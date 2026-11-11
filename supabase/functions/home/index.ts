@@ -183,6 +183,15 @@ async function gh(path, init = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
+// Says in plain words why GitHub refused to save something.
+function writeProblem(r, fallback) {
+  if (r.status === 401) return "The GitHub key is no longer valid. Create a new one and replace the GITHUB_TOKEN secret.";
+  if (r.status === 403 || r.status === 404) {
+    return "The GitHub key is not allowed to make changes to this site. On GitHub, open the key and check that the resource owner is Artiscope, this repository is selected, Contents and Pull requests are both set to Read and write, and the key is not waiting for approval.";
+  }
+  return fallback + " (GitHub code " + r.status + ")";
+}
+
 async function getText(repo, path) {
   const r = await gh("/repos/" + repo + "/contents/" + path);
   if (!r.ok || !r.data || !r.data.content) return null;
@@ -321,7 +330,7 @@ export async function handle(req) {
         sha: file.sha,
       }),
     });
-    if (!put.ok) return json({ error: "GitHub did not save the answer. Please try again." }, 502);
+    if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save the answer. Please try again.") }, 502);
     return json({ ok: true });
   }
 
@@ -335,6 +344,9 @@ export async function handle(req) {
         method: "PUT",
         body: JSON.stringify({ merge_method: "squash" }),
       });
+      if (!m.ok && (m.status === 401 || m.status === 403 || m.status === 404)) {
+        return json({ error: writeProblem(m, "") }, 502);
+      }
       if (!m.ok) {
         return json({
           error: "This draft could not be published as it stands. The agent will refresh it on its next run.",
@@ -357,7 +369,7 @@ export async function handle(req) {
         method: "PATCH",
         body: JSON.stringify({ state: "closed" }),
       });
-      if (!c.ok) return json({ error: "GitHub did not close the draft. Please try again." }, 502);
+      if (!c.ok) return json({ error: writeProblem(c, "GitHub did not close the draft. Please try again.") }, 502);
     }
     return json({ ok: true });
   }
@@ -378,7 +390,7 @@ export async function handle(req) {
       method: "PUT",
       body: JSON.stringify({ message: "Photo added from Artiscope Digital Home", content }),
     });
-    if (!put.ok) return json({ error: "GitHub did not accept the photo. Please try again." }, 502);
+    if (!put.ok) return json({ error: writeProblem(put, "GitHub did not accept the photo. Please try again.") }, 502);
     return json({ ok: true, name });
   }
 
