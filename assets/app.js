@@ -18,6 +18,7 @@
     loading: false,
     notice: null,        // { text, problem }
     signinSent: false,
+    signinMode: "link",   // "link" or "password"
     busy: {},            // key -> true while a request is running
     topicDone: {},       // key -> "yes" | "no"
     draftMode: {},       // key -> "confirm" | "return" | "reject"
@@ -107,17 +108,39 @@
   // ---------- the pieces of the page ----------
 
   function viewSignin() {
+    var pw = state.signinMode === "password";
+    var formBody;
+    if (state.signinSent) {
+      formBody = '<p class="notice">Check your inbox. The sign-in link has been sent to ' + esc(state.email) + '.</p>' +
+        '<button type="button" class="linklike small" data-act="signin-mode" data-mode="password">Use a password instead</button>';
+    } else {
+      formBody =
+        '<p class="muted">' + (pw ? "Enter your work email and password." : "Enter your work email and we will send you a sign-in link. No password needed.") + '</p>' +
+        '<div class="field"><label for="email">Email address</label>' +
+        '<input id="email" name="email" type="email" autocomplete="email" required value="' + esc(state.email) + '"></div>' +
+        (pw ? '<div class="field"><label for="password">Password</label>' +
+              '<input id="password" name="password" type="password" autocomplete="current-password" required></div>' : '') +
+        '<div><button class="btn primary" type="submit"' + (state.busy.signin ? " disabled" : "") + '>' + (pw ? "Sign in" : "Send me a sign-in link") + '</button></div>' +
+        '<button type="button" class="linklike small" data-act="signin-mode" data-mode="' + (pw ? "link" : "password") + '">' +
+          (pw ? "Email me a sign-in link instead" : "Use a password instead") + '</button>';
+    }
     return '<div class="signin"><form class="card" data-form="signin">' +
       '<span class="brand-mark" aria-hidden="true">' + mark() + '</span>' +
-      '<h1>Artiscope<br>Digital Home</h1>' +
-      (state.signinSent
-        ? '<p class="notice">Check your inbox. The sign-in link has been sent to ' + esc(state.email) + '.</p>'
-        : '<p class="muted">Enter your work email and we will send you a sign-in link. No password needed.</p>' +
-          '<div class="field"><label for="email">Email address</label>' +
-          '<input id="email" name="email" type="email" autocomplete="email" required></div>' +
-          '<div><button class="btn primary" type="submit"' + (state.busy.signin ? " disabled" : "") + '>Send me a sign-in link</button></div>') +
+      '<h1>Artiscope<br>Digital Home</h1>' + formBody +
       (state.notice ? '<p class="notice problem">' + esc(state.notice.text) + '</p>' : '') +
       '</form></div>';
+  }
+
+  // Turns a sign-in failure into a plain sentence.
+  function signinProblem(error, usedPassword) {
+    var code = String(error.code || ""), status = Number(error.status || 0), msg = String(error.message || "");
+    if (status === 429 || /rate|limit|seconds/i.test(code + " " + msg)) {
+      return "Too many sign-in emails were requested. Supabase only sends a few each hour. Wait a while, or use a password instead.";
+    }
+    if (usedPassword) return "That email and password do not match. Check them and try again.";
+    if (/invalid|valid email/i.test(code + " " + msg)) return "That does not look like an email address. Check it and try again.";
+    if (/signup|not allowed|disabled/i.test(code + " " + msg)) return "This email address is not set up for sign-in yet.";
+    return "The link could not be sent" + (msg ? " (" + msg + ")." : ".") + " Please try again in a few minutes.";
   }
 
   function mark() {
@@ -346,6 +369,7 @@
     if (el.dataset.tab) { state.tab = el.dataset.tab; state.notice = null; render(); window.scrollTo(0, 0); return; }
     var a = el.dataset.act, k = el.dataset.k;
     if (a === "refresh") load();
+    else if (a === "signin-mode") { state.signinMode = el.dataset.mode; state.signinSent = false; state.notice = null; var em = app.querySelector("#email"); if (em) state.email = em.value.trim(); render(); }
     else if (a === "signout") sb.auth.signOut();
     else if (a === "topic") answerTopic(k, el.dataset.answer);
     else if (a === "draft-mode") { if (el.dataset.mode) state.draftMode[k] = el.dataset.mode; else delete state.draftMode[k]; state.notice = null; render(); }
@@ -364,14 +388,18 @@
     if (form.dataset.form === "photo") { uploadPhoto(form); return; }
     if (form.dataset.form === "signin") {
       state.email = form.email.value.trim();
+      var usePassword = state.signinMode === "password";
+      var password = usePassword ? form.password.value : "";
       state.busy.signin = true; state.notice = null; render();
-      var res = await sb.auth.signInWithOtp({
-        email: state.email,
-        options: { emailRedirectTo: window.location.origin + window.location.pathname },
-      });
+      var res = usePassword
+        ? await sb.auth.signInWithPassword({ email: state.email, password: password })
+        : await sb.auth.signInWithOtp({
+            email: state.email,
+            options: { emailRedirectTo: window.location.origin + window.location.pathname },
+          });
       delete state.busy.signin;
-      if (res.error) state.notice = { text: "The link could not be sent. Check the address and try again.", problem: true };
-      else state.signinSent = true;
+      if (res.error) state.notice = { text: signinProblem(res.error, usePassword), problem: true };
+      else if (!usePassword) state.signinSent = true;
       render();
     }
   });
