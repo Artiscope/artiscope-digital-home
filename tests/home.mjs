@@ -148,6 +148,39 @@ export function safePhotoName(artistSlug, description, ext) {
   return a + "-" + d + "." + e;
 }
 
+// Reads a site's list of image spots. Anything malformed is dropped.
+export function parseSlots(text) {
+  let data = null;
+  try { data = JSON.parse(text); } catch (_e) { return []; }
+  const list = data && Array.isArray(data.slots) ? data.slots : [];
+  return list
+    .filter((x) => x && /^[a-z0-9][a-z0-9-]{1,90}$/.test(String(x.id || "")) && x.label)
+    .slice(0, 400)
+    .map((x) => ({
+      id: String(x.id),
+      group: String(x.group || "Other").slice(0, 80),
+      label: String(x.label).slice(0, 160),
+      filled: x.filled === true,
+    }));
+}
+
+// A photo meant for an exact spot is saved as slot--<spot id>.<ext>
+export function slotPhotoName(slotId, ext) {
+  const e = String(ext || "").toLowerCase().replace("jpeg", "jpg");
+  if (e !== "jpg" && e !== "png") return null;
+  if (!/^[a-z0-9][a-z0-9-]{1,90}$/.test(String(slotId || ""))) return null;
+  return "slot--" + slotId + "." + e;
+}
+
+// A photo with only a description is saved as note--<description>.<ext>
+export function notePhotoName(description, ext) {
+  const e = String(ext || "").toLowerCase().replace("jpeg", "jpg");
+  if (e !== "jpg" && e !== "png") return null;
+  const d = String(description || "").toLowerCase().normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70);
+  return d ? "note--" + d + "." + e : null;
+}
+
 function decodeBase64Utf8(b64) {
   const bin = atob(b64.replace(/\n/g, ""));
   const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
@@ -224,18 +257,27 @@ async function siteOverview(site) {
   const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists };
   if (!site.live) return base;
   try {
-    const [cal, log, drafts, inbox] = await Promise.all([
+    const [cal, log, drafts, inbox, slotFile] = await Promise.all([
       getText(site.repo, "CONTENT-CALENDAR.md"),
       getText(site.repo, "AGENT-LOG.md"),
       draftsOf(site.repo),
       inboxOf(site.repo),
+      getText(site.repo, "image-slots.json"),
     ]);
+    const waitingSlots = inbox
+      .map((n) => (n.match(/^slot--([a-z0-9-]+)\.(jpg|png)$/) || [])[1])
+      .filter(Boolean);
+    const slots = (slotFile ? parseSlots(slotFile.text) : []).map((x) => ({
+      ...x,
+      waiting: waitingSlots.includes(x.id),
+    }));
     return {
       ...base,
       topics: cal ? parseCalendar(cal.text) : { waiting: [], approved: [] },
       log: log ? parseLog(log.text) : [],
       drafts,
       inbox,
+      slots,
     };
   } catch (_e) {
     return { ...base, error: "Could not read this site from GitHub just now." };
@@ -375,23 +417,29 @@ export async function handle(req) {
   }
 
   if (action === "uploadPhoto") {
-    const artist = site.artists.find((a) => a.slug === body.artist);
-    if (!artist) return json({ error: "Choose which artist the photo belongs to." }, 400);
-    const name = safePhotoName(artist.slug, body.description, body.ext);
-    if (!name) return json({ error: "Add a short description, and use a JPG or PNG." }, 400);
+    let name = null;
+    if (body.slot) {
+      const slotFile = await getText(site.repo, "image-slots.json");
+      const known = slotFile ? parseSlots(slotFile.text) : [];
+      if (!known.some((x) => x.id === body.slot)) return json({ error: "That spot is no longer on the site. Refresh and choose again." }, 409);
+      name = slotPhotoName(body.slot, body.ext);
+    } else {
+      name = notePhotoName(body.description, body.ext);
+    }
+    if (!name) return json({ error: "Choose where the photo goes, or describe it, and use a JPG or PNG." }, 400);
     const content = String(body.content || "");
     if (!content || content.length > 7_500_000 || /[^A-Za-z0-9+/=]/.test(content)) {
       return json({ error: "That photo is too large or could not be read." }, 400);
     }
     const path = "/repos/" + site.repo + "/contents/inbox/" + name;
     const exists = await gh(path);
-    if (exists.ok) return json({ error: "A photo with that description is already waiting. Change the description." }, 409);
+    if (exists.ok) return json({ error: "A photo is already waiting for that spot. The agent will place it on its next run." }, 409);
     const put = await gh(path, {
       method: "PUT",
       body: JSON.stringify({ message: "Photo added from Artiscope Digital Home", content }),
     });
     if (!put.ok) return json({ error: writeProblem(put, "GitHub did not accept the photo. Please try again.") }, 502);
-    return json({ ok: true, name });
+    return json({ ok: true, name, slot: body.slot || null });
   }
 
   return json({ error: "Unknown request." }, 400);

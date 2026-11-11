@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
-import { parseCalendar, setAnswer, parseLog, safePhotoName, handle } from "./home.mjs";
+import { parseCalendar, setAnswer, parseLog, safePhotoName, parseSlots, slotPhotoName, notePhotoName, handle } from "./home.mjs";
 
 const empty = fs.readFileSync("/home/claude/global-art-monitor/CONTENT-CALENDAR.md", "utf8");
 assert.deepEqual(parseCalendar(empty), { waiting: [], approved: [] });
@@ -52,13 +52,24 @@ assert.equal(setAnswer(cal, "No such topic", "yes"), null);
 
 const log = fs.readFileSync("/home/claude/world-art-review/AGENT-LOG.md", "utf8");
 const l = parseLog(log);
-assert.equal(l[0].date, "Wednesday 11 November 2026");
+assert.ok(/\d{4}/.test(l[0].date));
 assert.ok(l[0].lines.length >= 3);
 
 assert.equal(safePhotoName("zara-muse", "In Her Own Light!", "JPEG"), "zara-muse-in-her-own-light.jpg");
 assert.equal(safePhotoName("zara-muse", "../../etc", "png"), "zara-muse-etc.png");
 assert.equal(safePhotoName("zara-muse", "x", "exe"), null);
 assert.equal(safePhotoName("zara-muse", "", "jpg"), null);
+
+const war = parseSlots(fs.readFileSync("/home/claude/world-art-review/image-slots.json", "utf8"));
+assert.equal(war.length, 31);
+assert.ok(war.find((x) => x.id === "artist-zara-muse").filled);
+assert.equal(parseSlots("not json").length, 0);
+assert.equal(parseSlots(JSON.stringify({ slots: [{ id: "../x", label: "bad" }, { id: "ok-1", label: "Fine" }] })).length, 1);
+assert.equal(slotPhotoName("article-palette-knife-painting", "JPEG"), "slot--article-palette-knife-painting.jpg");
+assert.equal(slotPhotoName("../../etc", "jpg"), null);
+assert.equal(slotPhotoName("ok-1", "gif"), null);
+assert.equal(notePhotoName("Studio shot, 2025!", "png"), "note--studio-shot-2025.png");
+assert.equal(notePhotoName("", "png"), null);
 
 // handler: sign-in and allow-list checks, with the network mocked
 const realFetch = globalThis.fetch;

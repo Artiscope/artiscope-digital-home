@@ -24,7 +24,7 @@ back drafts, and add photos, without opening GitHub.
 | Today | What is waiting, your sites, the agent's latest log | Jump to anything waiting |
 | Topics | Ideas the agent has proposed | Yes or no, with an optional note |
 | Drafts | Finished pieces waiting for approval | Publish, send back with a note, or reject |
-| Photos | Photos waiting to be placed | Add a photo for a site and artist |
+| Photos | Photos waiting to be placed, and the image spots on each site | Add one or several photos and choose the exact spot for each |
 | Sites | All five sites and their status | Nothing to change here |
 
 ## Sample mode

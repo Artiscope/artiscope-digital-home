@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "7";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -25,6 +25,8 @@
     draftMode: {},       // key -> "confirm" | "return" | "reject"
     draftDone: {},       // key -> "published" | "returned" | "rejected"
     photoDone: [],
+    photoFiles: [],      // photos chosen but not yet sent: { file, slot, note }
+    photoSent: {},       // slot id -> true once sent this session
   };
 
   // ---------- small helpers ----------
@@ -269,25 +271,75 @@
       (cards ? '<div class="stack-wide">' + cards + '</div>' : '<p class="notice">No drafts are waiting.</p>');
   }
 
+  function currentPhotoSite() {
+    var sites = liveSites();
+    return sites.find(function (s) { return s.id === state.photoSite; }) || sites[0];
+  }
+
+  // The list of places a photo can go, grouped the way the site is.
+  function slotOptions(site, chosen) {
+    var groups = {}, order = [];
+    (site.slots || []).forEach(function (x) {
+      if (!groups[x.group]) { groups[x.group] = []; order.push(x.group); }
+      groups[x.group].push(x);
+    });
+    var html = '<option value="">Choose a spot</option>';
+    order.forEach(function (g) {
+      html += '<optgroup label="' + esc(g) + '">' + groups[g].map(function (x) {
+        var waiting = x.waiting || state.photoSent[key(site.id, x.id)];
+        var tag = waiting ? " (photo already waiting)" : x.filled ? " (has an image, replacing needs your approval)" : " (empty)";
+        return '<option value="' + esc(x.id) + '"' + (x.id === chosen ? " selected" : "") + (waiting ? " disabled" : "") + '>' + esc(x.label + tag) + '</option>';
+      }).join("") + '</optgroup>';
+    });
+    return html + '<option value="other"' + (chosen === "other" ? " selected" : "") + '>Somewhere else, I will describe it</option>';
+  }
+
+  function slotLabel(site, name) {
+    var m = /^slot--([a-z0-9-]+)\.(jpg|png)$/.exec(name);
+    if (!m) return "";
+    var x = (site.slots || []).find(function (y) { return y.id === m[1]; });
+    return x ? x.group + ", " + x.label : "";
+  }
+
   function viewPhotos() {
     var sites = liveSites();
-    var current = sites.find(function (s) { return s.id === state.photoSite; }) || sites[0];
+    var current = currentPhotoSite();
     var siteOptions = sites.map(function (s) { return '<option value="' + esc(s.id) + '"' + (current && s.id === current.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("");
-    var artistOptions = current ? current.artists.map(function (a) { return '<option value="' + esc(a.slug) + '">' + esc(a.name) + '</option>'; }).join("") : "";
+    var empty = current ? (current.slots || []).filter(function (x) { return !x.filled && !x.waiting; }).length : 0;
+
+    var rows = state.photoFiles.map(function (p, i) {
+      return '<div class="well stack"><b>' + esc(p.file.name) + '</b>' +
+        '<div class="field"><label for="slot-' + i + '">Where should it go?</label>' +
+        '<select id="slot-' + i + '" data-change="photo-slot" data-i="' + i + '">' + slotOptions(current, p.slot) + '</select></div>' +
+        (p.slot === "other" ? '<div class="field"><label for="pnote-' + i + '">Describe where it belongs</label>' +
+          '<input type="text" id="pnote-' + i + '" data-input="photo-note" data-i="' + i + '" maxlength="70" value="' + esc(p.note) + '" placeholder="For example: Zara Muse in her studio"></div>' : '') +
+        (p.status ? '<span class="' + (p.failed ? "" : "muted") + '">' + esc(p.status) + '</span>' : '') +
+        '<div><button type="button" class="linklike small" data-act="photo-remove" data-i="' + i + '">Remove this photo</button></div></div>';
+    }).join("");
+
+    var ready = state.photoFiles.length && state.photoFiles.every(function (p) { return p.slot && (p.slot !== "other" || p.note.trim()); });
+
     var waiting = [];
-    sites.forEach(function (s) { (s.inbox || []).forEach(function (n) { waiting.push({ site: s.name, name: n }); }); });
+    sites.forEach(function (s) { (s.inbox || []).forEach(function (n) { waiting.push({ site: s.name, name: n, where: slotLabel(s, n) }); }); });
     state.photoDone.forEach(function (p) { waiting.push(p); });
     var list = waiting.map(function (w) {
-      return '<div class="card" style="padding:16px 22px"><div class="row" style="justify-content:space-between"><div><b>' + esc(w.name) + '</b><div class="small">' + esc(w.site) + '</div></div><span class="badge">Waiting for the next run</span></div></div>';
+      return '<div class="card" style="padding:16px 22px"><div class="row" style="justify-content:space-between"><div><b>' + esc(w.where || w.name) + '</b><div class="small">' + esc(w.site) + '</div></div><span class="badge">Waiting for the next run</span></div></div>';
     }).join("");
-    return '<div class="page-head"><h1>Photos</h1><p>Add a photo and say where it belongs. The agent resizes it, writes a description and places it on its next run. It never uses images from anywhere else.</p></div>' +
-      '<form class="card stack-wide" data-form="photo">' +
-        '<div class="grid-2"><div class="field"><label for="p-site">Which site?</label><select id="p-site" name="site" data-change="photo-site">' + siteOptions + '</select></div>' +
-        '<div class="field"><label for="p-artist">Which artist?</label><select id="p-artist" name="artist">' + artistOptions + '</select></div></div>' +
-        '<div class="field"><label for="p-desc">What does it show?</label><input type="text" id="p-desc" name="description" maxlength="60" required placeholder="For example: portrait, or the title of the artwork"></div>' +
-        '<div class="field"><label for="p-file">The photo</label><div class="well"><input type="file" id="p-file" name="file" accept="image/jpeg,image/png" required></div><span class="small">JPG or PNG. Send the largest version you have.</span></div>' +
-        '<div><button type="submit" class="btn primary"' + (state.busy.photo ? " disabled" : "") + '>' + (state.busy.photo ? "Sending the photo" : "Add this photo") + '</button></div>' +
-      '</form>' +
+
+    if (current && !current.slots) {
+      return '<div class="page-head"><h1>Photos</h1><p>Choosing exact spots needs the newest server function.</p></div>' +
+        '<p class="notice problem">The server function in Supabase is an older copy. Paste in the latest version from GitHub and deploy it, then press Refresh.</p>';
+    }
+    return '<div class="page-head"><h1>Photos</h1><p>Add your photos and choose the exact spot for each one. The agent resizes them, writes their descriptions and places them on its next run. It never uses images from anywhere else.</p></div>' +
+      '<div class="card stack-wide">' +
+        '<div class="grid-2"><div class="field"><label for="p-site">Which site?</label><select id="p-site" data-change="photo-site">' + siteOptions + '</select></div>' +
+        '<div class="field"><span class="label">Empty spots on this site</span><span style="font-family:var(--serif);font-size:28px;color:var(--accent)">' + empty + '</span></div></div>' +
+        '<div class="field"><label for="p-file">Add photos</label><div class="well"><input type="file" id="p-file" data-change="photo-files" accept="image/jpeg,image/png" multiple></div><span class="small">JPG or PNG. You can choose several at once. Send the largest versions you have.</span></div>' +
+        (rows ? '<div class="stack-wide">' + rows + '</div>' : '') +
+        (state.photoFiles.length ? '<div class="row"><button type="button" class="btn primary" data-act="photo-send"' + (ready && !state.busy.photo ? "" : " disabled") + '>' +
+          (state.busy.photo ? "Sending" : state.photoFiles.length === 1 ? "Send this photo" : "Send these " + state.photoFiles.length + " photos") + '</button>' +
+          (ready ? '' : '<span class="small">Choose a spot for every photo first.</span>') + '</div>' : '') +
+      '</div>' +
       '<div class="stack"><h2 class="label">Waiting to be placed</h2>' + (list || '<p class="notice">No photos are waiting.</p>') + '</div>';
   }
 
@@ -365,15 +417,30 @@
     });
   }
 
-  async function uploadPhoto(form) {
-    var file = form.file.files[0]; if (!file) return;
-    var siteId = form.site.value, artist = form.artist.value, description = form.description.value.trim();
-    var site = liveSites().find(function (s) { return s.id === siteId; });
-    await act("photo", async function () {
-      var img = await prepareImage(file);
-      var res = await api("uploadPhoto", { site: siteId, artist: artist, description: description, ext: img.ext, content: img.content });
-      state.photoDone.push({ site: site ? site.name : "", name: res.name });
-    }, function () { state.notice = { text: "Photo added. The agent will place it on its next weekday run." }; });
+  async function sendPhotos() {
+    var site = currentPhotoSite(); if (!site || !state.photoFiles.length) return;
+    state.busy.photo = true; state.notice = null; render();
+    var sent = 0, left = [];
+    for (var i = 0; i < state.photoFiles.length; i++) {
+      var p = state.photoFiles[i];
+      try {
+        var img = await prepareImage(p.file);
+        var payload = { site: site.id, ext: img.ext, content: img.content };
+        if (p.slot === "other") payload.description = p.note.trim(); else payload.slot = p.slot;
+        var res = await api("uploadPhoto", payload);
+        if (p.slot !== "other") state.photoSent[key(site.id, p.slot)] = true;
+        state.photoDone.push({ site: site.name, name: res.name, where: slotLabel(site, res.name) });
+        sent++;
+      } catch (e) {
+        p.status = e.message; p.failed = true; left.push(p);
+      }
+    }
+    state.photoFiles = left;
+    delete state.busy.photo;
+    state.notice = left.length
+      ? { text: sent + " sent. " + left.length + " could not be sent, see below.", problem: true }
+      : { text: (sent === 1 ? "Photo sent." : sent + " photos sent.") + " The agent will place " + (sent === 1 ? "it" : "them") + " on its next weekday run." };
+    render();
   }
 
   app.addEventListener("click", function (ev) {
@@ -384,6 +451,8 @@
     else if (a === "signin-mode") { state.signinMode = el.dataset.mode; state.signinSent = false; state.notice = null; var em = app.querySelector("#email"); if (em) state.email = em.value.trim(); render(); }
     else if (a === "signout") sb.auth.signOut();
     else if (a === "topic") answerTopic(k, el.dataset.answer);
+    else if (a === "photo-send") sendPhotos();
+    else if (a === "photo-remove") { state.photoFiles.splice(Number(el.dataset.i), 1); render(); }
     else if (a === "draft-mode") { if (el.dataset.mode) state.draftMode[k] = el.dataset.mode; else delete state.draftMode[k]; state.notice = null; render(); }
     else if (a === "draft-publish") draftAction(k, "publish");
     else if (a === "draft-return") draftAction(k, "return");
@@ -391,13 +460,33 @@
   });
 
   app.addEventListener("change", function (ev) {
-    if (ev.target.dataset.change === "photo-site") { state.photoSite = ev.target.value; render(); }
+    var t = ev.target, kind = t.dataset.change;
+    if (kind === "photo-site") { state.photoSite = t.value; state.photoFiles.forEach(function (p) { p.slot = ""; }); render(); }
+    else if (kind === "photo-files") {
+      Array.prototype.forEach.call(t.files, function (f) { if (state.photoFiles.length < 12) state.photoFiles.push({ file: f, slot: "", note: "" }); });
+      state.notice = null; render();
+    }
+    else if (kind === "photo-slot") {
+      var p = state.photoFiles[Number(t.dataset.i)]; if (!p) return;
+      var taken = t.value && t.value !== "other" && state.photoFiles.some(function (q) { return q !== p && q.slot === t.value; });
+      if (taken) { state.notice = { text: "Another photo in this batch is already going to that spot.", problem: true }; p.slot = ""; }
+      else { p.slot = t.value; p.status = ""; p.failed = false; state.notice = null; }
+      render();
+    }
+  });
+
+  // Typing a description must not redraw the page, or the box loses focus.
+  app.addEventListener("input", function (ev) {
+    var t = ev.target;
+    if (t.dataset.input === "photo-note") {
+      var p = state.photoFiles[Number(t.dataset.i)];
+      if (p) { var was = !!p.note.trim(); p.note = t.value; if (was !== !!p.note.trim()) { render(); var again = app.querySelector("#pnote-" + t.dataset.i); if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); } } }
+    }
   });
 
   app.addEventListener("submit", async function (ev) {
     ev.preventDefault();
     var form = ev.target;
-    if (form.dataset.form === "photo") { uploadPhoto(form); return; }
     if (form.dataset.form === "signin") {
       state.email = form.email.value.trim();
       var usePassword = state.signinMode === "password";
@@ -425,12 +514,14 @@
         artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }, { slug: "zen-xander", name: "Zen Xander" }],
         topics: { waiting: [{ title: "[Sample] A technique explainer for one artist", type: "Technique explainer", why: "The site has no technique explainer yet.", sources: "3", answer: "" }], approved: [] },
         drafts: [], inbox: [],
+        slots: [{ id: "artist-zara-muse", group: "Artist main images", label: "Zara Muse", filled: true, waiting: false }, { id: "artist-konn-artiss", group: "Artist main images", label: "Konn Artiss", filled: false, waiting: false }, { id: "article-sample", group: "Articles", label: "[Sample] An article", filled: false, waiting: false }],
         log: [{ date: "[Sample day]", lines: ["Published: two broken source links fixed.", "Drafts waiting: none.", "Needs you: nothing."] }] },
       { id: "global-art-monitor", name: "Global Art Monitor", domain: "globalartmonitor.com", live: true,
         artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }],
         topics: { waiting: [{ title: "[Sample] What a buyer's premium adds to a hammer price", type: "Collecting guide", why: "Readers reach the auction tables without a plain guide to the two prices.", sources: "2", answer: "" }], approved: [] },
         drafts: [{ number: 1, title: "[Sample] How to read an auction estimate", body: "What is new: a plain guide to estimates.\n\nSources:\n[source one]\n[source two]", url: "", created: new Date().toISOString() }],
-        inbox: ["zara-muse-portrait.jpg"],
+        inbox: ["slot--artist-zara-muse.jpg"],
+        slots: [{ id: "artist-zara-muse", group: "Artist profile images", label: "Zara Muse", filled: false, waiting: true }, { id: "artist-konn-artiss", group: "Artist profile images", label: "Konn Artiss", filled: false, waiting: false }],
         log: [{ date: "[Sample day]", lines: ["Published: nothing went live.", "Drafts waiting: one guide.", "Needs you: one topic to approve."] }] },
       { id: "site-3", name: "Site 3", domain: "", live: false, artists: [] },
       { id: "site-4", name: "Site 4", domain: "", live: false, artists: [] },
@@ -441,7 +532,7 @@
     return new Promise(function (resolve) {
       setTimeout(function () {
         if (body.action === "overview") resolve(JSON.parse(JSON.stringify(demoData)));
-        else if (body.action === "uploadPhoto") resolve({ ok: true, name: body.artist + "-" + String(body.description).toLowerCase().replace(/[^a-z0-9]+/g, "-") + "." + body.ext });
+        else if (body.action === "uploadPhoto") resolve({ ok: true, name: (body.slot ? "slot--" + body.slot : "note--" + String(body.description).toLowerCase().replace(/[^a-z0-9]+/g, "-")) + "." + body.ext });
         else resolve({ ok: true });
       }, 250);
     });
