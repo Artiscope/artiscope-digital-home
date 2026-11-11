@@ -22,6 +22,12 @@ export const SITES = [
       { slug: "konn-artiss", name: "Konn Artiss" },
       { slug: "zen-xander", name: "Zen Xander" },
     ],
+    collections: [
+      { id: "articles", label: "Articles", singular: "article", file: "content/site.json", path: ["articles"], shape: "list", key: "slug", title: "title", sub: ["kicker", "section"], canHide: true, canDelete: true },
+      { id: "artists", label: "Artists", singular: "artist", file: "content/site.json", path: ["artists"], shape: "list", key: "slug", title: "name", sub: ["tag", "place"], canHide: false, canDelete: false },
+      { id: "artworks", label: "Artworks", singular: "artwork", file: "content/site.json", path: ["artists"], shape: "nested", key: "slug", child: "works", parentTitle: "name", title: "title", sub: ["medium", "year"], canHide: true, canDelete: true },
+      { id: "sources", label: "Sources", singular: "source", file: "content/site.json", path: ["sources"], shape: "map", title: "title", sub: ["pub", "date"], canHide: false, canDelete: false },
+    ],
   },
   {
     id: "global-art-monitor",
@@ -33,10 +39,16 @@ export const SITES = [
       { slug: "zara-muse", name: "Zara Muse" },
       { slug: "konn-artiss", name: "Konn Artiss" },
     ],
+    collections: [
+      { id: "articles", label: "Articles", singular: "article", file: "data/content.json", path: ["features"], shape: "list", key: "slug", title: "title", sub: ["kicker"], canHide: true, canDelete: true },
+      { id: "sales", label: "Auction sales", singular: "sale", file: "data/sales.json", path: ["sales"], shape: "list", key: null, title: "title", sub: ["house", "date_text"], canHide: false, canDelete: true, numbers: ["est_low", "est_high", "hammer", "premium"] },
+      { id: "artists", label: "Artist notes", singular: "artist note", file: "data/content.json", path: ["bios"], shape: "map", title: null, sub: [], canHide: false, canDelete: false },
+      { id: "site", label: "Site details", singular: "site details", file: "data/content.json", path: ["site"], shape: "single", title: "name", sub: ["tagline"], canHide: false, canDelete: false },
+    ],
   },
-  { id: "site-3", name: "Site 3", domain: "", repo: "", live: false, artists: [] },
-  { id: "site-4", name: "Site 4", domain: "", repo: "", live: false, artists: [] },
-  { id: "site-5", name: "Site 5", domain: "", repo: "", live: false, artists: [] },
+  { id: "site-3", name: "Site 3", domain: "", repo: "", live: false, artists: [], collections: [] },
+  { id: "site-4", name: "Site 4", domain: "", repo: "", live: false, artists: [], collections: [] },
+  { id: "site-5", name: "Site 5", domain: "", repo: "", live: false, artists: [], collections: [] },
 ];
 
 const CORS = {
@@ -190,6 +202,105 @@ export function notePhotoName(description, ext) {
   const d = String(description || "").toLowerCase().normalize("NFKD")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70);
   return d ? "note--" + d + "." + e : null;
+}
+
+// ---------- content: the words on each site ----------
+
+// Fields the console never shows, because changing them breaks links
+// or belongs to another screen.
+const LOCKED = ["slug", "letter", "tone", "heroTone", "image", "hidden", "artist", "url_slug"];
+const LABELS = {
+  dek: "Summary line", kicker: "Label above the title", alt: "Picture description",
+  credit: "Picture caption", heroCredit: "Picture caption", html: "Body", body: "Body",
+  mins: "Reading time, minutes", minutes: "Reading time, minutes", standfirst: "Opening line",
+  est_low: "Estimate, low", est_high: "Estimate, high", hammer: "Hammer price",
+  premium: "Price with buyer's premium", hammer_basis: "Hammer price basis (published or calculated)",
+  date: "Sale date (year-month-day)", date_text: "Sale date in words", pub: "Publication",
+  source_label: "Source name", source_url: "Source link", source2_label: "Second source name",
+  source2_url: "Second source link", published: "Shown on the site", ghostWords: "Large background words",
+  tag: "Type of work", checked: "Last checked", seen: "Where to see the work", tags: "Tags",
+};
+
+function labelFor(name) {
+  if (LABELS[name]) return LABELS[name];
+  const words = String(name).replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+// Which fields of an entry can be edited, and as what.
+export function fieldsOf(entry, numbers = []) {
+  const out = [];
+  for (const name of Object.keys(entry || {})) {
+    if (LOCKED.includes(name)) continue;
+    const v = entry[name];
+    let type = null;
+    if (numbers.includes(name) || typeof v === "number") type = "number";
+    else if (typeof v === "boolean") type = "yesno";
+    else if (typeof v === "string") type = v.length > 90 || v.includes("\n") ? "long" : "text";
+    else if (v === null) type = "text";
+    else if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string")) type = "lines";
+    if (!type) continue;
+    out.push({ name, label: labelFor(name), type, value: v });
+  }
+  return out;
+}
+
+function dig(data, path) {
+  let node = data;
+  for (const k of path) node = node == null ? undefined : node[k];
+  return node;
+}
+
+// Every entry of one collection, each with an id the console can send back.
+export function entriesOf(data, col) {
+  const node = dig(data, col.path);
+  const list = [];
+  if (col.shape === "single" && node && typeof node === "object") {
+    list.push({ id: "only", ref: node, parent: null, title: node[col.title] || col.label });
+  } else if (col.shape === "map" && node && typeof node === "object") {
+    for (const k of Object.keys(node)) list.push({ id: k, ref: node[k], parent: null, title: (col.title && node[k][col.title]) || k });
+  } else if (col.shape === "list" && Array.isArray(node)) {
+    node.forEach((e, i) => list.push({ id: col.key && e[col.key] ? String(e[col.key]) : "n" + i, ref: e, parent: null, title: e[col.title] || "Untitled" }));
+  } else if (col.shape === "nested" && Array.isArray(node)) {
+    node.forEach((p) => {
+      (Array.isArray(p[col.child]) ? p[col.child] : []).forEach((e, i) => {
+        list.push({ id: String(p[col.key]) + "~" + i, ref: e, parent: p, title: e[col.title] || "Untitled", group: p[col.parentTitle] || "" });
+      });
+    });
+  }
+  return list;
+}
+
+function entryView(x, col) {
+  const sub = (col.sub || []).map((k) => x.ref[k]).filter((v) => typeof v === "string" && v).join(", ");
+  return {
+    id: x.id, title: String(x.title), sub: [x.group, sub].filter(Boolean).join(". "),
+    hidden: x.ref.hidden === true, fields: fieldsOf(x.ref, col.numbers || []),
+  };
+}
+
+// Applies edited values to one entry. Only fields the entry already has,
+// and only as the kind of value they already are.
+export function applyValues(entry, values, numbers = []) {
+  const allowed = fieldsOf(entry, numbers);
+  let changed = 0;
+  for (const f of allowed) {
+    if (!(f.name in values)) continue;
+    let v = values[f.name];
+    if (f.type === "number") {
+      if (v === "" || v === null) v = null;
+      else { v = Number(v); if (!Number.isFinite(v)) throw new Error(f.label + " must be a number."); }
+    } else if (f.type === "yesno") {
+      v = v === true || v === "true";
+    } else if (f.type === "lines") {
+      v = (Array.isArray(v) ? v : String(v).split(/\n+/)).map((x) => String(x).trim()).filter(Boolean).slice(0, 60);
+    } else {
+      v = String(v == null ? "" : v).replace(/—/g, ",").slice(0, 60000);
+      if (f.value === null && v === "") v = null;
+    }
+    if (JSON.stringify(entry[f.name]) !== JSON.stringify(v)) { entry[f.name] = v; changed++; }
+  }
+  return changed;
 }
 
 function decodeBase64Utf8(b64) {
@@ -367,6 +478,146 @@ export async function handle(req) {
 
   const site = liveSite(String(body.site || ""));
   if (!site) return json({ error: "That site is not available." }, 400);
+
+  // ----- content -----
+  const col = (site.collections || []).find((c) => c.id === body.collection) || null;
+  const who = " (" + email + ")";
+
+  async function loadJson(file) {
+    const f = await getText(site.repo, file);
+    if (!f) return null;
+    try { return { data: JSON.parse(f.text), sha: f.sha }; } catch (_e) { return null; }
+  }
+  async function saveJson(file, data, sha, message) {
+    return await gh("/repos/" + site.repo + "/contents/" + file, {
+      method: "PUT",
+      body: JSON.stringify({ message: message + who, content: encodeBase64Utf8(JSON.stringify(data, null, 2) + "\n"), sha }),
+    });
+  }
+
+  if (action === "content") {
+    const files = {};
+    const out = [];
+    for (const c of site.collections || []) {
+      if (!files[c.file]) files[c.file] = await loadJson(c.file);
+      const f = files[c.file];
+      out.push({
+        id: c.id, label: c.label, singular: c.singular, canHide: !!c.canHide, canDelete: !!c.canDelete,
+        entries: f ? entriesOf(f.data, c).map((x) => entryView(x, c)) : [],
+        problem: f ? "" : "This part of the site could not be read.",
+      });
+    }
+    return json({ collections: out });
+  }
+
+  if (action === "saveEntry" || action === "setHidden" || action === "deleteEntry") {
+    if (!col) return json({ error: "That kind of content is not available on this site." }, 400);
+    const f = await loadJson(col.file);
+    if (!f) return json({ error: "The site content could not be read." }, 502);
+    const all = entriesOf(f.data, col);
+    const x = all.find((e) => e.id === String(body.id));
+    if (!x) return json({ error: "That entry is no longer there. Refresh and try again." }, 409);
+    let message = "";
+
+    if (action === "saveEntry") {
+      let changed = 0;
+      try { changed = applyValues(x.ref, body.values || {}, col.numbers || []); }
+      catch (e) { return json({ error: e.message }, 400); }
+      if (!changed) return json({ ok: true, unchanged: true });
+      message = "Edit " + col.singular + ": " + x.title;
+    } else if (action === "setHidden") {
+      if (!col.canHide) return json({ error: "This kind of content cannot be hidden." }, 400);
+      if (body.hidden) x.ref.hidden = true; else delete x.ref.hidden;
+      message = (body.hidden ? "Hide " : "Show ") + col.singular + ": " + x.title;
+    } else {
+      if (!col.canDelete) return json({ error: "This kind of content cannot be deleted here." }, 400);
+      const holder = col.shape === "nested" ? x.parent[col.child] : dig(f.data, col.path);
+      const at = holder.indexOf(x.ref);
+      if (at < 0) return json({ error: "That entry is no longer there." }, 409);
+      holder.splice(at, 1);
+      message = "Delete " + col.singular + ": " + x.title;
+    }
+    const put = await saveJson(col.file, f.data, f.sha, message);
+    if (put.status === 409) return json({ error: "Someone else changed this at the same moment. Refresh and try again." }, 409);
+    if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save the change. Please try again.") }, 502);
+    return json({ ok: true });
+  }
+
+  if (action === "removePhoto") {
+    const slotFile = await loadJson("image-slots.json");
+    const slot = slotFile && Array.isArray(slotFile.data.slots) ? slotFile.data.slots.find((x) => x.id === body.slot) : null;
+    if (!slot) return json({ error: "That spot is not on the site." }, 409);
+    const m = /^(artist|article)-(.+)$/.exec(String(slot.id));
+    if (!m) return json({ error: "Photos in this kind of spot cannot be removed here yet." }, 400);
+    const builtSite = site.collections.some((c) => c.file === "data/content.json");
+    if (builtSite) {
+      let removed = false;
+      for (const ext of ["jpg", "jpeg", "png", "webp"]) {
+        const path = "/repos/" + site.repo + "/contents/assets/images/" + m[2] + "." + ext;
+        const cur = await gh(path);
+        if (cur.ok && cur.data && cur.data.sha) {
+          const del = await gh(path, { method: "DELETE", body: JSON.stringify({ message: "Remove photo: " + slot.label + who, sha: cur.data.sha }) });
+          if (!del.ok) return json({ error: writeProblem(del, "GitHub did not remove the photo.") }, 502);
+          removed = true;
+        }
+      }
+      if (!removed) return json({ error: "There is no photo in that spot." }, 409);
+    } else {
+      const f = await loadJson("content/site.json");
+      if (!f) return json({ error: "The site content could not be read." }, 502);
+      const list = m[1] === "artist" ? f.data.artists : f.data.articles;
+      const e = (list || []).find((x) => x.slug === m[2]);
+      if (!e || !e.image) return json({ error: "There is no photo in that spot." }, 409);
+      e.image = null; e.alt = "";
+      const put = await saveJson("content/site.json", f.data, f.sha, "Remove photo: " + slot.label);
+      if (!put.ok) return json({ error: writeProblem(put, "GitHub did not remove the photo.") }, 502);
+    }
+    const fresh = await loadJson("image-slots.json");
+    if (fresh) {
+      const again = fresh.data.slots.find((x) => x.id === slot.id);
+      if (again) { again.filled = false; await saveJson("image-slots.json", fresh.data, fresh.sha, "Mark spot empty: " + slot.label); }
+    }
+    return json({ ok: true });
+  }
+
+  // ----- history and undo -----
+  const CONTENT_FILES = ["content/site.json", "data/content.json", "data/sales.json", "data/images.json", "image-slots.json"];
+  const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Undo: )/;
+
+  if (action === "history") {
+    const r = await gh("/repos/" + site.repo + "/commits?per_page=30");
+    if (!r.ok || !Array.isArray(r.data)) return json({ error: "The history could not be read." }, 502);
+    return json({
+      changes: r.data.map((c) => {
+        const first = String(c.commit.message || "").split("\n")[0];
+        return { sha: c.sha, what: first.replace(/ \([^()@ ]+@[^()]+\)$/, ""), when: c.commit.author ? c.commit.author.date : "", by: (first.match(/\(([^()@ ]+@[^()]+)\)$/) || [])[1] || (c.commit.author ? c.commit.author.name : ""), canUndo: UNDOABLE.test(first) };
+      }),
+    });
+  }
+
+  if (action === "undo") {
+    const sha = String(body.sha || "");
+    if (!/^[0-9a-f]{40}$/.test(sha)) return json({ error: "That change could not be found." }, 400);
+    const c = await gh("/repos/" + site.repo + "/commits/" + sha);
+    if (!c.ok || !c.data) return json({ error: "That change could not be found." }, 404);
+    const first = String(c.data.commit.message || "").split("\n")[0];
+    const files = (c.data.files || []).map((x) => x.filename);
+    const parent = c.data.parents && c.data.parents[0] ? c.data.parents[0].sha : "";
+    if (!UNDOABLE.test(first) || !parent || !files.length || !files.every((x) => CONTENT_FILES.includes(x))) {
+      return json({ error: "This change cannot be undone from here." }, 400);
+    }
+    for (const file of files) {
+      const before = await gh("/repos/" + site.repo + "/contents/" + file + "?ref=" + parent);
+      const now = await gh("/repos/" + site.repo + "/contents/" + file);
+      if (!before.ok || !before.data.content || !now.ok) return json({ error: "The earlier version could not be read." }, 502);
+      const put = await gh("/repos/" + site.repo + "/contents/" + file, {
+        method: "PUT",
+        body: JSON.stringify({ message: "Undo: " + first.replace(/ \([^()@ ]+@[^()]+\)$/, "") + who, content: before.data.content.replace(/\n/g, ""), sha: now.data.sha }),
+      });
+      if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save the undo.") }, 502);
+    }
+    return json({ ok: true });
+  }
 
   if (action === "answerTopic") {
     const answer = body.answer === "yes" ? "yes" : body.answer === "no" ? "no" : null;

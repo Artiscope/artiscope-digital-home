@@ -1,31 +1,35 @@
 # Artiscope Digital Home
 
-One private console for the Artiscope websites. It shows what the
-website agent has done, and lets you approve topics, publish or send
-back drafts, and add photos, without opening GitHub.
+One private console for running the Artiscope websites: edit the words,
+add and remove photos, hide or delete content, and undo any change,
+without opening GitHub or touching code.
 
 ## How it works
 
 - The console is a plain web page: `index.html`, `assets/app.css` and
   `assets/app.js`. There is nothing to install and no build step.
-- You sign in with a link sent to your email (Supabase).
+- You sign in with a password or a link sent to your email (Supabase).
 - A single server-side function, `supabase/functions/home/index.ts`,
   checks who is signed in and then reads and writes the site
   repositories on GitHub. The GitHub token lives in Supabase as a
   secret and never reaches the browser.
-- GitHub stays the home of every site. A yes in the console is saved
-  to that site's `CONTENT-CALENDAR.md`. Publishing a draft merges its
-  pull request. A photo is saved to that site's `inbox/` folder.
+- Each site keeps its content in its own files, apart from its design.
+  The console edits those files, and the site rebuilds and republishes
+  itself in about two minutes.
+- GitHub keeps every version, which is what makes History and Undo work.
 
 ## What each screen does
 
-| Screen | What it shows | What you can do |
-|---|---|---|
-| Today | What is waiting, your sites, the agent's latest log | Jump to anything waiting |
-| Topics | Ideas the agent has proposed | Yes or no, with an optional note |
-| Drafts | Finished pieces waiting for approval | Publish, send back with a note, or reject |
-| Photos | Photos waiting to be placed, and the image spots on each site | Add one or several photos and choose the exact spot for each |
-| Sites | All five sites and their status | Nothing to change here |
+| Screen | What you can do |
+|---|---|
+| Home | Choose the site to work on and see it at a glance |
+| Content | Edit, hide or delete articles, artworks, sales and more |
+| Photos | Add photos to exact spots, and remove photos |
+| History | See every change and undo the ones made here |
+| Sites | See all five sites and their status |
+
+Still to come: page layouts and sections, theme colours and fonts, and
+creating new sites from a template.
 
 ## Sample mode
 
@@ -40,14 +44,14 @@ the address does the same at any time.
 | `config.js` | The Supabase address, publishable key and the server function's name. No secrets |
 | `index.html`, `assets/` | The console |
 | `supabase/functions/home/index.ts` | The server-side function, including the list of sites |
-| `tests/` | Automated checks. Run `node tests/run.mjs` and `node tests/ui.mjs` |
+| `tests/` | Automated checks. Run each file with `node`, for example `node tests/console.mjs` |
 
 ## Adding a site
 
 Add an entry to `SITES` at the top of
-`supabase/functions/home/index.ts` (name, domain, repository, artists),
-set `live: true`, and redeploy the function. The site then appears in
-every screen.
+`supabase/functions/home/index.ts`: its name, domain, repository, and
+its `collections` (which content files it has and what they hold). Set
+`live: true` and redeploy the function.
 
 ## Safety
 
