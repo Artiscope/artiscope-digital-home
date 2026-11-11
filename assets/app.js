@@ -50,15 +50,22 @@
     var body = Object.assign({ action: action }, payload || {});
     if (demo) return demoApi(body);
     var res = await sb.functions.invoke(cfg.functionName || "home", { body: body });
-    if (res.error) {
-      var message = "Something went wrong. Please try again.";
-      try {
-        var detail = await res.error.context.json();
-        if (detail && detail.error) message = detail.error;
-      } catch (e) { /* keep the general message */ }
-      throw new Error(message);
-    }
+    if (res.error) throw new Error(await explain(res.error));
     return res.data;
+  }
+
+  // Turns a failed call to the server function into a plain sentence
+  // that says which setup step to look at.
+  async function explain(error) {
+    var ctx = error && error.context, status = ctx && typeof ctx.status === "number" ? ctx.status : 0, detail = null;
+    try { if (ctx && typeof ctx.json === "function") detail = await ctx.json(); } catch (e) { detail = null; }
+    if (detail && detail.error) return detail.error;
+    var extra = detail ? String(detail.message || detail.msg || detail.code || "") : "";
+    if (status === 404) return "The server function was not found. In Supabase, under Edge Functions, it must exist and be named exactly: home";
+    if (status === 401) return "Supabase blocked the request before it reached the server function. Open the function's settings in Supabase, switch off Verify JWT, save, and try again.";
+    if (status >= 500) return "The server function is there but failed to run (code " + status + (extra ? ", " + extra : "") + "). Send this message to Claude.";
+    if (status) return "The server function answered with code " + status + (extra ? " (" + extra + ")" : "") + ". Send this message to Claude.";
+    return "The server function could not be reached. Either it has not been added in Supabase yet (it must be named: home), or the connection dropped.";
   }
 
   async function load() {
