@@ -4,6 +4,7 @@
 (function () {
   "use strict";
 
+  var VERSION = "4";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -135,6 +136,7 @@
       '<span class="brand-mark" aria-hidden="true">' + mark() + '</span>' +
       '<h1>Artiscope<br>Digital Home</h1>' + formBody +
       (state.notice ? '<p class="notice problem">' + esc(state.notice.text) + '</p>' : '') +
+      '<span class="small">Version ' + VERSION + '</span>' +
       '</form></div>';
   }
 
@@ -175,6 +177,7 @@
           (demo ? '<span class="small">Sample mode. Example data only, nothing is saved.</span>'
                 : '<span class="small">Signed in as ' + esc(state.email) + '</span>') +
           '<button type="button" class="linklike small" data-act="refresh">Refresh</button>' +
+          '<span class="small">Version ' + VERSION + '</span>' +
           (demo ? '' : '<button type="button" class="linklike small" data-act="signout">Sign out</button>') +
         '</div>' +
       '</nav>' +
@@ -301,7 +304,7 @@
     if (!demo && !state.session) { app.innerHTML = viewSignin(); return; }
     if (!state.data) {
       app.innerHTML = state.notice
-        ? '<div class="signin"><div class="card"><p class="notice problem">' + esc(state.notice.text) + '</p><div class="row"><button type="button" class="btn" data-act="refresh">Try again</button>' + (demo ? "" : '<button type="button" class="linklike" data-act="signout">Sign out</button>') + '</div></div></div>'
+        ? '<div class="signin"><div class="card"><p class="notice problem">' + esc(state.notice.text) + '</p><div class="row"><button type="button" class="btn" data-act="refresh">Try again</button>' + (demo ? "" : '<button type="button" class="linklike" data-act="signout">Sign out</button>') + '</div><span class="small">Version ' + VERSION + '</span></div></div>'
         : '<p class="loading">Reading your sites</p>';
       return;
     }
