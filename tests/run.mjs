@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
-import { parseCalendar, setAnswer, parseLog, safePhotoName, parseSlots, slotPhotoName, notePhotoName, handle } from "./home.mjs";
+import { parseCalendar, setAnswer, parseLog, safePhotoName, parseSlots, slotPhotoName, notePhotoName, cleanText, handle } from "./home.mjs";
 
 const empty = fs.readFileSync("/home/claude/global-art-monitor/CONTENT-CALENDAR.md", "utf8");
 assert.deepEqual(parseCalendar(empty), { waiting: [], approved: [] });
@@ -70,6 +70,8 @@ assert.equal(slotPhotoName("../../etc", "jpg"), null);
 assert.equal(slotPhotoName("ok-1", "gif"), null);
 assert.equal(notePhotoName("Studio shot, 2025!", "png"), "note--studio-shot-2025.png");
 assert.equal(notePhotoName("", "png"), null);
+assert.equal(cleanText('A <b>bold</b>\n"claim" `x` \\ end', 240), 'A bbold/b "claim" x end');
+assert.equal(cleanText("x".repeat(500), 240).length, 240);
 
 // handler: sign-in and allow-list checks, with the network mocked
 const realFetch = globalThis.fetch;

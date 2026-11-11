@@ -11,7 +11,7 @@ assert.ok(el.innerHTML.includes("Empty spots on this site") && el.innerHTML.incl
 // choose two files
 el.listeners.change({ target: { dataset: { change: "photo-files" }, files: [{ name: "a.jpg", type: "image/jpeg" }, { name: "<b>.png", type: "image/png" }] } });
 assert.ok(el.innerHTML.includes("Where should it go?") && el.innerHTML.includes("&lt;b&gt;.png") && !el.innerHTML.includes("<b>.png"));
-assert.ok(el.innerHTML.includes("Send these 2 photos") && el.innerHTML.includes("Choose a spot for every photo first"));
+assert.ok(el.innerHTML.includes("Send these 2 photos") && el.innerHTML.includes("Choose a spot and describe every photo first") && el.innerHTML.includes("Describe the picture"));
 assert.ok(el.innerHTML.includes("has an image, replacing needs your approval") && el.innerHTML.includes("(empty)"));
 // pick spots: same spot twice is refused
 el.listeners.change({ target: { dataset: { change: "photo-slot", i: "0" }, value: "artist-konn-artiss" } });
@@ -19,8 +19,8 @@ el.listeners.change({ target: { dataset: { change: "photo-slot", i: "1" }, value
 assert.ok(el.innerHTML.includes("already going to that spot"));
 el.listeners.change({ target: { dataset: { change: "photo-slot", i: "1" }, value: "other" } });
 assert.ok(el.innerHTML.includes("Describe where it belongs"));
-adh.state.photoFiles[1].note = "studio shot"; adh.render();
-assert.ok(!el.innerHTML.includes("Choose a spot for every photo first"));
+adh.state.photoFiles[1].note = "studio shot"; adh.state.photoFiles[0].alt = "Ice blocks"; adh.state.photoFiles[1].alt = "A studio"; adh.state.photoFiles[0].caption = "ANTI-FRIEZE"; adh.render();
+assert.ok(!el.innerHTML.includes("Choose a spot and describe every photo first"));
 // send
 el.listeners.click({ target: { closest: () => ({ dataset: { act: "photo-send" } }) } });
 await new Promise((r) => setTimeout(r, 900));

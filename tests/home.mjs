@@ -164,6 +164,17 @@ export function parseSlots(text) {
     }));
 }
 
+// Plain single-line text, safe to drop into a page.
+export function cleanText(text, limit) {
+  return String(text || "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[<>`\\]/g, "")
+    .replace(/\u2014/g, ",").replace(/\u2013/g, "-")
+    .replace(/ {2,}/g, " ")
+    .trim()
+    .slice(0, limit);
+}
+
 // A photo meant for an exact spot is saved as slot--<spot id>.<ext>
 export function slotPhotoName(slotId, ext) {
   const e = String(ext || "").toLowerCase().replace("jpeg", "jpg");
@@ -434,6 +445,25 @@ export async function handle(req) {
     const path = "/repos/" + site.repo + "/contents/inbox/" + name;
     const exists = await gh(path);
     if (exists.ok) return json({ error: "A photo is already waiting for that spot. The agent will place it on its next run." }, 409);
+
+    // The owner's description travels with the photo in a small note,
+    // saved first so it is already there when the photo arrives.
+    const alt = cleanText(body.alt, 240);
+    const caption = cleanText(body.caption, 160);
+    if (alt || caption) {
+      const notePath = "/repos/" + site.repo + "/contents/inbox/" + name.replace(/\.(jpg|png)$/, ".json");
+      const old = await gh(notePath);
+      const saved = await gh(notePath, {
+        method: "PUT",
+        body: JSON.stringify({
+          message: "Photo description from Artiscope Digital Home",
+          content: encodeBase64Utf8(JSON.stringify({ alt, caption, sent_by: email }, null, 2) + "\n"),
+          ...(old.ok && old.data && old.data.sha ? { sha: old.data.sha } : {}),
+        }),
+      });
+      if (!saved.ok) return json({ error: writeProblem(saved, "GitHub did not accept the description. Please try again.") }, 502);
+    }
+
     const put = await gh(path, {
       method: "PUT",
       body: JSON.stringify({ message: "Photo added from Artiscope Digital Home", content }),

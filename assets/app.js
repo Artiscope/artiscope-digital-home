@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "7";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "8";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -301,6 +301,8 @@
     return x ? x.group + ", " + x.label : "";
   }
 
+  function photoReady(p) { return p.slot && p.alt.trim() && (p.slot !== "other" || p.note.trim()); }
+
   function viewPhotos() {
     var sites = liveSites();
     var current = currentPhotoSite();
@@ -313,11 +315,16 @@
         '<select id="slot-' + i + '" data-change="photo-slot" data-i="' + i + '">' + slotOptions(current, p.slot) + '</select></div>' +
         (p.slot === "other" ? '<div class="field"><label for="pnote-' + i + '">Describe where it belongs</label>' +
           '<input type="text" id="pnote-' + i + '" data-input="photo-note" data-i="' + i + '" maxlength="70" value="' + esc(p.note) + '" placeholder="For example: Zara Muse in her studio"></div>' : '') +
+        '<div class="field"><label for="palt-' + i + '">Describe the picture</label>' +
+          '<input type="text" id="palt-' + i + '" data-input="photo-alt" data-i="' + i + '" maxlength="240" value="' + esc(p.alt) + '" placeholder="For example: a woman seen from behind, painted in thick strokes on deep blue">' +
+          '<span class="small">Read aloud to people who cannot see the picture. Say what it shows in a sentence.</span></div>' +
+        '<div class="field"><label for="pcap-' + i + '">Caption or credit (optional)</label>' +
+          '<input type="text" id="pcap-' + i + '" data-input="photo-caption" data-i="' + i + '" maxlength="160" value="' + esc(p.caption) + '" placeholder="For example: Ecos de Azul. Supplied by Grove Gallery"></div>' +
         (p.status ? '<span class="' + (p.failed ? "" : "muted") + '">' + esc(p.status) + '</span>' : '') +
         '<div><button type="button" class="linklike small" data-act="photo-remove" data-i="' + i + '">Remove this photo</button></div></div>';
     }).join("");
 
-    var ready = state.photoFiles.length && state.photoFiles.every(function (p) { return p.slot && (p.slot !== "other" || p.note.trim()); });
+    var ready = state.photoFiles.length && state.photoFiles.every(photoReady);
 
     var waiting = [];
     sites.forEach(function (s) { (s.inbox || []).forEach(function (n) { waiting.push({ site: s.name, name: n, where: slotLabel(s, n) }); }); });
@@ -330,7 +337,7 @@
       return '<div class="page-head"><h1>Photos</h1><p>Choosing exact spots needs the newest server function.</p></div>' +
         '<p class="notice problem">The server function in Supabase is an older copy. Paste in the latest version from GitHub and deploy it, then press Refresh.</p>';
     }
-    return '<div class="page-head"><h1>Photos</h1><p>Add your photos and choose the exact spot for each one. The agent resizes them, writes their descriptions and places them on its next run. It never uses images from anywhere else.</p></div>' +
+    return '<div class="page-head"><h1>Photos</h1><p>Add your photos, choose the exact spot for each one and describe it. A photo for an empty spot goes onto the site within a few minutes. Replacing an image, or anything unusual, comes to you for approval first.</p></div>' +
       '<div class="card stack-wide">' +
         '<div class="grid-2"><div class="field"><label for="p-site">Which site?</label><select id="p-site" data-change="photo-site">' + siteOptions + '</select></div>' +
         '<div class="field"><span class="label">Empty spots on this site</span><span style="font-family:var(--serif);font-size:28px;color:var(--accent)">' + empty + '</span></div></div>' +
@@ -338,7 +345,7 @@
         (rows ? '<div class="stack-wide">' + rows + '</div>' : '') +
         (state.photoFiles.length ? '<div class="row"><button type="button" class="btn primary" data-act="photo-send"' + (ready && !state.busy.photo ? "" : " disabled") + '>' +
           (state.busy.photo ? "Sending" : state.photoFiles.length === 1 ? "Send this photo" : "Send these " + state.photoFiles.length + " photos") + '</button>' +
-          (ready ? '' : '<span class="small">Choose a spot for every photo first.</span>') + '</div>' : '') +
+          (ready ? '' : '<span class="small" id="photo-hint">Choose a spot and describe every photo first.</span>') + '</div>' : '') +
       '</div>' +
       '<div class="stack"><h2 class="label">Waiting to be placed</h2>' + (list || '<p class="notice">No photos are waiting.</p>') + '</div>';
   }
@@ -425,7 +432,7 @@
       var p = state.photoFiles[i];
       try {
         var img = await prepareImage(p.file);
-        var payload = { site: site.id, ext: img.ext, content: img.content };
+        var payload = { site: site.id, ext: img.ext, content: img.content, alt: p.alt.trim(), caption: p.caption.trim() };
         if (p.slot === "other") payload.description = p.note.trim(); else payload.slot = p.slot;
         var res = await api("uploadPhoto", payload);
         if (p.slot !== "other") state.photoSent[key(site.id, p.slot)] = true;
@@ -439,7 +446,7 @@
     delete state.busy.photo;
     state.notice = left.length
       ? { text: sent + " sent. " + left.length + " could not be sent, see below.", problem: true }
-      : { text: (sent === 1 ? "Photo sent." : sent + " photos sent.") + " The agent will place " + (sent === 1 ? "it" : "them") + " on its next weekday run." };
+      : { text: (sent === 1 ? "Photo sent." : sent + " photos sent.") + " A photo for an empty spot appears on the site within a few minutes. Anything else waits for the agent or your approval." };
     render();
   }
 
@@ -463,7 +470,7 @@
     var t = ev.target, kind = t.dataset.change;
     if (kind === "photo-site") { state.photoSite = t.value; state.photoFiles.forEach(function (p) { p.slot = ""; }); render(); }
     else if (kind === "photo-files") {
-      Array.prototype.forEach.call(t.files, function (f) { if (state.photoFiles.length < 12) state.photoFiles.push({ file: f, slot: "", note: "" }); });
+      Array.prototype.forEach.call(t.files, function (f) { if (state.photoFiles.length < 12) state.photoFiles.push({ file: f, slot: "", note: "", alt: "", caption: "" }); });
       state.notice = null; render();
     }
     else if (kind === "photo-slot") {
@@ -475,13 +482,17 @@
     }
   });
 
-  // Typing a description must not redraw the page, or the box loses focus.
+  // Typing must not redraw the page, or the box loses focus. Only the
+  // Send button is updated as the photos become ready.
   app.addEventListener("input", function (ev) {
-    var t = ev.target;
-    if (t.dataset.input === "photo-note") {
-      var p = state.photoFiles[Number(t.dataset.i)];
-      if (p) { var was = !!p.note.trim(); p.note = t.value; if (was !== !!p.note.trim()) { render(); var again = app.querySelector("#pnote-" + t.dataset.i); if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); } } }
-    }
+    var t = ev.target, field = { "photo-note": "note", "photo-alt": "alt", "photo-caption": "caption" }[t.dataset.input];
+    if (!field) return;
+    var p = state.photoFiles[Number(t.dataset.i)]; if (!p) return;
+    p[field] = t.value;
+    var ready = state.photoFiles.every(photoReady);
+    var btn = app.querySelector('[data-act="photo-send"]'), hint = app.querySelector("#photo-hint");
+    if (btn) btn.disabled = !ready || !!state.busy.photo;
+    if (hint) hint.style.display = ready ? "none" : "";
   });
 
   app.addEventListener("submit", async function (ev) {
