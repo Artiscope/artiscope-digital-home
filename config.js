@@ -4,5 +4,5 @@
 window.ADH_CONFIG = {
   supabaseUrl: "https://qjfutwulufvmhetztubt.supabase.co",
   supabaseKey: "sb_publishable_6X_IS-AOOVGNpzp73QPU8w_l_qSEnhX",
-  functionName: "home",
+  functionName: "dynamic-handler",   // the name Supabase gave the server function
 };

@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "4";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "5";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -62,11 +62,11 @@
     try { if (ctx && typeof ctx.json === "function") detail = await ctx.json(); } catch (e) { detail = null; }
     if (detail && detail.error) return detail.error;
     var extra = detail ? String(detail.message || detail.msg || detail.code || "") : "";
-    if (status === 404) return "The server function was not found. In Supabase, under Edge Functions, it must exist and be named exactly: home";
+    if (status === 404) return "The server function was not found. In Supabase, under Edge Functions, it must exist under the name set in config.js";
     if (status === 401) return "Supabase blocked the request before it reached the server function. Open the function's settings in Supabase, switch off Verify JWT, save, and try again.";
     if (status >= 500) return "The server function is there but failed to run (code " + status + (extra ? ", " + extra : "") + "). Send this message to Claude.";
     if (status) return "The server function answered with code " + status + (extra ? " (" + extra + ")" : "") + ". Send this message to Claude.";
-    return "The server function could not be reached. Either it has not been added in Supabase yet (it must be named: home), or the connection dropped.";
+    return "The server function could not be reached. Either it has not been added in Supabase yet (or under a different name), or the connection dropped.";
   }
 
   async function load() {

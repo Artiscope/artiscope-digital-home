@@ -37,7 +37,7 @@ the address does the same at any time.
 
 | File | Purpose |
 |---|---|
-| `config.js` | The Supabase address and publishable key. No secrets |
+| `config.js` | The Supabase address, publishable key and the server function's name. No secrets |
 | `index.html`, `assets/` | The console |
 | `supabase/functions/home/index.ts` | The server-side function, including the list of sites |
 | `tests/` | Automated checks. Run `node tests/run.mjs` and `node tests/ui.mjs` |
