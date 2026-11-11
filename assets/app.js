@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "6";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -42,6 +42,8 @@
   function today() {
     return new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   }
+  // The agent's notes use code marks around file names. Drop them for reading.
+  function plain(text) { return String(text).replace(/`/g, ""); }
   function liveSites() { return (state.data ? state.data.sites : []).filter(function (s) { return s.live; }); }
   function plural(n, one, many) { return n === 1 ? one : many; }
 
@@ -198,7 +200,7 @@
       var e = s.log && s.log[0];
       if (!e) return '<div class="logline"><span class="dot off" aria-hidden="true"></span><span><b>' + esc(s.name) + '.</b> No runs recorded yet.</span></div>';
       return '<div class="logline"><span class="dot" aria-hidden="true"></span><div class="stack" style="gap:4px"><span><b>' + esc(s.name) + '</b> <span class="small">' + esc(e.date) + '</span></span>' +
-        e.lines.map(function (l) { return '<span class="muted">' + esc(l) + '</span>'; }).join("") + '</div></div>';
+        e.lines.map(function (l) { return '<span class="muted">' + esc(plain(l)) + '</span>'; }).join("") + '</div></div>';
     }).join("");
     return '<div class="page-head"><span class="small">' + esc(today()) + '</span><h1>' + greeting() + '</h1>' +
       '<p>' + (t + d ? "Here is what is waiting for you across your sites." : "Nothing is waiting for you. Everything is up to date.") + '</p></div>' +
