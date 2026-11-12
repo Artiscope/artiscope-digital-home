@@ -103,9 +103,29 @@ try {
   await page.click('[data-act="ask"][data-k="ed-delpage"]'); await page.click('[data-act="ed-delpage"]'); await settle();
   assert.equal(await hash(), "#home"); assert.ok(!(await page.$$eval(".pagepick option", (o) => o.map((x) => x.value))).includes("page-visit-us"));
   await page.click('[data-act="ed-discard"]');
-  // pages drawn by the site's own code say so
+  // Editorial standards is a page of sections now, and can be edited, but not deleted
   await frame().click("footer a[href='#standards']"); await settle();
-  assert.ok((await page.innerText(".ed-left")).includes("drawn by the site's own code"));
+  assert.equal(await page.inputValue(".pagepick"), "page-standards");
+  assert.deepEqual(await page.locator("#ed-sections .sec:not(.blk) .nm").evaluateAll((l) => l.map((x) => x.firstChild.textContent)), ["Page heading", "Long text"]);
+  await frame().click("#text h2 >> nth=0"); await page.waitForSelector(".ed-right h2:has-text('Long text')");
+  await page.click('.sec[data-where="pageinfo"]'); assert.ok((await page.innerText(".ed-right")).includes("one of the site's own pages"));
+  // the research desk and search have their own headings
+  await page.selectOption(".pagepick", "search"); await settle(); await page.click('.sec[data-where="list"]'); await page.fill('[data-pf="intro"]', "Find anything."); await settle();
+  assert.equal(await frame().evaluate(() => document.querySelector(".phead .dek").textContent), "Find anything.");
+  // a source that is cited cannot be deleted
+  await page.selectOption(".pagepick", "a-palette-knife-painting"); await settle(); await page.click('.sec[data-where="item"][data-id="sources"]');
+  await page.click('.picklist [data-op="edit"] >> nth=0'); await page.waitForSelector(".ed-right h2:has-text('Source')");
+  assert.ok((await page.innerText(".ed-right")).includes("cannot be deleted"));
+  // an artist named in articles cannot be deleted; one who is not, can
+  await page.selectOption(".pagepick", "artist-zara-muse"); await settle(); await page.click('.sec[data-where="item"][data-id="settings"]');
+  assert.ok((await page.innerText(".ed-right")).includes("is named in"));
+  await page.selectOption(".pagepick", "artist-zen-xander"); await settle(); await page.click('.sec[data-where="item"][data-id="settings"]');
+  await page.click('[data-act="ask"][data-k="ed-delartist"]'); await page.click('[data-act="ed-delartist"]'); await settle();
+  assert.equal(await page.inputValue(".pagepick"), "artists"); assert.ok(!(await page.$$eval(".pagepick option", (o) => o.map((x) => x.value))).includes("artist-zen-xander"));
+  await page.click('[data-act="ed-discard"]');
+  // the Theme tile shows the site's own colours
+  await page.click('[data-tab="overview"]'); await page.waitForSelector(".tile .swatches i"); assert.equal(await page.locator(".tile .swatches i").count(), 4);
+  await page.screenshot({ path: shots + "overview.png" });
   // phone width holds
   await page.setViewportSize({ width: 390, height: 844 }); await settle();
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= 392), "no sideways scrolling on a phone");

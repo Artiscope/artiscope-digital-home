@@ -133,6 +133,11 @@ const WAR_SECTIONS = {
   button: { label: "Button or link", about: "A heading, a line and one button.", summary: (st) => (st.label || "Button"), library: "Send visitors somewhere", fields: [HEADING, { name: "text", label: "Text", type: "text" }, { name: "label", label: "Button words", type: "text" }, { name: "href", label: "Where it goes", type: "text", hint: "A page on this site starts with #, or a full web address." }, { name: "style", label: "Style", type: "choice", group: "Look", options: [["green", "Green"], ["paper", "Paper"], ["outline", "Outline"]] }, BG, FG],
     starter: { heading: ["Find out more"], text: "", label: "Read on", href: "#artists", style: "green", bg: "paper", fg: "" } },
 };
+// A page's own heading, and long text, as on Editorial standards.
+WAR_SECTIONS["page-heading"] = { label: "Page heading", about: "The heading at the top of a page.", summary: (st) => (st.heading || []).join(" "), library: "A page's heading and introduction",
+  starter: { eyebrow: "A small line", heading: ["A new", "page"], intro: "" }, fields: [EYEBROW, { ...HEADING, label: "Heading" }, { name: "intro", label: "Introduction", type: "long", plain: true }] };
+WAR_SECTIONS["long-text"] = { label: "Long text", about: "Headings and paragraphs, in the narrow reading column.", summary: (st) => String(st.body || "").replace(/<[^>]*>/g, " ").trim().split(/\s+/).slice(0, 6).join(" "), library: "Headings and paragraphs to read",
+  starter: { body: "<h2>A heading</h2><p>Write here.</p>" }, fields: [{ name: "body", label: "Text", type: "long", cite: false, hint: "Type as you would in a document. Grey square brackets mark wording still to be added." }] };
 // Sections of the original design can be added again from the library too.
 WAR_SECTIONS.numbers.library = "Figures from the site, in a band"; WAR_SECTIONS.numbers.starter = { eyebrow: "The review so far", heading: ["Research you", "can check"], labels: ["Artists documented", "Articles and reviews", "Sources cited", "Facts with a numbered source"] };
 WAR_SECTIONS.method.library = "Three cards in a row"; WAR_SECTIONS.method.starter = { eyebrow: "How we research", heading: ["The work first,", "then the story"], cards: [{ n: "1", text: "Write here.", title: "A title", sub: "A small line" }] };
@@ -213,6 +218,8 @@ const WAR_LISTS = {
   explained: { label: "Art Explained", section: "explained", start: { eyebrow: "Art Explained", heading: ["How the work is made,", "and why it matters"], intro: "Plain-language guides to the techniques, materials and ideas behind the artworks." } },
   library: { label: "Collector's Library", section: "library", start: { eyebrow: "Collector's Library", heading: ["Buy with your", "eyes open"], intro: "Practical, independent guidance on researching artists, understanding what you are buying and keeping good records." } },
   guides: { label: "Exhibition Guides", start: { eyebrow: "Exhibition Guides", heading: ["What to see,", "and how to see it"], intro: "Short, practical guides to current exhibitions featuring the artists we cover." } },
+  search: { label: "Search", start: { eyebrow: "Search", heading: ["Search the", "archive"], intro: "Artists, artworks, techniques and collecting guides." } },
+  research: { label: "Research desk", start: { eyebrow: "Research desk", heading: ["What still needs", "to be added"], intro: "An internal checklist, drawn from the portfolios themselves. Each item disappears once the information is added. Not for the public site." } },
 };
 
 // ----- Global Art Monitor: its sections, articles, artist market profiles and site details -----
@@ -420,7 +427,12 @@ export function gamFromEditor(kinds, given, content, sales, images, imageFiles) 
     rows.forEach((r) => { delete r.sale._i; allSales.push(r.sale); });
     if (isNew) changed.push("Add artist: " + a.name); else if (touched) changed.push("Edit profile: " + a.name);
   }
-  for (const slug of curSlugs) if (!seenR.has(slug)) throw new Error("Artists cannot be removed here.");
+  // an artist can go only once their sales have gone
+  for (const slug of curSlugs) if (!seenR.has(slug)) {
+    const n = (sales.sales || []).filter((x) => x.artist === slug).length, name = (sales.artists[slug] || {}).name || slug;
+    if (n) throw new Error(name + " still has " + n + (n === 1 ? " sale" : " sales") + " on the site. Remove the sales and save first, then delete the artist.");
+    if (c.bios) delete c.bios[slug]; delete im[slug]; changed.push("Delete artist: " + name);
+  }
   s.artists = artistsOut; s.sales = allSales;
   return { content: c, sales: s, images: im, changed };
 }
@@ -614,7 +626,7 @@ export function cleanSite(kinds, given, current) {
   out.sources = sources;
   const ga = Array.isArray(given.articles) ? given.articles : current.articles || [];
   const gr = Array.isArray(given.artists) ? given.artists : current.artists || [];
-  const ctx = { sourceIds: Object.keys(sources), articleSlugs: ga.map((x) => String((x && x.slug) || "")), artists: gr.map((x) => ({ slug: String((x && x.slug) || "") })) };
+  const ctx = { sourceIds: Object.keys(sources).filter((id) => !(given.sources && typeof given.sources === "object" && !Array.isArray(given.sources)) || id in given.sources), articleSlugs: ga.map((x) => String((x && x.slug) || "")), artists: gr.map((x) => ({ slug: String((x && x.slug) || "") })) };
   // artists: changed or added, never removed here
   const curArtists = current.artists || [], seenA = new Set(), artists = [];
   for (const g of gr) {
@@ -628,7 +640,12 @@ export function cleanSite(kinds, given, current) {
     if (!cur) changed.push("Add artist: " + next.name); else if (canon(next) !== canon(cur)) changed.push("Edit portfolio: " + next.name);
     artists.push(next);
   }
-  for (const cur of curArtists) if (!seenA.has(cur.slug)) throw new Error("Artists cannot be removed here. Unpublish the portfolio instead.");
+  // an artist can go only when no article names them
+  for (const cur of curArtists) if (!seenA.has(cur.slug)) {
+    const named = ga.find((a) => Array.isArray(a && a.artists) && a.artists.includes(cur.slug));
+    if (named) throw new Error(cur.name + " is named in the article " + named.title + ". Take them out of it first, or unpublish the portfolio instead.");
+    changed.push("Delete artist: " + cur.name);
+  }
   if (artists.length > 60) throw new Error("There are too many artists.");
   out.artists = artists;
   // articles: changed, added, moved or deleted
@@ -648,6 +665,15 @@ export function cleanSite(kinds, given, current) {
   if (articles.length > 400) throw new Error("There are too many articles.");
   if (curArticles.map((x) => x.slug).join() !== articles.map((x) => x.slug).join() && !changed.length) changed.push("Reorder articles");
   out.articles = articles;
+  // a source can go only when nothing cites it any more
+  if (given.sources && typeof given.sources === "object" && !Array.isArray(given.sources)) {
+    const text = JSON.stringify({ a: given.artists || current.artists, b: given.articles || current.articles });
+    for (const id of Object.keys(current.sources || {})) {
+      if (id in given.sources) continue;
+      if (text.includes('"' + id + '"') || text.includes('\\"' + id + '\\"')) throw new Error("The source " + (current.sources[id].title || id) + " is still cited. Take it out of those places first.");
+      delete out.sources[id]; changed.push("Delete source: " + (current.sources[id].title || id));
+    }
+  }
   return { data: out, changed };
 }
 // Item data as the editor sees it: artwork pictures by file name, like every other picture.

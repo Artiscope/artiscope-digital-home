@@ -34,10 +34,15 @@ const W = SITES[0];
   assert.equal(r.data.artists[1], war.artists[1] === undefined ? undefined : r.data.artists[1]); assert.equal(canon(r.data.artists[1]), canon(war.artists[1]), "untouched artists stay exactly as they were");
   const fresh = r.data.articles.at(-1); assert.equal(fresh.hidden, true); assert.equal(fresh.section, "reviews"); assert.equal(fresh.status, "Draft for review");
   // refusals
-  const bad = siteForEditor(war); bad.artists.pop(); assert.throws(() => cleanSite(W.items, bad, war), /cannot be removed/);
   const bad2 = siteForEditor(war); bad2.articles.push({ slug: "Bad Slug", title: "x" }); assert.throws(() => cleanSite(W.items, bad2, war), /web address/);
   const bad3 = siteForEditor(war); bad3.sources["x-1"] = { title: "x", url: "javascript:alert(1)" }; assert.throws(() => cleanSite(W.items, bad3, war), /https/);
   const bad4 = siteForEditor(war); bad4.articles[0].title = " "; assert.throws(() => cleanSite(W.items, bad4, war), /title/);
+  // a source can be deleted only when nothing cites it; an artist only when no article names them
+  const ds = siteForEditor(war); delete ds.sources["ap-muse"]; assert.throws(() => cleanSite(W.items, ds, war), /still cited/);
+  const unused = Object.keys(war.sources).find((id) => !JSON.stringify({ a: war.artists, b: war.articles }).includes('"' + id + '"') && !JSON.stringify(war.articles).includes('\\"' + id + '\\"'));
+  if (unused) { const d2 = siteForEditor(war); delete d2.sources[unused]; const rr = cleanSite(W.items, d2, war); assert.ok(!(unused in rr.data.sources)); assert.match(rr.changed[0], /^Delete source/); }
+  const da = siteForEditor(war); da.artists = da.artists.filter((a) => a.slug !== "zara-muse"); assert.throws(() => cleanSite(W.items, da, war), /named in the article/);
+  const dz = siteForEditor(war); dz.artists = dz.artists.filter((a) => a.slug !== "zen-xander"); assert.deepEqual(cleanSite(W.items, dz, war).changed, ["Delete artist: Zen Xander"]);
   // deleting an article
   const del = siteForEditor(war); del.articles = del.articles.filter((a) => a.slug !== "glossary-of-paint");
   assert.match(cleanSite(W.items, del, war).changed[0], /^Delete article: A short glossary/);
@@ -88,7 +93,7 @@ const read = (f) => JSON.parse(hub.read(WR, "main", f));
   // nothing changed: nothing saved
   assert.equal((await call({ action: "savePages", pages: p, content: siteForEditor(read("content/site.json")) })).unchanged, true);
   // refused content is not saved at all
-  const c3 = siteForEditor(read("content/site.json")); c3.artists.pop();
+  const c3 = siteForEditor(read("content/site.json")); c3.artists.shift();
   assert.equal((await call({ action: "savePages", pages: p, content: c3 })).status, 400);
   // undo takes the last step back, then the first
   assert.equal((await call({ action: "undoStep" })).ok, true); assert.equal(read("content/site.json").articles.find((x) => x.slug === "studio-visit").hidden, true);

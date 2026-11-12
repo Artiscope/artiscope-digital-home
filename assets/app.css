@@ -395,3 +395,5 @@ label.linklike.upl { display: inline-flex; align-items: center; font-weight: 400
 .extras { gap: 10px; margin-top: 18px; }
 .rt-cite { max-width: 200px; min-height: 34px; border: 0; border-radius: 10px; background: var(--well); color: var(--text); font: inherit; font-size: 13px; padding: 0 10px; }
 .ed .sec.plain.go { font-size: 13.5px; padding: 7px 10px 7px 20px; }
+.tile .swatches { display: flex; gap: 10px; margin: 2px 0 10px; }
+.tile .swatches i { width: 34px; height: 34px; border-radius: 10px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .08), 0 4px 12px rgba(0, 0, 0, .35); }

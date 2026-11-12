@@ -47,6 +47,10 @@ e = clone(E); e.artists[0].sales.reverse(); e.artists[0].sales.pop();
 r = gamFromEditor(S.items, e, content, sales, images, imageFiles);
 assert.equal(r.sales.sales.filter((x) => x.artist === "zara-muse").length, E.artists[0].sales.length - 1);
 assert.equal(canon(r.sales.sales[0]), canon(sales.sales[E.artists[0].sales.length - 1]));
+// an artist goes only once their sales have gone
+e = clone(E); e.artists.pop(); assert.throws(() => gamFromEditor(S.items, e, content, sales, images, imageFiles), /Remove the sales/);
+{ const s0 = clone(sales); s0.sales = s0.sales.filter((x) => x.artist !== "konn-artiss"); const e0 = gamForEditor(content, s0, images, imageFiles); e0.artists.pop();
+  const r0 = gamFromEditor(S.items, e0, content, s0, images, imageFiles); assert.deepEqual(r0.changed, ["Delete artist: Konn Artiss"]); assert.ok(!r0.sales.artists["konn-artiss"] && !r0.content.bios["konn-artiss"] && !r0.images["konn-artiss"]); }
 // the publisher disclosure must stay; the list of sections is fixed
 e = clone(E); e.site.disclosure = " "; assert.throws(() => gamFromEditor(S.items, e, content, sales, images, imageFiles), /publishes the site/);
 e = clone(E); e.sections.pop(); assert.throws(() => gamFromEditor(S.items, e, content, sales, images, imageFiles), /fixed/);
