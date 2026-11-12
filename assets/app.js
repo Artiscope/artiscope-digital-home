@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "22";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "23";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -165,7 +165,7 @@
       delete state.busy[k]; render();
       await ensure(true);
     } catch (e) {
-      state.status = "live"; state.notice = { text: e.message, problem: true };
+      state.status = "live"; state.notice = e.stale && state.ask ? null : { text: e.message, problem: true };
       delete state.busy[k]; render();
     }
   }
@@ -659,7 +659,13 @@
   function pgSummary(pgd, where, key, sec) {
     var k = pgd.kinds[sec.type]; if (!k) return "";
     var own = pgd.summaries[(where === "shared" ? "shared:" : pgd.page + ":") + key];
-    return own != null ? own : "";
+    return own != null ? fillWords(pgd, own) : "";
+  }
+  // Words in curly brackets, such as {headline}, are filled in by the site from Site details.
+  // The list on the left shows them filled in, as visitors see them.
+  function fillWords(pgd, t) {
+    var d = pgd.gam && pgd.site && pgd.site.site; if (!d || typeof t !== "string" || t.indexOf("{") < 0) return t;
+    return t.replace(/\{(tagline|headline|intro|disclosure|email|published)\}/g, function (m, w) { var v = w === "published" ? pgd.site.published_text : d[w]; return v ? String(v) : m; });
   }
   function pgMark(pgd) { pgd.dirty = canon(pgd.doc) !== pgd.base || JSON.stringify(pgd.pictures || {}) !== (pgd.picBase || "{}") || siteChanged(pgd); state.dirty = pgd.dirty; }
   function siteChanged(pgd) { return !!pgd.site && JSON.stringify(pgd.site) !== pgd.siteBase; }
