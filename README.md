@@ -67,7 +67,6 @@ The Theme screen changes a site's colours and typefaces. Choices are kept in `co
 
 Browser tests: `PLAYWRIGHT=<path to playwright> node tests/rich.mjs` and `node tests/theme.mjs`.
 
-## Working copies, Undo and Publish
+## Saving, Undo and trial copies
 
-Nothing the console saves goes straight to visitors. Each site has a working branch for the live site (`adh/live-...`) and up to two trial copies (`adh/trial-...`). Saving adds a step to the copy being worked on. Undo and Redo move that copy back and forward a step. Publish joins the copy into `main`, which is what visitors see. Each copy is also built into `preview/<name>/` on the site, marked so search engines ignore it. `tests/fakegit.mjs` stands in for GitHub in the tests.
-
+On the live site, Save goes straight to visitors (it commits to `main`) after a short confirmation. Undo and Redo on the live site add new commits that put earlier words back, and the Recent steps list shows what can be undone. A trial copy (`adh/trial-...`) keeps its changes on its own branch with a preview at `preview/<name>/`, until "Make live" merges it into `main`. `tests/fakegit.mjs` stands in for GitHub in the tests.

@@ -106,35 +106,36 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   for (const st of SITES.filter((x) => x.theme)) for (const l of st.theme.looks) cleanTheme(st.theme, { colours: l.colours });
 }
 
-// copies: nothing reaches visitors until Publish; undo, redo, trial copies
+// live saves go straight to the live site; undo and redo add steps; trial copies wait for Make live
 {
   const site = "world-art-review", call = async (b) => { const r = await handle(post({ site, ...b })); return { status: r.status, ...(await r.json()) }; };
   const over = async (copies) => (await (await handle(post({ action: "overview", copies }))).json()).sites[0];
   const title = (ref) => JSON.parse(hub.read(WR, ref, "content/site.json")).articles[0].title;
-  const original = JSON.parse(JSON.stringify(war)).articles[0].title;
-  assert.equal(title("main"), original, "live is untouched by everything saved so far");
+  assert.equal(title("main"), "Edited in a test", "a live save is on the live site at once");
+  assert.equal(work(), undefined, "no working branch for the live site");
   let o = await over(); const live = o.copies[0];
-  assert.equal(live.kind, "live"); assert.ok(live.ahead >= 5 && live.steps.length === live.ahead && !live.canRedo);
+  assert.equal(live.kind, "live"); assert.equal(live.ahead, 0); assert.ok(live.steps.length >= 5 && !live.canRedo);
   assert.equal(live.steps[0].what, "Theme: bands and buttons, headlines typeface"); assert.equal(live.steps[0].by, "me@x.com");
-  assert.ok(!JSON.stringify(o.copies).includes("adh/"), "branch names stay on the server");
-  assert.equal(o.slots.find((x) => x.id === "artist-zara-muse").filled, false, "the console shows the copy being worked on");
+  assert.equal(live.preview, "", "the live site has no preview link");
 
-  // undo and redo, one step and several
-  const n0 = live.ahead;
+  // undo one step, then two, then redo everything undone
+  const n0 = live.steps.length;
   assert.equal((await call({ action: "undoStep" })).ok, true);
-  o = await over(); assert.equal(o.copies[0].ahead, n0 - 1); assert.equal(o.copies[0].canRedo, true);
-  assert.equal(hub.read(WR, work(), "content/theme.json"), null, "the theme step is undone");
+  o = await over(); assert.equal(o.copies[0].steps.length, n0 - 1); assert.equal(o.copies[0].canRedo, true);
+  assert.equal(hub.read(WR, "main", "content/theme.json"), null, "the theme step is undone on the live site");
+  assert.match(hub.lastMessage(WR, "main"), /^Undo: Theme: bands and buttons, headlines typeface \(me@x\.com\)\n/);
   assert.equal((await call({ action: "undoStep", steps: 2 })).ok, true);
-  o = await over(); assert.equal(o.copies[0].ahead, n0 - 3);
-  for (let i = 0; i < 3; i++) assert.equal((await call({ action: "redoStep" })).ok, true);
-  o = await over(); assert.equal(o.copies[0].ahead, n0); assert.equal(o.copies[0].canRedo, false);
+  o = await over(); assert.equal(o.copies[0].steps.length, n0 - 3);
+  assert.equal((await call({ action: "redoStep" })).ok, true);
+  o = await over(); assert.equal(o.copies[0].steps.length, n0); assert.equal(o.copies[0].canRedo, false);
+  assert.ok(hub.read(WR, "main", "content/theme.json").includes("#22304A"), "redo put the theme back");
   assert.equal((await call({ action: "redoStep" })).status, 409);
-  assert.ok(hub.read(WR, work(), "content/theme.json").includes("#22304A"));
-  // a new edit after an undo ends the chance to redo
+  // a new save after an undo ends the chance to redo, and the undone step stays undone
   await call({ action: "undoStep" });
   await call({ action: "saveEntry", collection: "articles", id: first.id, values: { title: "Second edit" } });
-  o = await over(); assert.equal(o.copies[0].canRedo, false); assert.equal(title(work()), "Second edit");
+  o = await over(); assert.equal(o.copies[0].canRedo, false); assert.equal(title("main"), "Second edit"); assert.equal(hub.read(WR, "main", "content/theme.json"), null);
   assert.equal((await call({ action: "undoStep", steps: 99 })).status, 409);
+  assert.equal((await call({ action: "discard" })).status, 400);
 
   // trial copies: made from live, at most two, edited on their own
   let t = await call({ action: "makeCopy", name: "Winter look!" }); assert.match(t.copy, /^trial-winter-look-[0-9a-f]{6}$/);
@@ -142,41 +143,31 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   await call({ action: "makeCopy", name: "Second" }); assert.equal((await call({ action: "makeCopy", name: "Third" })).status, 400);
   o = await over({ [site]: t.copy }); assert.equal(o.copy, t.copy); assert.equal(o.copies.length, 3); assert.equal(o.copies[1].name, "Second");
   const trial = o.copies.find((c) => c.id === t.copy); assert.equal(trial.name, "Winter look"); assert.equal(trial.ahead, 0); assert.ok(trial.preview.endsWith("/preview/" + t.copy + "/"));
-  assert.equal(o.slots.find((x) => x.id === "artist-zara-muse").filled, true, "a new trial copy starts as live is");
   await call({ action: "saveEntry", copy: t.copy, collection: "articles", id: first.id, values: { title: "Trial title" } });
-  assert.equal(title("adh/" + t.copy), "Trial title"); assert.equal(title(work()), "Second edit"); assert.equal(title("main"), original);
+  assert.equal(title("adh/" + t.copy), "Trial title"); assert.equal(title("main"), "Second edit");
   let c2 = await (await handle(post({ action: "content", site, copy: t.copy }))).json(); assert.equal(c2.collections[0].entries[0].title, "Trial title");
   assert.equal((await call({ action: "saveEntry", copy: "trial-gone-000000", collection: "articles", id: first.id, values: { title: "x" } })).status, 409);
+  // trial undo and redo move the copy, step by step
+  assert.equal((await call({ action: "undoStep", copy: t.copy })).ok, true); o = await over({ [site]: t.copy }); assert.equal(o.copies.find((c) => c.id === t.copy).ahead, 0);
+  assert.equal((await call({ action: "redoStep", copy: t.copy })).ok, true); o = await over({ [site]: t.copy }); assert.equal(o.copies.find((c) => c.id === t.copy).ahead, 1);
 
-  // publish the live changes
-  const pub = await call({ action: "publish" }); assert.equal(pub.ok, true);
-  assert.equal(title("main"), "Second edit"); assert.match(hub.lastMessage(WR, "main"), /^Publish: \d+ changes \(me@x\.com\)$/);
-  o = await over(); assert.equal(o.copies[0].ahead, 0); assert.equal(o.copies[0].behind, 0);
-  assert.equal((await call({ action: "publish" })).unchanged, true);
-  assert.equal(JSON.parse(liveFile("image-slots.json")).slots.find((x) => x.id === "artist-zara-muse").filled, false);
-
-  // the trial copy and live now both changed the same file: ask first, then replace content only
+  // live changed in the same file since: ask first, then replace content only
   hub.commitOn(WR, "main", "tools/build_site.py", "print(2)", "A layout fix made on live");
-  o = await over(); assert.equal(o.copies.find((c) => c.id === t.copy).behind > 0, true);
-  const clash = await call({ action: "publish", copy: t.copy }); assert.equal(clash.conflict, true); assert.ok(clash.live.includes("A layout fix made on live"));
-  assert.equal(title("main"), "Second edit", "nothing is published while the question is open");
+  await call({ action: "saveEntry", collection: "articles", id: first.id, values: { title: "Live edit in the meantime" } });
+  o = await over({ [site]: t.copy }); assert.ok(o.copies.find((c) => c.id === t.copy).behind > 0);
+  const clash = await call({ action: "publish", copy: t.copy }); assert.equal(clash.conflict, true); assert.ok(clash.live.includes("A layout fix made on live") && clash.live.some((x) => x.startsWith("Edit article: ")));
+  assert.equal(title("main"), "Live edit in the meantime", "nothing is published while the question is open");
   assert.equal((await call({ action: "refreshCopy", copy: t.copy })).status, 409);
   assert.equal((await call({ action: "publish", copy: t.copy, replace: true })).ok, true);
   assert.equal(title("main"), "Trial title"); assert.equal(hub.read(WR, "main", "tools/build_site.py"), "print(2)", "live keeps its own layout fix");
   assert.equal(hub.lastMessage(WR, "main"), "Make live: Winter look (me@x.com)");
-  o = await over(); assert.equal(o.copies.find((c) => c.id === t.copy).ahead, 0);
+  o = await over(); assert.equal(o.copies.find((c) => c.id === t.copy).ahead, 0); assert.equal(o.copies[0].steps[0].what, "Make live: Winter look");
+  assert.equal((await call({ action: "publish" })).unchanged, true);
 
-  // the next live edit starts from the newest live site
-  await call({ action: "saveEntry", collection: "articles", id: first.id, values: { dek: "A new summary." } });
-  assert.equal(title(work()), "Trial title"); assert.equal(hub.read(WR, work(), "tools/build_site.py"), "print(2)");
-  o = await over(); assert.equal(o.copies[0].ahead, 1);
-  assert.equal((await call({ action: "discard" })).ok, true); o = await over(); assert.equal(o.copies[0].ahead, 0);
-  assert.equal(JSON.parse(hub.read(WR, work(), "content/site.json")).articles[0].dek, JSON.parse(liveFile("content/site.json")).articles[0].dek);
-
-  // History can put a published change back, as a step that waits for Publish
+  // History can put a published change back, straight onto the live site
   const hist = (await call({ action: "history" })).changes; const made = hist.find((h) => h.what === "Make live: Winter look"); assert.ok(made && made.canUndo);
   assert.equal((await call({ action: "undo", sha: made.sha })).ok, true);
-  assert.equal(title(work()), "Second edit"); assert.equal(title("main"), "Trial title"); assert.equal(hub.lastMessage(WR, work()), "Undo: Make live: Winter look (me@x.com)");
+  assert.equal(title("main"), "Live edit in the meantime"); assert.match(hub.lastMessage(WR, "main"), /^Undo: Make live: Winter look \(me@x\.com\)/);
   assert.equal(hist.find((h) => h.what === "A layout fix made on live").canUndo, false);
 
   // a refresh that can be joined, then delete
@@ -185,5 +176,6 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   assert.equal((await call({ action: "deleteCopy", copy: second })).ok, true); assert.equal((await call({ action: "deleteCopy" })).status, 400);
   o = await over({ [site]: second }); assert.equal(o.copies.length, 2); assert.equal(o.copy, o.copies[0].id, "a deleted copy falls back to the live site");
   assert.ok(!Object.keys(hub.refs(WR)).some((n) => n.startsWith("adh-redo/")), "no leftovers");
+
 }
 console.log("CONTENT CHECKS PASSED");

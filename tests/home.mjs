@@ -534,11 +534,15 @@ async function inboxOf(repo, ref = "") {
 }
 
 
+const CONTENT_FILES = ["content/site.json", "data/content.json", "data/sales.json", "data/images.json", "image-slots.json", "content/theme.json", "data/theme.json", "content/pages.json", "data/pages.json"];
+const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Mark spot |Add photo|Photo description|Place photos|Theme: |Publish: |Make live: |Undo: |Redo: )/;
+
 // ---------- copies of a site: the live one being worked on, and trial copies ----------
 //
-// Nothing the console saves goes straight to visitors. Each site has a
-// working branch for the live site ("adh/live-...") and up to two trial
-// copies ("adh/trial-..."). Publishing merges one of them into main.
+// Saving on the live site goes straight to visitors: it commits to main.
+// A trial copy ("adh/trial-...") keeps its changes on its own branch
+// until "Make live" merges it into main. Undo on the live site adds a
+// new commit that puts the earlier words back.
 
 const MAX_TRIALS = 2;
 const COPY_ID = /^(live|trial)-[a-z0-9-]{1,60}$/;
@@ -589,21 +593,34 @@ async function copiesOf(site) {
       preview: "https://" + site.domain + "/preview/" + r.id + "/",
     };
   }));
-  const lives = out.filter((c) => c.kind === "live");
-  const live = lives[0] || { id: "live", kind: "live", name: "Live site", branch: "", sha: "", ahead: 0, behind: 0, since: "", steps: [], canRedo: false, preview: "" };
+  // an older working copy of the live site (from before saving went straight to live) is published and removed
+  for (const old of out.filter((c) => c.kind === "live")) {
+    if (old.ahead > 0) await gh("/repos/" + site.repo + "/merges", { method: "POST", body: JSON.stringify({ base: "main", head: old.branch, commit_message: "Publish: earlier saved changes" }) });
+    await gh("/repos/" + site.repo + "/git/refs/heads/" + old.branch, { method: "DELETE" });
+    if (redoable.includes(old.id)) await gh("/repos/" + site.repo + "/git/refs/heads/adh-redo/" + old.id, { method: "DELETE" });
+  }
+  const recent = await gh("/repos/" + site.repo + "/commits?sha=main&per_page=20");
+  const list = recent.ok && Array.isArray(recent.data) ? recent.data : [];
+  // the steps still standing: an Undo or Redo commit says which earlier state it put back,
+  // so the list continues from there
+  const steps = [];
+  for (let i = 0; i < list.length;) {
+    const st = stepOf(list[i]);
+    if (!UNDOABLE.test(st.what)) break;
+    const back = String(list[i].commit.message || "").match(/\nRestored-To: ([0-9a-f]{40})/);
+    if (back) { const j = list.findIndex((c) => c.sha === back[1]); if (j < 0) break; i = j; continue; }
+    steps.push(st); i++;
+  }
+  const live = { id: "live", kind: "live", name: "Live site", branch: "main", sha: list[0] ? list[0].sha : "", ahead: 0, behind: 0, since: "", steps, canRedo: redoable.includes("live"), preview: "" };
   return [live].concat(out.filter((c) => c.kind === "trial").sort((a, b) => a.id.localeCompare(b.id)));
 }
 function pickCopy(copies, id) {
   if (!id || id === "live" || String(id).startsWith("live-")) return copies[0];
   return copies.find((c) => c.id === id) || null;
 }
-// Where to read a copy from. The live copy is read from main until it has changes of its own.
-function readRefOf(copy) {
-  if (copy.kind === "trial") return copy.branch;
-  return copy.branch && copy.ahead > 0 ? copy.branch : "main";
-}
+function readRefOf(copy) { return copy.kind === "trial" ? copy.branch : "main"; }
 function publicCopy(c) {
-  return { id: c.id, kind: c.kind, name: c.name, ahead: c.ahead, behind: c.behind, since: c.since, steps: c.steps.map((x) => ({ what: x.what, when: x.when, by: x.by })), canRedo: c.canRedo, preview: c.ahead > 0 || c.kind === "trial" ? c.preview : "" };
+  return { id: c.id, kind: c.kind, name: c.name, ahead: c.ahead, behind: c.behind, since: c.since, steps: c.steps.map((x) => ({ what: x.what, when: x.when, by: x.by })), canRedo: c.canRedo, preview: c.kind === "trial" ? c.preview : "" };
 }
 async function mainSha(site) {
   const r = await gh("/repos/" + site.repo + "/git/ref/heads/main");
@@ -614,23 +631,13 @@ async function moveBranch(site, branch, sha, force) {
 }
 async function dropRedo(site, copy) {
   if (copy.canRedo) await gh("/repos/" + site.repo + "/git/refs/heads/adh-redo/" + copy.id, { method: "DELETE" });
+  if (copy.kind === "live" && !copy.canRedo) { /* nothing kept */ }
   copy.canRedo = false;
 }
-// Makes sure the copy has a branch to save to, brought up to date with live where that is safe.
-async function branchForWriting(site, copy, who) {
-  if (!copy.branch) {
-    const sha = await mainSha(site);
-    if (!sha) return null;
-    const id = "live-" + randomTail();
-    const made = await gh("/repos/" + site.repo + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/adh/" + id, sha }) });
-    if (!made.ok) return null;
-    copy.id = id; copy.branch = "adh/" + id; copy.sha = sha;
-  } else if (copy.kind === "live" && copy.behind > 0) {
-    if (copy.ahead === 0) await moveBranch(site, copy.branch, await mainSha(site), false);
-    else await gh("/repos/" + site.repo + "/merges", { method: "POST", body: JSON.stringify({ base: copy.branch, head: "main", commit_message: "Bring in the latest live changes" + who }) });
-  }
+// The branch a save goes to. The live site is main; a trial copy is its own branch.
+async function branchForWriting(site, copy, _who) {
   await dropRedo(site, copy);
-  return copy.branch;
+  return copy.branch || "main";
 }
 
 async function siteOverview(site, wanted = "") {
@@ -888,8 +895,6 @@ export async function handle(req) {
   }
 
   // ----- history and undo -----
-  const CONTENT_FILES = ["content/site.json", "data/content.json", "data/sales.json", "data/images.json", "image-slots.json", "content/theme.json", "data/theme.json", "content/pages.json", "data/pages.json"];
-  const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Add photo|Place photos|Theme: |Publish: |Make live: |Undo: )/;
 
   if (action === "history") {
     const r = await gh("/repos/" + site.repo + "/commits?per_page=30");
@@ -959,9 +964,8 @@ export async function handle(req) {
       if (!del.ok && del.status !== 422) return json({ error: writeProblem(del, "GitHub did not delete the copy.") }, 502);
       return json({ ok: true });
     }
-    if (!copy.branch) return json({ ok: true, unchanged: true });
-
     if (action === "refreshCopy") {
+      if (copy.kind !== "trial") return json({ ok: true, unchanged: true });
       if (copy.behind === 0) return json({ ok: true, unchanged: true });
       await dropRedo(site, copy);
       const m = copy.ahead === 0
@@ -973,6 +977,7 @@ export async function handle(req) {
     }
 
     if (action === "publish") {
+      if (copy.kind !== "trial") return json({ ok: true, unchanged: true });
       if (copy.ahead === 0) return json({ ok: true, unchanged: true });
       const message = (copy.kind === "live" ? "Publish: " + copy.ahead + (copy.ahead === 1 ? " change" : " changes") : "Make live: " + copy.name) + who;
       let newSha = "";
@@ -1004,12 +1009,49 @@ export async function handle(req) {
       return json({ ok: true });
     }
 
-    if (action === "discard") {
-      if (copy.kind !== "live") return json({ error: "To drop a trial copy, delete it." }, 400);
-      await dropRedo(site, copy);
-      const moved = await moveBranch(site, copy.branch, await mainSha(site), true);
-      if (!moved.ok) return json({ error: writeProblem(moved, "GitHub did not discard the changes.") }, 502);
+    if (action === "discard") return json({ error: "Nothing waits on the live site. Undo a step instead." }, 400);
+
+    // On the live site, undo and redo add new commits that put earlier words back.
+    async function restoreTo(sha, message) {
+      const want = await gh(repo + "/git/trees/" + sha + "?recursive=1");
+      const headSha = await mainSha(site);
+      const head = headSha ? await gh(repo + "/git/commits/" + headSha) : null;
+      const have = headSha ? await gh(repo + "/git/trees/" + headSha + "?recursive=1") : null;
+      if (!want.ok || !head || !head.ok || !have.ok) return json({ error: "The earlier version could not be read." }, 502);
+      const keep = (t) => t.type === "blob" && (CONTENT_FILES.includes(t.path) || /^(images|assets\/images|inbox)\/[^/]+$/.test(t.path));
+      const wanted = {}; for (const t of want.data.tree) if (keep(t)) wanted[t.path] = t.sha;
+      const tree = [];
+      for (const t of have.data.tree) if (keep(t) && !(t.path in wanted)) tree.push({ path: t.path, mode: "100644", type: "blob", sha: null });
+      for (const [path, blob] of Object.entries(wanted)) tree.push({ path, mode: "100644", type: "blob", sha: blob });
+      const made = await gh(repo + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: head.data.tree.sha, tree }) });
+      if (!made.ok) return json({ error: writeProblem(made, "GitHub did not save the change.") }, 502);
+      if (made.data.sha === head.data.tree.sha) return json({ ok: true, unchanged: true });
+      const commit = await gh(repo + "/git/commits", { method: "POST", body: JSON.stringify({ message: message + "\n\nRestored-To: " + sha, tree: made.data.sha, parents: [headSha] }) });
+      if (!commit.ok) return json({ error: writeProblem(commit, "GitHub did not save the change.") }, 502);
+      const moved = await moveBranch(site, "main", commit.data.sha, false);
+      if (!moved.ok) return json({ error: writeProblem(moved, "GitHub did not save the change. Please try again.") }, 502);
       return json({ ok: true });
+    }
+    if (action === "undoStep" && copy.kind === "live") {
+      const n = Math.max(1, Math.min(20, Number(body.steps) || 1));
+      if (copy.steps.length < n) return json({ error: "There is nothing more to undo." }, 409);
+      const last = await gh(repo + "/git/commits/" + copy.steps[n - 1].sha);
+      const parent = last.ok && last.data.parents && last.data.parents[0] ? last.data.parents[0].sha : "";
+      if (!parent) return json({ error: "That step could not be undone." }, 502);
+      if (!copy.canRedo) {
+        const kept = await gh(repo + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/adh-redo/live", sha: copy.sha }) });
+        if (!kept.ok) return json({ error: writeProblem(kept, "GitHub did not undo the step.") }, 502);
+      }
+      const what = n === 1 ? copy.steps[0].what : n + " steps";
+      return await restoreTo(parent, "Undo: " + what + who);
+    }
+    if (action === "redoStep" && copy.kind === "live") {
+      if (!copy.canRedo) return json({ error: "There is nothing to redo." }, 409);
+      const tip = await gh(repo + "/git/ref/heads/adh-redo/live");
+      const at = tip.ok && tip.data.object ? tip.data.object.sha : "";
+      const out = at ? await restoreTo(at, "Redo: earlier steps" + who) : null;
+      await dropRedo(site, copy);
+      return out || json({ error: "There is nothing to redo." }, 409);
     }
 
     if (action === "undoStep") {

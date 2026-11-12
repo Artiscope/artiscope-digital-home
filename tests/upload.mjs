@@ -11,13 +11,13 @@ let r = await handle(post({ action: "uploadPhoto", site: "world-art-review", slo
 assert.equal(r.status, 200); const out = await r.json(); assert.equal(out.name, "slot--artist-konn-artiss.jpg");
 const writes = hub.log.filter((c) => c.startsWith("PUT")).map((c) => c.replace("contents/", ""));
 assert.deepEqual(writes, ["PUT inbox/slot--artist-konn-artiss.json", "PUT inbox/slot--artist-konn-artiss.jpg"], "description is saved before the photo");
-// the photo waits on the working copy, not on the live site
-const work = Object.keys(hub.refs(WR)).find((n) => n.startsWith("adh/live-")); assert.ok(work);
+// the photo goes to the live site's inbox, to be placed within minutes
+const work = "main"; assert.ok(!Object.keys(hub.refs(WR)).some((n) => n.startsWith("adh/live-")));
 const note = JSON.parse(hub.read(WR, work, "inbox/slot--artist-konn-artiss.json"));
 assert.equal(note.alt, "Ice blocks on a pavement"); assert.equal(note.caption, "ANTI-FRIEZE, 2025"); assert.equal(note.sent_by, "me@x.com");
-assert.equal(hub.read(WR, work, "inbox/slot--artist-konn-artiss.jpg"), "ABC"); assert.equal(hub.read(WR, "main", "inbox/slot--artist-konn-artiss.jpg"), null);
+assert.equal(hub.read(WR, work, "inbox/slot--artist-konn-artiss.jpg"), "ABC");
 const over = (await (await handle(post({ action: "overview" }))).json()).sites[0];
-assert.deepEqual(over.inbox, ["slot--artist-konn-artiss.jpg"]); assert.equal(over.slots[0].waiting, true); assert.equal(over.copies[0].ahead, 2);
+assert.deepEqual(over.inbox, ["slot--artist-konn-artiss.jpg"]); assert.equal(over.slots[0].waiting, true); assert.equal(over.copies[0].steps.length, 2);
 r = await handle(post({ action: "uploadPhoto", site: "world-art-review", slot: "artist-konn-artiss", ext: "jpg", content: "QUJD", alt: "x" }));
 assert.equal(r.status, 409, "one photo at a time per spot");
 r = await handle(post({ action: "uploadPhoto", site: "world-art-review", slot: "artist-nobody", ext: "jpg", content: "QUJD", alt: "x" }));

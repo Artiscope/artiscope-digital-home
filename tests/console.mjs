@@ -8,10 +8,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const click = (d) => el.listeners.click({ target: { closest: () => ({ dataset: d }) } });
 await wait(500);
 const adh = win.__adh, html = () => el.innerHTML;
-assert.ok(html().includes("Artiscope<br>Digital Home") && html().includes("Sample mode") && html().includes("Version 14"));
+assert.ok(html().includes("Artiscope<br>Digital Home") && html().includes("Sample mode") && html().includes("Version 15"));
 assert.ok(html().includes("Pick a site to work on") && html().includes('class="bulge') && !html().includes('data-tab="content"'), "outside a site only All sites shows");
 adh.openSite("world-art-review"); await wait(400);
-assert.ok(html().includes("Working in") && html().includes('data-tab="content"') && html().includes("Live site and trial copies") && html().includes("Everything is live"));
+assert.ok(html().includes("Working in") && html().includes('data-tab="content"') && html().includes("Live site and trial copies") && html().includes("Saves go straight to visitors"));
 
 // every screen draws, with no stray "undefined" and no long dashes
 for (const tab of ["overview", "content", "theme", "photos", "history", "home"]) {
@@ -29,30 +29,32 @@ adh.openSite("world-art-review"); await wait(300); assert.equal(adh.state.tab, "
 adh.go("content"); await wait(300);
 assert.ok(html().includes('class="blob"') && html().includes("Hidden from the site"));
 click({ act: "open", ci: "0", ei: "0" });
-assert.ok(html().includes("Save and publish") && html().includes("Summary line") && html().includes('type="number"') && html().includes("Hide from the site"));
+assert.ok(html().includes(">Save<") && html().includes("Summary line") && html().includes('type="number"') && html().includes("Hide from the site"));
 const form = { dataset: { form: "entry" }, querySelectorAll: () => [{ dataset: { field: "title" }, value: "New title" }, { dataset: { field: "minutes" }, value: "7" }] };
 el.listeners.submit({ preventDefault() {}, target: form }); await wait(50);
-assert.ok(html().includes(">Saving<") || html().includes("Saved. Not live yet"));
+// on the live site a save asks first, then goes live
+assert.ok(html().includes("This edit goes live in about two minutes") && html().includes("Save and go live"), "asks before a live save");
+click({ act: "ask-cancel" }); assert.ok(!html().includes("Save and go live") && html().includes(">Save<"), "cancel keeps the editor open");
+el.listeners.submit({ preventDefault() {}, target: form }); await wait(50); click({ act: "livesave" }); await wait(50);
+assert.ok(html().includes(">Saving<") || html().includes("Saved. Live in about two minutes"));
 await wait(500);
-assert.ok(html().includes("Saved. Not live yet") && !html().includes("Save and publish"), "returns to the list after saving");
-// nothing is live until Publish; undo and redo step through what was saved
-assert.ok(html().includes('data-act="publish"') && adh.state.data.sites[0].copies[0].ahead === 1);
-click({ act: "undo-step" }); await wait(500);
-assert.ok(html().includes("Undone") && !html().includes('data-act="publish"') && adh.state.data.sites[0].copies[0].canRedo);
-click({ act: "redo-step" }); await wait(500);
-assert.ok(html().includes("Redone") && html().includes('data-act="publish"'));
+assert.ok(html().includes("Saved. Live in about two minutes") && !html().includes(">Save<"), "returns to the list after saving");
+assert.ok(!html().includes('data-act="publish"') && adh.state.data.sites[0].copies[0].steps.length === 1);
+click({ act: "undo-step" }); assert.ok(html().includes("Undoing this step goes live")); click({ act: "livesave" }); await wait(500);
+assert.ok(html().includes("Undone") && adh.state.data.sites[0].copies[0].canRedo);
+click({ act: "redo-step" }); click({ act: "livesave" }); await wait(500);
+assert.ok(html().includes("Redone"));
 adh.go("content"); await wait(300);
-assert.ok(html().includes("1 change saved, not yet live"));
-click({ act: "publish" }); await wait(500);
-assert.ok(html().includes("Published. Live in about two minutes") && !html().includes('data-act="publish"'));
+assert.ok(html().includes("Saves go straight to visitors"));
 // trial copies: make one, work on it, make it live after a question, delete after a question
 adh.go("overview"); await wait(100);
-assert.ok(html().includes("Make a trial copy") && html().includes("What visitors see") && html().includes("You are working on this"));
+assert.ok(html().includes("Make a trial copy") && html().includes("What visitors see") && html().includes("You are working on this") && !html().includes("Throw away"));
 el.listeners.submit({ preventDefault() {}, target: { dataset: { form: "copy" }, querySelector: () => ({ value: "Winter look" }) } }); await wait(500);
 assert.ok(html().includes("Trial: Winter look") && html().includes("Same as the live site") && adh.state.copy["world-art-review"].startsWith("trial-winter-look"));
 adh.go("content"); await wait(300); click({ act: "open", ci: "0", ei: "0" });
 el.listeners.submit({ preventDefault() {}, target: form }); await wait(600);
-assert.ok(html().includes('data-act="ask-makelive"') && html().includes(">Make live<"));
+assert.ok(!html().includes("Save and go live"), "no question on a trial copy");
+assert.ok(html().includes('data-act="ask-makelive"') && html().includes(">Make live<") && html().includes("Saved on this copy"));
 adh.go("overview"); await wait(100);
 assert.ok(html().includes("1 change saved on this copy") && html().includes("Open the preview") && html().includes("Undo this"));
 click({ act: "ask-makelive" });
@@ -93,7 +95,7 @@ assert.ok(html().includes("already going to that spot"));
 el.listeners.change({ target: { dataset: { change: "photo-slot", i: "1" }, value: "other" } });
 Object.assign(adh.state.photoFiles[0], { alt: "Ice blocks" }); Object.assign(adh.state.photoFiles[1], { alt: "A studio", note: "studio shot" }); adh.render();
 assert.ok(!html().includes("Choose a spot and describe every photo first"));
-click({ act: "photo-send" }); await wait(700);
+click({ act: "photo-send" }); assert.ok(html().includes("Sending these photos goes live")); click({ act: "livesave" }); await wait(700);
 assert.ok(html().includes("2 photos sent") && adh.state.photoFiles.length === 0);
 click({ act: "ask", k: "photo|world-art-review|artist-zara-muse" });
 assert.ok(html().includes("Take this photo off the site?"));
