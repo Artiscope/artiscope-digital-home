@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "21";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "22";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -73,7 +73,7 @@
     if (action === "overview") body.copies = state.copy;
     if (demo) return demoApi(body);
     var res = await sb.functions.invoke(cfg.functionName || "home", { body: body });
-    if (res.error) throw new Error(await explain(res.error));
+    if (res.error) { var err = new Error(await explain(res.error)); err.stale = !!(explain.last && explain.last.stale); throw err; }
     return res.data;
   }
 
@@ -82,6 +82,7 @@
   async function explain(error) {
     var ctx = error && error.context, status = ctx && typeof ctx.status === "number" ? ctx.status : 0, detail = null;
     try { if (ctx && typeof ctx.json === "function") detail = await ctx.json(); } catch (e) { detail = null; }
+    explain.last = detail;
     if (detail && detail.error) return detail.error === "Unknown request."
       ? "The server function in Supabase is an older copy. Paste in the latest version from GitHub and deploy it, then press Refresh."
       : detail.error;
@@ -119,7 +120,7 @@
         var pgd = await api("pages", { site: s.id });
         var pref = state.edPrefs[s.id] || {};
         var pics = {}; (pgd.pictures || []).forEach(function (p) { pics[p.key] = p; });
-        state.pg[s.id] = { pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false,
+        state.pg[s.id] = { version: pgd.version || "", pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false,
           site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, lists: pgd.lists || {}, listFields: pgd.listFields || [], at: pref.at || "", gam: !!pgd.gam, pageFields: pgd.pageFields || null };
         var made = state.pg[s.id]; if (made.at && !atKnown(made)) made.at = "";
         render();
@@ -241,6 +242,9 @@
       title = "Throw away " + c.ahead + (c.ahead === 1 ? " change" : " changes") + " that are not live yet?";
       text = "The live site stays exactly as visitors see it now. This cannot be undone.";
       yes = "Throw them away"; act = "discard";
+    } else if (q.kind === "stale") {
+      return '<div class="sunk stack ask" role="alertdialog" aria-label="Someone else changed this site"><b>Someone else changed this site while you were editing</b><span class="muted">Perhaps the website agent or another person saved something. Your changes are still here and have not been saved. You can save yours anyway, which replaces what they changed in the same places, or start again from the latest version.</span>' +
+        '<div class="row"><button type="button" class="btn" data-act="stale-replace">Save mine anyway</button><button type="button" class="soft" data-act="stale-reload">Start again from the latest</button></div></div>';
     } else if (q.kind === "deletecopy") {
       title = "Delete the trial copy \u201C" + c.name + "\u201D?";
       text = "Its changes are lost. The live site is not affected. This cannot be undone.";
@@ -426,6 +430,15 @@
     var other = t.spec.colours.find(function (x) { return x.id === c.on; }); if (!other) return "";
     return contrast(t.draft.colours[c.id], t.draft.colours[other.id]) < c.min ? "Hard to read against the " + other.label.toLowerCase() : "";
   }
+  // Shows or clears the "hard to read" warning on every colour while a colour is being changed.
+  function themeWarnings(t) {
+    t.spec.colours.forEach(function (c) {
+      var input = app.querySelector('[data-theme-hex="' + c.id + '"]'), body = input && input.closest(".swrow") && input.closest(".swrow").querySelector(".body"); if (!body) return;
+      var w = themeWarning(t, c), el = body.querySelector(".warn");
+      if (w && !el) { el = document.createElement("span"); el.className = "warn"; body.appendChild(el); }
+      if (el) { if (w) el.textContent = w; else el.remove(); }
+    });
+  }
   function byRole(list, role) { return list.find(function (x) { return x.role === role; }); }
 
   function themeSettings(t) {
@@ -560,9 +573,10 @@
   }
   function makeCopy(name) {
     var s = site(); if (!s) return;
+    if (!name) { state.notice = { text: "Give the trial copy a short name, for example Winter look.", problem: true }; render(); var box = app.querySelector("#copy-name"); if (box) box.focus(); return; }
     state.busy.copy = true;
     change(key("copy", s.id), function () { return api("makeCopy", { site: s.id, name: name }); },
-      function (out) { delete state.busy.copy; state.copyName = ""; if (out && out.copy) state.copy[s.id] = out.copy; }, "Trial copy made. You are working on it now").then(function () { delete state.busy.copy; });
+      function (out) { delete state.busy.copy; state.copyName = ""; if (out && out.copy) state.copy[s.id] = out.copy; }, "Trial copy made. You are working on it now").then(function () { if (state.busy.copy) { delete state.busy.copy; render(); } });
   }
   async function workOn(id) {
     var s = site(); if (!s) return;
@@ -1163,7 +1177,11 @@
     var used = canon(doc) + canon(pics) + (contentNow ? canon(contentNow) : ""), uploads = Object.keys(pgd.uploads || {}).filter(function (k) { return used.indexOf(JSON.stringify(k)) >= 0; }).map(function (k) { var u = pgd.uploads[k]; return { key: k, name: u.name, ext: u.ext, content: u.content }; });
     edRemember(); state.notice = null;
     onLive(function () {
-      change(key("pages", s.id), function () { return api("savePages", { site: s.id, pages: doc, what: what, uploads: uploads, pictures: pics, content: contentNow }); }, function () { state.dirty = false; }, curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes");
+      change(key("pages", s.id), function () { return api("savePages", { site: s.id, pages: doc, what: what, uploads: uploads, pictures: pics, content: contentNow, version: pgd.version, replace: !!pgd.replaceNext }).catch(function (e) {
+          pgd.replaceNext = false;
+          if (e.stale) state.ask = { kind: "stale" };
+          throw e;
+        }); }, function () { state.dirty = false; }, curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes");
     }, (picNames.length ? "This change, including the shared " + (picNames.length === 1 ? "picture of " + picNames[0] + "," : "pictures of " + picNames.join(" and ") + ",") : "This page change") + (uploads.length ? (uploads.length === 1 ? " and its new photo" : " and its " + uploads.length + " new photos") : ""));
   }
 
@@ -1977,6 +1995,8 @@
     else if (a === "publish-replace") publish(el.dataset.copy, true);
     else if (a === "ask-makelive") { state.ask = { kind: "makelive", copy: curCopy().id }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
     else if (a === "ask-big") { state.ask = { kind: el.dataset.kind, copy: el.dataset.copy }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
+    else if (a === "stale-replace") { var px = pgOf(); state.ask = null; state.notice = null; if (px) { px.replaceNext = true; state.sure = true; try { savePages(); } finally { state.sure = false; } } }
+    else if (a === "stale-reload") { var sx = site(); state.ask = null; state.notice = null; state.dirty = false; if (sx) { delete state.pg[sx.id]; render(); ensure(); } }
     else if (a === "ask-cancel") { state.ask = null; if (state.tab === "pages" && pgOf()) edPatch(); else render(); }
     else if (a === "livesave") { var run = state.ask && state.ask.go; state.ask = null; state.sure = true; try { if (run) run(); } finally { state.sure = false; } }
     else if (a === "makelive") publish(el.dataset.copy);
@@ -2100,7 +2120,7 @@
       var row = t.closest(".swrow"), other = row && row.querySelector(t.dataset.themeColour ? "[data-theme-hex]" : "[data-theme-colour]"), sw = row && row.querySelector(".sw");
       if (other) other.value = t.dataset.themeColour ? v.toUpperCase() : v.toLowerCase();
       if (sw) sw.style.background = v;
-      patchIsland(); applyPreview(); return;
+      themeWarnings(th); patchIsland(); applyPreview(); return;
     }
     if (t.dataset.input === "fadd-alt" || t.dataset.input === "fadd-cap") {
       var fa = state.fileAdd[Number(t.dataset.i)]; if (!fa) return;

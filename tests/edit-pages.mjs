@@ -47,7 +47,7 @@ try {
   assert.ok((await frame().evaluate(() => document.querySelector(".phead h1").textContent)).includes("what the ice said"));
   // cite a source in the body, at the cursor
   await page.click('.sec[data-where="item"][data-id="body"]'); await page.waitForSelector(".ed-right .rt-page");
-  await page.click(".ed-right .rt-page p >> nth=0"); await page.keyboard.press("End");
+  await page.click(".ed-right .rt-page p >> nth=0"); await settle(); await page.keyboard.press("End"); await settle();
   await page.selectOption(".rt-cite", "ap-muse"); await settle();
   assert.ok(await page.evaluate(() => { const p = window.__adh.pgOf(); return p.site.articles.find((a) => a.slug === "review-anti-frieze").body.includes('data-src="ap-muse"'); }));
   // sources: add one from the list, then a brand new one

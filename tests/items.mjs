@@ -99,5 +99,15 @@ const read = (f) => JSON.parse(hub.read(WR, "main", f));
   assert.equal((await call({ action: "undoStep" })).ok, true); assert.equal(read("content/site.json").articles.find((x) => x.slug === "studio-visit").hidden, true);
   assert.equal((await call({ action: "undoStep" })).ok, true);
   assert.ok(!read("content/site.json").articles.some((x) => x.slug === "studio-visit")); assert.ok(!read("content/pages.json").pages.visit);
+  // someone else saved in between: refused, unless the person chooses to replace it
+  {
+    const v1 = (await call({ action: "pages" })).version; assert.ok(v1);
+    const c4 = JSON.parse(JSON.stringify(siteForEditor(read("content/site.json")))); c4.articles[0].hidden = true;
+    const other = JSON.parse(JSON.stringify(siteForEditor(read("content/site.json")))); other.articles[0].title += ", again";
+    assert.equal((await call({ action: "savePages", pages: p, content: other, version: v1 })).status, 200);
+    const stale = await call({ action: "savePages", pages: p, content: c4, version: v1 }); assert.equal(stale.status, 409); assert.equal(stale.stale, true);
+    assert.equal((await call({ action: "savePages", pages: p, content: c4, version: v1, replace: true })).status, 200);
+    assert.equal(read("content/site.json").articles[0].hidden, true);
+  }
 }
 console.log("ITEM CHECKS PASSED");

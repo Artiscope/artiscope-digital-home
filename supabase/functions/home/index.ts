@@ -444,10 +444,10 @@ function cleanField(f, v, site) {
   const t = f.type;
   if (t === "text") {
     if (f.none && (v === false || /^\s*none\s*$/i.test(String(v == null ? "" : v)))) return false;
-    const x = String(v == null ? "" : v).replace(/—/g, ",").slice(0, 400);
+    const x = String(v == null ? "" : v).replace(/ *— */g, ", ").replace(/, ,/g, ",").slice(0, 400);
     return f.nullable && !x.trim() ? null : x;
   }
-  if (t === "long") { const x = String(v == null ? "" : v).replace(/—/g, ",").slice(0, 60000); return f.nullable && !x.trim() ? null : x; }
+  if (t === "long") { const x = String(v == null ? "" : v).replace(/ *— */g, ", ").replace(/, ,/g, ",").slice(0, 60000); return f.nullable && !x.trim() ? null : x; }
   if (t === "sources") { const ok = site.sourceIds || []; return [...new Set((Array.isArray(v) ? v : []).map(String))].filter((x) => ok.includes(x)).slice(0, 40); }
   if (t === "articles") { const ok = site.articleSlugs || []; return [...new Set((Array.isArray(v) ? v : []).map(String))].filter((x) => ok.includes(x.replace(/^a-/, ""))).map((x) => "a-" + x.replace(/^a-/, "")).slice(0, 12); }
   if (t === "lines") return (Array.isArray(v) ? v : String(v == null ? "" : v).split(/\n\s*\n/)).map((x) => String(x).trim()).filter(Boolean).slice(0, 40);
@@ -970,7 +970,7 @@ export function cleanText(text, limit) {
   return String(text || "")
     .replace(/[\r\n\t]+/g, " ")
     .replace(/[<>`\\]/g, "")
-    .replace(/\u2014/g, ",").replace(/\u2013/g, "-")
+    .replace(/ *\u2014 */g, ", ").replace(/, ,/g, ",").replace(/ \u2013 /g, ", ").replace(/\u2013/g, "-")
     .replace(/ {2,}/g, " ")
     .trim()
     .slice(0, limit);
@@ -1131,7 +1131,7 @@ export function applyValues(entry, values, numbers = [], inside = {}) {
     } else if (f.type === "lines") {
       v = (Array.isArray(v) ? v : String(v).split(/\n+/)).map((x) => String(x).trim()).filter(Boolean).slice(0, 60);
     } else {
-      v = String(v == null ? "" : v).replace(/—/g, ",").slice(0, 60000);
+      v = String(v == null ? "" : v).replace(/ *— */g, ", ").replace(/, ,/g, ",").slice(0, 60000);
       if (f.value === null && v === "") v = null;
     }
     // the name is a path that fieldsOf produced from this same entry, so every step exists
@@ -1520,7 +1520,7 @@ export async function handle(req) {
       gh(repoPath + "/contents/assets/images?ref=" + encodeURIComponent(ref))]);
     if (!content || !sales) return null;
     const imageFiles = Array.isArray(listing.data) ? listing.data.filter((x) => x.type === "file").map((x) => x.name) : [];
-    return { content: content.data, sales: sales.data, images: images ? images.data : {}, imageFiles };
+    return { content: content.data, sales: sales.data, images: images ? images.data : {}, imageFiles, shas: [content.sha, sales.sha, images ? images.sha : ""] };
   }
   // What the page fields may refer to: the artists and articles as they are now.
   function pageCtx(editorData) {
@@ -1538,6 +1538,10 @@ export async function handle(req) {
     if (site.gam && !gamNow) return json({ error: "The site's words and sales could not be read." }, 502);
     const editorNow = site.gam ? gamForEditor(gamNow.content, gamNow.sales, gamNow.images, gamNow.imageFiles) : c && site.items ? siteForEditor(c.data) : null;
     const pctx = pageCtx(editorNow);
+    const version = [f.sha, c ? c.sha : "", ...(gamNow ? gamNow.shas : [])].join(".");
+    if (action === "savePages" && body.version && body.version !== version && !body.replace) {
+      return json({ error: "Someone else changed this site while you were editing, perhaps the website agent or another person. Your changes are still here and have not been saved.", stale: true }, 409);
+    }
     if (action === "pages") {
       const [imgs, meta] = await Promise.all([
         gh("/repos/" + site.repo + "/contents/" + ps.images + "?ref=" + encodeURIComponent(ref)),
@@ -1550,7 +1554,7 @@ export async function handle(req) {
       let doc = f.data; try { doc = cleanPages(pctx, f.data, f.data); } catch (_e) { /* shown as it is */ }
       const extra = editorNow ? { site: editorNow, itemKinds: site.items, lists: Object.fromEntries(Object.entries(site.lists || {}).map(([k, l]) => [k, { label: l.label, section: l.section || "" }])), listFields: LIST_FIELDS, gam: !!site.gam,
         pageFields: site.gam ? [{ name: "title", label: "Title in the browser tab and search results", type: "text" }, { name: "description", label: "Description for search engines", type: "long", plain: true, hint: "One or two sentences. Not shown on the page." }] : null } : {};
-      return json({ pages: doc, kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, ...extra });
+      return json({ pages: doc, kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, version, ...extra });
     }
     // the page fields may refer to artists and articles added in this same save
     const sctx = body.content && typeof body.content === "object" ? pageCtx(body.content) : pctx;
