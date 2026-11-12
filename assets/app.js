@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "13";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "14";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -16,6 +16,8 @@
     data: null,            // overview: sites, photo spots, waiting photos
     site: "",              // id of the site being worked on
     tab: "home", prevTab: "home",
+    inSite: false,         // true once a site has been opened from Home
+    place: {},             // site id -> the screen last used there
     notice: null,          // { text, problem }
     status: "live",        // "live" | "saving" | "saved"
     flash: "",             // what just happened, said once in the top bar
@@ -52,7 +54,7 @@
   }
   function sites() { return state.data ? state.data.sites : []; }
   function liveSites() { return sites().filter(function (s) { return s.live; }); }
-  function site() { return liveSites().find(function (s) { return s.id === state.site; }) || liveSites()[0] || null; }
+  function site() { return liveSites().find(function (s) { return s.id === state.site; }) || null; }
   function initials(name) { return String(name).split(/\s+/).map(function (w) { return w.charAt(0); }).join("").slice(0, 3).toUpperCase(); }
   var COLOURS = { "world-art-review": ["#1D4A35", "#EEE5D4"], "global-art-monitor": ["#F3C3C8", "#2A2A2F"] };
   function colours(id) { return COLOURS[id] || ["#1B2132", "#6F7890"]; }
@@ -88,7 +90,7 @@
   async function load() {
     try {
       state.data = await api("overview");
-      if (!site() || site().id !== state.site) state.site = liveSites()[0] ? liveSites()[0].id : "";
+      if (state.inSite && !sites().some(function (x) { return x.id === state.site; })) { state.inSite = false; state.site = ""; state.tab = "home"; }
       keepCopies();
       state.notice = null;
     } catch (e) { state.notice = { text: e.message, problem: true }; }
@@ -100,10 +102,10 @@
   async function ensure(force) {
     var s = site(); if (!s) return;
     try {
-      if ((state.tab === "content" || state.tab === "home") && (force || !state.content[s.id])) {
+      if ((state.tab === "content" || state.tab === "overview") && (force || !state.content[s.id])) {
         var c = await api("content", { site: s.id }); state.content[s.id] = c.collections || []; render();
       }
-      if (state.tab === "theme" && !state.theme[s.id]) {
+      if ((state.tab === "theme" || state.tab === "overview") && !state.theme[s.id]) {
         var t = await api("theme", { site: s.id });
         state.theme[s.id] = { spec: t.spec, values: t.values, draft: JSON.parse(JSON.stringify(t.values)), mode: "computer", live: null }; render();
       }
@@ -144,22 +146,28 @@
 
   // ---------- the frame: menu, floating bar ----------
 
+  var ICON_HOME = "M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z";
+  var ICON_SITES = ["M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M4.5 12h15M12 4.5c2.6 2.4 2.6 12.6 0 15M12 4.5c-2.6 2.4-2.6 12.6 0 15"];
   var NAV = [
-    ["home", "Home", "M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z", ""],
+    ["home", "All sites", ICON_SITES[0], ICON_SITES[1]],
+    ["overview", "Overview", ICON_HOME, ""],
     ["content", "Content", "M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z", ""],
     ["theme", "Theme", "M12 4a8 8 0 1 0 0 16c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a3 3 0 0 0 3-3c0-3.9-3.6-7-8-7z", "M8.5 11.5h.01M11 8.5h.01M14.5 9h.01"],
     ["photos", "Photos", "M4 6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z", "M7 16l3.5-3.5 2.5 2.5 2-2 2 3"],
     ["history", "History", "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M12 8v4.5l3 2"],
-    ["sites", "Sites", "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M4.5 12h15M12 4.5c2.6 2.4 2.6 12.6 0 15M12 4.5c-2.6 2.4-2.6 12.6 0 15"],
   ];
-  function navIndex(tab) { var i = NAV.findIndex(function (n) { return n[0] === tab; }); return i < 0 ? 0 : i; }
+  // Outside a site only "All sites" shows. Inside, the site's own screens.
+  function navItems() { return state.inSite && site() ? NAV : NAV.slice(0, 1); }
+  function navIndex(tab) { var i = navItems().findIndex(function (n) { return n[0] === tab; }); return i < 0 ? 0 : i; }
   function mark() { return '<svg width="24" height="24" viewBox="0 0 26 26"><path d="M2 24V10l11-9 11 9v14z" fill="#A9BCE0"></path><rect x="10" y="14" width="6" height="10" fill="#141927"></rect></svg>'; }
 
   // The floating bar: which site, and what state its changes are in.
   function islandBusy() { return state.status !== "live" || curCopy().ahead > 0; }
   function islandInner() {
     var s = site(), list = copiesOf(s), c = curCopy(), trial = c.kind === "trial", busy = state.status === "saving";
-    var options = liveSites().map(function (x) { return '<option value="' + esc(x.id) + '"' + (s && x.id === s.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("");
+    if (!state.inSite || !s) {
+      return '<span class="dot" aria-hidden="true" style="background:#55678C"></span><b class="island-name">All sites</b><span class="small">' + (state.status === "saving" ? "Saving" : state.flash || "Pick a site to work on") + '</span>';
+    }
     var copyPick = list.length > 1
       ? '<label class="small" for="copy-pick" style="position:absolute;left:-9999px">Working on</label><select id="copy-pick" class="copypick" data-change="copy">' +
         list.map(function (x) { return '<option value="' + esc(x.kind === "live" ? "" : x.id) + '"' + (x.id === c.id ? " selected" : "") + '>' + esc(x.kind === "live" ? "Live site" : "Trial: " + x.name) + '</option>'; }).join("") + '</select>'
@@ -170,8 +178,7 @@
     var act = c.ahead && !busy ? '<button type="button" class="btn slim" data-act="' + (trial ? "ask-makelive" : "publish") + '">' + (trial ? "Make live" : "Publish") + '</button>'
       : '<span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#A9BCE0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>';
     return '<span class="dot" aria-hidden="true" style="background:' + (s ? colours(s.id)[0] : "#55678C") + '"></span>' +
-      '<label class="small" for="site-pick" style="position:absolute;left:-9999px">Site</label>' +
-      '<select id="site-pick" data-change="site">' + options + '</select>' + copyPick +
+      '<b class="island-name">' + esc(s.name) + '</b>' + copyPick +
       '<button type="button" class="soft slim" data-act="undo-step"' + (c.ahead && !busy ? "" : " disabled") + '>Undo</button>' +
       '<button type="button" class="soft slim" data-act="redo-step"' + (c.canRedo && !busy ? "" : " disabled") + '>Redo</button>' +
       '<span class="small" id="island-text">' + esc(text) + '</span>' + act;
@@ -209,7 +216,7 @@
   function viewShell(inner) {
     var s = site();
     var from = navIndex(state.prevTab), to = navIndex(state.tab);
-    var nav = NAV.map(function (n) {
+    var nav = navItems().map(function (n) {
       var on = n[0] === state.tab;
       return '<button type="button" class="navb' + (on ? " on" : "") + '" data-tab="' + n[0] + '"' + (on ? ' aria-current="page"' : "") + '>' +
         '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="' + n[2] + '"></path><path class="o" d="' + n[2] + '"></path><path class="d" d="' + n[3] + '"></path></svg>' +
@@ -218,6 +225,7 @@
     return '<div class="shell">' +
       '<nav class="rail" aria-label="Sections">' +
         '<div class="brand"><span class="brand-mark" aria-hidden="true">' + mark() + '</span><span class="brand-name">Artiscope<br>Digital Home</span></div>' +
+        (state.inSite && s ? '<div class="where"><span class="small">Working in</span><b>' + esc(s.name) + '</b></div>' : "") +
         '<div class="nav"><span class="well" aria-hidden="true" data-to="' + (to * 58) + '" style="top:' + (from * 58) + 'px"></span>' +
           '<span class="bulge' + (from !== to ? " go" : "") + '" aria-hidden="true" data-to="' + (to * 58) + '" style="top:' + (from * 58) + 'px"><i></i></span>' + nav + '</div>' +
         '<div class="rail-foot">' +
@@ -250,27 +258,47 @@
 
   function head(title, text) { return '<div class="page-head"><h1>' + esc(title) + '</h1><p>' + esc(text) + '</p></div>'; }
 
+  function statusLine(x) {
+    if (!x.live) return "Not built yet";
+    var list = copiesOf(x), live = list[0], trials = list.length - 1, bits = [];
+    bits.push(live.ahead ? live.ahead + (live.ahead === 1 ? " change" : " changes") + " waiting to be published" : "Everything is live");
+    if (x.inbox && x.inbox.length) bits.push(x.inbox.length + (x.inbox.length === 1 ? " photo" : " photos") + " on the way");
+    if (trials) bits.push(trials + (trials === 1 ? " trial copy" : " trial copies"));
+    return bits.join(". ");
+  }
   function viewHome() {
-    var s = site();
     var cards = sites().map(function (x) {
       var c = colours(x.live ? x.id : "");
-      return '<button type="button" class="card lift sitecard' + (s && x.id === s.id ? " current" : "") + '" data-act="' + (x.live ? "pick-site" : "go-sites") + '" data-site="' + esc(x.id) + '">' +
+      return '<button type="button" class="card lift sitecard" data-act="open-site" data-site="' + esc(x.id) + '">' +
         '<span class="banner" aria-hidden="true" style="background:' + c[0] + ";color:" + c[1] + '">' + esc(x.live ? initials(x.name) : x.name.replace(/\D/g, "")) + '</span>' +
-        '<span class="info"><b>' + esc(x.name) + '</b><span class="small">' + esc(x.live ? x.domain : "Not built yet") + '</span>' +
-        '<span class="small" style="color:var(--accent);margin-top:8px">' + (x.live ? (s && x.id === s.id ? "You are working on this site" : "Work on this site") : "To be built") + '</span></span></button>';
+        '<span class="info"><b>' + esc(x.name) + '</b><span class="small">' + esc(x.live ? x.domain : "Domain owned") + '</span>' +
+        '<span class="small" style="margin-top:8px">' + esc(statusLine(x)) + '</span>' +
+        '<span class="small" style="color:var(--accent);margin-top:8px">' + (x.live ? "Open" : "Not built yet") + '</span></span></button>';
     }).join("");
-    var cols = s ? state.content[s.id] : null;
-    var entries = cols ? cols.reduce(function (n, c) { return n + c.entries.length; }, 0) : null;
-    var empty = s ? (s.slots || []).filter(function (x) { return !x.filled && !x.waiting; }).length : 0;
-    var waiting = s && s.inbox ? s.inbox.length : 0;
     return '<div class="page-head"><span class="small">' + esc(today()) + '</span><h1 style="font-size:48px">' + greeting() + '</h1>' +
-      '<p>Pick a site to work on. What you save is kept safe but not shown to visitors until you press Publish, and every step can be undone.</p></div>' +
-      '<div class="sites">' + cards + '</div>' +
-      (s ? '<div class="stack"><h2 class="label">' + esc(s.name) + ' at a glance</h2><div class="grid-3">' +
-        '<button type="button" class="card lift sitecard" data-tab="content" style="padding:26px 28px;gap:6px"><span class="bignum">' + (entries == null ? "..." : entries) + '</span><b>pieces of content</b><span class="small">Edit, hide or delete</span></button>' +
-        '<button type="button" class="card lift sitecard" data-tab="photos" style="padding:26px 28px;gap:6px"><span class="bignum">' + empty + '</span><b>empty photo spots</b><span class="small">Add photos</span></button>' +
-        '<button type="button" class="card lift sitecard" data-tab="photos" style="padding:26px 28px;gap:6px"><span class="bignum">' + waiting + '</span><b>' + (waiting === 1 ? "photo on its way" : "photos on their way") + '</b><span class="small">See what is waiting</span></button>' +
-        '</div></div>' : "");
+      '<p>Your five sites. Open one to work on its words, colours and photos. Nothing reaches visitors until you press Publish, and every step can be undone.</p></div>' +
+      '<div class="sites">' + cards + '</div>';
+  }
+  function viewUnbuilt(x) {
+    return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><h1>' + esc(x.name) + '</h1>' +
+      '<p>Not built yet. Creating a new site from a template arrives in a later stage. Until then there is nothing to do here.</p></div>';
+  }
+  function viewOverview() {
+    var s = site(); if (!s) return viewHome();
+    var cols = state.content[s.id];
+    var entries = cols ? cols.reduce(function (n, c) { return n + c.entries.length; }, 0) : null;
+    var empty = (s.slots || []).filter(function (x) { return !x.filled && !x.waiting; }).length, waiting = s.inbox ? s.inbox.length : 0;
+    var t = state.theme[s.id], colourCount = t ? t.spec.colours.length + t.spec.fonts.length : null;
+    function tile(tab, n, name, sub, act) {
+      return '<button type="button" class="card lift sitecard tile" data-tab="' + tab + '"><span class="bignum">' + (n == null ? "..." : n) + '</span><b>' + name + '</b><span class="small">' + esc(sub) + '</span><span class="small" style="color:var(--accent);margin-top:4px">' + act + '</span></button>';
+    }
+    return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><h1>' + esc(s.name) + '</h1>' +
+      '<p>' + esc(s.domain) + '. Everything for this site is here: its words, colours, photos and history, and the trial copies you try things on.</p></div>' +
+      '<div class="grid-3">' +
+        tile("content", entries, "Content", (cols ? cols.map(function (c) { return c.label.toLowerCase(); }).join(", ") : "Articles, artists and more"), "Edit, hide or delete") +
+        tile("theme", colourCount == null ? "" : colourCount, "Theme", "Colours and typefaces", "Change the look") +
+        tile("photos", empty, "Photos", empty + " empty " + (empty === 1 ? "spot" : "spots") + ", " + waiting + " on the way", "Add photos") +
+      '</div>' + viewCopies();
   }
 
   // Long lists open short. Searching looks through all of them without redrawing.
@@ -490,7 +518,7 @@
     var s = site(); if (!s) return;
     state.busy.copy = true;
     change(key("copy", s.id), function () { return api("makeCopy", { site: s.id, name: name }); },
-      function (out) { delete state.busy.copy; if (out && out.copy) state.copy[s.id] = out.copy; }, "Trial copy made. You are working on it now").then(function () { delete state.busy.copy; });
+      function (out) { delete state.busy.copy; state.copyName = ""; if (out && out.copy) state.copy[s.id] = out.copy; }, "Trial copy made. You are working on it now").then(function () { delete state.busy.copy; });
   }
   async function workOn(id) {
     var s = site(); if (!s) return;
@@ -800,7 +828,7 @@
       '<div class="stack">' + (rows || '<p class="notice">No changes yet.</p>') + '</div>';
   }
 
-  function viewSites() {
+  function viewCopies() {
     var s = site(), list = copiesOf(s), cur = curCopy(), trials = list.filter(function (c) { return c.kind === "trial"; });
     function card(c) {
       var live = c.kind === "live", on = c.id === cur.id, tone = s ? colours(s.id) : ["#1B2132", "#6F7890"];
@@ -823,21 +851,14 @@
     }
     var maker = trials.length < 2
       ? '<form class="card stack copycard maker" data-form="copy"><h2 class="cardh">Make a trial copy</h2><span class="small">A full copy of the live site to try new content, colours and photos on. Visitors never see it.</span>' +
-        '<input type="text" id="copy-name" maxlength="30" placeholder="A name, for example Winter look" aria-label="Name for the trial copy"><button type="submit" class="soft" style="align-self:flex-start"' + (state.busy.copy ? " disabled" : "") + '>Make the copy</button></form>'
+        '<input type="text" id="copy-name" data-input="copy-name" maxlength="30" value="' + esc(state.copyName || "") + '" placeholder="A name, for example Winter look" aria-label="Name for the trial copy"><button type="submit" class="soft" style="align-self:flex-start"' + (state.busy.copy ? " disabled" : "") + '>Make the copy</button></form>'
       : '<div class="card stack copycard maker"><h2 class="cardh">Two trial copies</h2><span class="small">That is the most a site can have. Delete one to make another.</span></div>';
     var steps = cur.steps && cur.steps.length
       ? '<div class="card stack" style="max-width:820px"><h2 class="cardh">Recent steps on ' + esc(cur.kind === "live" ? "the live site, not yet published" : "the trial copy " + cur.name) + '</h2>' +
         cur.steps.map(function (st, i) { return '<div class="row between steprow"><div class="body"><span>' + esc(st.what) + '</span><span class="small">' + esc(when(st.when)) + (st.by ? ", by " + esc(st.by) : "") + '</span></div><button type="button" class="linklike small" data-act="undo-step" data-steps="' + (i + 1) + '">' + (i ? "Undo back to before this" : "Undo this") + '</button></div>'; }).join("") + '</div>'
       : "";
-    var rows = sites().map(function (x) {
-      return '<div class="card entry"><span aria-hidden="true" style="flex:none;width:14px;height:14px;border-radius:50%;background:' + (x.live ? colours(x.id)[0] : "rgba(221,225,234,.25)") + ';box-shadow:0 0 0 2px rgba(221,225,234,.25)"></span>' +
-        '<div class="body"><b>' + esc(x.name) + '</b><span class="small">' + esc(x.live ? x.domain : "Domain owned. Not built yet.") + '</span></div>' +
-        '<span class="chip' + (x.live ? "" : " quiet") + '">' + (x.live ? "Live" : "To be built") + '</span></div>';
-    }).join("");
-    return head(s ? s.name : "Sites", "The live site and its trial copies. Try new content, colours and photos on a copy. Visitors only ever see the live site, and only what you have published.") +
-      '<div class="copies">' + list.map(card).join("") + maker + '</div>' +
-      '<p class="small" style="margin:14px 0 26px">A preview is ready about two minutes after a change. Anyone with the link can open it, so keep confidential work out of trial copies.</p>' + steps +
-      '<h2 class="cardh" style="margin:34px 0 14px">All sites</h2><div class="stack">' + rows + '</div>';
+    return '<h2 class="cardh" style="margin:34px 0 14px">Live site and trial copies</h2><div class="copies" style="margin-top:0">' + list.map(card).join("") + maker + '</div>' +
+      '<p class="small" style="margin:14px 0 26px">A preview is ready about two minutes after a change. Anyone with the link can open it, so keep confidential work out of trial copies.</p>' + steps;
   }
 
   // ----- sign in -----
@@ -878,8 +899,10 @@
         : '<p class="loading">Reading your sites</p>';
       return;
     }
-    var views = { home: viewHome, content: viewContent, theme: viewTheme, photos: viewPhotos, history: viewHistory, sites: viewSites };
-    app.innerHTML = viewShell((views[state.tab] || viewHome)());
+    var views = { home: viewHome, overview: viewOverview, content: viewContent, theme: viewTheme, photos: viewPhotos, history: viewHistory };
+    var s = site(), unbuilt = state.inSite && !s && state.site;
+    var inner = unbuilt ? viewUnbuilt(sites().find(function (x) { return x.id === state.site; }) || { name: "Site" }) : (views[state.inSite ? state.tab : "home"] || viewHome)();
+    app.innerHTML = viewShell(inner);
     mountRich(); mountTheme(); filterList();
     settle();
   }
@@ -950,7 +973,14 @@
     render();
   }
 
+  function openSite(id) {
+    var x = sites().find(function (y) { return y.id === id; }); if (!x) return;
+    state.flash = ""; state.ask = null; state.site = id; state.inSite = true; state.photoFiles = []; state.prevCtab = 0;
+    go(x.live ? (state.place[id] || "overview") : "overview");
+  }
   function go(tab) {
+    if (tab === "home") { state.inSite = false; }
+    else if (site()) state.place[site().id] = tab;
     state.prevTab = state.tab; state.tab = tab; state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.notice = null;
     state.csearch = ""; state.cmore = false;
     if (state.status === "saved") state.status = "live";
@@ -983,7 +1013,6 @@
     else next();
   }
   function closeEntry() { var s = site(); state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.prevCtab = s ? (state.ctab[s.id] || 0) : 0; render(); }
-  function pickSite(id) { state.flash = ""; state.ask = null; state.site = id; state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.photoFiles = []; state.prevCtab = 0; state.csearch = ""; state.cmore = false; render(); ensure(); }
 
   app.addEventListener("click", function (ev) {
     var rt = ev.target.closest("[data-rt]"); if (rt && rt.dataset && rt.dataset.rt) { state.dirty = true; richCmd(rt); return; }
@@ -993,7 +1022,7 @@
     if (a === "refresh") { state.content = {}; state.history = {}; load(); }
     else if (a === "signout") sb.auth.signOut();
     else if (a === "signin-mode") { state.signinMode = el.dataset.mode; state.signinSent = false; state.notice = null; var em = app.querySelector("#email"); if (em) state.email = em.value.trim(); render(); }
-    else if (a === "pick-site") { state.site = el.dataset.site; go("content"); }
+    else if (a === "open-site") { var sid = el.dataset.site; guard(function () { openSite(sid); }); }
     else if (a === "leave-stay") { state.leave = null; render(); }
     else if (a === "leave-go") { var next = state.leave; state.leave = null; state.dirty = false; if (next) next(); }
     else if (a === "leave-save") { var fm = app.querySelector('form[data-form="entry"]'); state.leave = null; if (fm) saveEntry(fm); }
@@ -1024,7 +1053,6 @@
       Array.prototype.forEach.call(app.querySelectorAll('[data-act="pv-mode"]'), function (x) { x.className = x.dataset.mode === t3.mode ? "on" : ""; });
       sizePreview();
     }
-    else if (a === "go-sites") go("sites");
     else if (a === "ctab") { state.prevCtab = state.ctab[s.id] || 0; state.ctab[s.id] = Number(el.dataset.i); state.csearch = ""; state.cmore = false; render(); }
     else if (a === "open") { state.draft = null; state.dirty = false; state.leave = null; state.egroup = 0; state.open = { ci: Number(el.dataset.ci), ei: Number(el.dataset.ei) }; state.confirm = null; state.notice = null; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
     else if (a === "close") guard(closeEntry);
@@ -1041,8 +1069,7 @@
   app.addEventListener("change", function (ev) {
     var t = ev.target, kind = t.dataset.change;
     if (t.dataset.field) state.dirty = true;
-    if (kind === "site") { var want = t.value; if (state.open && state.dirty) t.value = state.site; guard(function () { pickSite(want); }); }
-    else if (kind === "copy") { var cw = t.value; if (state.open && state.dirty) t.value = curCopy().kind === "live" ? "" : curCopy().id; guard(function () { workOn(cw); }); }
+    if (kind === "copy") { var cw = t.value; if (state.open && state.dirty) t.value = curCopy().kind === "live" ? "" : curCopy().id; guard(function () { workOn(cw); }); }
     else if (kind === "csort") { state.csort = t.value; render(); }
     else if (t.dataset.themeFont) { var tf = themeOf(); if (tf) { tf.draft.fonts[t.dataset.themeFont] = t.value; themeUpdate(); } }
     else if (t.dataset.themeColour || t.dataset.themeHex) { themeUpdate(); }
@@ -1066,6 +1093,7 @@
     if (!t.dataset) return;
     if (t.dataset.field) { state.dirty = true; return; }
     if (t.dataset.input === "csearch") { state.csearch = t.value; filterList(); return; }
+    if (t.dataset.input === "copy-name") { state.copyName = t.value; return; }
     if (t.dataset.themeColour || t.dataset.themeHex) {
       var th = themeOf(), id = t.dataset.themeColour || t.dataset.themeHex, v = t.value.trim();
       if (!th || !validHex(v)) return;
@@ -1200,6 +1228,6 @@
   }
 
   // Exposed for the automated checks only.
-  window.__adh = { state: state, render: render, esc: esc, go: go, themeCss: themeCss, richIn: richIn, richOut: richOut, richInline: richInline };
+  window.__adh = { state: state, render: render, esc: esc, go: go, openSite: openSite, themeCss: themeCss, richIn: richIn, richOut: richOut, richInline: richInline };
   start();
 })();

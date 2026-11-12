@@ -8,17 +8,22 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const click = (d) => el.listeners.click({ target: { closest: () => ({ dataset: d }) } });
 await wait(500);
 const adh = win.__adh, html = () => el.innerHTML;
-assert.ok(html().includes("Artiscope<br>Digital Home") && html().includes("Sample mode") && html().includes("Version 13"));
-assert.ok(html().includes("Everything is live") && html().includes('class="bulge'));
+assert.ok(html().includes("Artiscope<br>Digital Home") && html().includes("Sample mode") && html().includes("Version 14"));
+assert.ok(html().includes("Pick a site to work on") && html().includes('class="bulge') && !html().includes('data-tab="content"'), "outside a site only All sites shows");
+adh.openSite("world-art-review"); await wait(400);
+assert.ok(html().includes("Working in") && html().includes('data-tab="content"') && html().includes("Live site and trial copies") && html().includes("Everything is live"));
 
 // every screen draws, with no stray "undefined" and no long dashes
-for (const tab of ["home", "content", "theme", "photos", "history", "sites"]) {
+for (const tab of ["overview", "content", "theme", "photos", "history", "home"]) {
   adh.go(tab); await wait(300);
   assert.ok(html().length > 800, tab + " draws");
   assert.ok(!html().includes("undefined") && !html().includes("[object"), tab + " is clean");
   assert.ok(!/[–—]/.test(html()), tab + " has no long dashes");
   assert.ok(html().includes('data-tab="' + tab + '" aria-current="page"'), tab + " is marked in the menu");
 }
+assert.ok(!html().includes("Working in"), "home leaves the site");
+adh.openSite("site-3"); await wait(100); assert.ok(html().includes("Not built yet") && !html().includes('data-tab="content"'));
+adh.openSite("world-art-review"); await wait(300); assert.equal(adh.state.tab, "history", "a site opens where you left it");
 
 // content: tabs, open an entry, save, hide, delete with a second press
 adh.go("content"); await wait(300);
@@ -41,14 +46,14 @@ assert.ok(html().includes("1 change saved, not yet live"));
 click({ act: "publish" }); await wait(500);
 assert.ok(html().includes("Published. Live in about two minutes") && !html().includes('data-act="publish"'));
 // trial copies: make one, work on it, make it live after a question, delete after a question
-adh.go("sites"); await wait(100);
+adh.go("overview"); await wait(100);
 assert.ok(html().includes("Make a trial copy") && html().includes("What visitors see") && html().includes("You are working on this"));
 el.listeners.submit({ preventDefault() {}, target: { dataset: { form: "copy" }, querySelector: () => ({ value: "Winter look" }) } }); await wait(500);
 assert.ok(html().includes("Trial: Winter look") && html().includes("Same as the live site") && adh.state.copy["world-art-review"].startsWith("trial-winter-look"));
 adh.go("content"); await wait(300); click({ act: "open", ci: "0", ei: "0" });
 el.listeners.submit({ preventDefault() {}, target: form }); await wait(600);
 assert.ok(html().includes('data-act="ask-makelive"') && html().includes(">Make live<"));
-adh.go("sites"); await wait(100);
+adh.go("overview"); await wait(100);
 assert.ok(html().includes("1 change saved on this copy") && html().includes("Open the preview") && html().includes("Undo this"));
 click({ act: "ask-makelive" });
 assert.ok(html().includes("the live site?") && html().includes("Make it live"));
@@ -72,14 +77,14 @@ const col = adh.state.content["world-art-review"][0];
 col.label = bad; col.entries[0] = { id: bad, title: bad, sub: bad, hidden: false, fields: [{ name: bad, label: bad, type: "long", value: bad }, { name: "x", label: bad, type: "lines", value: [bad] }] };
 adh.state.data.sites[0].name = bad; adh.state.data.sites[0].slots[0].label = bad; adh.state.data.sites[0].slots[0].group = bad;
 adh.state.history["world-art-review"] = [{ sha: bad, what: bad, when: "2026-11-11T10:00:00Z", by: bad, canUndo: true }];
-for (const tab of ["home", "content", "theme", "photos", "history", "sites"]) {
-  adh.go(tab); await wait(50);
+for (const tab of ["overview", "content", "theme", "photos", "history", "home"]) {
+  if (tab !== "home") adh.openSite("world-art-review"); adh.go(tab); await wait(50);
   if (tab === "content") click({ act: "open", ci: "0", ei: "0" });
   assert.ok(!html().includes("<img src=x") && !html().includes("<script>alert"), tab + " escapes hostile text");
 }
 
 // photos: add two, describe them, send; remove asks first
-adh.state.data.sites[0].name = "World Art Review"; adh.go("photos"); await wait(50);
+adh.state.data.sites[0].name = "World Art Review"; adh.openSite("world-art-review"); adh.go("photos"); await wait(50);
 el.listeners.change({ target: { dataset: { change: "photo-files" }, files: [{ name: "a.jpg", type: "image/jpeg" }, { name: "b.png", type: "image/png" }] } });
 assert.ok(html().includes("Send these 2 photos") && html().includes("Choose a spot and describe every photo first"));
 el.listeners.change({ target: { dataset: { change: "photo-slot", i: "0" }, value: "artist-konn-artiss" } });

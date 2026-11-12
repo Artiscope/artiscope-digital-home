@@ -17,7 +17,7 @@ try {
   const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
   await page.route((u) => !u.hostname.includes("localhost"), (r) => r.abort());
   await page.goto(consoleAt + "/index.html?demo&preview=" + encodeURIComponent(siteAt));
-  await page.waitForSelector('[data-tab="theme"]');
+  await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="world-art-review"]'); await page.waitForSelector('[data-tab="theme"]');
 
   // the console and the server work the theme out the same way
   for (const s of SITES.filter((x) => x.theme)) {
@@ -59,13 +59,13 @@ try {
   await page.waitForSelector('[data-theme-hex="green"]'); assert.equal(await page.inputValue('[data-theme-hex="green"]'), "#22304A");
   assert.equal(await page.locator("#theme-settings .savebar").count(), 0);
   // saved is not live: the top bar offers Undo and Publish, and Publish sends it to visitors
-  await page.click('[data-tab="home"]'); assert.ok((await page.innerText(".island")).includes("1 change saved, not yet live"));
+  await page.click('[data-tab="overview"]'); assert.ok((await page.innerText(".island")).includes("1 change saved, not yet live"));
   await page.screenshot({ path: "/tmp/topbar.png", clip: { x: 0, y: 0, width: 1440, height: 420 } });
   await page.click('[data-act="publish"]'); await page.waitForSelector("text=Published. Live in about two minutes");
-  await page.click('[data-tab="sites"]'); await page.fill("#copy-name", "Winter look"); await page.click('form[data-form="copy"] button[type=submit]');
+  await page.click('[data-tab="overview"]'); await page.fill("#copy-name", "Winter look"); await page.click('form[data-form="copy"] button[type=submit]');
   await page.waitForSelector("text=Trial copy made"); assert.equal(await page.inputValue("#copy-pick"), "trial-winter-look-000001");
   await page.click('[data-tab="content"]'); await page.click('[data-act="open"]'); await page.fill("#f-0", "A trial title"); await page.click('button[type="submit"]'); await page.waitForSelector("text=Saved. Not live yet");
-  await page.click('[data-tab="sites"]'); await page.waitForSelector("text=1 change saved on this copy"); await page.screenshot({ path: "/tmp/sites.png", fullPage: true });
+  await page.click('[data-tab="overview"]'); await page.waitForSelector("text=1 change saved on this copy"); await page.screenshot({ path: "/tmp/sites.png", fullPage: true });
   await page.selectOption("#copy-pick", ""); await page.waitForSelector(".copycard.on >> text=What visitors see");
   assert.ok((await page.innerText(".island")).includes("Everything is live"));
 

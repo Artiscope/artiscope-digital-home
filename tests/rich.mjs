@@ -14,7 +14,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
 await page.route(/^https?:/, (r) => r.abort());
 await page.goto("file://" + here + "/index.html?demo");
-await page.waitForSelector('[data-tab="content"]');
+await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="world-art-review"]'); await page.waitForSelector('[data-tab="content"]');
 
 // 1. nothing is lost: every real body survives a trip through the editor
 const results = await page.evaluate((list) => list.map((html) => {
