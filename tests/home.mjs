@@ -83,6 +83,7 @@ export const SITES = [
       { slug: "konn-artiss", name: "Konn Artiss" },
       { slug: "zen-xander", name: "Zen Xander" },
     ],
+    pages: { file: "content/pages.json" },
     theme: {
       file: "content/theme.json",
       colours: [
@@ -123,6 +124,7 @@ export const SITES = [
       { slug: "zara-muse", name: "Zara Muse" },
       { slug: "konn-artiss", name: "Konn Artiss" },
     ],
+    pages: { file: "data/pages.json" },
     theme: {
       file: "data/theme.json",
       colours: [
@@ -886,7 +888,7 @@ export async function handle(req) {
   }
 
   // ----- history and undo -----
-  const CONTENT_FILES = ["content/site.json", "data/content.json", "data/sales.json", "data/images.json", "image-slots.json", "content/theme.json", "data/theme.json"];
+  const CONTENT_FILES = ["content/site.json", "data/content.json", "data/sales.json", "data/images.json", "image-slots.json", "content/theme.json", "data/theme.json", "content/pages.json", "data/pages.json"];
   const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Add photo|Place photos|Theme: |Publish: |Make live: |Undo: )/;
 
   if (action === "history") {
