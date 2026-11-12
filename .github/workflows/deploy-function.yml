@@ -46,6 +46,6 @@ jobs:
           mkdir -p "supabase/functions/$FUNCTION_NAME"
           cp supabase/functions/home/index.ts "supabase/functions/$FUNCTION_NAME/index.ts"
       - name: Deploy
-        run: supabase functions deploy "$FUNCTION_NAME" --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
+        run: supabase functions deploy "$FUNCTION_NAME" --project-ref "$PROJECT_REF" --no-verify-jwt --use-api --yes
       - name: Done
         run: echo "The server function is live. Refresh the console to use it."
