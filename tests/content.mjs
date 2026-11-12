@@ -34,16 +34,15 @@ assert.deepEqual(bio.body, ["First paragraph.", "Second paragraph."]);
 
 // the handler, with GitHub mocked
 globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "me@x.com", SUPABASE_URL: "https://s" }[k] || "") }, serve() {} };
-const store = { "content/site.json": JSON.stringify(war), "image-slots.json": fs.readFileSync("/home/claude/world-art-review/image-slots.json", "utf8") };
-const writes = [];
-globalThis.fetch = async (url, init = {}) => {
-  url = String(url);
-  if (url.includes("/auth/v1/user")) return new Response(JSON.stringify({ email: "me@x.com" }));
-  const m = url.match(/contents\/([^?]+)/); const method = init.method || "GET";
-  if (m && method === "GET") return store[m[1]] ? new Response(JSON.stringify({ sha: "sha-" + m[1], content: Buffer.from(store[m[1]]).toString("base64") })) : new Response("{}", { status: 404 });
-  if (m && method === "PUT") { const b = JSON.parse(init.body); store[m[1]] = Buffer.from(b.content, "base64").toString(); writes.push(b.message); return new Response("{}", { status: 200 }); }
-  throw new Error("unexpected " + method + " " + url);
-};
+const { makeGitHub } = await import("./fakegit.mjs");
+const WR = "Artiscope/World-art-review";
+const hub = makeGitHub({ [WR]: { "content/site.json": JSON.stringify(war), "image-slots.json": fs.readFileSync("/home/claude/world-art-review/image-slots.json", "utf8"), "images/zara-muse.jpg": "picture", "tools/build_site.py": "print(1)" } });
+globalThis.fetch = async (url, init = {}) => String(url).includes("/auth/v1/user") ? new Response(JSON.stringify({ email: "me@x.com" })) : hub.fetch(url, init);
+// what the copy being worked on holds, and what visitors see
+const work = () => Object.keys(hub.refs(WR)).find((n) => n.startsWith("adh/live-"));
+const store = new Proxy({}, { get: (_t, file) => hub.read(WR, work() || "main", file) });
+const liveFile = (file) => hub.read(WR, "main", file);
+const writes = { at: () => hub.lastMessage(WR, work() || "main") };
 const post = (b) => new Request("https://x", { method: "POST", headers: { Authorization: "Bearer t", apikey: "k" }, body: JSON.stringify(b) });
 let r = await handle(post({ action: "content", site: "world-art-review" })); let d = await r.json();
 assert.equal(d.collections.length, 4); assert.equal(d.collections[0].entries.length, 16);
@@ -105,5 +104,86 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   r2 = await handle(post({ action: "saveTheme", site: "world-art-review", values: { colours: { green: "url(x)" } } })); assert.equal(r2.status, 400);
   fs.writeFileSync("/tmp/theme-saved.json", JSON.stringify(saved, null, 2));
   for (const st of SITES.filter((x) => x.theme)) for (const l of st.theme.looks) cleanTheme(st.theme, { colours: l.colours });
+}
+
+// copies: nothing reaches visitors until Publish; undo, redo, trial copies
+{
+  const site = "world-art-review", call = async (b) => { const r = await handle(post({ site, ...b })); return { status: r.status, ...(await r.json()) }; };
+  const over = async (copies) => (await (await handle(post({ action: "overview", copies }))).json()).sites[0];
+  const title = (ref) => JSON.parse(hub.read(WR, ref, "content/site.json")).articles[0].title;
+  const original = JSON.parse(JSON.stringify(war)).articles[0].title;
+  assert.equal(title("main"), original, "live is untouched by everything saved so far");
+  let o = await over(); const live = o.copies[0];
+  assert.equal(live.kind, "live"); assert.ok(live.ahead >= 5 && live.steps.length === live.ahead && !live.canRedo);
+  assert.equal(live.steps[0].what, "Theme: bands and buttons, headlines typeface"); assert.equal(live.steps[0].by, "me@x.com");
+  assert.ok(!JSON.stringify(o.copies).includes("adh/"), "branch names stay on the server");
+  assert.equal(o.slots.find((x) => x.id === "artist-zara-muse").filled, false, "the console shows the copy being worked on");
+
+  // undo and redo, one step and several
+  const n0 = live.ahead;
+  assert.equal((await call({ action: "undoStep" })).ok, true);
+  o = await over(); assert.equal(o.copies[0].ahead, n0 - 1); assert.equal(o.copies[0].canRedo, true);
+  assert.equal(hub.read(WR, work(), "content/theme.json"), null, "the theme step is undone");
+  assert.equal((await call({ action: "undoStep", steps: 2 })).ok, true);
+  o = await over(); assert.equal(o.copies[0].ahead, n0 - 3);
+  for (let i = 0; i < 3; i++) assert.equal((await call({ action: "redoStep" })).ok, true);
+  o = await over(); assert.equal(o.copies[0].ahead, n0); assert.equal(o.copies[0].canRedo, false);
+  assert.equal((await call({ action: "redoStep" })).status, 409);
+  assert.ok(hub.read(WR, work(), "content/theme.json").includes("#22304A"));
+  // a new edit after an undo ends the chance to redo
+  await call({ action: "undoStep" });
+  await call({ action: "saveEntry", collection: "articles", id: first.id, values: { title: "Second edit" } });
+  o = await over(); assert.equal(o.copies[0].canRedo, false); assert.equal(title(work()), "Second edit");
+  assert.equal((await call({ action: "undoStep", steps: 99 })).status, 409);
+
+  // trial copies: made from live, at most two, edited on their own
+  let t = await call({ action: "makeCopy", name: "Winter look!" }); assert.match(t.copy, /^trial-winter-look-[0-9a-f]{6}$/);
+  assert.equal((await call({ action: "makeCopy", name: "  " })).status, 400);
+  await call({ action: "makeCopy", name: "Second" }); assert.equal((await call({ action: "makeCopy", name: "Third" })).status, 400);
+  o = await over({ [site]: t.copy }); assert.equal(o.copy, t.copy); assert.equal(o.copies.length, 3); assert.equal(o.copies[1].name, "Second");
+  const trial = o.copies.find((c) => c.id === t.copy); assert.equal(trial.name, "Winter look"); assert.equal(trial.ahead, 0); assert.ok(trial.preview.endsWith("/preview/" + t.copy + "/"));
+  assert.equal(o.slots.find((x) => x.id === "artist-zara-muse").filled, true, "a new trial copy starts as live is");
+  await call({ action: "saveEntry", copy: t.copy, collection: "articles", id: first.id, values: { title: "Trial title" } });
+  assert.equal(title("adh/" + t.copy), "Trial title"); assert.equal(title(work()), "Second edit"); assert.equal(title("main"), original);
+  let c2 = await (await handle(post({ action: "content", site, copy: t.copy }))).json(); assert.equal(c2.collections[0].entries[0].title, "Trial title");
+  assert.equal((await call({ action: "saveEntry", copy: "trial-gone-000000", collection: "articles", id: first.id, values: { title: "x" } })).status, 409);
+
+  // publish the live changes
+  const pub = await call({ action: "publish" }); assert.equal(pub.ok, true);
+  assert.equal(title("main"), "Second edit"); assert.match(hub.lastMessage(WR, "main"), /^Publish: \d+ changes \(me@x\.com\)$/);
+  o = await over(); assert.equal(o.copies[0].ahead, 0); assert.equal(o.copies[0].behind, 0);
+  assert.equal((await call({ action: "publish" })).unchanged, true);
+  assert.equal(JSON.parse(liveFile("image-slots.json")).slots.find((x) => x.id === "artist-zara-muse").filled, false);
+
+  // the trial copy and live now both changed the same file: ask first, then replace content only
+  hub.commitOn(WR, "main", "tools/build_site.py", "print(2)", "A layout fix made on live");
+  o = await over(); assert.equal(o.copies.find((c) => c.id === t.copy).behind > 0, true);
+  const clash = await call({ action: "publish", copy: t.copy }); assert.equal(clash.conflict, true); assert.ok(clash.live.includes("A layout fix made on live"));
+  assert.equal(title("main"), "Second edit", "nothing is published while the question is open");
+  assert.equal((await call({ action: "refreshCopy", copy: t.copy })).status, 409);
+  assert.equal((await call({ action: "publish", copy: t.copy, replace: true })).ok, true);
+  assert.equal(title("main"), "Trial title"); assert.equal(hub.read(WR, "main", "tools/build_site.py"), "print(2)", "live keeps its own layout fix");
+  assert.equal(hub.lastMessage(WR, "main"), "Make live: Winter look (me@x.com)");
+  o = await over(); assert.equal(o.copies.find((c) => c.id === t.copy).ahead, 0);
+
+  // the next live edit starts from the newest live site
+  await call({ action: "saveEntry", collection: "articles", id: first.id, values: { dek: "A new summary." } });
+  assert.equal(title(work()), "Trial title"); assert.equal(hub.read(WR, work(), "tools/build_site.py"), "print(2)");
+  o = await over(); assert.equal(o.copies[0].ahead, 1);
+  assert.equal((await call({ action: "discard" })).ok, true); o = await over(); assert.equal(o.copies[0].ahead, 0);
+  assert.equal(JSON.parse(hub.read(WR, work(), "content/site.json")).articles[0].dek, JSON.parse(liveFile("content/site.json")).articles[0].dek);
+
+  // History can put a published change back, as a step that waits for Publish
+  const hist = (await call({ action: "history" })).changes; const made = hist.find((h) => h.what === "Make live: Winter look"); assert.ok(made && made.canUndo);
+  assert.equal((await call({ action: "undo", sha: made.sha })).ok, true);
+  assert.equal(title(work()), "Second edit"); assert.equal(title("main"), "Trial title"); assert.equal(hub.lastMessage(WR, work()), "Undo: Make live: Winter look (me@x.com)");
+  assert.equal(hist.find((h) => h.what === "A layout fix made on live").canUndo, false);
+
+  // a refresh that can be joined, then delete
+  const second = o.copies.find((c) => c.name === "Second").id;
+  assert.equal((await call({ action: "refreshCopy", copy: second })).ok, true); o = await over({ [site]: second }); assert.equal(o.copies.find((c) => c.id === second).behind, 0);
+  assert.equal((await call({ action: "deleteCopy", copy: second })).ok, true); assert.equal((await call({ action: "deleteCopy" })).status, 400);
+  o = await over({ [site]: second }); assert.equal(o.copies.length, 2); assert.equal(o.copy, o.copies[0].id, "a deleted copy falls back to the live site");
+  assert.ok(!Object.keys(hub.refs(WR)).some((n) => n.startsWith("adh-redo/")), "no leftovers");
 }
 console.log("CONTENT CHECKS PASSED");

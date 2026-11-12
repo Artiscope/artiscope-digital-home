@@ -31,11 +31,11 @@ try {
   const frame = page.frames().find((f) => f.url().startsWith(siteAt));
   const band = () => frame.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--green").trim());
   assert.equal(await band(), "#1D4A35");
-  assert.ok(!(await page.innerText(".island")).includes("not yet published"));
+  assert.ok((await page.innerText(".island")).includes("Everything is live")); assert.equal(await page.locator(".savebar").count(), 0);
   // a ready-made look
   await page.click('.look >> nth=1'); await page.waitForTimeout(200);
   assert.equal(await band(), "#22304A");
-  assert.ok((await page.innerText(".island")).includes("4 changes not yet published"));
+  assert.ok((await page.innerText("#theme-settings")).includes("4 changes to the theme, not saved yet"));
   assert.equal(await page.locator("#pv-live").count(), 1);
   // typing a colour code, without the screen redrawing
   await page.fill('[data-theme-hex="brick"]', "#f4f1ea"); await page.waitForTimeout(150);
@@ -52,12 +52,22 @@ try {
   await page.screenshot({ path: "/tmp/theme-phone.png" });
   // discard, then change one thing and publish
   await page.click('[data-act="theme-discard"]'); await page.waitForTimeout(150);
-  assert.equal(await band(), "#1D4A35"); assert.ok(!(await page.innerText(".island")).includes("not yet published"));
+  assert.equal(await band(), "#1D4A35"); assert.equal(await page.locator("#theme-settings .savebar").count(), 0);
   await page.fill('[data-theme-hex="green"]', "#22304A"); await page.locator('[data-theme-hex="green"]').blur();
-  assert.ok((await page.innerText(".island")).includes("1 change not yet published"));
-  await page.click('[data-act="theme-publish"]'); await page.waitForSelector("text=Saved. Live in about two minutes");
-  assert.ok(!(await page.innerText(".island")).includes("not yet published"));
-  assert.equal(await page.inputValue('[data-theme-hex="green"]'), "#22304A");
+  assert.ok((await page.innerText("#theme-settings")).includes("1 change to the theme, not saved yet"));
+  await page.click('[data-act="theme-publish"]'); await page.waitForSelector("text=Saved. Not live yet");
+  await page.waitForSelector('[data-theme-hex="green"]'); assert.equal(await page.inputValue('[data-theme-hex="green"]'), "#22304A");
+  assert.equal(await page.locator("#theme-settings .savebar").count(), 0);
+  // saved is not live: the top bar offers Undo and Publish, and Publish sends it to visitors
+  await page.click('[data-tab="home"]'); assert.ok((await page.innerText(".island")).includes("1 change saved, not yet live"));
+  await page.screenshot({ path: "/tmp/topbar.png", clip: { x: 0, y: 0, width: 1440, height: 420 } });
+  await page.click('[data-act="publish"]'); await page.waitForSelector("text=Published. Live in about two minutes");
+  await page.click('[data-tab="sites"]'); await page.fill("#copy-name", "Winter look"); await page.click('form[data-form="copy"] button[type=submit]');
+  await page.waitForSelector("text=Trial copy made"); assert.equal(await page.inputValue("#copy-pick"), "trial-winter-look-000001");
+  await page.click('[data-tab="content"]'); await page.click('[data-act="open"]'); await page.fill("#f-0", "A trial title"); await page.click('button[type="submit"]'); await page.waitForSelector("text=Saved. Not live yet");
+  await page.click('[data-tab="sites"]'); await page.waitForSelector("text=1 change saved on this copy"); await page.screenshot({ path: "/tmp/sites.png", fullPage: true });
+  await page.selectOption("#copy-pick", ""); await page.waitForSelector(".copycard.on >> text=What visitors see");
+  assert.ok((await page.innerText(".island")).includes("Everything is live"));
 
   // content: the editor is split into parts, and asks before losing typing
   await page.click('[data-tab="content"]'); await page.click('[data-act="ctab"][data-i="1"]'); await page.click('[data-act="open"]');

@@ -246,3 +246,20 @@ select.fontpick { width: auto; min-width: 190px; max-width: 210px; min-height: 4
   .swrow { flex-wrap: wrap; }
   .island { max-width: 100%; }
 }
+
+/* ---------- copies, undo, publish ---------- */
+.soft.slim { min-height: 36px; padding: 0 14px; border-radius: 12px; font-size: 13.5px; }
+.island { max-width: none; flex-wrap: nowrap; }
+.island.busy { max-width: none; }
+.island select.copypick { max-width: 190px; font-weight: 500; color: var(--accent); background: rgba(7, 10, 17, .55); border-radius: 12px; padding: 0 12px; min-height: 36px; }
+.ask { margin-bottom: 22px; box-shadow: var(--sink), 0 0 0 2px rgba(169, 188, 224, .35); }
+.copies { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 22px; margin-top: 26px; }
+.copycard { padding: 0; overflow: hidden; }
+.copycard.on { box-shadow: var(--lift), 0 0 0 2px rgba(169, 188, 224, .55); }
+.copytop { display: flex; align-items: flex-end; height: 70px; padding: 12px 22px; font-size: 13px; font-weight: 600; }
+.copybody { padding: 16px 22px 22px; }
+.copyname { font-size: 18px; color: var(--bright); }
+.copycard.maker { padding: 22px; }
+.steprow { padding: 6px 0; }
+.steprow .body { display: flex; flex-direction: column; min-width: 0; }
+@media (max-width: 900px) { .island { flex-wrap: wrap; height: auto; padding: 8px 12px; border-radius: 24px; justify-content: center; } }

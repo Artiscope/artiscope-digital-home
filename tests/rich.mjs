@@ -66,7 +66,7 @@ assert.ok(body.includes("<h2>A new heading</h2>") && body.includes('<p>Visit <a 
 assert.ok(body.includes('<div class="callout"><strong>Try it</strong>Pick one') && !/style=|rt-|contenteditable|&nbsp;/.test(body), "clean");
 // a redraw keeps what was typed
 assert.ok((await page.innerText(".rt-page")).includes("A new heading"));
-await page.click('button[type="submit"]'); await page.waitForSelector("text=Saved. Live in about two minutes");
+await page.click('button[type="submit"]'); await page.waitForSelector("text=Saved. Not live yet");
 assert.deepEqual(errors, []);
 // phone width
 await page.setViewportSize({ width: 390, height: 800 }); await page.click('[data-act="open"]'); await page.click('.seg.wide button:has-text("Body")'); await page.waitForSelector(".rt-page");

@@ -503,8 +503,8 @@ function writeProblem(r, fallback) {
   return fallback + " (GitHub code " + r.status + ")";
 }
 
-async function getText(repo, path) {
-  const r = await gh("/repos/" + repo + "/contents/" + path);
+async function getText(repo, path, ref = "") {
+  const r = await gh("/repos/" + repo + "/contents/" + path + (ref ? "?ref=" + encodeURIComponent(ref) : ""));
   if (!r.ok || !r.data || !r.data.content) return null;
   return { text: decodeBase64Utf8(r.data.content), sha: r.data.sha };
 }
@@ -523,24 +523,127 @@ async function draftsOf(repo) {
     }));
 }
 
-async function inboxOf(repo) {
-  const r = await gh("/repos/" + repo + "/contents/inbox");
+async function inboxOf(repo, ref = "") {
+  const r = await gh("/repos/" + repo + "/contents/inbox" + (ref ? "?ref=" + encodeURIComponent(ref) : ""));
   if (!r.ok || !Array.isArray(r.data)) return [];
   return r.data
     .filter((f) => f.type === "file" && /\.(jpe?g|png)$/i.test(f.name))
     .map((f) => f.name);
 }
 
-async function siteOverview(site) {
+
+// ---------- copies of a site: the live one being worked on, and trial copies ----------
+//
+// Nothing the console saves goes straight to visitors. Each site has a
+// working branch for the live site ("adh/live-...") and up to two trial
+// copies ("adh/trial-..."). Publishing merges one of them into main.
+
+const MAX_TRIALS = 2;
+const COPY_ID = /^(live|trial)-[a-z0-9-]{1,60}$/;
+
+function randomTail() {
+  const b = new Uint8Array(3);
+  crypto.getRandomValues(b);
+  return Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+export function copySlug(name) {
+  return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30).replace(/-+$/g, "");
+}
+export function copyName(id) {
+  const words = String(id).replace(/^trial-/, "").replace(/-[0-9a-f]{6}$/, "").replace(/-/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+function stepOf(c) {
+  const first = String((c.commit && c.commit.message) || "").split("\n")[0];
+  return {
+    sha: c.sha,
+    what: first.replace(/ \([^()@ ]+@[^()]+\)$/, ""),
+    when: c.commit && c.commit.author ? c.commit.author.date : "",
+    by: (first.match(/\(([^()@ ]+@[^()]+)\)$/) || [])[1] || "",
+  };
+}
+
+// Every copy of one site, with how far each is from the live site.
+async function copiesOf(site) {
+  // one call finds both the copies ("adh/...") and their redo markers ("adh-redo/...")
+  const found = await gh("/repos/" + site.repo + "/git/matching-refs/heads/adh");
+  const all = Array.isArray(found.data) ? found.data : [];
+  const redoable = all.filter((r) => String(r.ref).startsWith("refs/heads/adh-redo/")).map((r) => String(r.ref).replace("refs/heads/adh-redo/", ""));
+  const ids = all
+    .filter((r) => String(r.ref).startsWith("refs/heads/adh/"))
+    .map((r) => ({ id: String(r.ref).replace("refs/heads/adh/", ""), sha: r.object && r.object.sha }))
+    .filter((r) => COPY_ID.test(r.id));
+  const out = await Promise.all(ids.map(async (r) => {
+    const cmp = await gh("/repos/" + site.repo + "/compare/main...adh/" + r.id);
+    const d = cmp.ok && cmp.data ? cmp.data : {};
+    const commits = Array.isArray(d.commits) ? d.commits : [];
+    const kind = r.id.startsWith("live-") ? "live" : "trial";
+    return {
+      id: r.id, kind, name: kind === "live" ? "Live site" : copyName(r.id), branch: "adh/" + r.id, sha: r.sha,
+      ahead: Number(d.ahead_by || 0), behind: Number(d.behind_by || 0),
+      since: d.merge_base_commit && d.merge_base_commit.commit && d.merge_base_commit.commit.committer ? d.merge_base_commit.commit.committer.date : "",
+      steps: commits.slice(-20).reverse().map(stepOf),
+      canRedo: redoable.includes(r.id),
+      preview: "https://" + site.domain + "/preview/" + r.id + "/",
+    };
+  }));
+  const lives = out.filter((c) => c.kind === "live");
+  const live = lives[0] || { id: "live", kind: "live", name: "Live site", branch: "", sha: "", ahead: 0, behind: 0, since: "", steps: [], canRedo: false, preview: "" };
+  return [live].concat(out.filter((c) => c.kind === "trial").sort((a, b) => a.id.localeCompare(b.id)));
+}
+function pickCopy(copies, id) {
+  if (!id || id === "live" || String(id).startsWith("live-")) return copies[0];
+  return copies.find((c) => c.id === id) || null;
+}
+// Where to read a copy from. The live copy is read from main until it has changes of its own.
+function readRefOf(copy) {
+  if (copy.kind === "trial") return copy.branch;
+  return copy.branch && copy.ahead > 0 ? copy.branch : "main";
+}
+function publicCopy(c) {
+  return { id: c.id, kind: c.kind, name: c.name, ahead: c.ahead, behind: c.behind, since: c.since, steps: c.steps.map((x) => ({ what: x.what, when: x.when, by: x.by })), canRedo: c.canRedo, preview: c.ahead > 0 || c.kind === "trial" ? c.preview : "" };
+}
+async function mainSha(site) {
+  const r = await gh("/repos/" + site.repo + "/git/ref/heads/main");
+  return r.ok && r.data && r.data.object ? r.data.object.sha : "";
+}
+async function moveBranch(site, branch, sha, force) {
+  return await gh("/repos/" + site.repo + "/git/refs/heads/" + branch, { method: "PATCH", body: JSON.stringify({ sha, force: !!force }) });
+}
+async function dropRedo(site, copy) {
+  if (copy.canRedo) await gh("/repos/" + site.repo + "/git/refs/heads/adh-redo/" + copy.id, { method: "DELETE" });
+  copy.canRedo = false;
+}
+// Makes sure the copy has a branch to save to, brought up to date with live where that is safe.
+async function branchForWriting(site, copy, who) {
+  if (!copy.branch) {
+    const sha = await mainSha(site);
+    if (!sha) return null;
+    const id = "live-" + randomTail();
+    const made = await gh("/repos/" + site.repo + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/adh/" + id, sha }) });
+    if (!made.ok) return null;
+    copy.id = id; copy.branch = "adh/" + id; copy.sha = sha;
+  } else if (copy.kind === "live" && copy.behind > 0) {
+    if (copy.ahead === 0) await moveBranch(site, copy.branch, await mainSha(site), false);
+    else await gh("/repos/" + site.repo + "/merges", { method: "POST", body: JSON.stringify({ base: copy.branch, head: "main", commit_message: "Bring in the latest live changes" + who }) });
+  }
+  await dropRedo(site, copy);
+  return copy.branch;
+}
+
+async function siteOverview(site, wanted = "") {
   const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists };
   if (!site.live) return base;
   try {
+    const copies = await copiesOf(site);
+    const copy = pickCopy(copies, wanted) || copies[0];
+    const ref = readRefOf(copy);
     const [cal, log, drafts, inbox, slotFile] = await Promise.all([
       getText(site.repo, "CONTENT-CALENDAR.md"),
       getText(site.repo, "AGENT-LOG.md"),
       draftsOf(site.repo),
-      inboxOf(site.repo),
-      getText(site.repo, "image-slots.json"),
+      inboxOf(site.repo, ref),
+      getText(site.repo, "image-slots.json", ref),
     ]);
     const waitingSlots = inbox
       .map((n) => (n.match(/^slot--([a-z0-9-]+)\.(jpg|png)$/) || [])[1])
@@ -556,6 +659,8 @@ async function siteOverview(site) {
       drafts,
       inbox,
       slots,
+      copies: copies.map(publicCopy),
+      copy: copy.id,
     };
   } catch (_e) {
     return { ...base, error: "Could not read this site from GitHub just now." };
@@ -628,7 +733,8 @@ export async function handle(req) {
   const action = String(body.action || "");
 
   if (action === "overview") {
-    const sites = await Promise.all(SITES.map(siteOverview));
+    const wanted = body.copies && typeof body.copies === "object" ? body.copies : {};
+    const sites = await Promise.all(SITES.map((s) => siteOverview(s, String(wanted[s.id] || ""))));
     return json({ user: { email }, sites });
   }
 
@@ -639,13 +745,35 @@ export async function handle(req) {
   const col = (site.collections || []).find((c) => c.id === body.collection) || null;
   const who = " (" + email + ")";
 
+  // Which copy of the site this request is about, and the branch that goes with it.
+  const WRITES = ["saveTheme", "saveEntry", "setHidden", "deleteEntry", "removePhoto", "undo", "uploadPhoto"];
+  const COPY_ACTIONS = ["makeCopy", "deleteCopy", "refreshCopy", "publish", "discard", "undoStep", "redoStep"];
+  const DRAFT_ACTIONS = ["answerTopic", "publishDraft", "returnDraft", "rejectDraft", "history"];
+  let copies = [], copy = null, ref = "main";
+  if (!DRAFT_ACTIONS.includes(action)) {
+    copies = await copiesOf(site);
+    copy = pickCopy(copies, String(body.copy || ""));
+    if (!copy) return json({ error: "That trial copy is no longer there. Refresh and choose again." }, 409);
+    if (WRITES.includes(action)) {
+      const b = await branchForWriting(site, copy, who);
+      if (!b) return json({ error: "The working copy could not be prepared. Please try again." }, 502);
+      ref = b;
+    } else ref = readRefOf(copy);
+  }
+  // Reads and writes of site files go to that branch.
+  const ghc = (path, init = {}) => {
+    if (!init.method) return gh(path.includes("?ref=") ? path : path + "?ref=" + encodeURIComponent(ref), init);
+    const b = JSON.parse(init.body || "{}");
+    return gh(path, { ...init, body: JSON.stringify({ ...b, branch: ref }) });
+  };
+
   async function loadJson(file) {
-    const f = await getText(site.repo, file);
+    const f = await getText(site.repo, file, ref);
     if (!f) return null;
     try { return { data: JSON.parse(f.text), sha: f.sha }; } catch (_e) { return null; }
   }
   async function saveJson(file, data, sha, message) {
-    return await gh("/repos/" + site.repo + "/contents/" + file, {
+    return await ghc("/repos/" + site.repo + "/contents/" + file, {
       method: "PUT",
       body: JSON.stringify({ message: message + who, content: encodeBase64Utf8(JSON.stringify(data, null, 2) + "\n"), sha }),
     });
@@ -731,9 +859,9 @@ export async function handle(req) {
       let removed = false;
       for (const ext of ["jpg", "jpeg", "png", "webp"]) {
         const path = "/repos/" + site.repo + "/contents/assets/images/" + m[2] + "." + ext;
-        const cur = await gh(path);
+        const cur = await ghc(path);
         if (cur.ok && cur.data && cur.data.sha) {
-          const del = await gh(path, { method: "DELETE", body: JSON.stringify({ message: "Remove photo: " + slot.label + who, sha: cur.data.sha }) });
+          const del = await ghc(path, { method: "DELETE", body: JSON.stringify({ message: "Remove photo: " + slot.label + who, sha: cur.data.sha }) });
           if (!del.ok) return json({ error: writeProblem(del, "GitHub did not remove the photo.") }, 502);
           removed = true;
         }
@@ -759,7 +887,7 @@ export async function handle(req) {
 
   // ----- history and undo -----
   const CONTENT_FILES = ["content/site.json", "data/content.json", "data/sales.json", "data/images.json", "image-slots.json", "content/theme.json", "data/theme.json"];
-  const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Theme: |Undo: )/;
+  const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Add photo|Place photos|Theme: |Publish: |Make live: |Undo: )/;
 
   if (action === "history") {
     const r = await gh("/repos/" + site.repo + "/commits?per_page=30");
@@ -772,28 +900,151 @@ export async function handle(req) {
     });
   }
 
+  // Puts back what one published change altered, as a new step on the copy being worked on.
   if (action === "undo") {
     const sha = String(body.sha || "");
     if (!/^[0-9a-f]{40}$/.test(sha)) return json({ error: "That change could not be found." }, 400);
     const c = await gh("/repos/" + site.repo + "/commits/" + sha);
     if (!c.ok || !c.data) return json({ error: "That change could not be found." }, 404);
     const first = String(c.data.commit.message || "").split("\n")[0];
-    const files = (c.data.files || []).map((x) => x.filename);
+    const files = c.data.files || [];
     const parent = c.data.parents && c.data.parents[0] ? c.data.parents[0].sha : "";
-    if (!UNDOABLE.test(first) || !parent || !files.length || !files.every((x) => CONTENT_FILES.includes(x))) {
+    const allowed = (f) => CONTENT_FILES.includes(f) || /^(images|assets\/images|inbox)\/[^/]+$/.test(f);
+    if (!UNDOABLE.test(first) || !parent || !files.length || files.length > 60 || !files.every((x) => allowed(x.filename))) {
       return json({ error: "This change cannot be undone from here." }, 400);
     }
-    for (const file of files) {
-      const before = await gh("/repos/" + site.repo + "/contents/" + file + "?ref=" + parent);
-      const now = await gh("/repos/" + site.repo + "/contents/" + file);
-      if (!before.ok || !before.data.content || !now.ok) return json({ error: "The earlier version could not be read." }, 502);
-      const put = await gh("/repos/" + site.repo + "/contents/" + file, {
-        method: "PUT",
-        body: JSON.stringify({ message: "Undo: " + first.replace(/ \([^()@ ]+@[^()]+\)$/, "") + who, content: before.data.content.replace(/\n/g, ""), sha: now.data.sha }),
-      });
-      if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save the undo.") }, 502);
+    const tree = [];
+    for (const f of files) {
+      let blob = null;
+      if (f.status !== "added") {
+        const before = await gh("/repos/" + site.repo + "/contents/" + f.filename + "?ref=" + parent);
+        if (!before.ok || !before.data || !before.data.sha) return json({ error: "The earlier version could not be read." }, 502);
+        blob = before.data.sha;
+      }
+      tree.push({ path: f.filename, mode: "100644", type: "blob", sha: blob });
     }
+    const head = await gh("/repos/" + site.repo + "/git/ref/heads/" + ref);
+    const headSha = head.ok && head.data && head.data.object ? head.data.object.sha : "";
+    const headCommit = headSha ? await gh("/repos/" + site.repo + "/git/commits/" + headSha) : null;
+    if (!headCommit || !headCommit.ok) return json({ error: "The working copy could not be read." }, 502);
+    const made = await gh("/repos/" + site.repo + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: headCommit.data.tree.sha, tree }) });
+    if (!made.ok) return json({ error: writeProblem(made, "GitHub did not save the undo.") }, 502);
+    if (made.data.sha === headCommit.data.tree.sha) return json({ ok: true, unchanged: true });
+    const commit = await gh("/repos/" + site.repo + "/git/commits", { method: "POST", body: JSON.stringify({ message: "Undo: " + first.replace(/ \([^()@ ]+@[^()]+\)$/, "") + who, tree: made.data.sha, parents: [headSha] }) });
+    if (!commit.ok) return json({ error: writeProblem(commit, "GitHub did not save the undo.") }, 502);
+    const moved = await moveBranch(site, ref, commit.data.sha, false);
+    if (!moved.ok) return json({ error: writeProblem(moved, "GitHub did not save the undo.") }, 502);
     return json({ ok: true });
+  }
+
+  // ----- copies: trial copies, undo and redo, publish -----
+  if (COPY_ACTIONS.includes(action)) {
+    const repo = "/repos/" + site.repo;
+    if (action === "makeCopy") {
+      const slug = copySlug(body.name);
+      if (!slug) return json({ error: "Give the trial copy a short name, for example Winter look." }, 400);
+      if (copies.filter((c) => c.kind === "trial").length >= MAX_TRIALS) return json({ error: "This site already has " + MAX_TRIALS + " trial copies. Delete one to make another." }, 400);
+      const sha = await mainSha(site);
+      const id = "trial-" + slug + "-" + randomTail();
+      const made = await gh(repo + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/adh/" + id, sha }) });
+      if (!sha || !made.ok) return json({ error: writeProblem(made, "GitHub did not make the copy. Please try again.") }, 502);
+      return json({ ok: true, copy: id });
+    }
+    if (action === "deleteCopy") {
+      if (copy.kind !== "trial") return json({ error: "The live site cannot be deleted." }, 400);
+      await dropRedo(site, copy);
+      const del = await gh(repo + "/git/refs/heads/" + copy.branch, { method: "DELETE" });
+      if (!del.ok && del.status !== 422) return json({ error: writeProblem(del, "GitHub did not delete the copy.") }, 502);
+      return json({ ok: true });
+    }
+    if (!copy.branch) return json({ ok: true, unchanged: true });
+
+    if (action === "refreshCopy") {
+      if (copy.behind === 0) return json({ ok: true, unchanged: true });
+      await dropRedo(site, copy);
+      const m = copy.ahead === 0
+        ? await moveBranch(site, copy.branch, await mainSha(site), false)
+        : await gh(repo + "/merges", { method: "POST", body: JSON.stringify({ base: copy.branch, head: "main", commit_message: "Bring in the latest live changes" + who }) });
+      if (m.status === 409) return json({ error: "Live and this copy have both changed the same thing, so they cannot be joined automatically. Make the same edit on the copy by hand, or start a fresh copy." }, 409);
+      if (!m.ok && m.status !== 204) return json({ error: writeProblem(m, "GitHub did not refresh the copy.") }, 502);
+      return json({ ok: true });
+    }
+
+    if (action === "publish") {
+      if (copy.ahead === 0) return json({ ok: true, unchanged: true });
+      const message = (copy.kind === "live" ? "Publish: " + copy.ahead + (copy.ahead === 1 ? " change" : " changes") : "Make live: " + copy.name) + who;
+      let newSha = "";
+      const m = await gh(repo + "/merges", { method: "POST", body: JSON.stringify({ base: "main", head: copy.branch, commit_message: message }) });
+      if (m.ok && m.data && m.data.sha) newSha = m.data.sha;
+      else if (m.status === 409) {
+        if (!body.replace) {
+          const since = await gh(repo + "/compare/" + copy.branch + "...main");
+          const theirs = since.ok && Array.isArray(since.data.commits) ? since.data.commits.slice(-8).reverse().map((c) => stepOf(c).what) : [];
+          return json({ conflict: true, live: theirs });
+        }
+        // Live changed in the same places. Take the copy's words, pictures and theme, and keep everything else of live.
+        const [mainRef, root] = await Promise.all([mainSha(site), gh(repo + "/git/trees/" + copy.sha + "?recursive=1")]);
+        if (!mainRef || !root.ok || !Array.isArray(root.data.tree)) return json({ error: "The copy could not be read." }, 502);
+        const mainCommit = await gh(repo + "/git/commits/" + mainRef);
+        const tree = root.data.tree
+          .filter((t) => t.type === "blob" && (CONTENT_FILES.includes(t.path) || /^(images|assets\/images)\/[^/]+$/.test(t.path)))
+          .map((t) => ({ path: t.path, mode: t.mode, type: t.type, sha: t.sha }));
+        const made = await gh(repo + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: mainCommit.data.tree.sha, tree }) });
+        if (!made.ok) return json({ error: writeProblem(made, "GitHub did not publish the copy.") }, 502);
+        const commit = await gh(repo + "/git/commits", { method: "POST", body: JSON.stringify({ message, tree: made.data.sha, parents: [mainRef, copy.sha] }) });
+        if (!commit.ok) return json({ error: writeProblem(commit, "GitHub did not publish the copy.") }, 502);
+        const moved = await moveBranch(site, "main", commit.data.sha, false);
+        if (!moved.ok) return json({ error: writeProblem(moved, "GitHub did not publish the copy. Please try again.") }, 502);
+        newSha = commit.data.sha;
+      } else return json({ error: writeProblem(m, "GitHub did not publish. Please try again.") }, 502);
+      await dropRedo(site, copy);
+      await moveBranch(site, copy.branch, newSha, true);   // the copy now matches live exactly
+      return json({ ok: true });
+    }
+
+    if (action === "discard") {
+      if (copy.kind !== "live") return json({ error: "To drop a trial copy, delete it." }, 400);
+      await dropRedo(site, copy);
+      const moved = await moveBranch(site, copy.branch, await mainSha(site), true);
+      if (!moved.ok) return json({ error: writeProblem(moved, "GitHub did not discard the changes.") }, 502);
+      return json({ ok: true });
+    }
+
+    if (action === "undoStep") {
+      const n = Math.max(1, Math.min(20, Number(body.steps) || 1));
+      if (copy.ahead < n) return json({ error: "There is nothing more to undo." }, 409);
+      let at = copy.sha;
+      for (let i = 0; i < n; i++) {
+        const c = await gh(repo + "/git/commits/" + at);
+        if (!c.ok || !c.data.parents || !c.data.parents[0]) return json({ error: "That step could not be undone." }, 502);
+        at = c.data.parents[0].sha;
+      }
+      if (!copy.canRedo) {
+        const kept = await gh(repo + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/adh-redo/" + copy.id, sha: copy.sha }) });
+        if (!kept.ok) return json({ error: writeProblem(kept, "GitHub did not undo the step.") }, 502);
+      }
+      const moved = await moveBranch(site, copy.branch, at, true);
+      if (!moved.ok) return json({ error: writeProblem(moved, "GitHub did not undo the step.") }, 502);
+      return json({ ok: true });
+    }
+
+    if (action === "redoStep") {
+      if (!copy.canRedo) return json({ error: "There is nothing to redo." }, 409);
+      const tip = await gh(repo + "/git/ref/heads/adh-redo/" + copy.id);
+      let at = tip.ok && tip.data.object ? tip.data.object.sha : "", next = "";
+      const top = at;
+      for (let i = 0; i < 40 && at; i++) {
+        const c = await gh(repo + "/git/commits/" + at);
+        const parent = c.ok && c.data.parents && c.data.parents[0] ? c.data.parents[0].sha : "";
+        if (parent === copy.sha) { next = at; break; }
+        at = parent;
+      }
+      if (!next) { await dropRedo(site, copy); return json({ error: "There is nothing to redo." }, 409); }
+      const moved = await moveBranch(site, copy.branch, next, false);
+      if (!moved.ok) return json({ error: writeProblem(moved, "GitHub did not redo the step.") }, 502);
+      if (next === top) await dropRedo(site, copy);
+      return json({ ok: true });
+    }
   }
 
   if (action === "answerTopic") {
@@ -858,7 +1109,7 @@ export async function handle(req) {
   if (action === "uploadPhoto") {
     let name = null;
     if (body.slot) {
-      const slotFile = await getText(site.repo, "image-slots.json");
+      const slotFile = await getText(site.repo, "image-slots.json", ref);
       const known = slotFile ? parseSlots(slotFile.text) : [];
       if (!known.some((x) => x.id === body.slot)) return json({ error: "That spot is no longer on the site. Refresh and choose again." }, 409);
       name = slotPhotoName(body.slot, body.ext);
@@ -871,8 +1122,8 @@ export async function handle(req) {
       return json({ error: "That photo is too large or could not be read." }, 400);
     }
     const path = "/repos/" + site.repo + "/contents/inbox/" + name;
-    const exists = await gh(path);
-    if (exists.ok) return json({ error: "A photo is already waiting for that spot. The agent will place it on its next run." }, 409);
+    const exists = await ghc(path);
+    if (exists.ok) return json({ error: "A photo is already waiting for that spot. It will be placed shortly." }, 409);
 
     // The owner's description travels with the photo in a small note,
     // saved first so it is already there when the photo arrives.
@@ -880,8 +1131,8 @@ export async function handle(req) {
     const caption = cleanText(body.caption, 160);
     if (alt || caption) {
       const notePath = "/repos/" + site.repo + "/contents/inbox/" + name.replace(/\.(jpg|png)$/, ".json");
-      const old = await gh(notePath);
-      const saved = await gh(notePath, {
+      const old = await ghc(notePath);
+      const saved = await ghc(notePath, {
         method: "PUT",
         body: JSON.stringify({
           message: "Photo description from Artiscope Digital Home",
@@ -892,9 +1143,9 @@ export async function handle(req) {
       if (!saved.ok) return json({ error: writeProblem(saved, "GitHub did not accept the description. Please try again.") }, 502);
     }
 
-    const put = await gh(path, {
+    const put = await ghc(path, {
       method: "PUT",
-      body: JSON.stringify({ message: "Photo added from Artiscope Digital Home", content }),
+      body: JSON.stringify({ message: "Add photo: " + (body.slot ? String(body.slot) : cleanText(body.description, 60)) + who, content }),
     });
     if (!put.ok) return json({ error: writeProblem(put, "GitHub did not accept the photo. Please try again.") }, 502);
     return json({ ok: true, name, slot: body.slot || null });

@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "12";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "13";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -18,6 +18,9 @@
     tab: "home", prevTab: "home",
     notice: null,          // { text, problem }
     status: "live",        // "live" | "saving" | "saved"
+    flash: "",             // what just happened, said once in the top bar
+    copy: {},              // site id -> the trial copy being worked on ("" is the live site)
+    ask: null,             // a question shown before something big: { kind, ... }
     busy: {},
     content: {},           // site id -> collections
     ctab: {}, prevCtab: 0, // site id -> index of the open content tab
@@ -58,6 +61,8 @@
 
   async function api(action, payload) {
     var body = Object.assign({ action: action }, payload || {});
+    if (body.site && body.copy == null) body.copy = state.copy[body.site] || "";
+    if (action === "overview") body.copies = state.copy;
     if (demo) return demoApi(body);
     var res = await sb.functions.invoke(cfg.functionName || "home", { body: body });
     if (res.error) throw new Error(await explain(res.error));
@@ -84,6 +89,7 @@
     try {
       state.data = await api("overview");
       if (!site() || site().id !== state.site) state.site = liveSites()[0] ? liveSites()[0].id : "";
+      keepCopies();
       state.notice = null;
     } catch (e) { state.notice = { text: e.message, problem: true }; }
     render();
@@ -107,15 +113,27 @@
     } catch (e) { state.notice = { text: e.message, problem: true }; render(); }
   }
 
+  // ---------- copies of a site ----------
+  function copiesOf(s) { return (s && s.copies && s.copies.length ? s.copies : [{ id: "live", kind: "live", name: "Live site", ahead: 0, behind: 0, steps: [], canRedo: false, preview: "" }]); }
+  function curCopy() { var s = site(), list = copiesOf(s), id = s ? state.copy[s.id] : ""; return list.find(function (c) { return c.id === id; }) || list[0]; }
+  function keepCopies() {
+    sites().forEach(function (s) { var id = state.copy[s.id]; if (id && !copiesOf(s).some(function (c) { return c.id === id && c.kind === "trial"; })) state.copy[s.id] = ""; });
+  }
+  async function refreshCopies() {
+    var fresh = await api("overview"); state.data = fresh; keepCopies();
+  }
+
   // Runs one change, shows it in the floating bar, then refreshes.
-  async function change(k, run, done) {
-    state.busy[k] = true; state.status = "saving"; state.notice = null; state.confirm = null; render();
+  // "say" is what the bar says afterwards. Saving never reaches visitors; only Publish does.
+  async function change(k, run, done, say) {
+    state.busy[k] = true; state.status = "saving"; state.flash = ""; state.notice = null; state.confirm = null; state.ask = null; render();
     try {
-      await run();
-      state.status = "saved";
-      if (done) done();
+      var out = await run();
+      state.status = "saved"; state.flash = say || "Saved. Not live yet";
+      if (done) done(out);
       var s = site();
-      if (s) { delete state.history[s.id]; }
+      if (s) { delete state.history[s.id]; delete state.content[s.id]; delete state.theme[s.id]; }
+      try { await refreshCopies(); } catch (e2) { /* the next refresh will catch up */ }
       delete state.busy[k]; render();
       await ensure(true);
     } catch (e) {
@@ -138,27 +156,54 @@
   function mark() { return '<svg width="24" height="24" viewBox="0 0 26 26"><path d="M2 24V10l11-9 11 9v14z" fill="#A9BCE0"></path><rect x="10" y="14" width="6" height="10" fill="#141927"></rect></svg>'; }
 
   // The floating bar: which site, and what state its changes are in.
-  function islandBusy() { var t = themeOf(); return state.status !== "live" || (state.tab === "theme" && t && themeChanges(t) > 0); }
+  function islandBusy() { return state.status !== "live" || curCopy().ahead > 0; }
   function islandInner() {
-    var s = site(), t = themeOf(), n = state.tab === "theme" && t ? themeChanges(t) : 0;
+    var s = site(), list = copiesOf(s), c = curCopy(), trial = c.kind === "trial", busy = state.status === "saving";
     var options = liveSites().map(function (x) { return '<option value="' + esc(x.id) + '"' + (s && x.id === s.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("");
-    var statusText = state.status === "saving" ? "Saving your change" : state.status === "saved" ? "Saved. Live in about two minutes" : "Everything is live";
-    var right;
-    if (n && state.status !== "saving") {
-      right = '<span class="small">' + n + (n === 1 ? " change" : " changes") + ' not yet published</span>' +
-        '<button type="button" class="btn slim" data-act="theme-publish">Publish</button><button type="button" class="linklike small" data-act="theme-discard" style="margin-right:12px">Discard</button>';
-    } else {
-      right = '<span class="small">' + statusText + '</span>' +
-        (state.status === "saved" && state.tab !== "history" ? '<button type="button" class="linklike small" data-tab="history">See it in History</button>' : "") +
-        '<span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#A9BCE0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>';
-    }
+    var copyPick = list.length > 1
+      ? '<label class="small" for="copy-pick" style="position:absolute;left:-9999px">Working on</label><select id="copy-pick" class="copypick" data-change="copy">' +
+        list.map(function (x) { return '<option value="' + esc(x.kind === "live" ? "" : x.id) + '"' + (x.id === c.id ? " selected" : "") + '>' + esc(x.kind === "live" ? "Live site" : "Trial: " + x.name) + '</option>'; }).join("") + '</select>'
+      : "";
+    var text = busy ? "Saving" : state.flash ? state.flash
+      : c.ahead ? c.ahead + (c.ahead === 1 ? " change" : " changes") + (trial ? " on this copy" : " saved, not yet live")
+      : trial ? "Same as the live site" : "Everything is live";
+    var act = c.ahead && !busy ? '<button type="button" class="btn slim" data-act="' + (trial ? "ask-makelive" : "publish") + '">' + (trial ? "Make live" : "Publish") + '</button>'
+      : '<span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#A9BCE0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>';
     return '<span class="dot" aria-hidden="true" style="background:' + (s ? colours(s.id)[0] : "#55678C") + '"></span>' +
       '<label class="small" for="site-pick" style="position:absolute;left:-9999px">Site</label>' +
-      '<select id="site-pick" data-change="site">' + options + '</select>' + right;
+      '<select id="site-pick" data-change="site">' + options + '</select>' + copyPick +
+      '<button type="button" class="soft slim" data-act="undo-step"' + (c.ahead && !busy ? "" : " disabled") + '>Undo</button>' +
+      '<button type="button" class="soft slim" data-act="redo-step"' + (c.canRedo && !busy ? "" : " disabled") + '>Redo</button>' +
+      '<span class="small" id="island-text">' + esc(text) + '</span>' + act;
   }
   function patchIsland() {
     var el = app.querySelector && app.querySelector(".island"); if (!el) return;
     el.className = "island" + (islandBusy() ? " busy" : ""); el.innerHTML = islandInner();
+  }
+
+  // A question asked before anything that reaches visitors or throws work away.
+  function viewAsk() {
+    var q = state.ask; if (!q) return "";
+    var c = copiesOf(site()).find(function (x) { return x.id === q.copy; }) || curCopy(), title, text, yes, act;
+    if (q.kind === "makelive") {
+      title = "Make \u201C" + c.name + "\u201D the live site?";
+      text = "Visitors will see it in about two minutes. You can put the old version back from History." + (c.behind ? " The live site has changed since this copy was made. Those changes are kept, unless they are in the same place as yours." : "");
+      yes = "Make it live"; act = "makelive";
+    } else if (q.kind === "replace") {
+      title = "The live site has changed in the same places";
+      text = "Since this work was started, the live site had these changes: " + ((q.live || []).join("; ") || "changes made elsewhere") + ". If you carry on, your version of the words, pictures and theme replaces the live one. You can undo it from History.";
+      yes = "Publish my version"; act = "publish-replace";
+    } else if (q.kind === "discard") {
+      title = "Throw away " + c.ahead + (c.ahead === 1 ? " change" : " changes") + " that are not live yet?";
+      text = "The live site stays exactly as visitors see it now. This cannot be undone.";
+      yes = "Throw them away"; act = "discard";
+    } else if (q.kind === "deletecopy") {
+      title = "Delete the trial copy \u201C" + c.name + "\u201D?";
+      text = "Its changes are lost. The live site is not affected. This cannot be undone.";
+      yes = "Delete the copy"; act = "deletecopy";
+    } else return "";
+    return '<div class="sunk stack ask" role="alertdialog" aria-label="' + esc(title) + '"><b>' + esc(title) + '</b><span class="muted">' + esc(text) + '</span>' +
+      '<div class="row"><button type="button" class="btn" data-act="' + act + '" data-copy="' + esc(c.id) + '">' + yes + '</button><button type="button" class="soft" data-act="ask-cancel">Cancel</button></div></div>';
   }
 
   function viewShell(inner) {
@@ -186,7 +231,7 @@
         '<div class="island-row"><div class="island' + (islandBusy() ? " busy" : "") + '" role="status">' + islandInner() + '</div></div>' +
         '<div class="column fade">' +
           (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
-          inner +
+          viewAsk() + inner +
         '</div></main></div>';
   }
 
@@ -219,7 +264,7 @@
     var empty = s ? (s.slots || []).filter(function (x) { return !x.filled && !x.waiting; }).length : 0;
     var waiting = s && s.inbox ? s.inbox.length : 0;
     return '<div class="page-head"><span class="small">' + esc(today()) + '</span><h1 style="font-size:48px">' + greeting() + '</h1>' +
-      '<p>Pick a site to work on. A change you save goes live on that site in about two minutes, and every change can be undone from History.</p></div>' +
+      '<p>Pick a site to work on. What you save is kept safe but not shown to visitors until you press Publish, and every step can be undone.</p></div>' +
       '<div class="sites">' + cards + '</div>' +
       (s ? '<div class="stack"><h2 class="label">' + esc(s.name) + ' at a glance</h2><div class="grid-3">' +
         '<button type="button" class="card lift sitecard" data-tab="content" style="padding:26px 28px;gap:6px"><span class="bignum">' + (entries == null ? "..." : entries) + '</span><b>pieces of content</b><span class="small">Edit, hide or delete</span></button>' +
@@ -337,7 +382,8 @@
     }).join("");
     return '<div class="card stack"><h2 class="cardh">Ready-made looks</h2><span class="small">A quick starting point. You can still change every colour below.</span><div class="looks">' + looks + '</div></div>' +
       '<div class="card stack"><h2 class="cardh">Colours</h2>' + cols + '<span class="small">Press a colour square to choose a colour, or type its code.</span></div>' +
-      '<div class="card stack"><h2 class="cardh">Typefaces</h2>' + fonts + '<span class="small">A short list chosen to suit a gallery site, so nothing looks out of place.</span></div>';
+      '<div class="card stack"><h2 class="cardh">Typefaces</h2>' + fonts + '<span class="small">A short list chosen to suit a gallery site, so nothing looks out of place.</span></div>' +
+      (themeChanges(t) ? '<div class="savebar"><button type="button" class="btn" data-act="theme-publish"' + (state.busy[key("theme", site().id)] ? " disabled" : "") + '>Save theme</button><button type="button" class="soft" data-act="theme-discard">Discard</button><span class="small">' + themeChanges(t) + (themeChanges(t) === 1 ? " change" : " changes") + ' to the theme, not saved yet.</span></div>' : "");
   }
   function drawPreview(s) {
     return '<div class="pvd"><div class="pvd-band"><b>' + esc(s.name) + '</b><span>Artists &nbsp; Reviews &nbsp; Guides</span></div>' +
@@ -348,7 +394,7 @@
     var s = site(); if (!s) return "";
     var t = themeOf();
     if (!t) return head("Theme", "Reading the theme of " + s.name + ".");
-    return head("Theme", "Colours and typefaces for " + s.name + ". Nothing changes on the live site until you press Publish.") +
+    return head("Theme", "Colours and typefaces for " + s.name + ". Try things freely, then save. Like everything else, a saved theme waits for Publish.") +
       '<div class="theme"><div class="stack-wide" id="theme-settings">' + themeSettings(t) + '</div>' +
       '<div class="card stack pv-card"><div class="row between"><h2 class="cardh">Preview</h2>' +
         '<div class="seg" id="pv-seg"><button type="button" class="' + (t.mode === "computer" ? "on" : "") + '" data-act="pv-mode" data-mode="computer">Computer</button><button type="button" class="' + (t.mode === "phone" ? "on" : "") + '" data-act="pv-mode" data-mode="phone">Phone</button></div></div>' +
@@ -426,6 +472,34 @@
     var t = themeOf(), box = app.querySelector("#theme-settings"); if (!t || !box) { render(); return; }
     box.innerHTML = themeSettings(t); patchIsland(); applyPreview();
   }
+  // ---------- publish, undo, redo and trial copies ----------
+  function copyArg(id) { var s = site(), c = copiesOf(s).find(function (x) { return x.id === id; }) || curCopy(); return { c: c, arg: c.kind === "live" ? "" : c.id }; }
+  function publish(id, replace) {
+    var s = site(); if (!s) return; var x = copyArg(id);
+    change(key("publish", s.id), function () { return api("publish", { site: s.id, copy: x.arg, replace: !!replace }); },
+      function (out) { if (out && out.conflict) { state.ask = { kind: "replace", copy: x.c.id, live: out.live || [] }; state.flash = "Not published yet"; } },
+      "Published. Live in about two minutes");
+  }
+  function stepBack(n) { var s = site(); if (s) change(key("step", s.id), function () { return api("undoStep", { site: s.id, steps: n || 1 }); }, null, n > 1 ? "Undone, " + n + " steps" : "Undone"); }
+  function stepForward() { var s = site(); if (s) change(key("step", s.id), function () { return api("redoStep", { site: s.id }); }, null, "Redone"); }
+  function copyAction(action, id, say, after) {
+    var s = site(); if (!s) return; var x = copyArg(id);
+    change(key("copy", s.id), function () { return api(action, { site: s.id, copy: x.arg }); }, after, say);
+  }
+  function makeCopy(name) {
+    var s = site(); if (!s) return;
+    state.busy.copy = true;
+    change(key("copy", s.id), function () { return api("makeCopy", { site: s.id, name: name }); },
+      function (out) { delete state.busy.copy; if (out && out.copy) state.copy[s.id] = out.copy; }, "Trial copy made. You are working on it now").then(function () { delete state.busy.copy; });
+  }
+  async function workOn(id) {
+    var s = site(); if (!s) return;
+    state.copy[s.id] = id || ""; state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.ask = null; state.flash = ""; state.photoFiles = [];
+    delete state.content[s.id]; delete state.theme[s.id]; render();
+    try { await refreshCopies(); } catch (e) { state.notice = { text: e.message, problem: true }; }
+    render(); ensure();
+  }
+
   function publishTheme() {
     var s = site(), t = themeOf(); if (!s || !t) return;
     var sent = JSON.parse(JSON.stringify(t.draft));
@@ -727,12 +801,43 @@
   }
 
   function viewSites() {
+    var s = site(), list = copiesOf(s), cur = curCopy(), trials = list.filter(function (c) { return c.kind === "trial"; });
+    function card(c) {
+      var live = c.kind === "live", on = c.id === cur.id, tone = s ? colours(s.id) : ["#1B2132", "#6F7890"];
+      var lines = [];
+      if (live) lines.push(c.ahead ? c.ahead + (c.ahead === 1 ? " change" : " changes") + " saved, not yet live" : "Nothing waiting to be published");
+      else {
+        lines.push(c.ahead ? c.ahead + (c.ahead === 1 ? " change" : " changes") + " saved on this copy" : "Same as the live site");
+        if (c.behind) lines.push("The live site has changed since this copy was made");
+      }
+      var acts = (on ? '<span class="chip">You are working on this</span>' : '<button type="button" class="btn slim" data-act="work-on" data-copy="' + esc(live ? "" : c.id) + '">Work on this</button>') +
+        (c.preview && c.ahead ? '<a class="linklike small" href="' + esc(c.preview) + '" target="_blank" rel="noopener">Open the preview</a>' : "") +
+        (live && c.ahead ? '<button type="button" class="linklike small" data-act="ask-big" data-kind="discard" data-copy="' + esc(c.id) + '">Throw away these changes</button>' : "") +
+        (!live && c.ahead ? '<button type="button" class="soft slim" data-act="ask-big" data-kind="makelive" data-copy="' + esc(c.id) + '">Make this the live site</button>' : "") +
+        (!live && c.behind ? '<button type="button" class="linklike small" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Refresh from live</button>' : "") +
+        (!live ? '<button type="button" class="linklike small" data-act="ask-big" data-kind="deletecopy" data-copy="' + esc(c.id) + '">Delete</button>' : "");
+      return '<div class="card copycard' + (on ? " on" : "") + '"><div class="copytop" style="background:' + (live ? tone[0] : "linear-gradient(120deg, #2E3A57, #55678C)") + ';color:' + (live ? tone[1] : "#EEF1F6") + '"><span>' + (live ? "Live site" : "Trial copy") + '</span></div>' +
+        '<div class="stack copybody"><b class="copyname">' + esc(live ? "What visitors see" : c.name) + '</b>' +
+        '<span class="small">' + esc(live ? (s ? s.domain : "") : (c.since ? "Copied from live on " + when(c.since).split(",")[0] : "A copy of the live site")) + '</span>' +
+        lines.map(function (l) { return '<span>' + esc(l) + '</span>'; }).join("") + '<div class="row">' + acts + '</div></div></div>';
+    }
+    var maker = trials.length < 2
+      ? '<form class="card stack copycard maker" data-form="copy"><h2 class="cardh">Make a trial copy</h2><span class="small">A full copy of the live site to try new content, colours and photos on. Visitors never see it.</span>' +
+        '<input type="text" id="copy-name" maxlength="30" placeholder="A name, for example Winter look" aria-label="Name for the trial copy"><button type="submit" class="soft" style="align-self:flex-start"' + (state.busy.copy ? " disabled" : "") + '>Make the copy</button></form>'
+      : '<div class="card stack copycard maker"><h2 class="cardh">Two trial copies</h2><span class="small">That is the most a site can have. Delete one to make another.</span></div>';
+    var steps = cur.steps && cur.steps.length
+      ? '<div class="card stack" style="max-width:820px"><h2 class="cardh">Recent steps on ' + esc(cur.kind === "live" ? "the live site, not yet published" : "the trial copy " + cur.name) + '</h2>' +
+        cur.steps.map(function (st, i) { return '<div class="row between steprow"><div class="body"><span>' + esc(st.what) + '</span><span class="small">' + esc(when(st.when)) + (st.by ? ", by " + esc(st.by) : "") + '</span></div><button type="button" class="linklike small" data-act="undo-step" data-steps="' + (i + 1) + '">' + (i ? "Undo back to before this" : "Undo this") + '</button></div>'; }).join("") + '</div>'
+      : "";
     var rows = sites().map(function (x) {
       return '<div class="card entry"><span aria-hidden="true" style="flex:none;width:14px;height:14px;border-radius:50%;background:' + (x.live ? colours(x.id)[0] : "rgba(221,225,234,.25)") + ';box-shadow:0 0 0 2px rgba(221,225,234,.25)"></span>' +
         '<div class="body"><b>' + esc(x.name) + '</b><span class="small">' + esc(x.live ? x.domain : "Domain owned. Not built yet.") + '</span></div>' +
         '<span class="chip' + (x.live ? "" : " quiet") + '">' + (x.live ? "Live" : "To be built") + '</span></div>';
     }).join("");
-    return head("Sites", "Your five sites. Creating a new site from a template arrives in a later stage, along with page layouts and theme colours.") + '<div class="stack">' + rows + '</div>';
+    return head(s ? s.name : "Sites", "The live site and its trial copies. Try new content, colours and photos on a copy. Visitors only ever see the live site, and only what you have published.") +
+      '<div class="copies">' + list.map(card).join("") + maker + '</div>' +
+      '<p class="small" style="margin:14px 0 26px">A preview is ready about two minutes after a change. Anyone with the link can open it, so keep confidential work out of trial copies.</p>' + steps +
+      '<h2 class="cardh" style="margin:34px 0 14px">All sites</h2><div class="stack">' + rows + '</div>';
   }
 
   // ----- sign in -----
@@ -837,10 +942,11 @@
       } catch (e) { p.status = e.message; left.push(p); }
     }
     state.photoFiles = left; delete state.busy.photo;
-    state.status = sent ? "saved" : "live";
+    state.status = sent ? "saved" : "live"; state.flash = sent ? "Saved. Not live yet" : "";
+    if (sent) { try { await refreshCopies(); } catch (e3) { /* shown on the next refresh */ } }
     state.notice = left.length
       ? { text: sent + " sent. " + left.length + " could not be sent, see below.", problem: true }
-      : { text: (sent === 1 ? "Photo sent." : sent + " photos sent.") + " It will be on the site within a few minutes. Press Refresh to see it marked as in place." };
+      : { text: (sent === 1 ? "Photo sent." : sent + " photos sent.") + " It is placed on the copy you are working on within a few minutes, and goes live when you publish. Press Refresh to see it marked as in place." };
     render();
   }
 
@@ -848,6 +954,7 @@
     state.prevTab = state.tab; state.tab = tab; state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.notice = null;
     state.csearch = ""; state.cmore = false;
     if (state.status === "saved") state.status = "live";
+    state.flash = ""; state.ask = null;
     render(); ensure();
     if (typeof window.scrollTo === "function") window.scrollTo(0, 0);
   }
@@ -876,7 +983,7 @@
     else next();
   }
   function closeEntry() { var s = site(); state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.prevCtab = s ? (state.ctab[s.id] || 0) : 0; render(); }
-  function pickSite(id) { state.site = id; state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.photoFiles = []; state.prevCtab = 0; state.csearch = ""; state.cmore = false; render(); ensure(); }
+  function pickSite(id) { state.flash = ""; state.ask = null; state.site = id; state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.photoFiles = []; state.prevCtab = 0; state.csearch = ""; state.cmore = false; render(); ensure(); }
 
   app.addEventListener("click", function (ev) {
     var rt = ev.target.closest("[data-rt]"); if (rt && rt.dataset && rt.dataset.rt) { state.dirty = true; richCmd(rt); return; }
@@ -899,6 +1006,18 @@
     else if (a === "look") { var t = themeOf(), i = Number(el.dataset.i); if (t) { Object.assign(t.draft.colours, i < 0 ? t.values.colours : t.spec.looks[i].colours); themeUpdate(); } }
     else if (a === "theme-discard") { var t2 = themeOf(); if (t2) { t2.draft = JSON.parse(JSON.stringify(t2.values)); themeUpdate(); } }
     else if (a === "theme-publish") publishTheme();
+    else if (a === "publish") publish(curCopy().id);
+    else if (a === "publish-replace") publish(el.dataset.copy, true);
+    else if (a === "ask-makelive") { state.ask = { kind: "makelive", copy: curCopy().id }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
+    else if (a === "ask-big") { state.ask = { kind: el.dataset.kind, copy: el.dataset.copy }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
+    else if (a === "ask-cancel") { state.ask = null; render(); }
+    else if (a === "makelive") publish(el.dataset.copy);
+    else if (a === "discard") copyAction("discard", el.dataset.copy, "Changes thrown away. The live site is as it was");
+    else if (a === "deletecopy") copyAction("deleteCopy", el.dataset.copy, "Trial copy deleted", function () { state.copy[s.id] = ""; });
+    else if (a === "refresh-copy") copyAction("refreshCopy", el.dataset.copy, "Copy brought up to date with live");
+    else if (a === "undo-step") { var n = Number(el.dataset.steps) || 1; guard(function () { state.open = null; state.draft = null; state.dirty = false; stepBack(n); }); }
+    else if (a === "redo-step") guard(function () { state.open = null; state.draft = null; state.dirty = false; stepForward(); });
+    else if (a === "work-on") { var wid = el.dataset.copy; guard(function () { workOn(wid); }); }
     else if (a === "pv-mode") {
       var t3 = themeOf(); if (!t3) return; t3.mode = el.dataset.mode;
       app.querySelector("#pv-stage").className = "pv-stage " + t3.mode;
@@ -923,6 +1042,7 @@
     var t = ev.target, kind = t.dataset.change;
     if (t.dataset.field) state.dirty = true;
     if (kind === "site") { var want = t.value; if (state.open && state.dirty) t.value = state.site; guard(function () { pickSite(want); }); }
+    else if (kind === "copy") { var cw = t.value; if (state.open && state.dirty) t.value = curCopy().kind === "live" ? "" : curCopy().id; guard(function () { workOn(cw); }); }
     else if (kind === "csort") { state.csort = t.value; render(); }
     else if (t.dataset.themeFont) { var tf = themeOf(); if (tf) { tf.draft.fonts[t.dataset.themeFont] = t.value; themeUpdate(); } }
     else if (t.dataset.themeColour || t.dataset.themeHex) { themeUpdate(); }
@@ -968,6 +1088,7 @@
     ev.preventDefault();
     var form = ev.target;
     if (form.dataset.form === "entry") { saveEntry(form); return; }
+    if (form.dataset.form === "copy") { var nm = form.querySelector("#copy-name"); makeCopy(nm ? nm.value.trim() : ""); return; }
     if (form.dataset.form === "signin") {
       state.email = form.email.value.trim();
       var usePassword = state.signinMode === "password", password = usePassword ? form.password.value : "";
@@ -1022,15 +1143,40 @@
     },
     values: { colours: { paper: "#EEE5D4", green: "#1D4A35", brick: "#B5392B", ink: "#1D1D1B" }, fonts: { display: "Castoro", text: "Literata", sans: "Libre Franklin" } },
   };
+  // Sample mode keeps its own pretend copies, so every button can be tried.
+  var demoCopies = {};
+  function demoList(id) { return demoCopies[id] || (demoCopies[id] = [{ id: "live", kind: "live", name: "Live site", ahead: 0, behind: 0, since: "", steps: [], canRedo: false, preview: "", redo: [] }]); }
+  function demoCopy(body) { var l = demoList(body.site); return l.find(function (c) { return c.id === body.copy; }) || l[0]; }
+  function demoStep(body, what) { var c = demoCopy(body); c.steps.unshift({ what: what, when: new Date().toISOString(), by: "sample" }); c.ahead = c.steps.length; c.redo = []; c.canRedo = false; if (c.kind === "live") c.preview = "https://example.org/preview/live-000000/"; }
+  var DEMO_STEPS = { saveEntry: "Edit: sample entry", setHidden: "Hide or show: sample entry", deleteEntry: "Delete: sample entry", removePhoto: "Remove photo", uploadPhoto: "Add photo", saveTheme: "Theme: sample change", undo: "Undo: an earlier change" };
   function demoApi(body) {
-    return new Promise(function (resolve) {
+    return new Promise(function (resolve, reject) {
       setTimeout(function () {
-        if (body.action === "overview") resolve(JSON.parse(JSON.stringify(demoData)));
-        else if (body.action === "content") resolve({ collections: JSON.parse(JSON.stringify(demoContent)) });
-        else if (body.action === "history") resolve({ changes: demoHistory });
-        else if (body.action === "theme") { if (params.has("preview")) demoTheme.spec.url = params.get("preview"); resolve(JSON.parse(JSON.stringify(demoTheme))); }
-        else if (body.action === "saveTheme") { demoTheme.values = JSON.parse(JSON.stringify(body.values)); resolve({ ok: true, values: body.values }); }
-        else if (body.action === "uploadPhoto") resolve({ ok: true, name: (body.slot ? "slot--" + body.slot : "note--" + String(body.description).toLowerCase().replace(/[^a-z0-9]+/g, "-")) + "." + body.ext });
+        var a = body.action, c = body.site ? demoCopy(body) : null, l = body.site ? demoList(body.site) : null;
+        if (DEMO_STEPS[a]) demoStep(body, DEMO_STEPS[a]);
+        if (a === "overview") {
+          var d = JSON.parse(JSON.stringify(demoData));
+          d.sites.forEach(function (x) { if (!x.live) return; var list = demoList(x.id), want = (body.copies || {})[x.id]; x.copies = JSON.parse(JSON.stringify(list)); x.copy = (list.find(function (y) { return y.id === want; }) || list[0]).id; });
+          resolve(d);
+        }
+        else if (a === "content") resolve({ collections: JSON.parse(JSON.stringify(demoContent)) });
+        else if (a === "history") resolve({ changes: demoHistory });
+        else if (a === "theme") { if (params.has("preview")) demoTheme.spec.url = params.get("preview"); resolve(JSON.parse(JSON.stringify(demoTheme))); }
+        else if (a === "saveTheme") { demoTheme.values = JSON.parse(JSON.stringify(body.values)); resolve({ ok: true, values: body.values }); }
+        else if (a === "uploadPhoto") resolve({ ok: true, name: (body.slot ? "slot--" + body.slot : "note--" + String(body.description).toLowerCase().replace(/[^a-z0-9]+/g, "-")) + "." + body.ext });
+        else if (a === "undoStep") { var n = Math.min(Number(body.steps) || 1, c.steps.length); if (!n) return reject(new Error("There is nothing more to undo.")); while (n--) c.redo.push(c.steps.shift()); c.ahead = c.steps.length; c.canRedo = true; resolve({ ok: true }); }
+        else if (a === "redoStep") { if (!c.redo.length) return reject(new Error("There is nothing to redo.")); c.steps.unshift(c.redo.pop()); c.ahead = c.steps.length; c.canRedo = c.redo.length > 0; resolve({ ok: true }); }
+        else if (a === "publish" || a === "discard") { c.steps = []; c.redo = []; c.ahead = 0; c.behind = 0; c.canRedo = false; resolve({ ok: true }); }
+        else if (a === "refreshCopy") { c.behind = 0; resolve({ ok: true }); }
+        else if (a === "makeCopy") {
+          var slug = String(body.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+          if (!slug) return reject(new Error("Give the trial copy a short name, for example Winter look."));
+          if (l.length > 2) return reject(new Error("This site already has 2 trial copies. Delete one to make another."));
+          var id = "trial-" + slug + "-00000" + l.length;
+          l.push({ id: id, kind: "trial", name: slug.charAt(0).toUpperCase() + slug.slice(1).replace(/-/g, " "), ahead: 0, behind: 0, since: new Date().toISOString(), steps: [], canRedo: false, preview: "https://example.org/preview/" + id + "/", redo: [] });
+          resolve({ ok: true, copy: id });
+        }
+        else if (a === "deleteCopy") { demoCopies[body.site] = l.filter(function (x) { return x !== c || x.kind === "live"; }); resolve({ ok: true }); }
         else resolve({ ok: true });
       }, 100);
     });
