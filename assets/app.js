@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "23";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "24";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -1697,13 +1697,13 @@
     var s = site(); if (!s) return;
     change(key("undo", s.id, sha), function () { return api("undo", { site: s.id, sha: sha }); }, function () { delete state.content[s.id]; });
   }
-
+  // Shrinks a photo in the browser so uploads stay quick. The sites ask for 2000 pixels at most on the longest side, and about 400 KB.
   // Shrinks a photo in the browser so uploads stay quick.
   function prepareImage(file, as) {
     return new Promise(function (resolve, reject) {
       var url = URL.createObjectURL(file), img = new Image();
       img.onload = function () {
-        var max = 2400, scale = Math.min(1, max / Math.max(img.width, img.height));
+        var max = 2000, scale = Math.min(1, max / Math.max(img.width, img.height));
         var c = document.createElement("canvas");
         c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
         c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);

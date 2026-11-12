@@ -91,7 +91,7 @@ async function openSite(id) { await page.click('[data-tab="home"]', { timeout: 1
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all five sites", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 5, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 23"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 24"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-3"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await page.click('[data-tab="home"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -153,7 +153,7 @@ await check("A very large photo is made smaller before it is sent", async () => 
   await page.click('[data-act="ed-library"]'); await page.click('[data-act="ed-add"][data-kind="picture"]'); await page.waitForSelector('[data-upload="image"]', { state: "attached" });
   await page.setInputFiles('[data-upload="image"]', "/tmp/uat/big.jpg"); await page.waitForSelector(".picthumb[src^='data:image']");
   const dims = await page.evaluate(() => new Promise((r) => { const p = window.__adh.pgOf(), k = Object.keys(p.uploads).pop(), i = new Image(); i.onload = () => r([i.width, i.height]); i.src = p.uploads[k].dataUrl; }));
-  await page.click('[data-act="ed-discard"]'); must(Math.max(...dims) <= 2400, "sent at " + dims.join("x")); return "Sent at " + dims.join(" by ") + " pixels";
+  await page.click('[data-act="ed-discard"]'); must(Math.max(...dims) <= 2000, "sent at " + dims.join("x")); return "Sent at " + dims.join(" by ") + " pixels";
 });
 await check("A link in the page goes to that page; Alt with a click picks it", async () => {
   await frame("worldartreview.com").evaluate(() => [...document.querySelectorAll("header.hdr nav.left a")].find((a) => a.textContent.includes("Reviews")).click()); await settle(1200);
