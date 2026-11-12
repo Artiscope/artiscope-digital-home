@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "9";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "10";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -24,6 +24,7 @@
     open: null,            // { ci, ei } entry being edited
     confirm: null,         // key of the thing waiting for a second press
     history: {},           // site id -> list of changes
+    draft: null,           // what has been typed into the open entry, kept across redraws
     photoFiles: [], photoSent: {}, photoDone: [],
   };
 
@@ -224,16 +225,189 @@
       '<div class="stack">' + (list || '<p class="notice">Nothing here yet.</p>') + '</div>';
   }
 
+
+  // ---------- formatted text, edited as plain writing ----------
+  // Article bodies are stored with formatting marks. The editor shows them
+  // the way a document would, and turns the result back into the same
+  // marks on save. Sources and built-in features are held aside untouched.
+
+  var RICH_OK = { p: 1, h2: 1, h3: 1, h4: 1, ul: 1, ol: 1, li: 1, strong: 1, b: 1, em: 1, i: 1, a: 1, br: 1, blockquote: 1, cite: 1, span: 1, div: 1, sup: 1 };
+  var RICH_BLOCK = { p: 1, h2: 1, h3: 1, h4: 1, ul: 1, ol: 1, li: 1, blockquote: 1, div: 1 };
+  var RICH_ATTR = ["class", "href", "data-src", "id"];
+  var TOKEN = /\[\[([A-Z]+):([a-z0-9-]+)\]\]/g;
+  var rich = {};        // field name -> { keep: [...], dirty: bool } for the editors on screen
+  var richSource = {};  // field name -> { html, dirty } waiting to be shown
+  var richRange = null; // the words selected when "Link" was pressed
+
+  function isRich(v) { return /<[a-z][^>]*>/i.test(String(v || "")); }
+  function tagOf(n) { return String(n.nodeName || "").toLowerCase(); }
+  function kids(n) { return Array.prototype.slice.call(n.childNodes || []); }
+  function escText(v) { return String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function attrsOf(n) {
+    return RICH_ATTR.map(function (a) {
+      var v = n.getAttribute(a); if (v == null) return "";
+      if (a === "class") v = v.split(/\s+/).filter(function (c) { return c && c.indexOf("rt-") !== 0; }).join(" ");
+      if (a === "href" && /^\s*(javascript|data|vbscript):/i.test(v)) v = "";
+      return v ? " " + a + '="' + esc(v) + '"' : "";
+    }).join("");
+  }
+  function strange(n) {
+    if (n.nodeType !== 1) return false;
+    return !RICH_OK[tagOf(n)] || kids(n).some(strange);
+  }
+  function tokenLabel(kind, slug) {
+    var words = slug.replace(/-/g, " ");
+    return kind === "TIMELINE" ? "The auction table for " + words + " appears here" : "A built-in feature appears here (" + kind.toLowerCase() + ", " + words + ")";
+  }
+  function textIn(v, block) {
+    return escText(v).replace(TOKEN, function (m, kind, slug) {
+      return "<" + (block ? "div" : "span") + ' class="' + (block ? "rt-lock" : "rt-chip") + '" contenteditable="false" data-token="' + m + '">' + esc(tokenLabel(kind, slug)) + "</" + (block ? "div" : "span") + ">";
+    });
+  }
+
+  // From the stored text to what the editor shows.
+  function richIn(root, keep) {
+    function inline(n) {
+      if (n.nodeType === 3) return textIn(n.nodeValue, false);
+      if (n.nodeType !== 1) return "";
+      var t = tagOf(n);
+      if (t === "br") return "<br>";
+      if (t === "sup" && /\bcite\b/.test(n.getAttribute("class") || "")) {
+        keep.push(n.outerHTML);
+        return '<span class="rt-chip" contenteditable="false" data-keep="' + (keep.length - 1) + '" title="' + esc("Source: " + String(n.textContent || "").replace(/[\[\]]/g, "")) + '">source</span>';
+      }
+      return "<" + t + attrsOf(n) + ">" + kids(n).map(inline).join("") + "</" + t + ">";
+    }
+    return kids(root).map(function (n) {
+      if (n.nodeType === 3) {
+        var v = n.nodeValue.trim(); if (!v) return "";
+        return v.replace(TOKEN, "") ? "<p>" + textIn(v, false) + "</p>" : textIn(v, true);
+      }
+      if (n.nodeType !== 1) return "";
+      if (strange(n)) {
+        keep.push(n.outerHTML);
+        return '<div class="rt-lock" contenteditable="false" data-keep="' + (keep.length - 1) + '">A built-in feature sits here, such as an interactive picture. It stays as it is.</div>';
+      }
+      return inline(n);
+    }).join("");
+  }
+
+  // From what is in the editor back to the stored text.
+  function richOut(root, keep) {
+    function out(n) {
+      if (n.nodeType === 3) return escText(String(n.nodeValue).replace(/ /g, " "));
+      if (n.nodeType !== 1) return "";
+      var k = n.getAttribute("data-keep");
+      if (k != null) return keep[Number(k)] || "";
+      var tk = n.getAttribute("data-token");
+      if (tk != null) return /^\[\[[A-Z]+:[a-z0-9-]+\]\]$/.test(tk) ? tk : "";
+      var t = tagOf(n);
+      if (t === "script" || t === "style") return "";
+      if (t === "br") return "<br>";
+      if (t === "b") t = "strong";
+      var inner = kids(n).map(out).join("");
+      if (!RICH_OK[t]) return inner;
+      var a = attrsOf(n);
+      if (t === "span" && !a) return inner;
+      if (t === "div" && !a) { if (kids(n).some(function (c) { return c.nodeType === 1 && RICH_BLOCK[tagOf(c)]; })) return inner; t = "p"; }
+      if (RICH_BLOCK[t]) inner = inner.replace(/(<br>\s*)+$/, "");
+      if (!inner.replace(/<br>|\s/g, "")) return RICH_BLOCK[t] ? "" : inner;
+      return "<" + t + a + ">" + inner + "</" + t + ">";
+    }
+    var parts = [], run = "";
+    function flush() { run = run.replace(/^(\s|<br>)+|(\s|<br>)+$/g, ""); if (run) parts.push("<p>" + run + "</p>"); run = ""; }
+    kids(root).forEach(function (n) {
+      var h = out(n);
+      if (n.nodeType === 1 && RICH_BLOCK[tagOf(n)]) { flush(); if (h) parts.push(h); } else run += h;
+    });
+    flush();
+    return parts.join("\n");
+  }
+
+  function mountRich() {
+    rich = {};
+    if (typeof DOMParser === "undefined" || !app.querySelectorAll) return;
+    Array.prototype.forEach.call(app.querySelectorAll("[data-rich]"), function (ed) {
+      var name = ed.dataset.rich, src = richSource[name] || { html: "", dirty: false }, keep = [];
+      var doc = new DOMParser().parseFromString("<body>" + src.html + "</body>", "text/html");
+      ed.innerHTML = richIn(doc.body, keep) || "<p><br></p>";
+      rich[name] = { keep: keep, dirty: src.dirty };
+    });
+    try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch (e) { /* older browsers */ }
+  }
+  function richTools(id) {
+    function b(cmd, label, extra) { return '<button type="button" class="rt-b" data-rt="' + cmd + '"' + (extra || "") + '>' + label + '</button>'; }
+    return '<div class="rt-bar" role="toolbar" aria-label="Formatting">' +
+      b("bold", "<b>Bold</b>") + b("italic", "<i>Italic</i>") + '<span class="rt-gap"></span>' +
+      b("h2", "Heading") + b("h3", "Small heading") + b("p", "Normal text") + '<span class="rt-gap"></span>' +
+      b("ul", "Bullet list") + b("ol", "Numbered list") + '<span class="rt-gap"></span>' +
+      b("link", "Link") + b("unlink", "Remove link") + '</div>' +
+      '<div class="rt-link" hidden><input type="text" aria-label="Web address for the link" placeholder="Paste the web address, for example https://www.tate.org.uk">' +
+      '<button type="button" class="soft" data-rt="link-add">Add link</button><button type="button" class="linklike" data-rt="link-cancel">Cancel</button></div>' +
+      '<span class="small rt-say" hidden>Select the words for the link first, then press Link.</span>';
+  }
+  function richCmd(btn) {
+    var box = btn.closest(".rt"); if (!box) return;
+    var ed = box.querySelector("[data-rich]"), panel = box.querySelector(".rt-link"), say = box.querySelector(".rt-say"), input = panel.querySelector("input");
+    var c = btn.dataset.rt, r = rich[ed.dataset.rich];
+    function run(cmd, value) { ed.focus(); document.execCommand(cmd, false, value == null ? null : value); if (r) r.dirty = true; }
+    say.hidden = true;
+    if (c === "link") {
+      var sel = window.getSelection(), ok = sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode);
+      if (!ok) { say.hidden = false; panel.hidden = true; return; }
+      richRange = sel.getRangeAt(0).cloneRange(); panel.hidden = false; input.value = ""; input.focus();
+    } else if (c === "link-cancel") { panel.hidden = true; richRange = null; }
+    else if (c === "link-add") {
+      var url = input.value.trim(); if (!url || !richRange) return;
+      if (/^\s*(javascript|data|vbscript):/i.test(url)) return;
+      if (!/^(https?:|mailto:|#|\/|@@)/i.test(url)) url = "https://" + url;
+      ed.focus(); var s2 = window.getSelection(); s2.removeAllRanges(); s2.addRange(richRange);
+      run("createLink", url); panel.hidden = true; richRange = null;
+    }
+    else if (c === "bold" || c === "italic" || c === "unlink") run(c);
+    else if (c === "ul") run("insertUnorderedList");
+    else if (c === "ol") run("insertOrderedList");
+    else if (c === "h2" || c === "h3" || c === "p") run("formatBlock", "<" + c + ">");
+  }
+
+  // What is in the open form right now. Formatted fields are only
+  // included when someone has changed them, so nothing is rewritten by accident.
+  function collect(form) {
+    var values = {};
+    Array.prototype.forEach.call(form.querySelectorAll("[data-field]"), function (el) {
+      if (!el.dataset.field) return;
+      values[el.dataset.field] = el.dataset.kind === "lines" ? el.value.split(/\n\s*\n/) : el.value;
+    });
+    Array.prototype.forEach.call(form.querySelectorAll("[data-rich]"), function (el) {
+      var r = rich[el.dataset.rich];
+      if (r && r.dirty) values[el.dataset.rich] = richOut(el, r.keep);
+    });
+    return values;
+  }
+  function snapshot() {
+    var form = app.querySelector && app.querySelector('form[data-form="entry"]'), o = openEntry();
+    if (!form || !o || !o.e) return;
+    state.draft = { k: key("entry", o.s.id, o.col.id, o.e.id), values: collect(form) };
+  }
+
   function viewEditor(s, cols) {
     var col = cols[state.open.ci], e = col && col.entries[state.open.ei];
     if (!e) { state.open = null; return viewContent(); }
     var k = key("entry", s.id, col.id, e.id), busy = state.busy[k];
-    var fields = e.fields.map(function (f, i) {
-      var id = "f-" + i, label = '<label for="' + id + '">' + esc(f.label) + '</label>', input;
-      if (f.type === "long") {
+    var draft = state.draft && state.draft.k === k ? state.draft.values : {};
+    richSource = {};
+    var fields = e.fields.map(function (f0, i) {
+      var typed = Object.prototype.hasOwnProperty.call(draft, f0.name);
+      var f = typed ? Object.assign({}, f0, { value: f0.type === "yesno" ? String(draft[f0.name]) === "true" : draft[f0.name] }) : f0;
+      var id = "f-" + i, label = '<label for="' + id + '" id="l-' + i + '">' + esc(f.label) + '</label>', input;
+      if (f.type === "long" && isRich(f0.value)) {
+        richSource[f.name] = { html: String(f.value || ""), dirty: typed };
+        input = '<div class="rt">' + richTools(id) +
+          '<div class="rt-page" id="' + id + '" data-rich="' + esc(f.name) + '" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="l-' + i + '" spellcheck="true" lang="en-GB"></div></div>' +
+          '<span class="small">Type as you would in a document. Select words, then use the buttons above to style them. The small grey tags mark sources and built-in features, and stay as they are.</span>';
+      } else if (f.type === "long") {
         var big = String(f.value || "").length > 600;
-        input = '<textarea id="' + id + '" data-field="' + esc(f.name) + '"' + (big ? ' class="tall"' : "") + '>' + esc(f.value) + '</textarea>' +
-          (big ? '<span class="small">The marks in angle brackets are formatting. Change the words between them and leave the marks as they are.</span>' : "");
+        input = '<textarea id="' + id + '" data-field="' + esc(f.name) + '"' + (big ? ' class="tall"' : "") + '>' + esc(f.value) + '</textarea>';
       } else if (f.type === "lines") {
         input = '<textarea id="' + id + '" data-field="' + esc(f.name) + '" data-kind="lines">' + esc((f.value || []).join("\n\n")) + '</textarea><span class="small">One item per paragraph. Leave an empty line between them.</span>';
       } else if (f.type === "number") {
@@ -371,6 +545,7 @@
   }
 
   function render() {
+    snapshot();
     if (!demo && !state.session) { app.innerHTML = viewSignin(); return; }
     if (!state.data) {
       app.innerHTML = state.notice
@@ -380,6 +555,7 @@
     }
     var views = { home: viewHome, content: viewContent, photos: viewPhotos, history: viewHistory, sites: viewSites };
     app.innerHTML = viewShell((views[state.tab] || viewHome)());
+    mountRich();
     settle();
   }
 
@@ -389,13 +565,10 @@
   function entryChange(action, extra) {
     var o = openEntry(); if (!o || !o.e) return;
     var k = key("entry", o.s.id, o.col.id, o.e.id);
-    change(k, function () { return api(action, Object.assign({ site: o.s.id, collection: o.col.id, id: o.e.id }, extra(o))); }, function () { state.open = null; delete state.content[o.s.id]; });
+    change(k, function () { return api(action, Object.assign({ site: o.s.id, collection: o.col.id, id: o.e.id }, extra(o))); }, function () { state.open = null; state.draft = null; delete state.content[o.s.id]; });
   }
   function saveEntry(form) {
-    var values = {};
-    Array.prototype.forEach.call(form.querySelectorAll("[data-field]"), function (el) {
-      values[el.dataset.field] = el.dataset.kind === "lines" ? el.value.split(/\n\s*\n/) : el.value;
-    });
+    var values = collect(form);
     entryChange("saveEntry", function () { return { values: values }; });
   }
   function takePhoto(slot) {
@@ -452,13 +625,31 @@
   }
 
   function go(tab) {
-    state.prevTab = state.tab; state.tab = tab; state.open = null; state.confirm = null; state.notice = null;
+    state.prevTab = state.tab; state.tab = tab; state.open = null; state.draft = null; state.confirm = null; state.notice = null;
     if (state.status === "saved") state.status = "live";
     render(); ensure();
     if (typeof window.scrollTo === "function") window.scrollTo(0, 0);
   }
 
+  // Formatting buttons must not take the cursor out of the text.
+  app.addEventListener("mousedown", function (ev) {
+    var b = ev.target.closest && ev.target.closest(".rt-b"); if (b) ev.preventDefault();
+  });
+  app.addEventListener("keydown", function (ev) {
+    var t = ev.target;
+    if (ev.key === "Enter" && t.closest && t.closest(".rt-link")) { ev.preventDefault(); var add = t.closest(".rt-link").querySelector('[data-rt="link-add"]'); if (add) richCmd(add); }
+  });
+  // Pasting brings in the words only, never the styling of where they came from.
+  app.addEventListener("paste", function (ev) {
+    var ed = ev.target.closest && ev.target.closest("[data-rich]"); if (!ed) return;
+    ev.preventDefault();
+    var text = (ev.clipboardData || window.clipboardData).getData("text/plain");
+    document.execCommand("insertText", false, text);
+    if (rich[ed.dataset.rich]) rich[ed.dataset.rich].dirty = true;
+  });
+
   app.addEventListener("click", function (ev) {
+    var rt = ev.target.closest("[data-rt]"); if (rt && rt.dataset && rt.dataset.rt) { richCmd(rt); return; }
     var el = ev.target.closest("[data-tab],[data-act]"); if (!el) return;
     if (el.dataset.tab) { go(el.dataset.tab); return; }
     var a = el.dataset.act, s = site();
@@ -468,8 +659,8 @@
     else if (a === "pick-site") { state.site = el.dataset.site; go("content"); }
     else if (a === "go-sites") go("sites");
     else if (a === "ctab") { state.prevCtab = state.ctab[s.id] || 0; state.ctab[s.id] = Number(el.dataset.i); render(); }
-    else if (a === "open") { state.open = { ci: Number(el.dataset.ci), ei: Number(el.dataset.ei) }; state.confirm = null; state.notice = null; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
-    else if (a === "close") { state.open = null; state.confirm = null; state.prevCtab = s ? (state.ctab[s.id] || 0) : 0; render(); }
+    else if (a === "open") { state.draft = null; state.open = { ci: Number(el.dataset.ci), ei: Number(el.dataset.ei) }; state.confirm = null; state.notice = null; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
+    else if (a === "close") { state.open = null; state.draft = null; state.confirm = null; state.prevCtab = s ? (state.ctab[s.id] || 0) : 0; render(); }
     else if (a === "ask") { state.confirm = el.dataset.k; render(); }
     else if (a === "cancel") { state.confirm = null; render(); }
     else if (a === "entry-hide") entryChange("setHidden", function (o) { return { hidden: !o.e.hidden }; });
@@ -482,7 +673,7 @@
 
   app.addEventListener("change", function (ev) {
     var t = ev.target, kind = t.dataset.change;
-    if (kind === "site") { state.site = t.value; state.open = null; state.confirm = null; state.photoFiles = []; state.prevCtab = 0; render(); ensure(); }
+    if (kind === "site") { state.site = t.value; state.open = null; state.draft = null; state.confirm = null; state.photoFiles = []; state.prevCtab = 0; render(); ensure(); }
     else if (kind === "photo-files") {
       Array.prototype.forEach.call(t.files, function (f) { if (state.photoFiles.length < 12) state.photoFiles.push({ file: f, slot: "", note: "", alt: "", caption: "" }); });
       state.notice = null; render();
@@ -497,6 +688,8 @@
 
   // Typing must not redraw the page, or the box loses focus.
   app.addEventListener("input", function (ev) {
+    var ed = ev.target.closest && ev.target.closest("[data-rich]");
+    if (ed) { if (rich[ed.dataset.rich]) rich[ed.dataset.rich].dirty = true; return; }
     var t = ev.target, field = { "photo-note": "note", "photo-alt": "alt", "photo-caption": "caption" }[t.dataset.input];
     if (!field) return;
     var p = state.photoFiles[Number(t.dataset.i)]; if (!p) return;
@@ -528,7 +721,7 @@
 
   var demoContent = [
     { id: "articles", label: "Articles", singular: "article", canHide: true, canDelete: true, entries: [
-      { id: "a1", title: "[Sample] How to look at a painting", sub: "Looking", hidden: false, fields: [{ name: "title", label: "Title", type: "text", value: "[Sample] How to look at a painting" }, { name: "dek", label: "Summary line", type: "long", value: "A short sample summary that shows how a longer piece of text is edited in the console, in a box that grows." }, { name: "minutes", label: "Reading time, minutes", type: "number", value: 6 }] },
+      { id: "a1", title: "[Sample] How to look at a painting", sub: "Looking", hidden: false, fields: [{ name: "title", label: "Title", type: "text", value: "[Sample] How to look at a painting" }, { name: "dek", label: "Summary line", type: "long", value: "A short sample summary that shows how a longer piece of text is edited in the console, in a box that grows." }, { name: "minutes", label: "Reading time, minutes", type: "number", value: 6 }, { name: "body", label: "Body", type: "long", value: '<p>Start with the whole picture before the detail. Give it a full minute.<sup class="cite"><a data-src="sample-1">[sample-1]</a></sup></p>\n<h2>Then move closer</h2>\n<p>Look for where the paint is <strong>thick</strong> and where it is thin, and read the <a href="#guides">collecting guides</a> for more.</p>\n<ul><li>Stand back.</li><li>Step in.</li></ul>\n<div class="callout"><strong>Try it</strong>Pick one small area and count the separate marks in it.</div>\n[[TIMELINE:zara-muse]]' }] },
       { id: "a2", title: "[Sample] Original or print", sub: "Collecting", hidden: true, fields: [{ name: "title", label: "Title", type: "text", value: "[Sample] Original or print" }] }] },
     { id: "artists", label: "Artists", singular: "artist", canHide: false, canDelete: false, entries: [
       { id: "zara-muse", title: "Zara Muse", sub: "Portraiture, London", hidden: false, fields: [{ name: "name", label: "Name", type: "text", value: "Zara Muse" }, { name: "published", label: "Shown on the site", type: "yesno", value: true }, { name: "ghostWords", label: "Large background words", type: "lines", value: ["Knives,", "not", "brushes."] }] }] },
@@ -575,6 +768,6 @@
   }
 
   // Exposed for the automated checks only.
-  window.__adh = { state: state, render: render, esc: esc, go: go };
+  window.__adh = { state: state, render: render, esc: esc, go: go, richIn: richIn, richOut: richOut };
   start();
 })();
