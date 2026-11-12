@@ -75,3 +75,7 @@ On the live site, Save goes straight to visitors (it commits to `main`) after a 
 
 Opening a site goes to the page editor: the sections of the page on the left, the real page in the middle, and the chosen section's settings on the right. The page redraws as you type, because the site's own code redraws from the edited section list sent to it, and nothing is kept until Save. Each site's section kinds and their fields are described on the server (`WAR_SECTIONS`). Library sections are drawn by the site itself (`LIBRARY` in `src/index.html` on World Art Review). Browser test: `node tests/pages.mjs`.
 
+## Deploying the server function
+
+The workflow `.github/workflows/deploy-function.yml` deploys `supabase/functions/home/index.ts` to Supabase as `dynamic-handler` on every push that changes it (and on demand from the Actions tab). It needs the repository secret `SUPABASE_ACCESS_TOKEN`. The function's own secrets (`GITHUB_TOKEN`, `ALLOWED_EMAILS`) stay in Supabase and are not touched.
+
