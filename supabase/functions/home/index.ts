@@ -24,7 +24,7 @@ export const SITES = [
     ],
     collections: [
       { id: "articles", label: "Articles", singular: "article", file: "content/site.json", path: ["articles"], shape: "list", key: "slug", title: "title", sub: ["kicker", "section"], canHide: true, canDelete: true },
-      { id: "artists", label: "Artists", singular: "artist", file: "content/site.json", path: ["artists"], shape: "list", key: "slug", title: "name", sub: ["tag", "place"], canHide: false, canDelete: false },
+      { id: "artists", label: "Artists", singular: "artist", file: "content/site.json", path: ["artists"], shape: "list", key: "slug", title: "name", sub: ["tag", "place"], canHide: false, canDelete: false, inside: { works: false, glance: { labelFrom: 0, cols: { 1: "" } } } },
       { id: "artworks", label: "Artworks", singular: "artwork", file: "content/site.json", path: ["artists"], shape: "nested", key: "slug", child: "works", parentTitle: "name", title: "title", sub: ["medium", "year"], canHide: true, canDelete: true },
       { id: "sources", label: "Sources", singular: "source", file: "content/site.json", path: ["sources"], shape: "map", title: "title", sub: ["pub", "date"], canHide: false, canDelete: false },
     ],
@@ -42,7 +42,9 @@ export const SITES = [
     collections: [
       { id: "articles", label: "Articles", singular: "article", file: "data/content.json", path: ["features"], shape: "list", key: "slug", title: "title", sub: ["kicker"], canHide: true, canDelete: true },
       { id: "sales", label: "Auction sales", singular: "sale", file: "data/sales.json", path: ["sales"], shape: "list", key: null, title: "title", sub: ["house", "date_text"], canHide: false, canDelete: true, numbers: ["est_low", "est_high", "hammer", "premium"] },
-      { id: "artists", label: "Artist notes", singular: "artist note", file: "data/content.json", path: ["bios"], shape: "map", title: null, sub: [], canHide: false, canDelete: false },
+      { id: "artists", label: "Artist notes", singular: "artist note", file: "data/content.json", path: ["bios"], shape: "map", title: null, sub: [], canHide: false, canDelete: false, inside: { sources: { cols: { 0: "name", 1: "link" } } } },
+      { id: "glossary", label: "Glossary", singular: "glossary term", file: "data/content.json", path: ["glossary"], shape: "rows", titleAt: 0, columns: ["Term", "Meaning"], canHide: false, canDelete: false },
+      { id: "sections", label: "Sections", singular: "section", file: "data/content.json", path: ["sections"], shape: "rows", titleAt: 1, columns: [null, "Name", "Description"], canHide: false, canDelete: false },
       { id: "site", label: "Site details", singular: "site details", file: "data/content.json", path: ["site"], shape: "single", title: "name", sub: ["tagline"], canHide: false, canDelete: false },
     ],
   },
@@ -211,7 +213,9 @@ export function notePhotoName(description, ext) {
 const LOCKED = ["slug", "letter", "tone", "heroTone", "image", "hidden", "artist", "url_slug"];
 const LABELS = {
   dek: "Summary line", kicker: "Label above the title", alt: "Picture description",
-  credit: "Picture caption", heroCredit: "Picture caption", html: "Body", body: "Body",
+  credit: "Picture caption", heroCredit: "Picture caption", html: "Text", body: "Body",
+  what: "What happened", when: "When", sections: "Portfolio sections", glance: "At a glance",
+  timeline: "Timeline", research: "Still to research", sources: "Sources",
   mins: "Reading time, minutes", minutes: "Reading time, minutes", standfirst: "Opening line",
   est_low: "Estimate, low", est_high: "Estimate, high", hammer: "Hammer price",
   premium: "Price with buyer's premium", hammer_basis: "Hammer price basis (published or calculated)",
@@ -227,22 +231,65 @@ function labelFor(name) {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-// Which fields of an entry can be edited, and as what.
-export function fieldsOf(entry, numbers = []) {
+// Lists of internal names (which sources, which artists). Not for hand editing.
+const ID_LISTS = ["sources", "artists", "related", "src"];
+const INNER_LOCKED = ["id", "src"];
+const HAS_MARKS = /<[a-z][^>]*>/i;
+
+function kindOf(name, v, numbers) {
+  if (numbers.includes(name) || typeof v === "number") return "number";
+  if (typeof v === "boolean") return "yesno";
+  if (typeof v === "string") return v.length > 90 || v.includes("\n") || HAS_MARKS.test(v) || name === "html" ? "long" : "text";
+  if (v === null) return "text";
+  return null;
+}
+
+// Which fields of an entry can be edited, and as what. Parts that sit
+// inside an entry (portfolio sections, timeline, at a glance) come out as
+// fields too, named by where they sit, for example "sections.0.html".
+// "inside" says how to treat those parts; false leaves one out.
+export function fieldsOf(entry, numbers = [], inside = {}) {
   const out = [];
-  for (const name of Object.keys(entry || {})) {
-    if (LOCKED.includes(name)) continue;
-    const v = entry[name];
-    let type = null;
-    if (numbers.includes(name) || typeof v === "number") type = "number";
-    else if (typeof v === "boolean") type = "yesno";
-    else if (typeof v === "string") type = v.length > 90 || v.includes("\n") ? "long" : "text";
-    else if (v === null) type = "text";
-    else if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string")) type = "lines";
-    if (!type) continue;
-    out.push({ name, label: labelFor(name), type, value: v });
+  if (Array.isArray(entry)) {
+    const cols = Array.isArray(inside) ? inside : [];
+    entry.forEach((v, j) => {
+      if (!cols[j] || typeof v !== "string") return;
+      out.push({ name: String(j), label: cols[j], type: kindOf("", v, []), value: v });
+    });
+    return out;
   }
-  return out;
+  const rules = inside && !Array.isArray(inside) ? inside : {};
+  const later = [];
+  for (const name of Object.keys(entry || {})) {
+    if (LOCKED.includes(name) || rules[name] === false) continue;
+    const v = entry[name];
+    const type = kindOf(name, v, numbers);
+    if (type) { out.push({ name, label: labelFor(name), type, value: v }); continue; }
+    if (!Array.isArray(v) || v.length === 0) continue;
+    if (v.every((x) => typeof x === "string")) {
+      if (!ID_LISTS.includes(name)) out.push({ name, label: labelFor(name), type: "lines", value: v });
+    } else if (v.every((x) => x && typeof x === "object" && !Array.isArray(x))) {
+      v.forEach((item, i) => {
+        const lead = typeof item.title === "string" && item.title ? item.title : String(i + 1);
+        for (const k of Object.keys(item)) {
+          if (LOCKED.includes(k) || INNER_LOCKED.includes(k)) continue;
+          const t = kindOf(k, item[k], []);
+          if (t) later.push({ name: name + "." + i + "." + k, label: lead + ": " + labelFor(k).toLowerCase(), type: t, value: item[k], group: labelFor(name) });
+        }
+      });
+    } else if (rules[name] && v.every((x) => Array.isArray(x))) {
+      const rule = rules[name];
+      v.forEach((row, i) => {
+        for (const j of Object.keys(rule.cols)) {
+          if (typeof row[j] !== "string") continue;
+          const lead = rule.labelFrom != null ? String(row[rule.labelFrom]) : String(i + 1);
+          const tail = rule.cols[j] ? ": " + rule.cols[j] : "";
+          later.push({ name: name + "." + i + "." + j, label: lead + tail, type: kindOf("", row[j], []), value: row[j], group: labelFor(name) });
+        }
+      });
+    }
+  }
+  return out.concat(later);
 }
 
 function dig(data, path) {
@@ -261,6 +308,8 @@ export function entriesOf(data, col) {
     for (const k of Object.keys(node)) list.push({ id: k, ref: node[k], parent: null, title: (col.title && node[k][col.title]) || k });
   } else if (col.shape === "list" && Array.isArray(node)) {
     node.forEach((e, i) => list.push({ id: col.key && e[col.key] ? String(e[col.key]) : "n" + i, ref: e, parent: null, title: e[col.title] || "Untitled" }));
+  } else if (col.shape === "rows" && Array.isArray(node)) {
+    node.forEach((row, i) => { if (Array.isArray(row)) list.push({ id: "n" + i, ref: row, parent: null, title: row[col.titleAt] || "Untitled" }); });
   } else if (col.shape === "nested" && Array.isArray(node)) {
     node.forEach((p) => {
       (Array.isArray(p[col.child]) ? p[col.child] : []).forEach((e, i) => {
@@ -275,14 +324,14 @@ function entryView(x, col) {
   const sub = (col.sub || []).map((k) => x.ref[k]).filter((v) => typeof v === "string" && v).join(", ");
   return {
     id: x.id, title: String(x.title), sub: [x.group, sub].filter(Boolean).join(". "),
-    hidden: x.ref.hidden === true, fields: fieldsOf(x.ref, col.numbers || []),
+    hidden: x.ref.hidden === true, fields: fieldsOf(x.ref, col.numbers || [], col.columns || col.inside || {}),
   };
 }
 
 // Applies edited values to one entry. Only fields the entry already has,
 // and only as the kind of value they already are.
-export function applyValues(entry, values, numbers = []) {
-  const allowed = fieldsOf(entry, numbers);
+export function applyValues(entry, values, numbers = [], inside = {}) {
+  const allowed = fieldsOf(entry, numbers, inside);
   let changed = 0;
   for (const f of allowed) {
     if (!(f.name in values)) continue;
@@ -298,7 +347,11 @@ export function applyValues(entry, values, numbers = []) {
       v = String(v == null ? "" : v).replace(/—/g, ",").slice(0, 60000);
       if (f.value === null && v === "") v = null;
     }
-    if (JSON.stringify(entry[f.name]) !== JSON.stringify(v)) { entry[f.name] = v; changed++; }
+    // the name is a path that fieldsOf produced from this same entry, so every step exists
+    const steps = f.name.split("."), last = steps.pop();
+    let holder = entry;
+    for (const k of steps) holder = holder[k];
+    if (JSON.stringify(holder[last]) !== JSON.stringify(v)) { holder[last] = v; changed++; }
   }
   return changed;
 }
@@ -521,7 +574,7 @@ export async function handle(req) {
 
     if (action === "saveEntry") {
       let changed = 0;
-      try { changed = applyValues(x.ref, body.values || {}, col.numbers || []); }
+      try { changed = applyValues(x.ref, body.values || {}, col.numbers || [], col.columns || col.inside || {}); }
       catch (e) { return json({ error: e.message }, 400); }
       if (!changed) return json({ ok: true, unchanged: true });
       message = "Edit " + col.singular + ": " + x.title;

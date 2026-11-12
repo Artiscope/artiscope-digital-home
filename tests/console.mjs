@@ -8,7 +8,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const click = (d) => el.listeners.click({ target: { closest: () => ({ dataset: d }) } });
 await wait(500);
 const adh = win.__adh, html = () => el.innerHTML;
-assert.ok(html().includes("Artiscope<br>Digital Home") && html().includes("Sample mode") && html().includes("Version 10"));
+assert.ok(html().includes("Artiscope<br>Digital Home") && html().includes("Sample mode") && html().includes("Version 11"));
 assert.ok(html().includes("Everything is live") && html().includes('class="bulge'));
 
 // every screen draws, with no stray "undefined" and no long dashes

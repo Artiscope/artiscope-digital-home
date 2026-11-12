@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "10";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "11";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -293,7 +293,9 @@
   }
 
   // From what is in the editor back to the stored text.
-  function richOut(root, keep) {
+  // A single line of text (no paragraphs of its own) is stored without paragraph marks.
+  function richInline(root) { return !kids(root).some(function (n) { return n.nodeType === 1 && RICH_BLOCK[tagOf(n)]; }); }
+  function richOut(root, keep, single) {
     function out(n) {
       if (n.nodeType === 3) return escText(String(n.nodeValue).replace(/ /g, " "));
       if (n.nodeType !== 1) return "";
@@ -321,6 +323,7 @@
       if (n.nodeType === 1 && RICH_BLOCK[tagOf(n)]) { flush(); if (h) parts.push(h); } else run += h;
     });
     flush();
+    if (single) return parts.map(function (h) { return h.replace(/^<p>([\s\S]*)<\/p>$/, "$1"); }).join(" ");
     return parts.join("\n");
   }
 
@@ -331,16 +334,16 @@
       var name = ed.dataset.rich, src = richSource[name] || { html: "", dirty: false }, keep = [];
       var doc = new DOMParser().parseFromString("<body>" + src.html + "</body>", "text/html");
       ed.innerHTML = richIn(doc.body, keep) || "<p><br></p>";
-      rich[name] = { keep: keep, dirty: src.dirty };
+      rich[name] = { keep: keep, dirty: src.dirty, single: richInline(doc.body) };
     });
     try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch (e) { /* older browsers */ }
   }
-  function richTools(id) {
+  function richTools(id, short) {
     function b(cmd, label, extra) { return '<button type="button" class="rt-b" data-rt="' + cmd + '"' + (extra || "") + '>' + label + '</button>'; }
     return '<div class="rt-bar" role="toolbar" aria-label="Formatting">' +
       b("bold", "<b>Bold</b>") + b("italic", "<i>Italic</i>") + '<span class="rt-gap"></span>' +
-      b("h2", "Heading") + b("h3", "Small heading") + b("p", "Normal text") + '<span class="rt-gap"></span>' +
-      b("ul", "Bullet list") + b("ol", "Numbered list") + '<span class="rt-gap"></span>' +
+      (short ? "" : b("h2", "Heading") + b("h3", "Small heading") + b("p", "Normal text") + '<span class="rt-gap"></span>' +
+      b("ul", "Bullet list") + b("ol", "Numbered list") + '<span class="rt-gap"></span>') +
       b("link", "Link") + b("unlink", "Remove link") + '</div>' +
       '<div class="rt-link" hidden><input type="text" aria-label="Web address for the link" placeholder="Paste the web address, for example https://www.tate.org.uk">' +
       '<button type="button" class="soft" data-rt="link-add">Add link</button><button type="button" class="linklike" data-rt="link-cancel">Cancel</button></div>' +
@@ -380,7 +383,7 @@
     });
     Array.prototype.forEach.call(form.querySelectorAll("[data-rich]"), function (el) {
       var r = rich[el.dataset.rich];
-      if (r && r.dirty) values[el.dataset.rich] = richOut(el, r.keep);
+      if (r && r.dirty) values[el.dataset.rich] = richOut(el, r.keep, r.single);
     });
     return values;
   }
@@ -396,15 +399,18 @@
     var k = key("entry", s.id, col.id, e.id), busy = state.busy[k];
     var draft = state.draft && state.draft.k === k ? state.draft.values : {};
     richSource = {};
+    var group = "";
     var fields = e.fields.map(function (f0, i) {
+      var heading = "";
+      if ((f0.group || "") !== group) { group = f0.group || ""; if (group) heading = '<h2 class="group">' + esc(group) + '</h2>'; }
       var typed = Object.prototype.hasOwnProperty.call(draft, f0.name);
       var f = typed ? Object.assign({}, f0, { value: f0.type === "yesno" ? String(draft[f0.name]) === "true" : draft[f0.name] }) : f0;
       var id = "f-" + i, label = '<label for="' + id + '" id="l-' + i + '">' + esc(f.label) + '</label>', input;
       if (f.type === "long" && isRich(f0.value)) {
         richSource[f.name] = { html: String(f.value || ""), dirty: typed };
-        input = '<div class="rt">' + richTools(id) +
-          '<div class="rt-page" id="' + id + '" data-rich="' + esc(f.name) + '" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="l-' + i + '" spellcheck="true" lang="en-GB"></div></div>' +
-          '<span class="small">Type as you would in a document. Select words, then use the buttons above to style them. The small grey tags mark sources and built-in features, and stay as they are.</span>';
+        input = '<div class="rt">' + richTools(id, !/<(p|h\d|ul|ol|div|blockquote)[\s>]/i.test(String(f0.value))) +
+          '<div class="rt-page' + (String(f0.value).length < 400 ? " short" : "") + '" id="' + id + '" data-rich="' + esc(f.name) + '" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="l-' + i + '" spellcheck="true" lang="en-GB"></div></div>' +
+          (String(f0.value).length < 400 ? "" : '<span class="small">Type as you would in a document. Select words, then use the buttons above to style them. The small grey tags mark sources and built-in features, and stay as they are.</span>');
       } else if (f.type === "long") {
         var big = String(f.value || "").length > 600;
         input = '<textarea id="' + id + '" data-field="' + esc(f.name) + '"' + (big ? ' class="tall"' : "") + '>' + esc(f.value) + '</textarea>';
@@ -417,7 +423,7 @@
       } else {
         input = '<input type="text" id="' + id + '" data-field="' + esc(f.name) + '" value="' + esc(f.value == null ? "" : f.value) + '">';
       }
-      return '<div class="field">' + label + input + '</div>';
+      return heading + '<div class="field">' + label + input + '</div>';
     }).join("");
     var danger;
     if (state.confirm === k + "|delete") {
@@ -724,7 +730,7 @@
       { id: "a1", title: "[Sample] How to look at a painting", sub: "Looking", hidden: false, fields: [{ name: "title", label: "Title", type: "text", value: "[Sample] How to look at a painting" }, { name: "dek", label: "Summary line", type: "long", value: "A short sample summary that shows how a longer piece of text is edited in the console, in a box that grows." }, { name: "minutes", label: "Reading time, minutes", type: "number", value: 6 }, { name: "body", label: "Body", type: "long", value: '<p>Start with the whole picture before the detail. Give it a full minute.<sup class="cite"><a data-src="sample-1">[sample-1]</a></sup></p>\n<h2>Then move closer</h2>\n<p>Look for where the paint is <strong>thick</strong> and where it is thin, and read the <a href="#guides">collecting guides</a> for more.</p>\n<ul><li>Stand back.</li><li>Step in.</li></ul>\n<div class="callout"><strong>Try it</strong>Pick one small area and count the separate marks in it.</div>\n[[TIMELINE:zara-muse]]' }] },
       { id: "a2", title: "[Sample] Original or print", sub: "Collecting", hidden: true, fields: [{ name: "title", label: "Title", type: "text", value: "[Sample] Original or print" }] }] },
     { id: "artists", label: "Artists", singular: "artist", canHide: false, canDelete: false, entries: [
-      { id: "zara-muse", title: "Zara Muse", sub: "Portraiture, London", hidden: false, fields: [{ name: "name", label: "Name", type: "text", value: "Zara Muse" }, { name: "published", label: "Shown on the site", type: "yesno", value: true }, { name: "ghostWords", label: "Large background words", type: "lines", value: ["Knives,", "not", "brushes."] }] }] },
+      { id: "zara-muse", title: "Zara Muse", sub: "Portraiture, London", hidden: false, fields: [{ name: "name", label: "Name", type: "text", value: "Zara Muse" }, { name: "published", label: "Shown on the site", type: "yesno", value: true }, { name: "ghostWords", label: "Large background words", type: "lines", value: ["Knives,", "not", "brushes."] }, { name: "glance.0.1", label: "Based in", type: "text", value: "London", group: "At a glance" }, { name: "glance.1.1", label: "Gallery", type: "long", value: '<span class="placeholder">[Gallery relationship to confirm]</span>', group: "At a glance" }, { name: "sections.0.title", label: "Biography: title", type: "text", value: "Biography", group: "Portfolio sections" }, { name: "sections.0.html", label: "Biography: text", type: "long", value: '<p>A sample biography paragraph, with a source at the end.<sup class="cite"><a data-src="sample-1">[sample-1]</a></sup></p>\n<p>A second paragraph, with a <strong>bold</strong> word in it.</p>', group: "Portfolio sections" }, { name: "timeline.0.when", label: "1: when", type: "text", value: "2019", group: "Timeline" }, { name: "timeline.0.what", label: "1: what happened", type: "text", value: "A sample event in the timeline.", group: "Timeline" }] }] },
     { id: "sources", label: "Sources", singular: "source", canHide: false, canDelete: false, entries: [] },
   ];
   var demoData = { user: { email: "sample" }, sites: [
@@ -768,6 +774,6 @@
   }
 
   // Exposed for the automated checks only.
-  window.__adh = { state: state, render: render, esc: esc, go: go, richIn: richIn, richOut: richOut };
+  window.__adh = { state: state, render: render, esc: esc, go: go, richIn: richIn, richOut: richOut, richInline: richInline };
   start();
 })();

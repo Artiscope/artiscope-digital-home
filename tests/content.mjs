@@ -61,4 +61,28 @@ r = await handle(post({ action: "removePhoto", site: "world-art-review", slot: "
 assert.equal(JSON.parse(store["content/site.json"]).artists[0].image, null);
 assert.equal(JSON.parse(store["image-slots.json"]).slots.find((x) => x.id === "artist-zara-muse").filled, false);
 r = await handle(post({ action: "saveEntry", site: "world-art-review", collection: "nope", id: "x", values: {} })); assert.equal(r.status, 400);
+
+// parts inside an entry: portfolio sections, at a glance, timeline, glossary
+{
+  const col = by(W, "artists"), zara = JSON.parse(JSON.stringify(entriesOf(war, col)[0].ref));
+  const fs2 = fieldsOf(zara, [], col.inside), get = (n) => fs2.find((f) => f.name === n);
+  assert.equal(get("sections.0.html").type, "long"); assert.equal(get("sections.0.html").group, "Portfolio sections");
+  assert.equal(get("sections.0.html").label, "Biography: text");
+  assert.ok(get("glance.1.1") && get("glance.1.1").label === "Based in" && get("timeline.0.what"));
+  assert.ok(!fs2.some((f) => /^works|\.src$|\.id$|^related$|\.tone$/.test(f.name)), "internal names stay out");
+  const n2 = applyValues(zara, { "sections.0.html": "<p>New text.</p>", "glance.1.1": "Paris", "sections.0.id": "x", "works.0.title": "x", "glance.1.0": "x" }, [], col.inside);
+  assert.equal(n2, 2); assert.equal(zara.sections[0].html, "<p>New text.</p>"); assert.equal(zara.glance[1][1], "Paris");
+  assert.equal(zara.glance[1][0], "Based in"); assert.equal(zara.sections[0].id, "bio");
+  const konn = entriesOf(war, col)[1].ref;
+  assert.equal(fieldsOf(konn, [], col.inside).find((f) => /placeholder/.test(String(f.value))).type, "long", "short text with marks opens in the writing editor");
+  assert.ok(!fieldsOf(entriesOf(war, by(W, "articles"))[0].ref).some((f) => f.name === "sources" || f.name === "artists"));
+  const gl = by(G, "glossary"), rows = entriesOf(gamC, gl);
+  assert.equal(rows.length, 16); assert.equal(rows[0].title, "Hammer price");
+  assert.deepEqual(fieldsOf(rows[0].ref, [], gl.columns).map((f) => f.label), ["Term", "Meaning"]);
+  const sec = by(G, "sections"), srow = JSON.parse(JSON.stringify(entriesOf(gamC, sec)[0].ref));
+  assert.deepEqual(fieldsOf(srow, [], sec.columns).map((f) => f.name), ["1", "2"]);
+  assert.equal(applyValues(srow, { 0: "hacked", 2: "New words." }, [], sec.columns), 1); assert.equal(srow[0], "market-intelligence");
+  const bio2 = fieldsOf(entriesOf(gamC, by(G, "artists"))[0].ref, [], by(G, "artists").inside);
+  assert.ok(bio2.some((f) => f.name === "sources.0.1" && f.group === "Sources" && f.label === "1: link"));
+}
 console.log("CONTENT CHECKS PASSED");

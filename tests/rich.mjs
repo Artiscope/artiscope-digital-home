@@ -5,7 +5,7 @@ import { createRequire } from "node:module"; const { chromium } = createRequire(
 const here = path.resolve("."), read = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; } };
 const war = read("../world-art-review/content/site.json"), gam = read("../global-art-monitor/data/content.json");
 const bodies = [];
-if (war) { war.articles.forEach((a) => bodies.push(a.body)); war.artists.forEach((a) => a.seen && bodies.push(a.seen)); }
+if (war) { war.articles.forEach((a) => bodies.push(a.body)); war.artists.forEach((a) => { a.seen && bodies.push(a.seen); (a.sections || []).forEach((x) => bodies.push(x.html)); (a.glance || []).forEach((r) => /</.test(r[1]) && bodies.push(r[1])); }); }
 if (gam) gam.features.forEach((f) => bodies.push(f.body));
 bodies.push('<p onclick="x()">Hi <img src=x onerror="window.bad=1"><a href="javascript:window.bad=1">link</a></p><script>window.bad=1</script><iframe src="https://example.com"></iframe>');
 
@@ -21,7 +21,7 @@ const results = await page.evaluate((list) => list.map((html) => {
   const keep = [], doc = new DOMParser().parseFromString("<body>" + html + "</body>", "text/html");
   const ed = document.createElement("div"); ed.contentEditable = "true"; document.body.appendChild(ed);
   ed.innerHTML = window.__adh.richIn(doc.body, keep);
-  const shown = ed.innerHTML, out = window.__adh.richOut(ed, keep); ed.remove();
+  const shown = ed.innerHTML, out = window.__adh.richOut(ed, keep, window.__adh.richInline(doc.body)); ed.remove();
   return { shown, out };
 }), bodies);
 const norm = (h) => h.replace(/>\s+</g, "><").replace(/\s+/g, " ").replace(/=""/g, "").replace(/\s*\/>/g, ">").replace(/<\/(rect|feDiffuseLighting|feDistantLight|feTurbulence|feComposite|feGaussianBlur|feBlend|feColorMatrix|feMerge|feMergeNode|circle|path|line|stop)>/g, "").trim();
@@ -71,4 +71,8 @@ assert.deepEqual(errors, []);
 await page.setViewportSize({ width: 390, height: 800 }); await page.click('[data-act="open"]'); await page.waitForSelector(".rt-page");
 assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= 392), "fits a phone");
 await page.screenshot({ path: "/tmp/rich-phone.png" });
+await page.setViewportSize({ width: 1280, height: 900 }); await page.click('[data-act="close"]'); await page.click('[data-act="ctab"][data-i="1"]'); await page.click('[data-act="open"]');
+await page.waitForSelector(".rt-page.short"); assert.equal(await page.locator(".rt-page").count(), 2); assert.equal(await page.locator("h2.group").count(), 3);
+assert.ok(!(await page.inputValue("#f-3")).includes("<"));
+await page.screenshot({ path: "/tmp/rich-artist.png", fullPage: true });
 await browser.close(); console.log("rich editor: all good");

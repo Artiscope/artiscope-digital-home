@@ -141,6 +141,8 @@ textarea.tall { min-height: 320px; font-size: 14px; }
 .rt-link[hidden], .rt-say[hidden] { display: none; }
 .rt-link input { flex: 1 1 260px; }
 .rt-page { min-height: 320px; max-height: 70vh; overflow-y: auto; border-radius: 16px; background: var(--well); box-shadow: var(--sink); padding: 22px 26px; font-size: 16px; line-height: 1.65; color: var(--bright); outline: none; }
+.rt-page.short { min-height: 0; padding: 14px 18px; font-size: 15px; }
+h2.group { font-family: var(--serif); font-weight: 400; font-size: 22px; color: var(--bright); margin: 18px 0 -6px; }
 .rt-page:focus-visible { box-shadow: var(--sink), 0 0 0 2px rgba(169, 188, 224, .45); }
 .rt-page > :first-child { margin-top: 0; }
 .rt-page > :last-child { margin-bottom: 0; }
