@@ -76,14 +76,14 @@ try {
   await page.locator(".egroup:not([hidden]) input[type=text]").first().fill("Life story");
   await page.click('.seg.wide button >> nth=0'); await page.fill("#f-0", "Zara M");
   await page.screenshot({ path: "/tmp/editor-parts.png" });
-  await page.click('[data-tab="photos"]');
+  await page.click('[data-tab="files"]');
   assert.ok(await page.isVisible("text=You have changes that are not saved yet"));
   assert.equal(await page.inputValue("#f-0"), "Zara M", "typing survives the question");
   await page.click('[data-act="leave-stay"]'); assert.equal(await page.inputValue("#f-0"), "Zara M");
   const sent = await page.evaluate(() => { window.__adh.render(); return window.__adh.state.draft.values; });
   assert.equal(sent["sections.0.title"], "Life story"); assert.equal(sent.name, "Zara M");
-  await page.click('[data-tab="photos"]'); await page.click('[data-act="leave-go"]'); await page.waitForSelector("text=Photos");
-  assert.equal(await page.evaluate(() => window.__adh.state.tab), "photos");
+  await page.click('[data-tab="files"]'); await page.click('[data-act="leave-go"]'); await page.waitForSelector(".files");
+  assert.equal(await page.evaluate(() => window.__adh.state.tab), "files");
   // long lists open short, and search looks through all of them
   await page.click('[data-tab="content"]'); await page.waitForSelector("#clist"); await page.click('[data-act="ctab"][data-i="0"]');
   await page.evaluate(() => { const st = window.__adh.state, c = st.content[Object.keys(st.content)[0]][0]; for (let i = 1; i <= 12; i++) c.entries.push(Object.assign({}, c.entries[0], { id: "x" + i, title: "Extra piece " + i, sub: "Looking" })); window.__adh.render(); });

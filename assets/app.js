@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "17";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "18";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -39,6 +39,9 @@
     edPrefs: {},           // site id -> { mode, page, sel } kept while the editor reloads
     pg: {},                // site id -> the page editor: { doc, base, kinds, summaries, images, artists, preview, page, sel, mode, panel, dirty }
     photoFiles: [], photoSent: {}, photoDone: [],
+    files: {},             // site id -> Files screen: { files, spots, imageBase, filter, open, assign, pick, bust }
+    fileAdd: [],           // photos chosen in Files, waiting for their descriptions
+    fileBust: {}, fileFilter: "all",   // photos replaced in this visit, so the new one shows; the last filter used
   };
 
   // ---------- small helpers ----------
@@ -115,8 +118,13 @@
       if (state.tab === "pages" && !state.pg[s.id]) {
         var pgd = await api("pages", { site: s.id });
         var pref = state.edPrefs[s.id] || {};
-        state.pg[s.id] = { doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false };
+        var pics = {}; (pgd.pictures || []).forEach(function (p) { pics[p.key] = p; });
+        state.pg[s.id] = { pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false };
         render();
+      }
+      if (state.tab === "files" && (force || !state.files[s.id])) {
+        var fl = await api("files", { site: s.id }), was = state.files[s.id] || {};
+        state.files[s.id] = { files: fl.files || [], spots: fl.spots || [], imageBase: fl.imageBase || "", filter: was.filter || state.fileFilter || "all", open: "", assign: "", pick: "" }; render();
       }
       if (state.tab === "history" && (force || !state.history[s.id])) {
         var h = await api("history", { site: s.id }); state.history[s.id] = h.changes || []; render();
@@ -149,7 +157,7 @@
       state.status = "saved"; state.flash = say || (curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes");
       if (done) done(out);
       var s = site();
-      if (s) { delete state.history[s.id]; delete state.content[s.id]; delete state.theme[s.id]; delete state.pg[s.id]; }
+      if (s) { delete state.history[s.id]; delete state.content[s.id]; delete state.theme[s.id]; delete state.pg[s.id]; delete state.files[s.id]; }
       try { await refreshCopies(); } catch (e2) { /* the next refresh will catch up */ }
       delete state.busy[k]; render();
       await ensure(true);
@@ -173,7 +181,13 @@
     ["history", "History", "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M12 8v4.5l3 2"],
   ];
   // Outside a site only "All sites" shows. Inside, the site's own screens.
-  function navItems() { return state.inSite && site() ? NAV : NAV.slice(0, 1); }
+  // Sites that keep their photos in Files show Files instead of Photos.
+  var NAV_FILES = ["files", "Files", "M4 6a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z", "M8 15l2.5-2.5 2 2 1.5-1.5 2 2"];
+  function navItems() {
+    var s = site(); if (!(state.inSite && s)) return NAV.slice(0, 1);
+    return s.files ? NAV.map(function (n) { return n[0] === "photos" ? NAV_FILES : n; }) : NAV;
+  }
+  function photosTab(s) { return s && s.files ? "files" : "photos"; }
   function navIndex(tab) { var i = navItems().findIndex(function (n) { return n[0] === tab; }); return i < 0 ? 0 : i; }
   function mark() { return '<svg width="24" height="24" viewBox="0 0 26 26"><path d="M2 24V10l11-9 11 9v14z" fill="#A9BCE0"></path><rect x="10" y="14" width="6" height="10" fill="#141927"></rect></svg>'; }
 
@@ -318,7 +332,8 @@
       '<div class="grid-3">' +
         tile("content", entries, "Content", (cols ? cols.map(function (c) { return c.label.toLowerCase(); }).join(", ") : "Articles, artists and more"), "Edit, hide or delete") +
         tile("theme", colourCount == null ? "" : colourCount, "Theme", "Colours and typefaces", "Change the look") +
-        tile("photos", empty, "Photos", empty + " empty " + (empty === 1 ? "spot" : "spots") + ", " + waiting + " on the way", "Add photos") +
+        (s.files ? tile("files", state.files[s.id] ? state.files[s.id].files.length : "", "Files", "Every photo on the site, what it shows and where it is used", "Upload and describe")
+          : tile("photos", empty, "Photos", empty + " empty " + (empty === 1 ? "spot" : "spots") + ", " + waiting + " on the way", "Add photos")) +
       '</div>' + viewCopies();
   }
 
@@ -574,6 +589,8 @@
     if (q.where === "shared") { var part = pgd.doc.shared[q.id]; if (!part) return null; out = { where: "shared", id: q.id, sec: part, kind: pgd.kinds[part.type] }; }
     else { var sec = pgSections(pgd).find(function (x) { return x.id === q.id; }); if (!sec) return null; out = { where: "page", id: q.id, sec: sec, kind: pgd.kinds[sec.type] }; }
     out.block = null;
+    var sp = q.pic && pgd.pictures && pgd.pictures[q.pic];
+    if (sp) return { where: out.where, id: out.id, parent: out, pic: q.pic, spot: sp, sec: { type: "picture", settings: sp }, kind: picKind(sp), block: null };
     var bk = out.kind && out.kind.blocks;
     if (bk && q.block != null) {
       var list = (out.sec.settings || {})[bk.field];
@@ -600,7 +617,35 @@
     var own = pgd.summaries[(where === "shared" ? "shared:" : pgd.page + ":") + key];
     return own != null ? own : "";
   }
-  function pgMark(pgd) { pgd.dirty = canon(pgd.doc) !== pgd.base; state.dirty = pgd.dirty; }
+  function pgMark(pgd) { pgd.dirty = canon(pgd.doc) !== pgd.base || JSON.stringify(pgd.pictures || {}) !== (pgd.picBase || "{}"); state.dirty = pgd.dirty; }
+  function pgReset(pgd) { pgd.doc = JSON.parse(pgd.base); pgd.pictures = JSON.parse(pgd.picBase || "{}"); pgd.dirty = false; state.dirty = false; }
+  // Pictures that belong to an artist or an article but show in a section of this page.
+  var LATEST_DEFAULT = ["zara-muse-profile", "konn-artiss-profile", "review-anti-frieze"];
+  function linkedOf(pgd, sec) {
+    var P = pgd.pictures || {}, st = sec.settings || {}, all = Object.keys(P).map(function (k) { return P[k]; }), out = [], seen = {};
+    var artists = all.filter(function (x) { return x.kind === "artist" && x.published; }), arts = all.filter(function (x) { return x.kind === "article" && !x.hidden; });
+    function add(x, where) { if (x && !seen[x.key]) { seen[x.key] = 1; out.push({ key: x.key, label: where + x.label }); } }
+    if (sec.type === "hero") {
+      var a1 = P["artist:" + st.artist] && P["artist:" + st.artist].published ? P["artist:" + st.artist] : artists[0];
+      var a2 = artists.find(function (a) { return a !== a1; }) || a1;
+      if (!st.image) add(a1, "Banner: ");
+      (st.latest && st.latest.length ? st.latest : LATEST_DEFAULT).forEach(function (sl) { add(P["article:" + sl], "Latest box: "); });
+      add(a2, "Small box: ");
+    } else if (sec.type === "featured") {
+      var chosen = (st.artists || []).map(function (sl) { return P["artist:" + sl]; }).filter(function (x) { return x && x.published; });
+      (chosen.length ? chosen : artists).forEach(function (x) { add(x, ""); });
+    } else if (sec.type === "explained") {
+      arts.filter(function (x) { return x.section === "explained"; }).slice(0, Number(st.count) || 2).forEach(function (x) { add(x, ""); });
+    } else if (sec.type === "articles") {
+      arts.filter(function (x) { return !st.section || st.section === "all" || x.section === st.section; }).slice(0, Math.max(1, Math.min(12, Number(st.count) || 3))).forEach(function (x) { add(x, ""); });
+    }
+    return out;
+  }
+  function picKind(sp) {
+    var f = [{ name: "image", label: "Picture", type: "image", alt: "alt" }, { name: "alt", label: "Describe the picture", type: "text", hint: "Read aloud to people who cannot see it." }];
+    if (sp.hasCredit) f.push({ name: "credit", label: "Credit under the picture", type: "text", hint: sp.kind === "artist" ? "Shown under the large picture on the portfolio and in the banner." : "Shown under the picture at the top of the article." });
+    return { label: "Picture of " + sp.label, fields: f };
+  }
 
   function viewLeave() {
     return state.leave ? '<div class="sunk stack ask"><b>You have changes that are not saved yet.</b>' +
@@ -633,12 +678,19 @@
   }
   function edRow(pgd, where, id, sec, picked) {
     var k = pgd.kinds[sec.type] || { label: sec.type }, hidden = sec.visible === false;
-    var row = '<div class="sec' + (picked && (pgd.sel.block == null) ? " on" : "") + (hidden ? " off" : "") + '" data-act="ed-pick" data-where="' + where + '" data-id="' + esc(id) + '"' + (where === "page" ? ' draggable="true"' : "") + '>' +
+    var row = '<div class="sec' + (picked && pgd.sel.block == null && !pgd.sel.pic ? " on" : "") + (hidden ? " off" : "") + '" data-act="ed-pick" data-where="' + where + '" data-id="' + esc(id) + '"' + (where === "page" ? ' draggable="true"' : "") + '>' +
       (where === "page" ? '<span class="grip" aria-hidden="true"><i></i><i></i><i></i></span>' : '<span class="grip" aria-hidden="true"></span>') +
       '<span class="nm">' + esc(k.label) + '<small id="sum-' + esc(where + "-" + id) + '">' + esc(pgSummary(pgd, where, id, sec)) + '</small></span>' + (hidden ? '<span class="eye">Hidden</span>' : "") + '</div>';
     var bk = k.blocks, list = bk ? (sec.settings || {})[bk.field] : null;
-    if (!bk || !Array.isArray(list)) return row;
-    return row + '<div class="blocks">' + list.map(function (item, i) {
+    var links = picked && where === "page" ? linkedOf(pgd, sec) : [];
+    var linkRows = links.length ? '<div class="blocks pics"><div class="grp sm">Pictures shown here</div>' + links.map(function (l) {
+      var sp = pgd.pictures[l.key], on = pgd.sel && pgd.sel.pic === l.key;
+      return '<div class="sec blk pic' + (on ? " on" : "") + '" data-act="ed-pick-pic" data-id="' + esc(id) + '" data-key="' + esc(l.key) + '">' +
+        (sp.image ? '<img class="mini" src="' + esc(imageSrc(pgd, sp.image)) + '" alt="">' : '<span class="mini none" aria-hidden="true"></span>') +
+        '<span class="nm">' + esc(l.label) + '</span><span class="eye">Shared</span></div>';
+    }).join("") + '</div>' : "";
+    if (!bk || !Array.isArray(list)) return row + linkRows;
+    return row + linkRows + '<div class="blocks">' + list.map(function (item, i) {
       var on = picked && pgd.sel.block === i, off = blockHidden(item);
       return '<div class="sec blk' + (on ? " on" : "") + (off ? " off" : "") + '" data-act="ed-pick" data-where="' + where + '" data-id="' + esc(id) + '" data-block="' + i + '">' +
         '<span class="dot" aria-hidden="true"></span><span class="nm">' + esc(blockTitle(item, i)) + '</span>' + (off ? '<span class="eye">Hidden</span>' : "") + '</div>';
@@ -655,7 +707,7 @@
       '<div class="grp">Also on this site</div>' +
       '<button type="button" class="sec plain" data-tab="theme"><span class="nm">Theme: colours and typefaces</span></button>' +
       '<button type="button" class="sec plain" data-tab="content"><span class="nm">Content: articles, artists, sources</span></button>' +
-      '<button type="button" class="sec plain" data-tab="photos"><span class="nm">Photos</span></button>' +
+      '<button type="button" class="sec plain" data-tab="' + photosTab(site()) + '"><span class="nm">' + (photosTab(site()) === "files" ? "Files: every photo" : "Photos") + '</span></button>' +
       '<button type="button" class="sec plain" data-tab="history"><span class="nm">History</span></button>';
   }
   function edLibrary(pgd) {
@@ -665,6 +717,12 @@
   }
   function edSettings(pgd, sel) {
     var kind = sel.kind || { label: sel.sec.type, fields: [] }, st = sel.sec.settings || {};
+    if (sel.pic) {
+      var parentKind = sel.parent.kind || { label: sel.id };
+      return '<div class="rhead"><button type="button" class="linklike small" data-act="ed-pick" data-where="' + sel.where + '" data-id="' + esc(sel.id) + '">Back to ' + esc(parentKind.label) + '</button>' +
+        '<h2>' + esc(kind.label) + '</h2><div class="shared-note"><b>A shared picture</b><span class="small">It belongs to ' + esc(sel.spot.kind === "artist" ? sel.spot.label : "the article") + ', so a change here also shows on ' + esc(sel.spot.also) + '.</span></div></div>' +
+        '<form class="stack" data-form="section">' + kind.fields.map(function (f) { return edField(pgd, f, st[f.name], f.name); }).join("") + '</form>';
+    }
     if (sel.block != null) {
       var n = sel.list.length, fieldsB = (sel.bdef ? sel.bdef.fields : []).map(function (g) { return edField(pgd, g, Array.isArray(sel.item) ? sel.item[g.name] : (sel.item || {})[g.name], sel.bk.field + "." + sel.block + "." + g.name); }).join("");
       return '<div class="rhead"><div class="row between"><button type="button" class="linklike small" data-act="ed-pick" data-where="' + sel.where + '" data-id="' + esc(sel.id) + '">Back to ' + esc(kind.label) + '</button><span class="small">' + esc(sel.bk.label) + " " + (sel.block + 1) + " of " + n + '</span></div>' +
@@ -683,7 +741,7 @@
   }
   // The floating bar over the page: acts on whatever is picked.
   function edFloat(pgd) {
-    var sel = pgSel(pgd); if (!sel) return "";
+    var sel = pgSel(pgd); if (!sel || sel.pic) return "";
     var isBlock = sel.block != null, page = sel.where === "page", idx, n, hid, canHide = true;
     if (isBlock) { idx = sel.block; n = sel.list.length; hid = blockHidden(sel.item); canHide = !Array.isArray(sel.item); }
     else { idx = page ? pgSections(pgd).findIndex(function (x) { return x.id === sel.id; }) : -1; n = pgSections(pgd).length; hid = sel.sec.visible === false; }
@@ -719,7 +777,7 @@
         '<div class="stack" style="gap:8px"><label class="btn slim upl">Upload a photo<input type="file" accept="image/jpeg,image/png" data-upload="' + esc(path) + '" hidden></label>' +
         '<button type="button" class="soft slim" data-act="ed-picker" data-path="' + esc(path) + '">' + (open ? "Close the photos" : "Choose from the site") + '</button>' +
         (v ? '<button type="button" class="linklike small" data-act="ed-pic-none" data-path="' + esc(path) + '" style="align-self:flex-start">Remove picture</button>' : "") + '</div></div>' +
-        (open ? '<div class="picgrid">' + (pgd.images.length ? pgd.images.map(function (im) { return '<button type="button" class="pictile' + (im === v ? " on" : "") + '" data-act="ed-pic-choose" data-path="' + esc(path) + '" data-name="' + esc(im) + '"><img src="' + esc(pgd.imageBase + im) + '" alt="" loading="lazy"><span>' + esc(im) + '</span></button>'; }).join("") : '<span class="small">No photos on the site yet. Upload one.</span>') + '</div>' : "") +
+        (open ? '<div class="picgrid">' + (pgd.images.length ? pgd.images.map(function (im) { var about = (pgd.imageMeta[im] || {}).alt; return '<button type="button" class="pictile' + (im === v ? " on" : "") + '" data-act="ed-pic-choose" data-path="' + esc(path) + '" data-name="' + esc(im) + '" title="' + esc(about || im) + '"><img src="' + esc(pgd.imageBase + im) + '" alt="" loading="lazy"><span>' + esc(about || im) + '</span></button>'; }).join("") : '<span class="small">No photos on the site yet. Upload one.</span>') + '</div>' : "") +
         '<span class="small">JPG or PNG. Resized for the web, never cropped. Kept when you press Save.</span>';
       hint = "";
     }
@@ -739,7 +797,7 @@
   function imageSrc(pgd, v) {
     if (!v) return "";
     if (pgd.uploads && pgd.uploads[v]) return pgd.uploads[v].dataUrl;
-    return pgd.imageBase ? pgd.imageBase + v : "";
+    return pgd.imageBase ? pgd.imageBase + v + (state.fileBust[v] ? "?v=" + state.fileBust[v] : "") : "";
   }
   // Reading and writing one setting by its path, such as "items.0.q".
   function pgGet(obj, path) { var cur = obj; path.split(".").forEach(function (k) { cur = cur == null ? undefined : cur[k]; }); return cur; }
@@ -759,7 +817,9 @@
       if (sel.block != null && !blockHidden(sel.item)) { block = sel.list.slice(0, sel.block).filter(function (x) { return !blockHidden(x); }).length; label = sel.bk.label + ": " + blockTitle(sel.item, sel.block); }
     }
     var id = pick != null ? pick : (sel ? sel.id : "");
-    try { frame.contentWindow.postMessage({ type: "adh-pages", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages }, images: images, pick: id, block: id ? block : -1, label: id ? label : "", scroll: !!pgd.scrollNext }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
+    var pictures = Object.keys(pgd.pictures || {}).map(function (k) { var p = pgd.pictures[k]; return { key: k, image: p.image, alt: p.alt, credit: p.credit }; });
+    if (sel && sel.pic) label = sel.kind.label;
+    try { frame.contentWindow.postMessage({ type: "adh-pages", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages }, images: images, pictures: pictures, pick: id, block: id ? block : -1, label: id ? label : "", scroll: !!pgd.scrollNext }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
     pgd.scrollNext = false;
   }
   function pushSoon() { clearTimeout(pushTimer); pushTimer = setTimeout(function () { pushPreview(); }, 150); }
@@ -826,18 +886,32 @@
       var k = pgd.kinds[sec.type]; if (!k || found) return;
       k.fields.forEach(function (f) { if (f.type === "image" && f.alt && (sec.settings || {})[f.name] && !String((sec.settings || {})[f.alt] || "").trim()) found = { page: pk, id: sec.id, label: k.label }; });
     }); });
+    if (found) return found;
+    var ch = picChanges(pgd);
+    Object.keys(ch).some(function (k) {
+      if (!ch[k].image || String(ch[k].alt || "").trim()) return false;
+      var home = pgSections(pgd).find(function (sec) { return linkedOf(pgd, sec).some(function (l) { return l.key === k; }); });
+      found = { page: pgd.page, id: home ? home.id : "", pic: k, label: "the picture of " + pgd.pictures[k].label }; return true;
+    });
     return found;
+  }
+  function picChanges(pgd) {
+    var was = JSON.parse(pgd.picBase || "{}"), out = {};
+    Object.keys(pgd.pictures || {}).forEach(function (k) { var a = pgd.pictures[k], b = was[k] || {}; if (a.image !== b.image || a.alt !== b.alt || a.credit !== b.credit) out[k] = { image: a.image, alt: a.alt, credit: a.credit }; });
+    return out;
   }
   function savePages() {
     var s = site(), pgd = pgOf(); if (!s || !pgd || !pgd.dirty) return;
     var miss = missingDescription(pgd);
-    if (miss) { pgd.page = miss.page; pgd.sel = { where: "page", id: miss.id, block: null }; state.notice = { text: "Please describe the picture in " + miss.label + " before saving. It is read out to people who cannot see it.", problem: true }; edPatch(); pushPreview(); return; }
+    if (miss) { pgd.page = miss.page; pgd.sel = miss.id ? { where: "page", id: miss.id, block: null, pic: miss.pic || "" } : null; state.notice = { text: "Please describe the picture in " + miss.label + " before saving. It is read out to people who cannot see it.", problem: true }; edPatch(); pushPreview(); return; }
     var doc = JSON.parse(JSON.stringify(pgd.doc)), what = pgd.what || (pgPage(pgd).title || pgd.page);
-    var used = canon(doc), uploads = Object.keys(pgd.uploads || {}).filter(function (k) { return used.indexOf(JSON.stringify(k)) >= 0; }).map(function (k) { var u = pgd.uploads[k]; return { key: k, name: u.name, ext: u.ext, content: u.content }; });
+    var pics = picChanges(pgd), picNames = Object.keys(pics).map(function (k) { return pgd.pictures[k].label; });
+    if (canon(doc) === pgd.base && picNames.length) what = "Picture of " + picNames.join(", ");
+    var used = canon(doc) + canon(pics), uploads = Object.keys(pgd.uploads || {}).filter(function (k) { return used.indexOf(JSON.stringify(k)) >= 0; }).map(function (k) { var u = pgd.uploads[k]; return { key: k, name: u.name, ext: u.ext, content: u.content }; });
     edRemember(); state.notice = null;
     onLive(function () {
-      change(key("pages", s.id), function () { return api("savePages", { site: s.id, pages: doc, what: what, uploads: uploads }); }, function () { state.dirty = false; }, curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes");
-    }, uploads.length ? "This page change and " + (uploads.length === 1 ? "its new photo" : "its " + uploads.length + " new photos") : "This page change");
+      change(key("pages", s.id), function () { return api("savePages", { site: s.id, pages: doc, what: what, uploads: uploads, pictures: pics }); }, function () { state.dirty = false; }, curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes");
+    }, (picNames.length ? "This change, including the shared " + (picNames.length === 1 ? "picture of " + picNames[0] + "," : "pictures of " + picNames.join(" and ") + ",") : "This page change") + (uploads.length ? (uploads.length === 1 ? " and its new photo" : " and its " + uploads.length + " new photos") : ""));
   }
 
   // ---------- formatted text, edited as plain writing ----------
@@ -1115,6 +1189,116 @@
       '<div class="stack"><h2 class="label">Photos on this site</h2>' + (spots ? '<div class="grid-3">' + spots + '</div>' : '<p class="notice">No photos yet.</p>') + '</div>';
   }
 
+
+  // ----- Files: every photo on the site -----
+
+  var FILE_FILTERS = [["all", "All"], ["used", "Used"], ["unused", "Not used yet"], ["nodesc", "No description"], ["empty", "Places without a picture"]];
+  function filesOf() { var s = site(); return (s && state.files[s.id]) || null; }
+  function fileSrc(fd, name) { var b = state.fileBust[name]; return fd.imageBase + name + (b ? "?v=" + b : ""); }
+  function fileCount(fd, f) {
+    if (f === "empty") return fd.spots.filter(function (x) { return !x.image; }).length;
+    return fd.files.filter(function (x) { return f === "all" || (f === "used" ? x.used.length : f === "unused" ? !x.used.length : !x.alt); }).length;
+  }
+  function viewFiles() {
+    var s = site(); if (!s) return "";
+    var fd = filesOf();
+    var top = head("Files", "Every photo on " + s.name + ". Describe a photo once here and it comes with it whenever you choose it in Pages. Replace a photo and every place that uses it shows the new one.");
+    if (!fd) return top + '<p class="loading">Reading the photos</p>';
+    var adding = state.fileAdd.map(function (p, i) {
+      return '<div class="addrow"><img src="' + esc(p.url) + '" alt=""><div class="stack" style="gap:8px;flex:1">' +
+        '<b class="small" style="color:var(--bright)">' + esc(p.file.name) + '</b>' +
+        '<div class="field"><label for="fa-alt-' + i + '">Describe the picture</label><input type="text" id="fa-alt-' + i + '" data-input="fadd-alt" data-i="' + i + '" maxlength="240" value="' + esc(p.alt) + '" placeholder="For example: a woman seen from behind, painted in thick strokes on deep blue"><span class="small">Read aloud to people who cannot see it.</span></div>' +
+        '<div class="field"><label for="fa-cap-' + i + '">Caption or credit (optional)</label><input type="text" id="fa-cap-' + i + '" data-input="fadd-cap" data-i="' + i + '" maxlength="160" value="' + esc(p.caption) + '"></div>' +
+        '<button type="button" class="linklike small" data-act="fadd-drop" data-i="' + i + '" style="align-self:flex-start">Leave this one out</button></div></div>';
+    }).join("");
+    var ready = state.fileAdd.length && state.fileAdd.every(function (p) { return p.alt.trim(); });
+    var upload = '<div class="card stack-wide">' +
+      '<div class="row between"><div class="stack" style="gap:2px"><b style="color:var(--bright)">Upload photos</b><span class="small">JPG or PNG, several at once if you like. Resized for the web, never cropped.</span></div>' +
+      '<label class="btn slim upl">Choose photos<input type="file" accept="image/jpeg,image/png" multiple data-change="files-add" hidden></label></div>' +
+      (adding ? '<div class="stack-wide">' + adding + '</div><div class="row"><button type="button" class="btn" data-act="files-send"' + (ready && state.status !== "saving" ? "" : " disabled") + '>' + (state.fileAdd.length === 1 ? "Add this photo" : "Add these " + state.fileAdd.length + " photos") + '</button>' +
+        (ready ? "" : '<span class="small">Describe every photo first.</span>') + '</div>' : "") + '</div>';
+    var filters = '<div class="seg mini filters" role="group" aria-label="Show">' + FILE_FILTERS.map(function (f) {
+      return '<button type="button" class="' + (fd.filter === f[0] ? "on" : "") + '" data-act="files-filter" data-f="' + f[0] + '">' + esc(f[1]) + ' <span class="n">' + fileCount(fd, f[0]) + '</span></button>';
+    }).join("") + '</div>';
+    return top + upload + '<div class="stack-wide">' + filters + (fd.filter === "empty" ? viewFileSpots(fd) : viewFileGrid(fd)) + '</div>';
+  }
+  function viewFileGrid(fd) {
+    var list = fd.files.filter(function (x) { var f = fd.filter; return f === "all" || (f === "used" ? x.used.length : f === "unused" ? !x.used.length : !x.alt); });
+    if (!list.length) return '<p class="notice">' + (fd.files.length ? "No photos here." : "No photos on this site yet. Upload some above.") + '</p>';
+    return '<div class="files">' + list.map(function (x) {
+      var k = key("file", x.name), open = fd.open === x.name, asking = state.confirm === "fdel|" + x.name;
+      var used = x.used.length ? '<ul class="used">' + x.used.map(function (u) {
+        return '<li>' + (u.id ? '<button type="button" class="linklike" data-act="files-goto" data-page="' + esc(u.page) + '" data-where="' + esc(u.where) + '" data-id="' + esc(u.id) + '">' + esc(u.label) + '</button>' : esc(u.label)) + '</li>';
+      }).join("") + '</ul>' : '<span class="small">Not used yet</span>';
+      var actions = asking
+        ? '<span class="small">Delete this photo for good?</span><button type="button" class="soft slim" data-act="files-remove" data-name="' + esc(x.name) + '">Yes, delete</button><button type="button" class="linklike small" data-act="cancel">Keep it</button>'
+        : '<button type="button" class="linklike small" data-act="files-describe" data-name="' + esc(x.name) + '">' + (x.alt ? "Change description" : "Describe") + '</button>' +
+          '<label class="linklike small upl">Replace everywhere<input type="file" accept="image/jpeg,image/png" data-change="files-replace" data-name="' + esc(x.name) + '" hidden></label>' +
+          (x.used.length ? '<span class="small quiet">In use, so it cannot be deleted</span>' : '<button type="button" class="linklike small" data-act="ask" data-k="fdel|' + esc(x.name) + '">Delete</button>');
+      return '<div class="card filecard"><div class="fthumb"><img src="' + esc(fileSrc(fd, x.name)) + '" alt="" loading="lazy"><span class="small">On its way. Ready in about two minutes.</span></div>' +
+        '<div class="stack" style="gap:8px;padding:14px 14px 12px">' +
+          '<div class="stack" style="gap:2px"><b class="fname">' + esc(x.name) + '</b><span class="small">' + (x.size ? Math.max(1, Math.round(x.size / 1024)) + " KB" : "") + '</span></div>' +
+          (open ? '<form class="stack" data-form="fdesc" data-name="' + esc(x.name) + '"><div class="field"><label for="fd-alt">Describe the picture</label><input type="text" id="fd-alt" name="alt" maxlength="240" value="' + esc(x.alt) + '"><span class="small">Places that show this photo without a description get this one too.</span></div>' +
+              '<div class="field"><label for="fd-cap">Caption or credit (optional)</label><input type="text" id="fd-cap" name="caption" maxlength="160" value="' + esc(x.caption) + '"></div>' +
+              '<div class="row"><button type="submit" class="btn slim"' + (state.busy[k] ? " disabled" : "") + '>Save</button><button type="button" class="linklike small" data-act="files-describe" data-name="">Cancel</button></div></form>'
+            : (x.alt ? '<p class="fdesc">' + esc(x.alt) + '</p>' : '<span class="chip warn" style="align-self:flex-start">No description yet</span>') + (x.caption && !open ? '<span class="small">' + esc(x.caption) + '</span>' : "")) +
+          '<div class="stack" style="gap:4px"><span class="label">Used in</span>' + used + '</div>' +
+          '<div class="row factions">' + actions + '</div>' +
+        '</div></div>';
+    }).join("") + '</div>';
+  }
+  function viewFileSpots(fd) {
+    var empty = fd.spots.filter(function (x) { return !x.image; });
+    if (!empty.length) return '<p class="notice">Every place on the site has a picture.</p>';
+    var groups = [];
+    empty.forEach(function (x) { var g = groups.find(function (y) { return y.name === x.group; }); if (!g) groups.push(g = { name: x.group, list: [] }); g.list.push(x); });
+    return groups.map(function (g) {
+      return '<div class="stack" style="gap:8px"><h2 class="label">' + esc(g.name) + '</h2><div class="spots">' + g.list.map(function (x) {
+        var open = fd.assign === x.key, chosen = open && fd.pick ? fd.files.find(function (f) { return f.name === fd.pick; }) : null;
+        return '<div class="card spot' + (open ? " open" : "") + '"><div class="row between"><div class="stack" style="gap:2px"><b style="color:var(--bright)">' + esc(x.label) + '</b><span class="small">Shows on ' + esc(x.also) + '.</span></div>' +
+          '<button type="button" class="' + (open ? "linklike small" : "soft slim") + '" data-act="files-assign" data-key="' + (open ? "" : esc(x.key)) + '">' + (open ? "Cancel" : "Choose a photo") + '</button></div>' +
+          (open ? '<div class="picgrid">' + (fd.files.length ? fd.files.map(function (f) { return '<button type="button" class="pictile' + (f.name === fd.pick ? " on" : "") + '" data-act="files-pick" data-name="' + esc(f.name) + '" title="' + esc(f.alt || f.name) + '"><img src="' + esc(fileSrc(fd, f.name)) + '" alt="" loading="lazy"><span>' + esc(f.alt || f.name) + '</span></button>'; }).join("") : '<span class="small">Upload a photo above first.</span>') + '</div>' +
+            (chosen ? '<form class="stack" data-form="fassign" data-key="' + esc(x.key) + '" data-name="' + esc(chosen.name) + '"><div class="field"><label for="fa-alt">Describe the picture</label><input type="text" id="fa-alt" name="alt" maxlength="240" value="' + esc(chosen.alt) + '"><span class="small">Read aloud to people who cannot see it.</span></div>' +
+              '<div class="row"><button type="submit" class="btn slim"' + (state.status === "saving" ? " disabled" : "") + '>Put it here</button></div></form>' : "") : "") +
+          '</div>';
+      }).join("") + '</div></div>';
+    }).join("");
+  }
+  function filesWrite(what, payload, done, say) {
+    var s = site(); if (!s) return;
+    onLive(function () {
+      change(key("files", s.id, payload.op, payload.name || ""), function () { return api("saveFiles", Object.assign({ site: s.id }, payload)); }, done, say);
+    }, what);
+  }
+  async function filesSend() {
+    var s = site(); if (!s || !state.fileAdd.length) return;
+    var batch = state.fileAdd.slice(), n = batch.length;
+    onLive(function () {
+      change(key("files", s.id, "add"), async function () {
+        for (var i = 0; i < batch.length; i++) {
+          var p = batch[i], img = await prepareImage(p.file);
+          await api("saveFiles", { site: s.id, op: "add", fileName: p.file.name, ext: img.ext, content: img.content, alt: p.alt.trim(), caption: p.caption.trim() });
+          state.fileAdd = state.fileAdd.filter(function (q) { return q !== p; }); URL.revokeObjectURL(p.url);
+        }
+      }, null, n === 1 ? "Photo added" : n + " photos added");
+    }, n === 1 ? "Adding this photo" : "Adding these " + n + " photos");
+  }
+  async function filesReplace(t) {
+    var s = site(), fd = filesOf(), file = t.files && t.files[0], name = t.dataset.name; if (!s || !fd || !file) return;
+    if (!/^image\/(jpeg|png)$/.test(file.type)) { state.notice = { text: "Please choose a JPG or PNG photo.", problem: true }; render(); return; }
+    try {
+      var img = await prepareImage(file, /\.png$/i.test(name) ? "png" : "jpg"), x = fd.files.find(function (f) { return f.name === name; }), where = x ? x.used.length : 0;
+      filesWrite("Replacing " + name + (where ? ", in all " + where + (where === 1 ? " place" : " places") + " it is used," : ""), { op: "replace", name: name, ext: img.ext, content: img.content },
+        function () { state.fileBust[name] = Date.now(); }, "Photo replaced everywhere");
+    } catch (e) { state.notice = { text: e.message, problem: true }; render(); }
+  }
+  function filesGoto(el) {
+    var s = site(); if (!s) return;
+    state.edPrefs[s.id] = Object.assign({}, state.edPrefs[s.id] || {}, { page: el.dataset.page || "home", sel: { where: el.dataset.where === "shared" ? "shared" : "page", id: el.dataset.id, block: null } });
+    var pgd = state.pg[s.id]; if (pgd) { pgd.page = state.edPrefs[s.id].page; pgd.sel = state.edPrefs[s.id].sel; pgd.scrollNext = true; }
+    go("pages");
+  }
+
   // ----- history -----
 
   function viewHistory() {
@@ -1204,7 +1388,7 @@
         : '<p class="loading">Reading your sites</p>';
       return;
     }
-    var views = { home: viewHome, overview: viewOverview, content: viewContent, theme: viewTheme, photos: viewPhotos, history: viewHistory };
+    var views = { home: viewHome, overview: viewOverview, content: viewContent, theme: viewTheme, photos: viewPhotos, files: viewFiles, history: viewHistory };
     var s = site(), unbuilt = state.inSite && !s && state.site;
     if (state.inSite && s && state.tab === "pages") { app.innerHTML = viewPagesEditor(s); mountRich(); mountPages(); return; }
     var inner = unbuilt ? viewUnbuilt(sites().find(function (x) { return x.id === state.site; }) || { name: "Site" }) : (views[state.inSite ? state.tab : "home"] || viewHome)();
@@ -1237,7 +1421,7 @@
   }
 
   // Shrinks a photo in the browser so uploads stay quick.
-  function prepareImage(file) {
+  function prepareImage(file, as) {
     return new Promise(function (resolve, reject) {
       var url = URL.createObjectURL(file), img = new Image();
       img.onload = function () {
@@ -1246,7 +1430,7 @@
         c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
         c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
         URL.revokeObjectURL(url);
-        var png = file.type === "image/png", dataUrl = c.toDataURL(png ? "image/png" : "image/jpeg", 0.9);
+        var png = as ? as === "png" : file.type === "image/png", dataUrl = c.toDataURL(png ? "image/png" : "image/jpeg", 0.9);
         resolve({ content: dataUrl.slice(dataUrl.indexOf(",") + 1), ext: png ? "png" : "jpg" });
       };
       img.onerror = function () { URL.revokeObjectURL(url); reject(new Error("That file could not be read as a photo.")); };
@@ -1332,14 +1516,23 @@
     else if (a === "open-site") { var sid = el.dataset.site; guard(function () { openSite(sid); }); }
     else if (a === "leave-stay") { state.leave = null; if (state.tab === "pages") edPatch(); else render(); }
     else if (a === "leave-save") { var fm = app.querySelector('form[data-form="entry"]'); state.leave = null; if (state.tab === "pages") savePages(); else if (fm) saveEntry(fm); }
-    else if (a === "leave-go") { var next = state.leave; state.leave = null; state.dirty = false; if (pgOf()) { pgOf().doc = JSON.parse(pgOf().base); pgOf().dirty = false; } if (next) next(); }
+    else if (a === "leave-go") { var next = state.leave; state.leave = null; state.dirty = false; if (pgOf()) pgReset(pgOf()); if (next) next(); }
     else if (a === "egroup") {
       state.egroup = Number(el.dataset.g);
       Array.prototype.forEach.call(app.querySelectorAll(".egroup"), function (x) { x.hidden = x.dataset.g !== el.dataset.g; });
       Array.prototype.forEach.call(app.querySelectorAll('[data-act="egroup"]'), function (x) { x.className = x.dataset.g === el.dataset.g ? "on" : ""; });
     }
     else if (a === "cmore") { state.cmore = true; filterList(); }
+    else if (a === "files-filter") { var ff = filesOf(); if (ff) { ff.filter = state.fileFilter = el.dataset.f; ff.assign = ""; ff.pick = ""; render(); } }
+    else if (a === "files-describe") { var fe = filesOf(); if (fe) { fe.open = el.dataset.name || ""; state.confirm = null; render(); var box = fe.open && app.querySelector("#fd-alt"); if (box) box.focus(); } }
+    else if (a === "files-assign") { var fg = filesOf(); if (fg) { fg.assign = el.dataset.key || ""; fg.pick = ""; render(); } }
+    else if (a === "files-pick") { var fh = filesOf(); if (fh) { fh.pick = el.dataset.name; render(); var ab = app.querySelector("#fa-alt"); if (ab && !ab.value) ab.focus(); } }
+    else if (a === "files-goto") filesGoto(el);
+    else if (a === "files-remove") filesWrite("Deleting " + el.dataset.name, { op: "remove", name: el.dataset.name }, null, "Photo deleted");
+    else if (a === "files-send") filesSend();
+    else if (a === "fadd-drop") { var dp = state.fileAdd.splice(Number(el.dataset.i), 1)[0]; if (dp) URL.revokeObjectURL(dp.url); render(); }
     else if (a === "ed-pick") pickSection(el.dataset.id, el.dataset.block);
+    else if (a === "ed-pick-pic") { var pi = pgOf(); if (pi && pi.pictures[el.dataset.key]) { pi.sel = { where: "page", id: el.dataset.id, block: null, pic: el.dataset.key }; pi.panel = ""; pi.picker = ""; edRemember(); edPatch(); pushPreview(); } }
     else if (a === "ed-panel-close") { var pq = pgOf(); if (pq) { pq.panel = ""; pq.sel = null; pq.picker = ""; edPatch(); pushPreview(""); } }
     else if (a === "ed-library") { var pl = pgOf(); if (pl) { pl.panel = "library"; edPatch(); } }
     else if (a === "ed-page") { var pp = pgOf(); if (pp) { pp.page = el.dataset.page; pp.sel = null; pp.panel = ""; edRemember(); edPatch(); pushPreview(); } }
@@ -1391,6 +1584,8 @@
     else if (a === "ed-pic-choose" || a === "ed-pic-none") {
       var pc = pgOf(), cs = pc && pgSel(pc); if (!cs) return;
       pgSet(cs.sec.settings, el.dataset.path, a === "ed-pic-none" ? "" : el.dataset.name); pc.picker = "";
+      var known = a === "ed-pic-choose" && (pc.imageMeta[el.dataset.name] || {}), altAt = el.dataset.path.replace(/[^.]+$/, "alt");
+      if (known && known.alt && !String(pgGet(cs.sec.settings, altAt) || "").trim()) pgSet(cs.sec.settings, altAt, known.alt);
       pc.what = "Edit " + (cs.kind ? cs.kind.label : cs.id); pgMark(pc); edPatch(); pushPreview();
     }
     else if (a === "ed-row-add" || a === "ed-row-del" || a === "ed-row-move") {
@@ -1402,7 +1597,7 @@
       px.what = "Edit " + (xs.kind ? xs.kind.label : xs.id); pgMark(px); edPatch(); pushPreview();
     }
     else if (a === "ed-save") savePages();
-    else if (a === "ed-discard") { var pz = pgOf(); if (pz) { pz.doc = JSON.parse(pz.base); pz.dirty = false; state.dirty = false; pz.sel = null; pz.panel = ""; pz.uploads = {}; pz.picker = ""; edPatch(); pushPreview(""); } }
+    else if (a === "ed-discard") { var pz = pgOf(); if (pz) { pgReset(pz); pz.sel = null; pz.panel = ""; pz.uploads = {}; pz.picker = ""; edPatch(); pushPreview(""); } }
     else if (a === "look") { var t = themeOf(), i = Number(el.dataset.i); if (t) { Object.assign(t.draft.colours, i < 0 ? t.values.colours : t.spec.looks[i].colours); themeUpdate(); } }
     else if (a === "theme-discard") { var t2 = themeOf(); if (t2) { t2.draft = JSON.parse(JSON.stringify(t2.values)); themeUpdate(); } }
     else if (a === "theme-publish") onLive(publishTheme, "This theme change");
@@ -1477,6 +1672,13 @@
   app.addEventListener("change", function (ev) {
     var t = ev.target, kind = t.dataset.change;
     if (t.dataset && t.dataset.upload) { uploadInto(t); return; }
+    if (kind === "files-replace") { filesReplace(t); t.value = ""; return; }
+    if (kind === "files-add") {
+      var bad = 0;
+      Array.prototype.forEach.call(t.files, function (f) { if (!/^image\/(jpeg|png)$/.test(f.type)) { bad++; return; } if (state.fileAdd.length < 12) state.fileAdd.push({ file: f, url: URL.createObjectURL(f), alt: "", caption: "" }); });
+      state.notice = bad ? { text: bad === 1 ? "One file was not a JPG or PNG photo, so it was left out." : bad + " files were not JPG or PNG photos, so they were left out.", problem: true } : null;
+      t.value = ""; render(); var first = app.querySelector('[data-input="fadd-alt"]'); if (first) first.focus(); return;
+    }
     if (t.dataset && t.dataset.pf && (t.tagName === "SELECT" || t.type === "checkbox" || t.type === "color")) { pgInput(t); return; }
     if (t.dataset.field) state.dirty = true;
     if (kind === "copy") { var cw = t.value; if (state.open && state.dirty) t.value = curCopy().kind === "live" ? "" : curCopy().id; guard(function () { workOn(cw); }); }
@@ -1515,6 +1717,12 @@
       if (sw) sw.style.background = v;
       patchIsland(); applyPreview(); return;
     }
+    if (t.dataset.input === "fadd-alt" || t.dataset.input === "fadd-cap") {
+      var fa = state.fileAdd[Number(t.dataset.i)]; if (!fa) return;
+      fa[t.dataset.input === "fadd-alt" ? "alt" : "caption"] = t.value;
+      var ok = state.fileAdd.every(function (p) { return p.alt.trim(); }), sb2 = app.querySelector('[data-act="files-send"]'); if (sb2) sb2.disabled = !ok || state.status === "saving";
+      return;
+    }
     field = { "photo-note": "note", "photo-alt": "alt", "photo-caption": "caption" }[t.dataset.input];
     if (!field) return;
     var p = state.photoFiles[Number(t.dataset.i)]; if (!p) return;
@@ -1524,10 +1732,22 @@
     if (hint) hint.style.display = ready ? "none" : "";
   });
 
+  // A photo saved on the live site appears there a minute or two later. Until then, say so.
+  app.addEventListener("error", function (ev) { var im = ev.target, box = im && im.tagName === "IMG" && im.parentNode; if (box && box.classList && (box.classList.contains("fthumb") || box.classList.contains("pictile"))) box.classList.add("waiting"); }, true);
+
   app.addEventListener("submit", async function (ev) {
     ev.preventDefault();
     var form = ev.target;
     if (form.dataset.form === "entry") { saveEntry(form); return; }
+    if (form.dataset.form === "fdesc") {
+      var dn = form.dataset.name, dalt = form.querySelector('[name="alt"]').value.trim(), dcap = form.querySelector('[name="caption"]').value.trim();
+      filesWrite("The description of " + dn, { op: "describe", name: dn, alt: dalt, caption: dcap }, null, "Description saved"); return;
+    }
+    if (form.dataset.form === "fassign") {
+      var aalt = form.querySelector('[name="alt"]').value.trim(), fs0 = filesOf(), spot = fs0 && fs0.spots.find(function (x) { return x.key === form.dataset.key; });
+      if (!aalt) { state.notice = { text: "Please describe the picture first. It is read out to people who cannot see it.", problem: true }; render(); return; }
+      filesWrite("The picture of " + (spot ? spot.label : "this place"), { op: "assign", name: form.dataset.name, spot: form.dataset.key, alt: aalt }, null, "Picture put in place"); return;
+    }
     if (form.dataset.form === "copy") { var nm = form.querySelector("#copy-name"); makeCopy(nm ? nm.value.trim() : ""); return; }
     if (form.dataset.form === "signin") {
       state.email = form.email.value.trim();
@@ -1554,7 +1774,7 @@
     { id: "sources", label: "Sources", singular: "source", canHide: false, canDelete: false, entries: [] },
   ];
   var demoData = { user: { email: "sample" }, sites: [
-    { id: "world-art-review", name: "World Art Review", domain: "worldartreview.com", live: true, artists: [], inbox: [],
+    { id: "world-art-review", name: "World Art Review", domain: "worldartreview.com", live: true, files: true, artists: [], inbox: [],
       slots: [{ id: "artist-zara-muse", group: "Artist main images", label: "Zara Muse", filled: true, waiting: false }, { id: "artist-konn-artiss", group: "Artist main images", label: "Konn Artiss", filled: false, waiting: false }, { id: "article-sample", group: "Articles", label: "[Sample] An article", filled: false, waiting: false }] },
     { id: "global-art-monitor", name: "Global Art Monitor", domain: "globalartmonitor.com", live: true, artists: [], inbox: ["slot--artist-zara-muse.jpg"],
       slots: [{ id: "artist-zara-muse", group: "Artist profile images", label: "Zara Muse", filled: false, waiting: true }, { id: "artist-konn-artiss", group: "Artist profile images", label: "Konn Artiss", filled: true, waiting: false }] },
@@ -1590,8 +1810,11 @@
   function demoStep(body, what) { var c = demoCopy(body); c.steps.unshift({ what: what, when: new Date().toISOString(), by: "sample" }); c.ahead = c.kind === "live" ? 0 : c.steps.length; c.redo = []; c.canRedo = false; }
   var DEMO_STEPS = { saveEntry: "Edit: sample entry", setHidden: "Hide or show: sample entry", deleteEntry: "Delete: sample entry", removePhoto: "Remove photo", uploadPhoto: "Add photo", saveTheme: "Theme: sample change", undo: "Undo: an earlier change" };
   // Sample pages for sample mode, generated from the server by tests/pages.mjs helpers.
-  var demoKinds = {"opening":{"label":"Opening screen","about":"The short screen shown while the site loads.","fields":[{"name":"name","label":"Site name","type":"text","hint":"Shown beside the logo."},{"name":"tagline","label":"Tagline","type":"text","hint":"Small words under the name."}],"library":"","starter":null},"header":{"label":"Menu bar","about":"The bar at the top of every page.","fields":[{"name":"name","label":"Site name","type":"text","hint":"Shown in the middle of the bar."},{"name":"links","label":"Links","type":"rows","fields":[{"name":0,"label":"Words","type":"text","hint":"What visitors see."},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists. Or paste a full web address."}]}],"library":"","starter":null,"blocks":{"field":"links","label":"Link","add":"Add a link"}},"footer":{"label":"Newsletter and footer","about":"The sign-up band and the links at the bottom of every page.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"button","label":"Button words","type":"text","hint":"The button opens the sign-up form."},{"name":"blurb","label":"Short description of the site","type":"long","hint":"Shown under the name, at the bottom left."},{"name":"columns","label":"Link columns","type":"rows","fields":[{"name":"title","label":"Column title","type":"text","hint":"A short word or two, such as Read."},{"name":"links","label":"Links in this column","type":"rows","fields":[{"name":0,"label":"Words","type":"text","hint":"What visitors see."},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists. Or paste a full web address."}]}]},{"name":"copyright","label":"Copyright line","type":"text"},{"name":"elsewhere","label":"Links in the bottom bar","type":"rows","fields":[{"name":0,"label":"Words","type":"text","hint":"What visitors see."},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists. Or paste a full web address."}]}],"library":"","starter":null,"blocks":{"field":"columns","label":"Column","add":"Add a column"}},"hero":{"label":"Opening banner","about":"The large green band at the top of the home page.","fields":[{"name":"headline","label":"Headline","type":"rows","hint":"Each line of the large headline. Italic lines are set in the slanted style.","fields":[{"name":"t","label":"Words","type":"text"},{"name":"ital","label":"In italics","type":"yesno"}]},{"name":"tagline","label":"Tagline","type":"rows","hint":"The smaller words at the bottom left of the banner.","fields":[{"name":"t","label":"Words","type":"text"},{"name":"ital","label":"In italics","type":"yesno"}]},{"name":"artist","label":"Whose work is shown","type":"artists","one":true,"hint":"Leave empty for the first published artist."},{"name":"rule_label","label":"Rule box, small line","type":"text","hint":"The box at the bottom right of the banner."},{"name":"rule_text","label":"Rule box, text","type":"text"},{"name":"rule_link","label":"Rule box, link words","type":"text","hint":"The link opens the page about sources."},{"name":"latest","label":"Pieces in the Latest box","type":"lines","hint":"Article names as they appear in web addresses, for example zara-muse-profile."}],"library":"","starter":null},"featured":{"label":"Featured artists","about":"The artist carousel under the banner.","fields":[{"name":"badge","label":"Badge words","type":"text","hint":"Under the number in the small square."},{"name":"artists","label":"Which artists","type":"artists","hint":"Tick the artists to show, in the order ticked. Leave all empty to show every published artist."}],"library":"","starter":null},"section-list":{"label":"Read by section","about":"A list of the parts of the site, each with a count.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"rows","label":"Rows","type":"rows","fields":[{"name":"n","label":"Number","type":"text","hint":"Shown small on the left, such as 01."},{"name":"name","label":"Name","type":"text"},{"name":"desc","label":"Description","type":"text","hint":"One short sentence."},{"name":"href","label":"Address","type":"text","hint":"Where the row leads. A page on this site starts with #."},{"name":"count","label":"Count shown","hint":"The number on the right is counted for you.","type":"choice","options":[["artists","Artists"],["reviews","Reviews"],["explained","Art explained pieces"],["library","Library guides"],["articles","All articles"],["sources","Sources"]]},{"name":"unit","label":"Count word","type":"text"}]}],"library":"","starter":null,"blocks":{"field":"rows","label":"Row","add":"Add a row"}},"explained":{"label":"Art, explained","about":"Two Art Explained articles beside a short introduction.","fields":[{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"text","label":"Text","type":"long","plain":true,"hint":"One or two sentences."},{"name":"count","label":"How many articles","type":"number","hint":"The newest Art Explained articles are shown."}],"library":"","starter":null},"numbers":{"label":"Numbers band","about":"Four figures counted from the site.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"labels","label":"The four labels","type":"lines","hint":"One label per line. The numbers are counted for you."}],"library":"Figures from the site, in a band","starter":{"eyebrow":"The review so far","heading":["Research you","can check"],"labels":["Artists documented","Articles and reviews","Sources cited","Facts with a numbered source"]}},"method":{"label":"How we research","about":"Three cards explaining the method.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"cards","label":"Cards","type":"rows","fields":[{"name":"n","label":"Number","type":"text","hint":"Shown large at the top of the card."},{"name":"title","label":"Title","type":"text","hint":"Shown in bold at the foot of the card."},{"name":"text","label":"Text","type":"long","hint":"Two or three short sentences read best."},{"name":"sub","label":"Small line","type":"text","hint":"Grey text under the title. Leave empty to hide."}]}],"library":"Three cards in a row","starter":{"eyebrow":"How we research","heading":["The work first,","then the story"],"cards":[{"n":"1","text":"Write here.","title":"A title","sub":"A small line"}]},"blocks":{"field":"cards","label":"Card","add":"Add a card"}},"text":{"label":"Text","about":"A heading and a few paragraphs.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"body","label":"Text","type":"long","hint":"Type as you would in a document."},{"name":"align","label":"Placing","type":"choice","group":"Look","options":[["","Left"],["centre","Centred"]]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"A heading and paragraphs","starter":{"eyebrow":"","heading":["A new heading"],"body":"<p>Write here.</p>","align":"","bg":"paper","fg":""}},"text-picture":{"label":"Text with picture","about":"Words on one side, a photo on the other.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"body","label":"Text","type":"long"},{"name":"image","label":"Picture","type":"image","alt":"alt"},{"name":"alt","label":"Describe the picture","type":"text","hint":"For people who cannot see it. Needed before you save."},{"name":"caption","label":"Caption","type":"text","hint":"Small text under the picture. Leave empty to hide."},{"name":"side","group":"Look","label":"Picture on the","type":"choice","options":[["right","Right"],["left","Left"]]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"Words beside a photo","starter":{"eyebrow":"","heading":["A new heading"],"body":"<p>Write here.</p>","image":"","alt":"","caption":"","side":"right","bg":"paper","fg":""}},"picture":{"label":"Picture","about":"One large photo with a caption.","fields":[{"name":"image","label":"Picture","type":"image","alt":"alt"},{"name":"alt","label":"Describe the picture","type":"text","hint":"For people who cannot see it. Needed before you save."},{"name":"caption","label":"Caption","type":"text","hint":"Small text under the picture. Leave empty to hide."},{"name":"size","group":"Look","label":"Width","type":"choice","options":[["","Full width"],["contained","Contained"]]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."}],"library":"One large photo, with a caption","starter":{"image":"","alt":"","caption":"","size":"","bg":"paper"}},"quote":{"label":"Quote","about":"One line, shown large.","fields":[{"name":"text","label":"The quote","type":"lines","hint":"Each line of the quote on its own line."},{"name":"who","label":"Who said it","type":"text","hint":"Leave empty to hide."},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"A short line that stands out","starter":{"text":["A line worth remembering."],"who":"","bg":"green","fg":""}},"articles":{"label":"Latest articles","about":"Article cards, filled in from Content.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"section","label":"Which articles","type":"choice","options":[["all","All"],["reviews","Reviews"],["explained","Art explained"],["library","Collector's library"],["features","Artist portfolios"]]},{"name":"count","label":"How many","type":"number"},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"Fills itself from Content","starter":{"eyebrow":"Latest","heading":["Recent pieces"],"section":"all","count":3,"bg":"paper","fg":""}},"faq":{"label":"Questions and answers","about":"Questions that open to show their answer.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"items","label":"Questions","type":"rows","fields":[{"name":"q","label":"Question","type":"text","hint":"Keep it short. Visitors click it to open the answer."},{"name":"a","label":"Answer","type":"long"}]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"A list that opens and closes","starter":{"eyebrow":"","heading":["Questions"],"items":[{"q":"A question?","a":"<p>The answer.</p>"}],"bg":"paper","fg":""},"blocks":{"field":"items","label":"Question","add":"Add a question"}},"button":{"label":"Button or link","about":"A heading, a line and one button.","fields":[{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"text","label":"Text","type":"text"},{"name":"label","label":"Button words","type":"text"},{"name":"href","label":"Where it goes","type":"text","hint":"A page on this site starts with #, or a full web address."},{"name":"style","label":"Style","type":"choice","group":"Look","options":[["green","Green"],["paper","Paper"],["outline","Outline"]]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"Send visitors somewhere","starter":{"heading":["Find out more"],"text":"","label":"Read on","href":"#artists","style":"green","bg":"paper","fg":""}}};
+  var demoKinds = {"opening":{"label":"Opening screen","about":"The short screen shown while the site loads.","fields":[{"name":"name","label":"Site name","type":"text","hint":"Shown beside the logo."},{"name":"tagline","label":"Tagline","type":"text","hint":"Small words under the name."}],"library":"","starter":null},"header":{"label":"Menu bar","about":"The bar at the top of every page.","fields":[{"name":"name","label":"Site name","type":"text","hint":"Shown in the middle of the bar."},{"name":"links","label":"Links","type":"rows","fields":[{"name":0,"label":"Words","type":"text","hint":"What visitors see."},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists. Or paste a full web address."}]}],"library":"","starter":null,"blocks":{"field":"links","label":"Link","add":"Add a link"}},"footer":{"label":"Newsletter and footer","about":"The sign-up band and the links at the bottom of every page.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"button","label":"Button words","type":"text","hint":"The button opens the sign-up form."},{"name":"blurb","label":"Short description of the site","type":"long","hint":"Shown under the name, at the bottom left."},{"name":"columns","label":"Link columns","type":"rows","fields":[{"name":"title","label":"Column title","type":"text","hint":"A short word or two, such as Read."},{"name":"links","label":"Links in this column","type":"rows","fields":[{"name":0,"label":"Words","type":"text","hint":"What visitors see."},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists. Or paste a full web address."}]}]},{"name":"copyright","label":"Copyright line","type":"text"},{"name":"elsewhere","label":"Links in the bottom bar","type":"rows","fields":[{"name":0,"label":"Words","type":"text","hint":"What visitors see."},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists. Or paste a full web address."}]}],"library":"","starter":null,"blocks":{"field":"columns","label":"Column","add":"Add a column"}},"hero":{"label":"Opening banner","about":"The large green band at the top of the home page.","fields":[{"name":"headline","label":"Headline","type":"rows","hint":"Each line of the large headline. Italic lines are set in the slanted style.","fields":[{"name":"t","label":"Words","type":"text"},{"name":"ital","label":"In italics","type":"yesno"}]},{"name":"tagline","label":"Tagline","type":"rows","hint":"The smaller words at the bottom left of the banner.","fields":[{"name":"t","label":"Words","type":"text"},{"name":"ital","label":"In italics","type":"yesno"}]},{"name":"image","label":"Main picture","type":"image","alt":"alt","hint":"Leave empty to show the picture of the artist chosen below. A picture here is used in this banner only."},{"name":"alt","label":"Describe the picture","type":"text","hint":"Read aloud to people who cannot see it."},{"name":"credit","label":"Credit under the picture","type":"text","hint":"For example the title of the work and the photographer. Leave empty for none."},{"name":"artist","label":"Whose work is shown","type":"artists","one":true,"hint":"Leave empty for the first published artist. Their name and details sit beside the picture."},{"name":"rule_label","label":"Rule box, small line","type":"text","hint":"The box at the bottom right of the banner."},{"name":"rule_text","label":"Rule box, text","type":"text"},{"name":"rule_link","label":"Rule box, link words","type":"text","hint":"The link opens the page about sources."},{"name":"latest","label":"Pieces in the Latest box","type":"lines","hint":"Article names as they appear in web addresses, for example zara-muse-profile."}],"library":"","starter":null},"featured":{"label":"Featured artists","about":"The artist carousel under the banner.","fields":[{"name":"badge","label":"Badge words","type":"text","hint":"Under the number in the small square."},{"name":"artists","label":"Which artists","type":"artists","hint":"Tick the artists to show, in the order ticked. Leave all empty to show every published artist."}],"library":"","starter":null},"section-list":{"label":"Read by section","about":"A list of the parts of the site, each with a count.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"rows","label":"Rows","type":"rows","fields":[{"name":"n","label":"Number","type":"text","hint":"Shown small on the left, such as 01."},{"name":"name","label":"Name","type":"text"},{"name":"desc","label":"Description","type":"text","hint":"One short sentence."},{"name":"href","label":"Address","type":"text","hint":"Where the row leads. A page on this site starts with #."},{"name":"count","label":"Count shown","hint":"The number on the right is counted for you.","type":"choice","options":[["artists","Artists"],["reviews","Reviews"],["explained","Art explained pieces"],["library","Library guides"],["articles","All articles"],["sources","Sources"]]},{"name":"unit","label":"Count word","type":"text"}]}],"library":"","starter":null,"blocks":{"field":"rows","label":"Row","add":"Add a row"}},"explained":{"label":"Art, explained","about":"Two Art Explained articles beside a short introduction.","fields":[{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"text","label":"Text","type":"long","plain":true,"hint":"One or two sentences."},{"name":"count","label":"How many articles","type":"number","hint":"The newest Art Explained articles are shown."}],"library":"","starter":null},"numbers":{"label":"Numbers band","about":"Four figures counted from the site.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"labels","label":"The four labels","type":"lines","hint":"One label per line. The numbers are counted for you."}],"library":"Figures from the site, in a band","starter":{"eyebrow":"The review so far","heading":["Research you","can check"],"labels":["Artists documented","Articles and reviews","Sources cited","Facts with a numbered source"]}},"method":{"label":"How we research","about":"Three cards explaining the method.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"cards","label":"Cards","type":"rows","fields":[{"name":"n","label":"Number","type":"text","hint":"Shown large at the top of the card."},{"name":"title","label":"Title","type":"text","hint":"Shown in bold at the foot of the card."},{"name":"text","label":"Text","type":"long","hint":"Two or three short sentences read best."},{"name":"sub","label":"Small line","type":"text","hint":"Grey text under the title. Leave empty to hide."}]}],"library":"Three cards in a row","starter":{"eyebrow":"How we research","heading":["The work first,","then the story"],"cards":[{"n":"1","text":"Write here.","title":"A title","sub":"A small line"}]},"blocks":{"field":"cards","label":"Card","add":"Add a card"}},"text":{"label":"Text","about":"A heading and a few paragraphs.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"body","label":"Text","type":"long","hint":"Type as you would in a document."},{"name":"align","label":"Placing","type":"choice","group":"Look","options":[["","Left"],["centre","Centred"]]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"A heading and paragraphs","starter":{"eyebrow":"","heading":["A new heading"],"body":"<p>Write here.</p>","align":"","bg":"paper","fg":""}},"text-picture":{"label":"Text with picture","about":"Words on one side, a photo on the other.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"body","label":"Text","type":"long"},{"name":"image","label":"Picture","type":"image","alt":"alt"},{"name":"alt","label":"Describe the picture","type":"text","hint":"For people who cannot see it. Needed before you save."},{"name":"caption","label":"Caption","type":"text","hint":"Small text under the picture. Leave empty to hide."},{"name":"side","group":"Look","label":"Picture on the","type":"choice","options":[["right","Right"],["left","Left"]]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"Words beside a photo","starter":{"eyebrow":"","heading":["A new heading"],"body":"<p>Write here.</p>","image":"","alt":"","caption":"","side":"right","bg":"paper","fg":""}},"picture":{"label":"Picture","about":"One large photo with a caption.","fields":[{"name":"image","label":"Picture","type":"image","alt":"alt"},{"name":"alt","label":"Describe the picture","type":"text","hint":"For people who cannot see it. Needed before you save."},{"name":"caption","label":"Caption","type":"text","hint":"Small text under the picture. Leave empty to hide."},{"name":"size","group":"Look","label":"Width","type":"choice","options":[["","Full width"],["contained","Contained"]]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."}],"library":"One large photo, with a caption","starter":{"image":"","alt":"","caption":"","size":"","bg":"paper"}},"quote":{"label":"Quote","about":"One line, shown large.","fields":[{"name":"text","label":"The quote","type":"lines","hint":"Each line of the quote on its own line."},{"name":"who","label":"Who said it","type":"text","hint":"Leave empty to hide."},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"A short line that stands out","starter":{"text":["A line worth remembering."],"who":"","bg":"green","fg":""}},"articles":{"label":"Latest articles","about":"Article cards, filled in from Content.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"section","label":"Which articles","type":"choice","options":[["all","All"],["reviews","Reviews"],["explained","Art explained"],["library","Collector's library"],["features","Artist portfolios"]]},{"name":"count","label":"How many","type":"number"},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"Fills itself from Content","starter":{"eyebrow":"Latest","heading":["Recent pieces"],"section":"all","count":3,"bg":"paper","fg":""}},"faq":{"label":"Questions and answers","about":"Questions that open to show their answer.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"items","label":"Questions","type":"rows","fields":[{"name":"q","label":"Question","type":"text","hint":"Keep it short. Visitors click it to open the answer."},{"name":"a","label":"Answer","type":"long"}]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"A list that opens and closes","starter":{"eyebrow":"","heading":["Questions"],"items":[{"q":"A question?","a":"<p>The answer.</p>"}],"bg":"paper","fg":""},"blocks":{"field":"items","label":"Question","add":"Add a question"}},"button":{"label":"Button or link","about":"A heading, a line and one button.","fields":[{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"text","label":"Text","type":"text"},{"name":"label","label":"Button words","type":"text"},{"name":"href","label":"Where it goes","type":"text","hint":"A page on this site starts with #, or a full web address."},{"name":"style","label":"Style","type":"choice","group":"Look","options":[["green","Green"],["paper","Paper"],["outline","Outline"]]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"Send visitors somewhere","starter":{"heading":["Find out more"],"text":"","label":"Read on","href":"#artists","style":"green","bg":"paper","fg":""}}};
   var demoPages = {"_how_to_edit":"Each page is a list of sections shown top to bottom. 'visible' hides a section without deleting it. 'settings' holds the words and choices for that section. Edit this from Artiscope Digital Home.","shared":{"opening":{"type":"opening","visible":true,"settings":{"name":"World Art Review","tagline":"Discover Artists. Understand Art."}},"header":{"type":"header","visible":true,"settings":{"links":[["Artists A to Z","#artists"],["Reviews","#reviews"],["Art Explained","#explained"]],"name":"World Art Review"}},"footer":{"type":"footer","visible":true,"settings":{"eyebrow":"Get the review","heading":["New portfolios,","once a month."],"button":"Subscribe","blurb":"Researched artist portfolios, reviews and collecting guides. Discover Artists. Understand Art.","columns":[{"title":"Read","links":[["Artists A to Z","#artists"],["Reviews","#reviews"],["Art Explained","#explained"],["Exhibition Guides","#guides"]]},{"title":"Collect","links":[["Collector's Library","#library"],["Original or print?","#a-original-vs-print"],["Provenance","#a-provenance-certificates"],["Research an artist","#a-research-emerging-artist"]]},{"title":"About","links":[["How we research","#home","method"],["Sources","#standards"],["Suggest an artist","mailto:info@grovegallery.com?subject=Suggest%20an%20artist%20for%20World%20Art%20Review"],["Contact","mailto:info@grovegallery.com"]]}],"copyright":"© 2026 World Art Review. All rights reserved.","elsewhere":[["Instagram","#"],["X","#"],["LinkedIn","#"],["Privacy","#standards"],["Terms","#standards"]]}}},"pages":{"home":{"title":"Home","sections":[{"id":"hero","type":"hero","visible":true,"settings":{"headline":[{"t":"Discover"},{"t":"Artists.","ital":true}],"tagline":[{"t":"Understand"},{"t":"Art.","ital":true}],"artist":"","rule_label":"Our rule","rule_text":"Every fact carries a numbered source. Where only the gallery or the artist says so, we say so.","rule_link":"How we work","latest":["zara-muse-profile","konn-artiss-profile","review-anti-frieze"]}},{"id":"featured","type":"featured","visible":true,"settings":{"badge":"Artist in focus","artists":[]}},{"id":"sections","type":"section-list","visible":true,"settings":{"eyebrow":"What you will find here","heading":["Read by","section"],"rows":[{"n":"01","name":"Artists A to Z","href":"#artists","desc":"Researched portfolios: biography, style, career and selected works.","count":"artists","unit":"portfolio"},{"n":"02","name":"Reviews","href":"#reviews","desc":"Close readings of single works, shows and interventions.","count":"reviews","unit":"review"},{"n":"03","name":"Art Explained","href":"#explained","desc":"Techniques, materials and ideas, in plain language.","count":"explained","unit":"guide"},{"n":"04","name":"Collector's Library","href":"#library","desc":"How to research an artist, read a certificate and tell an original from a print.","count":"library","unit":"guide"}]}},{"id":"explainedHome","type":"explained","visible":true,"settings":{"heading":["How to","look at","a painting"],"text":"Short, sourced explainers on the techniques and materials behind the work, so you know what you are looking at before you look it up.","count":2}},{"id":"numbers","type":"numbers","visible":true,"settings":{"eyebrow":"The review so far","heading":["Research you","can check"],"labels":["Artists documented","Articles and reviews","Sources cited","Facts with a numbered source"]}},{"id":"method","type":"method","visible":true,"settings":{"eyebrow":"How we research","heading":["The work first,","then the story"],"cards":[{"n":"1","text":"We start with the work itself: what it is made of, how it was made and where it has been shown.","title":"Start with the work","sub":"Seen, measured, described"},{"n":"2","text":"Every fact in a portfolio carries a numbered source you can open and read for yourself.","title":"Every fact, sourced","sub":"Press, auction records, gallery files"},{"n":"3","text":"Claims that come only from publicity are labelled <span class=\"reported\">Reported</span> so you can weigh them.","title":"Publicity, flagged","sub":"Kept apart from checked fact"}]}}]}}};
+  var demoFiles = ["zara-muse-portrait.jpg", "article-palette-knife-painting.jpg"];
+  var demoMeta = { "zara-muse-portrait.jpg": { alt: "Zara Muse's portrait, painted with a palette knife in warm reds and gold", caption: "" } };
+  var demoSpots = [{"key":"artist:zara-muse","kind":"artist","label":"Zara Muse","group":"Artists","also":"Zara Muse's portfolio and the home page","image":"zara-muse-portrait.jpg","alt":"A painting in thick palette knife strokes of a woman seen from behind, with a pale blonde bob and bare shoulders, against a deep blue background.","credit":"Image: painting by Zara Muse. Supplied by Grove Gallery","published":true,"slot":"artist-zara-muse","hasCredit":true},{"key":"work:zara-muse:0","kind":"work","label":"Malala Yousafzai","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-malala-yousafzai","hasCredit":false},{"key":"work:zara-muse:1","kind":"work","label":"Bella Dama del Sol","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-bella-dama-del-sol","hasCredit":false},{"key":"work:zara-muse:2","kind":"work","label":"Delicada Belleza","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-delicada-belleza","hasCredit":false},{"key":"work:zara-muse:3","kind":"work","label":"Ecos de Azul","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-ecos-de-azul","hasCredit":false},{"key":"work:zara-muse:4","kind":"work","label":"Gracia de Azafra","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-gracia-de-azafra","hasCredit":false},{"key":"work:zara-muse:5","kind":"work","label":"Oro Roja","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-oro-roja","hasCredit":false},{"key":"work:zara-muse:6","kind":"work","label":"Viento del Sur","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-viento-del-sur","hasCredit":false},{"key":"work:zara-muse:7","kind":"work","label":"A Moment in Amber","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-a-moment-in-amber","hasCredit":false},{"key":"artist:konn-artiss","kind":"artist","label":"Konn Artiss","group":"Artists","also":"Konn Artiss's portfolio and the home page","image":"","alt":"","credit":"Image: ANTI-FRIEZE, London, October 2025. Courtesy Konn Artiss","published":true,"slot":"artist-konn-artiss","hasCredit":true},{"key":"work:konn-artiss:0","kind":"work","label":"The Washington Ghost","group":"Artworks: Konn Artiss","also":"Konn Artiss's portfolio","image":"","alt":"","credit":"","slot":"work-konn-artiss-the-washington-ghost","hasCredit":false},{"key":"work:konn-artiss:1","kind":"work","label":"Venice canal effigy","group":"Artworks: Konn Artiss","also":"Konn Artiss's portfolio","image":"","alt":"","credit":"","slot":"work-konn-artiss-venice-canal-effigy","hasCredit":false},{"key":"work:konn-artiss:2","kind":"work","label":"ANTI-FRIEZE","group":"Artworks: Konn Artiss","also":"Konn Artiss's portfolio","image":"","alt":"","credit":"","slot":"work-konn-artiss-anti-frieze","hasCredit":false},{"key":"work:konn-artiss:3","kind":"work","label":"Frieze week ice blocks","group":"Artworks: Konn Artiss","also":"Konn Artiss's portfolio","image":"","alt":"","credit":"","slot":"work-konn-artiss-frieze-week-ice-blocks","hasCredit":false},{"key":"artist:zen-xander","kind":"artist","label":"Zen Xander","group":"Artists","also":"Zen Xander's portfolio and the home page","image":"","alt":"","credit":"","published":false,"slot":"artist-zen-xander","hasCredit":true},{"key":"article:zara-muse-profile","kind":"article","label":"Zara Muse: biography, artistic style and career","group":"Articles: Features","section":"features","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: Zara Muse portrait, detail. Supplied by Grove Gallery","slot":"article-zara-muse-profile","hasCredit":true},{"key":"article:konn-artiss-profile","kind":"article","label":"Konn Artiss: artist profile and selected works","group":"Articles: Features","section":"features","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: ANTI-FRIEZE, London, 2025. Courtesy Konn Artiss","slot":"article-konn-artiss-profile","hasCredit":true},{"key":"article:palette-knife-painting","kind":"article","label":"Understanding palette-knife painting","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"article-palette-knife-painting.jpg","alt":"Looking close on the strokes","credit":"Image: palette-knife detail.","slot":"article-palette-knife-painting","hasCredit":true},{"key":"article:texture-in-portraiture","kind":"article","label":"The role of texture in contemporary portraiture","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: portrait surface, raking light. [Image to supply]","slot":"article-texture-in-portraiture","hasCredit":true},{"key":"article:how-to-look-at-a-painting","kind":"article","label":"How to look at a painting in ten minutes","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: a visitor in front of a painting. [Image to supply]","slot":"article-how-to-look-at-a-painting","hasCredit":true},{"key":"article:oil-and-acrylic","kind":"article","label":"Oil or acrylic: what the difference means for the person who owns it","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: tubes of oil and acrylic paint. [Image to supply]","slot":"article-oil-and-acrylic","hasCredit":true},{"key":"article:glossary-of-paint","kind":"article","label":"A short glossary of paint, from impasto to sgraffito","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"","slot":"article-glossary-of-paint","hasCredit":true},{"key":"article:what-is-an-intervention","kind":"article","label":"What is an art intervention?","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: ANTI-FRIEZE, London, 2025. Courtesy Konn Artiss","slot":"article-what-is-an-intervention","hasCredit":true},{"key":"article:how-prints-are-made","kind":"article","label":"How prints are made: screenprint, etching, lithograph and giclée","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: a screenprinting squeegee. [Image to supply]","slot":"article-how-prints-are-made","hasCredit":true},{"key":"article:research-emerging-artist","kind":"article","label":"How to research an emerging artist","group":"Articles: Collecting library","section":"library","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"","slot":"article-research-emerging-artist","hasCredit":true},{"key":"article:original-vs-print","kind":"article","label":"Original, limited edition or open print?","group":"Articles: Collecting library","section":"library","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"","slot":"article-original-vs-print","hasCredit":true},{"key":"article:provenance-certificates","kind":"article","label":"Provenance and certificates, explained","group":"Articles: Collecting library","section":"library","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"","slot":"article-provenance-certificates","hasCredit":true},{"key":"article:mixed-media","kind":"article","label":"Mixed-media art: materials, meaning and conservation","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: ANTI-FRIEZE, 2025. Courtesy Konn Artiss","slot":"article-mixed-media","hasCredit":true},{"key":"article:review-anti-frieze","kind":"article","label":"ANTI-FRIEZE: what melts when the art market is put on ice","group":"Articles: Reviews","section":"reviews","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: ANTI-FRIEZE, London, October 2025. Courtesy Konn Artiss","slot":"article-review-anti-frieze","hasCredit":true},{"key":"article:review-washington-ghost","kind":"article","label":"The Washington Ghost: satire as a printed newspaper","group":"Articles: Reviews","section":"reviews","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: The Washington Ghost, Venice, 2025. [Image to supply]","slot":"article-review-washington-ghost","hasCredit":true},{"key":"article:compare-muse-artiss","kind":"article","label":"Zara Muse and Konn Artiss: two ways to talk about value","group":"Articles: Reviews","section":"reviews","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"","slot":"article-compare-muse-artiss","hasCredit":true}];
   var demoSummaries = { "shared:opening": "World Art Review", "shared:header": "3 links", "shared:footer": "3 columns", "home:hero": "Discover Artists.", "home:featured": "All published", "home:sections": "4 rows", "home:explainedHome": "2 articles", "home:numbers": "Four figures", "home:method": "3 cards" };
   function demoApi(body) {
     return new Promise(function (resolve, reject) {
@@ -1605,8 +1828,33 @@
         }
         else if (a === "content") resolve({ collections: JSON.parse(JSON.stringify(demoContent)) });
         else if (a === "history") resolve({ changes: demoHistory });
-        else if (a === "pages") resolve({ pages: JSON.parse(JSON.stringify(demoPages)), kinds: demoKinds, summaries: demoSummaries, images: ["zara-muse-portrait.jpg"], imageBase: (params.get("preview") || "https://worldartreview.com/") + "images/", artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }], preview: params.get("preview") || "https://worldartreview.com/" });
-        else if (a === "savePages") { demoPages = JSON.parse(JSON.stringify(body.pages)); resolve({ ok: true }); }
+        else if (a === "pages") resolve({ pictures: JSON.parse(JSON.stringify(demoSpots.filter(function (x) { return x.kind !== "work"; }))), imageMeta: JSON.parse(JSON.stringify(demoMeta)), pages: JSON.parse(JSON.stringify(demoPages)), kinds: demoKinds, summaries: demoSummaries, images: demoFiles.slice(), imageBase: (params.get("preview") || "https://worldartreview.com/") + "images/", artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }], preview: params.get("preview") || "https://worldartreview.com/" });
+        else if (a === "savePages") {
+          var named = {}; (body.uploads || []).forEach(function (u) { var n = String(u.name || "photo").toLowerCase().replace(/\.[a-z]+$/, "").replace(/[^a-z0-9]+/g, "-") + "." + u.ext; named[u.key] = n; if (demoFiles.indexOf(n) < 0) demoFiles.push(n); });
+          var fix = function (v) { return JSON.parse(JSON.stringify(v), function (k, x) { return typeof x === "string" && named[x] ? named[x] : x; }); };
+          demoPages = fix(body.pages);
+          var pics = fix(body.pictures || {}); Object.keys(pics).forEach(function (k) { var sp = demoSpots.find(function (x) { return x.key === k; }); if (sp) Object.assign(sp, pics[k]); });
+          var keepAlt = function (x) { if (Array.isArray(x)) return x.forEach(keepAlt); if (!x || typeof x !== "object") return; Object.keys(x).forEach(function (k) { if (k !== "alt" && typeof x[k] === "string" && Object.keys(named).some(function (u) { return named[u] === x[k]; }) && x.alt && !demoMeta[x[k]]) demoMeta[x[k]] = { alt: x.alt, caption: "" }; keepAlt(x[k]); }); };
+          keepAlt(demoPages); keepAlt(pics);
+          resolve({ ok: true, photos: named });
+        }
+        else if (a === "files") {
+          var usage = function (n) {
+            var out = [], has = function (v) { return Array.isArray(v) ? v.some(has) : v && typeof v === "object" ? Object.keys(v).some(function (k) { return has(v[k]); }) : v === n; };
+            (demoPages.pages.home.sections || []).forEach(function (sec) { if (has(sec.settings)) out.push({ label: "Home page: " + ((demoKinds[sec.type] || {}).label || sec.type), page: "home", where: "page", id: sec.id }); });
+            demoSpots.forEach(function (sp) { if (sp.image === n) out.push({ label: { artist: "Artist: ", work: "Artwork: ", article: "Article: " }[sp.kind] + sp.label, spot: sp.key }); });
+            return out;
+          };
+          resolve({ files: demoFiles.map(function (n) { return { name: n, size: 180000, alt: (demoMeta[n] || {}).alt || "", caption: (demoMeta[n] || {}).caption || "", used: usage(n) }; }), spots: JSON.parse(JSON.stringify(demoSpots)), imageBase: (params.get("preview") || "https://worldartreview.com/") + "images/" });
+        }
+        else if (a === "saveFiles") {
+          if (body.op === "add") { var base0 = String(body.fileName || "photo").toLowerCase().replace(/\.[a-z]+$/, "").replace(/[^a-z0-9]+/g, "-"), nn = base0 + "." + body.ext, nk = 2; while (demoFiles.indexOf(nn) >= 0) nn = base0 + "-" + (nk++) + "." + body.ext; demoFiles.push(nn); demoMeta[nn] = { alt: body.alt || "", caption: body.caption || "" }; demoStep(body, "Add photo: " + nn); }
+          else if (body.op === "describe") { demoMeta[body.name] = { alt: body.alt, caption: body.caption }; demoStep(body, "Photo description: " + body.name); }
+          else if (body.op === "replace") demoStep(body, "Replace photo: " + body.name);
+          else if (body.op === "remove") { demoFiles = demoFiles.filter(function (n) { return n !== body.name; }); demoStep(body, "Remove photo: " + body.name); }
+          else if (body.op === "assign") { var sq = demoSpots.find(function (x) { return x.key === body.spot; }); if (sq) { sq.image = body.name; sq.alt = body.alt; } demoStep(body, "Edit picture: " + (sq ? sq.label : "")); }
+          resolve({ ok: true });
+        }
         else if (a === "theme") { if (params.has("preview")) demoTheme.spec.url = params.get("preview"); resolve(JSON.parse(JSON.stringify(demoTheme))); }
         else if (a === "saveTheme") { demoTheme.values = JSON.parse(JSON.stringify(body.values)); resolve({ ok: true, values: body.values }); }
         else if (a === "uploadPhoto") resolve({ ok: true, name: (body.slot ? "slot--" + body.slot : "note--" + String(body.description).toLowerCase().replace(/[^a-z0-9]+/g, "-")) + "." + body.ext });

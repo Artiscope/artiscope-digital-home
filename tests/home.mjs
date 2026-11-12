@@ -98,7 +98,10 @@ const WAR_SECTIONS = {
   hero: { label: "Opening banner", about: "The large green band at the top of the home page.", summary: (st) => (st.headline || []).map((x) => x.t).join(" "), fields: [
     { name: "headline", label: "Headline", type: "rows", hint: "Each line of the large headline. Italic lines are set in the slanted style.", fields: [{ name: "t", label: "Words", type: "text" }, { name: "ital", label: "In italics", type: "yesno" }] },
     { name: "tagline", label: "Tagline", type: "rows", hint: "The smaller words at the bottom left of the banner.", fields: [{ name: "t", label: "Words", type: "text" }, { name: "ital", label: "In italics", type: "yesno" }] },
-    { name: "artist", label: "Whose work is shown", type: "artists", one: true, hint: "Leave empty for the first published artist." },
+    { name: "image", label: "Main picture", type: "image", alt: "alt", hint: "Leave empty to show the picture of the artist chosen below. A picture here is used in this banner only." },
+    { name: "alt", label: "Describe the picture", type: "text", hint: "Read aloud to people who cannot see it." },
+    { name: "credit", label: "Credit under the picture", type: "text", hint: "For example the title of the work and the photographer. Leave empty for none." },
+    { name: "artist", label: "Whose work is shown", type: "artists", one: true, hint: "Leave empty for the first published artist. Their name and details sit beside the picture." },
     { name: "rule_label", label: "Rule box, small line", type: "text", hint: "The box at the bottom right of the banner." }, { name: "rule_text", label: "Rule box, text", type: "text" }, { name: "rule_link", label: "Rule box, link words", type: "text", hint: "The link opens the page about sources." },
     { name: "latest", label: "Pieces in the Latest box", type: "lines", hint: "Article names as they appear in web addresses, for example zara-muse-profile." },
   ] },
@@ -181,6 +184,79 @@ export function photoFileName(wanted, ext, taken) {
   return name;
 }
 
+// ----- pictures kept with the content: artists, their artworks and articles -----
+// These are shared: an artist's picture shows on the home page and on the portfolio alike.
+const PIC_FILE = /^[A-Za-z0-9._-]{1,120}$/;
+function picName(v) { const m = /^images\/([A-Za-z0-9._-]{1,120})$/.exec(String(v || "")); return m ? m[1] : ""; }
+function slugOf(t) { return String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
+const ARTICLE_GROUP = { features: "Articles: Features", explained: "Articles: Art explained", library: "Articles: Collecting library", reviews: "Articles: Reviews" };
+export function pictureSpots(data) {
+  const out = [];
+  for (const a of (data && data.artists) || []) {
+    if (!a || typeof a !== "object") continue;
+    out.push({ key: "artist:" + a.slug, kind: "artist", label: a.name, group: "Artists", also: a.name + "'s portfolio and the home page", image: picName(a.image), alt: a.alt || "", credit: a.heroCredit || "", published: !!a.published, slot: "artist-" + a.slug, ref: a, creditKey: "heroCredit" });
+    (a.works || []).forEach((w, i) => {
+      if (!w || typeof w !== "object") return;
+      out.push({ key: "work:" + a.slug + ":" + i, kind: "work", label: w.title || "Work " + (i + 1) + " by " + a.name, group: "Artworks: " + a.name, also: a.name + "'s portfolio", image: picName(w.image), alt: w.alt || "", credit: "", slot: w.title ? "work-" + a.slug + "-" + slugOf(w.title) : "", ref: w, creditKey: null });
+    });
+  }
+  for (const x of (data && data.articles) || []) {
+    if (!x || typeof x !== "object") continue;
+    out.push({ key: "article:" + x.slug, kind: "article", label: x.title, group: ARTICLE_GROUP[x.section] || "Articles", section: x.section || "", hidden: x.hidden === true, also: "the article and its card in every list", image: picName(x.image), alt: x.alt || "", credit: x.credit || "", slot: "article-" + x.slug, ref: x, creditKey: "credit" });
+  }
+  return out;
+}
+export function publicSpot(sp) { const o = { ...sp }; delete o.ref; delete o.creditKey; o.hasCredit = !!sp.creditKey; return o; }
+// Applies picture changes { key: { image, alt, credit } } to the content, in place.
+export function applyPictures(data, changes, slotsData) {
+  const spots = pictureSpots(data), done = [];
+  for (const [key, c] of Object.entries(changes || {})) {
+    const sp = spots.find((x) => x.key === key);
+    if (!sp) throw new Error("One of the pictures is no longer on the site. Refresh and try again.");
+    if (!c || typeof c !== "object") continue;
+    let touched = false;
+    if ("image" in c) {
+      const img = String(c.image || "").trim();
+      if (img && !PIC_FILE.test(img)) throw new Error("A picture's file name could not be read.");
+      if (img !== sp.image) { sp.ref.image = img ? "images/" + img : null; touched = true; }
+    }
+    if ("alt" in c) { const v = cleanText(c.alt, 240); if (v !== sp.alt) { sp.ref.alt = v; touched = true; } }
+    if ("credit" in c && sp.creditKey) { const v = cleanText(c.credit, 160); if (v !== sp.credit) { sp.ref[sp.creditKey] = v; touched = true; } }
+    if (touched) done.push(sp);
+  }
+  let slotsChanged = false;
+  if (slotsData && Array.isArray(slotsData.slots)) for (const sp of done) {
+    const slot = slotsData.slots.find((x) => x.id === sp.slot);
+    if (slot && slot.filled !== !!sp.ref.image) { slot.filled = !!sp.ref.image; slotsChanged = true; }
+  }
+  return { done: done.map((x) => x.label), slotsChanged };
+}
+// Every place a photo is used: sections of the pages, and the shared pictures.
+export function usageOf(name, pagesDoc, kinds, spots) {
+  const has = (v) => (Array.isArray(v) ? v.some(has) : v && typeof v === "object" ? Object.values(v).some(has) : v === name);
+  const used = [];
+  for (const [key, part] of Object.entries((pagesDoc && pagesDoc.shared) || {})) if (part && has(part.settings)) used.push({ label: "Every page: " + ((kinds[part.type] || {}).label || key), page: "home", where: "shared", id: key });
+  for (const [pk, pg] of Object.entries((pagesDoc && pagesDoc.pages) || {})) for (const sec of (pg && pg.sections) || []) {
+    if (has(sec.settings)) used.push({ label: (pg.title || pk) + " page: " + ((kinds[sec.type] || {}).label || sec.type) + (sec.visible === false ? " (hidden)" : ""), page: pk, where: "page", id: sec.id });
+  }
+  const word = { artist: "Artist: ", work: "Artwork: ", article: "Article: " };
+  for (const sp of spots) if (sp.image === name) used.push({ label: word[sp.kind] + sp.label, spot: sp.key });
+  return used;
+}
+// Fills empty descriptions next to a photo, wherever it is used.
+export function fillDescriptions(v, name, alt) {
+  let n = 0;
+  const walk = (x) => {
+    if (Array.isArray(x)) { x.forEach(walk); return; }
+    if (!x || typeof x !== "object") return;
+    const uses = Object.keys(x).some((k) => k !== "alt" && (x[k] === name || x[k] === "images/" + name));
+    if (uses && "alt" in x && !String(x.alt || "").trim()) { x.alt = alt; n++; }
+    Object.values(x).forEach(walk);
+  };
+  walk(v);
+  return n;
+}
+
 export function cleanPages(site, given, current) {
   const spec = site.sectionKinds;
   if (!given || typeof given !== "object") throw new Error("The page could not be read.");
@@ -235,7 +311,7 @@ export const SITES = [
       { slug: "konn-artiss", name: "Konn Artiss" },
       { slug: "zen-xander", name: "Zen Xander" },
     ],
-    pages: { file: "content/pages.json", images: "images" },
+    pages: { file: "content/pages.json", images: "images", meta: "content/files.json", content: "content/site.json" },
     sectionKinds: WAR_SECTIONS,
     theme: {
       file: "content/theme.json",
@@ -687,8 +763,8 @@ async function inboxOf(repo, ref = "") {
 }
 
 
-const CONTENT_FILES = ["content/site.json", "data/content.json", "data/sales.json", "data/images.json", "image-slots.json", "content/theme.json", "data/theme.json", "content/pages.json", "data/pages.json"];
-const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Mark spot |Add photo|Photo description|Place photos|Theme: |Publish: |Make live: |Undo: |Redo: |Add section|Remove section|Move section)/;
+const CONTENT_FILES = ["content/site.json", "content/files.json", "data/content.json", "data/sales.json", "data/images.json", "image-slots.json", "content/theme.json", "data/theme.json", "content/pages.json", "data/pages.json"];
+const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Mark spot |Add photo|Photo description|Place photos|Replace photo|Theme: |Publish: |Make live: |Undo: |Redo: |Add section|Remove section|Move section)/;
 
 // ---------- copies of a site: the live one being worked on, and trial copies ----------
 //
@@ -794,7 +870,7 @@ async function branchForWriting(site, copy, _who) {
 }
 
 async function siteOverview(site, wanted = "") {
-  const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists };
+  const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta) };
   if (!site.live) return base;
   try {
     const copies = await copiesOf(site);
@@ -908,7 +984,7 @@ export async function handle(req) {
   const who = " (" + email + ")";
 
   // Which copy of the site this request is about, and the branch that goes with it.
-  const WRITES = ["saveTheme", "saveEntry", "setHidden", "deleteEntry", "removePhoto", "undo", "uploadPhoto", "savePages"];
+  const WRITES = ["saveTheme", "saveEntry", "setHidden", "deleteEntry", "removePhoto", "undo", "uploadPhoto", "savePages", "saveFiles"];
   const COPY_ACTIONS = ["makeCopy", "deleteCopy", "refreshCopy", "publish", "discard", "undoStep", "redoStep"];
   const DRAFT_ACTIONS = ["answerTopic", "publishDraft", "returnDraft", "rejectDraft", "history"];
   let copies = [], copy = null, ref = "main";
@@ -956,61 +1032,186 @@ export async function handle(req) {
     return json({ collections: out });
   }
 
+  // Writes several files as one step, which one Undo takes back.
+  const repoPath = "/repos/" + site.repo;
+  async function textBlob(tree, path, data) {
+    const b = await gh(repoPath + "/git/blobs", { method: "POST", body: JSON.stringify({ content: encodeBase64Utf8(JSON.stringify(data, null, 2) + "\n"), encoding: "base64" }) });
+    if (!b.ok) throw new Error(writeProblem(b, "GitHub did not save the change. Please try again."));
+    tree.push({ path, mode: "100644", type: "blob", sha: b.data.sha });
+  }
+  async function photoBlob(tree, path, content) {
+    content = String(content || "");
+    if (!content || content.length > 7_500_000 || /[^A-Za-z0-9+/=]/.test(content)) throw Object.assign(new Error("One of the photos is too large or could not be read."), { status: 400 });
+    const b = await gh(repoPath + "/git/blobs", { method: "POST", body: JSON.stringify({ content, encoding: "base64" }) });
+    if (!b.ok) throw new Error(writeProblem(b, "GitHub did not accept the photo. Please try again."));
+    tree.push({ path, mode: "100644", type: "blob", sha: b.data.sha });
+  }
+  async function commitTree(tree, message) {
+    const head = await gh(repoPath + "/git/ref/heads/" + ref);
+    const headSha = head.ok && head.data.object ? head.data.object.sha : "";
+    const headCommit = headSha ? await gh(repoPath + "/git/commits/" + headSha) : null;
+    if (!headCommit || !headCommit.ok) return json({ error: "The site could not be read. Please try again." }, 502);
+    const made = await gh(repoPath + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: headCommit.data.tree.sha, tree }) });
+    if (!made.ok) return json({ error: writeProblem(made, "GitHub did not save the change. Please try again.") }, 502);
+    if (made.data.sha === headCommit.data.tree.sha) return null;
+    const commit = await gh(repoPath + "/git/commits", { method: "POST", body: JSON.stringify({ message: message + who, tree: made.data.sha, parents: [headSha] }) });
+    if (!commit.ok) return json({ error: writeProblem(commit, "GitHub did not save the change. Please try again.") }, 502);
+    const moved = await moveBranch(site, ref, commit.data.sha, false);
+    if (!moved.ok) return json({ error: "Someone else changed this site at the same moment. Refresh and try again." }, 409);
+    return null;
+  }
+  const failed = (e) => json({ error: e.message || "GitHub did not save the change. Please try again." }, e.status || 502);
+
   if (action === "pages" || action === "savePages") {
     const ps = site.pages;
     if (!ps || !site.sectionKinds) return json({ error: "This site cannot be edited by sections yet." }, 400);
     const f = await loadJson(ps.file);
     if (!f) return json({ error: "The page list could not be read." }, 502);
+    const c = ps.content ? await loadJson(ps.content) : null;
     if (action === "pages") {
-      const imgs = await gh("/repos/" + site.repo + "/contents/" + ps.images + "?ref=" + encodeURIComponent(ref));
+      const [imgs, meta] = await Promise.all([
+        gh("/repos/" + site.repo + "/contents/" + ps.images + "?ref=" + encodeURIComponent(ref)),
+        ps.meta ? loadJson(ps.meta) : null,
+      ]);
       const images = Array.isArray(imgs.data) ? imgs.data.filter((x) => x.type === "file" && /\.(jpe?g|png|webp)$/i.test(x.name)).map((x) => x.name) : [];
       const preview = copy.kind === "trial" ? copy.preview : "https://" + site.domain + "/";
-      return json({ pages: f.data, kinds: kindsFor(site), summaries: summariesFor(site, f.data), images, imageBase: preview + ps.images + "/", artists: site.artists, preview, sha: f.sha });
+      const pictures = c ? pictureSpots(c.data).filter((x) => x.kind !== "work").map(publicSpot) : [];
+      const imageMeta = meta && meta.data && meta.data.files && typeof meta.data.files === "object" ? meta.data.files : {};
+      return json({ pages: f.data, kinds: kindsFor(site), summaries: summariesFor(site, f.data), images, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: site.artists, preview, sha: f.sha });
     }
     let next;
     try { next = cleanPages(site, body.pages, f.data); } catch (e) { return json({ error: e.message }, 400); }
     let was; try { was = cleanPages(site, f.data, f.data); } catch (_e) { was = f.data; }
-    if (canon(next) === canon(was)) return json({ ok: true, unchanged: true });
     const what = cleanText(body.what, 80) || "Edit page";
-    const uploads = Array.isArray(body.uploads) ? body.uploads.slice(0, 8) : [];
-    if (!uploads.length) {
+    const uploads = Array.isArray(body.uploads) ? body.uploads.slice(0, 12) : [];
+    const pics = body.pictures && typeof body.pictures === "object" && !Array.isArray(body.pictures) ? body.pictures : {};
+    const hasPics = Object.keys(pics).length > 0;
+    if (canon(next) === canon(was) && !uploads.length && !hasPics) return json({ ok: true, unchanged: true });
+    if (!uploads.length && !hasPics) {
       const put = await saveJson(ps.file, next, f.sha, "Edit page: " + what);
       if (put.status === 409) return json({ error: "Someone else changed this page at the same moment. Refresh and try again." }, 409);
       if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save the page. Please try again.") }, 502);
       return json({ ok: true, summaries: summariesFor(site, next) });
     }
-    // New photos and the page go in together, as one step that one Undo takes back.
-    const repo = "/repos/" + site.repo;
-    const listing = await gh(repo + "/contents/" + ps.images + "?ref=" + encodeURIComponent(ref));
-    const taken = Array.isArray(listing.data) ? listing.data.map((x) => x.name) : [];
-    const renamed = {}, tree = [];
-    for (const u of uploads) {
-      const content = String((u && u.content) || "");
-      if (!content || content.length > 7_500_000 || /[^A-Za-z0-9+/=]/.test(content)) return json({ error: "One of the photos is too large or could not be read." }, 400);
-      const name = photoFileName(u.name, u.ext, taken); taken.push(name);
-      renamed[String(u.key || "")] = name;
-      const blob = await gh(repo + "/git/blobs", { method: "POST", body: JSON.stringify({ content, encoding: "base64" }) });
-      if (!blob.ok) return json({ error: writeProblem(blob, "GitHub did not accept the photo. Please try again.") }, 502);
-      tree.push({ path: ps.images + "/" + name, mode: "100644", type: "blob", sha: blob.data.sha });
-    }
-    // point the sections at the photos' final names
+    if (hasPics && !c) return json({ error: "The pictures of this site could not be read." }, 502);
+    // New photos, shared pictures and the page go in together, as one step that one Undo takes back.
+    const tree = [], renamed = {};
+    try {
+      const listing = await gh(repoPath + "/contents/" + ps.images + "?ref=" + encodeURIComponent(ref));
+      const taken = Array.isArray(listing.data) ? listing.data.map((x) => x.name) : [];
+      for (const u of uploads) {
+        const name = photoFileName(u && u.name, u && u.ext, taken); taken.push(name);
+        renamed[String((u && u.key) || "")] = name;
+        await photoBlob(tree, ps.images + "/" + name, u && u.content);
+      }
+    } catch (e) { return failed(e); }
+    // point everything at the photos' final names
     const fix = (v) => { if (Array.isArray(v)) return v.map(fix); if (v && typeof v === "object") { const o = {}; for (const k of Object.keys(v)) o[k] = fix(v[k]); return o; } return typeof v === "string" && renamed[v] ? renamed[v] : v; };
-    let withPhotos;
+    let withPhotos, picsFixed = fix(pics), res = { done: [], slotsChanged: false };
     try { withPhotos = cleanPages(site, fix(body.pages), f.data); } catch (e) { return json({ error: e.message }, 400); }
-    const pageBlob = await gh(repo + "/git/blobs", { method: "POST", body: JSON.stringify({ content: encodeBase64Utf8(JSON.stringify(withPhotos, null, 2) + "\n"), encoding: "base64" }) });
-    if (!pageBlob.ok) return json({ error: writeProblem(pageBlob, "GitHub did not save the page. Please try again.") }, 502);
-    tree.push({ path: ps.file, mode: "100644", type: "blob", sha: pageBlob.data.sha });
-    const head = await gh(repo + "/git/ref/heads/" + ref);
-    const headSha = head.ok && head.data.object ? head.data.object.sha : "";
-    const headCommit = headSha ? await gh(repo + "/git/commits/" + headSha) : null;
-    if (!headCommit || !headCommit.ok) return json({ error: "The site could not be read. Please try again." }, 502);
-    const made = await gh(repo + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: headCommit.data.tree.sha, tree }) });
-    if (!made.ok) return json({ error: writeProblem(made, "GitHub did not save the page. Please try again.") }, 502);
-    const commit = await gh(repo + "/git/commits", { method: "POST", body: JSON.stringify({ message: "Edit page: " + what + who, tree: made.data.sha, parents: [headSha] }) });
-    if (!commit.ok) return json({ error: writeProblem(commit, "GitHub did not save the page. Please try again.") }, 502);
-    const moved = await moveBranch(site, ref, commit.data.sha, false);
-    if (!moved.ok) return json({ error: "Someone else changed this site at the same moment. Refresh and try again." }, 409);
+    const slots = hasPics ? await loadJson("image-slots.json") : null;
+    if (hasPics) { try { res = applyPictures(c.data, picsFixed, slots ? slots.data : null); } catch (e) { return json({ error: e.message }, 400); } }
+    if (!uploads.length && !res.done.length && canon(withPhotos) === canon(was)) return json({ ok: true, unchanged: true });
+    try {
+      if (canon(withPhotos) !== canon(was)) await textBlob(tree, ps.file, withPhotos);
+      if (res.done.length) await textBlob(tree, ps.content, c.data);
+      if (res.slotsChanged && slots) await textBlob(tree, "image-slots.json", slots.data);
+      // a new photo keeps the description it was given, for next time it is chosen
+      if (uploads.length && ps.meta) {
+        const m = await loadJson(ps.meta);
+        const doc = m && m.data && typeof m.data === "object" ? m.data : { note: "Descriptions and captions of the photos in " + ps.images + "/, kept by Artiscope Digital Home." };
+        if (!doc.files || typeof doc.files !== "object") doc.files = {};
+        let wrote = false;
+        for (const name of Object.values(renamed)) {
+          let alt = "", caption = "";
+          const find = (x) => { if (Array.isArray(x)) return x.forEach(find); if (!x || typeof x !== "object") return; if (!alt && Object.keys(x).some((k) => k !== "alt" && x[k] === name) && x.alt) { alt = cleanText(x.alt, 240); caption = cleanText(x.caption, 160); } Object.values(x).forEach(find); };
+          find(withPhotos); find(picsFixed);
+          if (alt) { doc.files[name] = { alt, caption }; wrote = true; }
+        }
+        if (wrote) await textBlob(tree, ps.meta, doc);
+      }
+    } catch (e) { return failed(e); }
+    const label = res.done.length && canon(withPhotos) === canon(was) && !uploads.length ? "Edit picture: " + res.done.join(", ").slice(0, 80) : "Edit page: " + what;
+    const problem = await commitTree(tree, label);
+    if (problem) return problem;
     return json({ ok: true, photos: renamed, summaries: summariesFor(site, withPhotos) });
+  }
+
+  // ----- Files: every photo on the site, its description and where it is used -----
+  if (action === "files" || action === "saveFiles") {
+    const ps = site.pages;
+    if (!ps || !ps.images || !ps.meta) return json({ error: "This site keeps its photos another way for now. Use Photos." }, 400);
+    const [listing, pf, cf, mf] = await Promise.all([
+      gh(repoPath + "/contents/" + ps.images + "?ref=" + encodeURIComponent(ref)),
+      loadJson(ps.file), ps.content ? loadJson(ps.content) : null, loadJson(ps.meta),
+    ]);
+    const files = Array.isArray(listing.data) ? listing.data.filter((x) => x.type === "file" && /\.(jpe?g|png|webp)$/i.test(x.name)) : [];
+    const metaDoc = mf && mf.data && typeof mf.data === "object" && !Array.isArray(mf.data) ? mf.data : { note: "Descriptions and captions of the photos in " + ps.images + "/, kept by Artiscope Digital Home." };
+    if (!metaDoc.files || typeof metaDoc.files !== "object") metaDoc.files = {};
+    const meta = metaDoc.files, kinds = site.sectionKinds || {};
+    const pagesDoc = pf ? pf.data : { shared: {}, pages: {} };
+    const spots = cf ? pictureSpots(cf.data) : [];
+    if (action === "files") {
+      const preview = copy.kind === "trial" ? copy.preview : "https://" + site.domain + "/";
+      return json({
+        files: files.map((x) => ({ name: x.name, size: x.size || 0, alt: (meta[x.name] || {}).alt || "", caption: (meta[x.name] || {}).caption || "", used: usageOf(x.name, pagesDoc, kinds, spots) })),
+        spots: spots.filter((x) => !x.hidden).map(publicSpot),
+        imageBase: preview + ps.images + "/",
+      });
+    }
+    const op = String(body.op || ""), names = files.map((x) => x.name), name = String(body.name || "");
+    const tree = [];
+    let message = "", out = {};
+    try {
+      if (op === "add") {
+        const final = photoFileName(body.fileName, body.ext, names);
+        await photoBlob(tree, ps.images + "/" + final, body.content);
+        const alt = cleanText(body.alt, 240), caption = cleanText(body.caption, 160);
+        if (alt || caption) { meta[final] = { alt, caption }; await textBlob(tree, ps.meta, metaDoc); }
+        message = "Add photo: " + final; out = { name: final };
+      } else {
+        if (!names.includes(name)) return json({ error: "That photo is no longer on the site. Refresh and try again." }, 409);
+        if (op === "describe") {
+          const alt = cleanText(body.alt, 240), caption = cleanText(body.caption, 160);
+          if (alt || caption) meta[name] = { alt, caption }; else delete meta[name];
+          await textBlob(tree, ps.meta, metaDoc);
+          // places that show this photo without a description get this one
+          if (alt) {
+            if (pf && fillDescriptions(pagesDoc.pages, name, alt) + fillDescriptions(pagesDoc.shared, name, alt)) await textBlob(tree, ps.file, pagesDoc);
+            if (cf && spots.some((sp) => sp.image === name && !String(sp.alt || "").trim())) {
+              const ch = {}; spots.forEach((sp) => { if (sp.image === name && !String(sp.alt || "").trim()) ch[sp.key] = { alt }; });
+              if (applyPictures(cf.data, ch, null).done.length) await textBlob(tree, ps.content, cf.data);
+            }
+          }
+          message = "Photo description: " + name;
+        } else if (op === "replace") {
+          const want = /\.png$/i.test(name) ? "png" : "jpg";
+          if ((body.ext === "png" ? "png" : "jpg") !== want) return json({ error: "Please choose a " + want.toUpperCase() + " photo to replace a " + want.toUpperCase() + " photo." }, 400);
+          await photoBlob(tree, ps.images + "/" + name, body.content);
+          message = "Replace photo: " + name;
+        } else if (op === "remove") {
+          if (usageOf(name, pagesDoc, kinds, spots).length) return json({ error: "This photo is still used on the site. Take it out of those places first." }, 409);
+          tree.push({ path: ps.images + "/" + name, mode: "100644", type: "blob", sha: null });
+          if (meta[name]) { delete meta[name]; await textBlob(tree, ps.meta, metaDoc); }
+          message = "Remove photo: " + name;
+        } else if (op === "assign") {
+          if (!cf) return json({ error: "The pictures of this site could not be read." }, 502);
+          const sp = spots.find((x) => x.key === String(body.spot || ""));
+          if (!sp) return json({ error: "That place is no longer on the site. Refresh and try again." }, 409);
+          const alt = cleanText(body.alt, 240) || (meta[name] || {}).alt || "";
+          if (!alt) return json({ error: "Please describe the picture first. It is read out to people who cannot see it." }, 400);
+          const slots = await loadJson("image-slots.json");
+          const res = applyPictures(cf.data, { [sp.key]: { image: name, alt } }, slots ? slots.data : null);
+          if (!res.done.length) return json({ ok: true, unchanged: true });
+          await textBlob(tree, ps.content, cf.data);
+          if (res.slotsChanged && slots) await textBlob(tree, "image-slots.json", slots.data);
+          message = "Edit picture: " + sp.label;
+        } else return json({ error: "Unknown request." }, 400);
+      }
+    } catch (e) { return failed(e); }
+    if (!tree.length) return json({ ok: true, unchanged: true });
+    const problem = await commitTree(tree, message);
+    return problem || json({ ok: true, ...out });
   }
 
   if (action === "theme" || action === "saveTheme") {

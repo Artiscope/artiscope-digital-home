@@ -8,13 +8,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const click = (d) => el.listeners.click({ target: { closest: () => ({ dataset: d }) } });
 await wait(500);
 const adh = win.__adh, html = () => el.innerHTML;
-assert.ok(html().includes("Artiscope<br>Digital Home") && html().includes("Sample mode") && html().includes("Version 17"));
+assert.ok(html().includes("Artiscope<br>Digital Home") && html().includes("Sample mode") && html().includes("Version 18"));
 assert.ok(html().includes("Pick a site to work on") && html().includes('class="bulge') && !html().includes('data-tab="content"'), "outside a site only All sites shows");
 adh.openSite("world-art-review"); await wait(400); adh.go("overview"); await wait(400);
 assert.ok(html().includes("Working in") && html().includes('data-tab="content"') && html().includes("Live site and trial copies") && html().includes("Saves go straight to visitors"));
 
 // every screen draws, with no stray "undefined" and no long dashes
-for (const tab of ["overview", "content", "theme", "photos", "history", "home"]) {
+for (const tab of ["overview", "content", "theme", "files", "history", "home"]) {
   adh.go(tab); await wait(300);
   assert.ok(html().length > 800, tab + " draws");
   assert.ok(!html().includes("undefined") && !html().includes("[object"), tab + " is clean");
@@ -80,9 +80,16 @@ const col = adh.state.content["world-art-review"][0];
 col.label = bad; col.entries[0] = { id: bad, title: bad, sub: bad, hidden: false, fields: [{ name: bad, label: bad, type: "long", value: bad }, { name: "x", label: bad, type: "lines", value: [bad] }] };
 adh.state.data.sites[0].name = bad; adh.state.data.sites[0].slots[0].label = bad; adh.state.data.sites[0].slots[0].group = bad;
 adh.state.history["world-art-review"] = [{ sha: bad, what: bad, when: "2026-11-11T10:00:00Z", by: bad, canUndo: true }];
-for (const tab of ["overview", "content", "theme", "photos", "history", "home"]) {
+for (const tab of ["overview", "content", "theme", "photos", "files", "history", "home"]) {
   if (tab !== "home") adh.openSite("world-art-review"); adh.go(tab); await wait(50);
   if (tab === "content") click({ act: "open", ci: "0", ei: "0" });
+  if (tab === "files") {
+    adh.state.files["world-art-review"] = { files: [{ name: bad, size: 1, alt: bad, caption: bad, used: [{ label: bad, page: bad, where: "page", id: bad }, { label: bad, spot: bad }] }], spots: [{ key: bad, label: bad, group: bad, also: bad, image: "" }], imageBase: bad, filter: "all", open: "", assign: "", pick: "" };
+    adh.state.fileAdd = [{ file: { name: bad }, url: bad, alt: bad, caption: bad }]; adh.render();
+    assert.ok(!html().includes("<img src=x") && !html().includes("<script>alert"), "files escapes hostile text");
+    adh.state.files["world-art-review"].filter = "empty"; adh.state.files["world-art-review"].assign = bad; adh.state.files["world-art-review"].pick = bad; adh.render();
+    adh.state.fileAdd = [];
+  }
   assert.ok(!html().includes("<img src=x") && !html().includes("<script>alert"), tab + " escapes hostile text");
 }
 

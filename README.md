@@ -24,12 +24,16 @@ without opening GitHub or touching code.
 |---|---|
 | Home | Choose the site to work on and see it at a glance |
 | Content | Edit, hide or delete articles, artworks, sales and more |
-| Photos | Add photos to exact spots, and remove photos |
+| Pages | Edit every section of the page beside the real page, with its pictures |
+| Theme | Colours and typefaces |
+| Files | Every photo on the site: upload, describe, see where each is used, replace everywhere, delete when unused, fill places with no picture (World Art Review) |
+| Photos | Add photos to exact spots (Global Art Monitor, until it moves to Files) |
 | History | See every change and undo the ones made here |
 | Sites | See all five sites and their status |
 
-Still to come: page layouts and sections, theme colours and fonts, and
-creating new sites from a template.
+Still to come: editing articles and portfolios in place, Global Art
+Monitor in the page editor, the code screen, payments, and creating new
+sites from a template.
 
 ## Sample mode
 
@@ -74,6 +78,8 @@ On the live site, Save goes straight to visitors (it commits to `main`) after a 
 ## The page editor
 
 Opening a site goes to the page editor: the sections of the page on the left, the real page in the middle, and the chosen section's settings on the right. The page redraws as you type, because the site's own code redraws from the edited section list sent to it, and nothing is kept until Save. Each site's section kinds and their fields are described on the server (`WAR_SECTIONS`). Library sections are drawn by the site itself (`LIBRARY` in `src/index.html` on World Art Review). Browser test: `node tests/pages.mjs`.
+
+Pictures that belong to an artist or an article (kept in `content/site.json`) are listed under the section that shows them, marked Shared. A change there is saved to `content/site.json` in the same step as the page, so one Undo takes both back. The opening banner can also have a picture of its own. Descriptions given to photos are kept in `content/files.json` and offered whenever that photo is chosen again. Server checks: `node tests/files.mjs`. Browser test: `node tests/files-ui.mjs`.
 
 ## Deploying the server function
 
