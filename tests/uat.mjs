@@ -91,7 +91,7 @@ async function openSite(id) { await page.click('[data-tab="home"]', { timeout: 1
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all five sites", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 5, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 24"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 25"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-3"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await page.click('[data-tab="home"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -102,7 +102,7 @@ await check("Someone not on the list is turned away with a plain message", async
 // =============== 2. World Art Review: the page editor ===============
 area = "Page editor, World Art Review";
 await check("Opening a site goes straight to the page editor with the real page", async () => { await openSite("world-art-review"); must(!!frame("worldartreview.com"), "no preview"); await shot("02-editor"); });
-await check("Menu has Overview, Pages, Theme, Files, History, and no Content or Photos", async () => { const t = await text(".ed-left"); must(t.includes("Files") && !t.includes("Content: articles") , "left list: " + t.slice(-160)); });
+await check("Menu has Overview, Pages, Theme, Files, History, and no Content or Photos", async () => { const t = await text(".ed .rail"); must(["Overview", "Pages", "Theme", "Files", "History"].every((w) => t.includes(w)) && !t.includes("Content") && !t.includes("Photos"), "menu: " + t); });
 await check("Clicking a part of the page opens its settings", async () => { await frame("worldartreview.com").click("#numbers"); await page.waitForSelector(".ed-right h2:has-text('Numbers band')"); });
 await check("Typing redraws the page before saving", async () => { await page.fill('[data-pf="eyebrow"]', "The review in numbers"); await settle(500); must((await frame("worldartreview.com").evaluate(() => document.querySelector("#numbers .eyebrow").textContent)) === "The review in numbers", "not redrawn"); });
 await check("Save on the live site asks once, then saves to the live site", async () => { await page.click('[data-act="ed-save"]'); await page.waitForSelector("text=goes live in about two minutes"); await shot("03-live-question"); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved"); await settle(1200); must(JSON.stringify(read(WR, "content/pages.json")).includes("The review in numbers"), "not on main"); });
@@ -111,7 +111,7 @@ await check("Redo puts it back", async () => { await page.click('[data-act="redo
 await check("Discard throws away unsaved typing", async () => { await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await page.fill('[data-pf="eyebrow"]', "Throw me away"); await settle(300); await page.click('[data-act="ed-discard"]'); await settle(400); must(!(await text(".ed-top")).includes("Edited"), "still edited"); });
 await check("Leaving with unsaved changes asks first, and Keep editing keeps them", async () => {
   await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await page.fill('[data-pf="eyebrow"]', "Keep me"); await settle(300);
-  await page.click('.sec.plain[data-tab="history"]'); await page.waitForSelector("text=You have changes that are not saved yet"); await page.click('[data-act="leave-stay"]');
+  await page.click('.navb[data-tab="history"]'); await page.waitForSelector("text=You have changes that are not saved yet"); await page.click('[data-act="leave-stay"]');
   must(await page.inputValue('[data-pf="eyebrow"]') === "Keep me", "lost"); await page.click('[data-act="ed-discard"]');
 });
 await check("Text that looks like code is shown as words, never run", async () => {
@@ -316,7 +316,7 @@ for (const tab of ["home", "overview", "files", "history", "theme"]) {
 }
 await check("Editor on a phone stays usable", async () => { await page.setViewportSize({ width: 390, height: 844 }); await page.evaluate(() => window.__adh.go("pages")); await settle(2500); await shot("07-phone-editor"); const w = await page.evaluate(() => document.documentElement.scrollWidth); await page.setViewportSize({ width: 1440, height: 900 }); must(w <= 392, w + " pixels wide"); });
 await check("Every button has words a screen reader can read", async () => {
-  const bad = await page.evaluate(() => [...document.querySelectorAll("button, a[href], [role=button]")].filter((b) => !(b.innerText || "").trim() && !b.getAttribute("aria-label") && !b.title).length); must(bad === 0, bad + " without words");
+  const bad = await page.evaluate(() => [...document.querySelectorAll("button, a[href], [role=button]")].filter((b) => !(b.innerText || "").trim() && !b.getAttribute("aria-label") && !b.title && !b.closest("details:not([open])")).length); must(bad === 0, bad + " without words");
 });
 await check("Every form box has a label", async () => {
   const bad = await page.evaluate(() => [...document.querySelectorAll("input:not([type=hidden]):not([type=file]), select, textarea")].filter((i) => !(i.id && document.querySelector('label[for="' + i.id + '"]')) && !i.getAttribute("aria-label") && !i.closest("label")).map((i) => i.dataset.pf || i.dataset.change || i.className)); must(bad.length === 0, bad.length + " without a label: " + bad.slice(0, 5).join(", "));

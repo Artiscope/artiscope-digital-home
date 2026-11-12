@@ -17,7 +17,7 @@ try {
   await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="world-art-review"]');
   await page.waitForSelector("#ed-sections .sec"); await page.waitForTimeout(3000);
   const frame = () => page.frames().find((f) => f.url().startsWith(siteAt));
-  assert.ok(await page.isVisible('.sec.plain[data-tab="files"]') && !(await page.isVisible('[data-tab="photos"]')), "Files replaces Photos");
+  assert.ok(await page.isVisible('.navb[data-tab="files"]') && !(await page.isVisible('[data-tab="photos"]')), "Files replaces Photos");
 
   // the banner lists the pictures it shows, each one shared
   await page.click('#ed-sections .sec[data-id="hero"]:not(.blk)'); await page.waitForSelector(".sec.pic");
@@ -57,7 +57,7 @@ try {
   await page.click('[data-act="ed-discard"]');
 
   // Files: every photo, what it shows and where it is used
-  await page.click('.sec.plain[data-tab="files"]'); await page.waitForSelector(".filecard");
+  await page.click('.navb[data-tab="files"]'); await page.waitForSelector(".filecard");
   assert.ok(await page.isVisible('.navb[data-tab="files"]') && !(await page.isVisible('.navb[data-tab="photos"]')), "the menu shows Files, not Photos");
   const names = await page.locator(".filecard .fname").allInnerTexts();
   assert.deepEqual(names, ["zara-muse-portrait.jpg", "article-palette-knife-painting.jpg", "studio.jpg"]);

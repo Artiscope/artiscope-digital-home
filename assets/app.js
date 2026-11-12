@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "24";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "25";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -63,7 +63,7 @@
   function site() { return liveSites().find(function (s) { return s.id === state.site; }) || null; }
   function initials(name) { return String(name).split(/\s+/).map(function (w) { return w.charAt(0); }).join("").slice(0, 3).toUpperCase(); }
   var COLOURS = { "world-art-review": ["#1D4A35", "#EEE5D4"], "global-art-monitor": ["#F3C3C8", "#2A2A2F"] };
-  function colours(id) { return COLOURS[id] || ["#1B2132", "#6F7890"]; }
+  function colours(id) { return COLOURS[id] || ["#EDE8F3", "#5D5866"]; }
 
   // ---------- talking to the server ----------
 
@@ -172,6 +172,41 @@
 
   // ---------- the frame: menu, floating bar ----------
 
+  // One small set of line icons, drawn the same way everywhere.
+  var IC = {
+    monitor: "M3.5 4.5h17v11.5h-17z M9 20h6 M12 16v4",
+    phone: "M7.5 3h9v18h-9z M11 18h2",
+    plus: "M12 5v14 M5 12h14",
+    copy: "M8.5 8.5h11v11h-11z M15.5 8.5V4.5h-11v11h4",
+    eye: "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z M12 9.2a2.8 2.8 0 1 1 0 5.6a2.8 2.8 0 1 1 0-5.6z",
+    eyeoff: "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z M12 9.2a2.8 2.8 0 1 1 0 5.6a2.8 2.8 0 1 1 0-5.6z M4 20L20 4",
+    bin: "M4.5 7h15 M10 7V4.5h4V7 M6.5 7l1 13h9l1-13",
+    banner: "M3.5 5h17v14h-17z M7 10h7 M7 14h4",
+    person: "M12 5.5a3.5 3.5 0 1 1 0 7a3.5 3.5 0 1 1 0-7z M5 20c1.2-3.6 4-5 7-5s5.8 1.4 7 5",
+    list: "M9 6h11 M9 12h11 M9 18h11 M4.5 6h.5 M4.5 12h.5 M4.5 18h.5",
+    book: "M4 5.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H4z M20 5.5h-6a2 2 0 0 0-2 2V20a2 2 0 0 1 2-2h6z",
+    hash: "M9 4l-2 16 M17 4l-2 16 M4.5 9h16 M3.5 15h16",
+    cards: "M3 6h5v12H3z M9.5 6h5v12h-5z M16 6h5v12h-5z",
+    loader: "M12 4.5a7.5 7.5 0 1 1 0 15a7.5 7.5 0 1 1 0-15z M12 4.5a7.5 7.5 0 0 1 7.5 7.5",
+    topbar: "M3.5 5h17v5h-17z M6 15h12 M6 19h8",
+    footer: "M6 5h12 M6 9h8 M3.5 14h17v5h-17z",
+    heading: "M6 5v14 M18 5v14 M6 12h12",
+    text: "M5 6h14 M5 10h14 M5 14h14 M5 18h9",
+    table: "M3.5 5h17v14h-17z M3.5 10h17 M9.5 10v9",
+    clock: "M12 3.5a8.5 8.5 0 1 1 0 17a8.5 8.5 0 1 1 0-17z M12 7.5V12l3 2",
+    picture: "M3.5 5h17v14h-17z M9 8.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 1 1 0-3.2z M4 17l5-4 4 3 3-2 4 3",
+    form: "M4 5h16v14H4z M7 9h10 M7 13h6",
+    links: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1 M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+    panel: "M4 6h16v12H4z M8 10h8 M8 14h5",
+    gear: "M12 9a3 3 0 1 1 0 6a3 3 0 1 1 0-6z M12 2.8v2.6 M12 18.6v2.6 M2.8 12h2.6 M18.6 12h2.6 M5.5 5.5l1.8 1.8 M16.7 16.7l1.8 1.8 M5.5 18.5l1.8-1.8 M16.7 7.3l1.8-1.8",
+    doc: "M6 3h8l4 4v14H6z M14 3v4h4",
+    block: "M4 5h16v14H4z"
+  };
+  function ic(name, size) { var z = size || 16; return '<svg class="i" width="' + z + '" height="' + z + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + (IC[name] || IC.block) + '"></path></svg>'; }
+  // Which icon stands for each kind of section, on both sites.
+  var KIND_IC = { hero: "banner", featured: "person", "section-list": "list", explained: "book", numbers: "hash", method: "cards", opening: "loader", header: "topbar", footer: "footer", "page-heading": "heading", "long-text": "text", status: "clock", timeline: "table", words: "book", features: "cards", profiles: "person", "page-links": "links", "page-head": "heading", "results-table": "table", "latest-result": "hash", glossary: "book", panel: "panel", prose: "text", "contact-form": "form" };
+  function kindIc(type) { return '<span class="kic">' + ic(KIND_IC[type] || "block") + '</span>'; }
+
   var ICON_HOME = "M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z";
   var ICON_SITES = ["M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M4.5 12h15M12 4.5c2.6 2.4 2.6 12.6 0 15M12 4.5c-2.6 2.4-2.6 12.6 0 15"];
   var NAV = [
@@ -192,14 +227,14 @@
   }
   function photosTab(s) { return s && s.files ? "files" : "photos"; }
   function navIndex(tab) { var i = navItems().findIndex(function (n) { return n[0] === tab; }); return i < 0 ? 0 : i; }
-  function mark() { return '<svg width="24" height="24" viewBox="0 0 26 26"><path d="M2 24V10l11-9 11 9v14z" fill="#A9BCE0"></path><rect x="10" y="14" width="6" height="10" fill="#141927"></rect></svg>'; }
+  function mark() { return '<svg width="20" height="20" viewBox="0 0 26 26"><path d="M2 24V10l11-9 11 9v14z" fill="#FFFFFF"></path><rect x="10" y="14" width="6" height="10" fill="#52057B"></rect></svg>'; }
 
   // The floating bar: which site, and what state its changes are in.
   function islandBusy() { return state.status !== "live" || (curCopy().kind === "trial" && curCopy().ahead > 0); }
   function islandInner() {
     var s = site(), list = copiesOf(s), c = curCopy(), trial = c.kind === "trial", busy = state.status === "saving";
     if (!state.inSite || !s) {
-      return '<span class="dot" aria-hidden="true" style="background:#55678C"></span><b class="island-name">All sites</b><span class="small">' + (state.status === "saving" ? "Saving" : state.flash || "Pick a site to work on") + '</span>';
+      return '<span class="dot" aria-hidden="true" style="background:#C9C2D3"></span><b class="island-name">All sites</b><span class="small">' + (state.status === "saving" ? "Saving" : state.flash || "Pick a site to work on") + '</span>';
     }
     var copyPick = list.length > 1
       ? '<label class="small" for="copy-pick" style="position:absolute;left:-9999px">Working on</label><select id="copy-pick" class="copypick" data-change="copy">' +
@@ -210,8 +245,8 @@
       : "Live site. Saves go straight to visitors";
     var canUndo = trial ? c.ahead > 0 : (c.steps && c.steps.length > 0);
     var act = trial && c.ahead && !busy ? '<button type="button" class="btn slim" data-act="ask-makelive">Make live</button>'
-      : '<span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#A9BCE0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>';
-    return '<span class="dot" aria-hidden="true" style="background:' + (s ? colours(s.id)[0] : "#55678C") + '"></span>' +
+      : '<span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#52057B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>';
+    return '<span class="dot" aria-hidden="true" style="background:' + (s ? colours(s.id)[0] : "#C9C2D3") + '"></span>' +
       '<b class="island-name">' + esc(s.name) + '</b>' + copyPick +
       '<button type="button" class="soft slim" data-act="undo-step"' + (canUndo && !busy ? "" : " disabled") + '>Undo</button>' +
       '<button type="button" class="soft slim" data-act="redo-step"' + (c.canRedo && !busy ? "" : " disabled") + '>Redo</button>' +
@@ -256,32 +291,38 @@
 
   function viewShell(inner) {
     var s = site();
-    var from = navIndex(state.prevTab), to = navIndex(state.tab);
-    var nav = navItems().map(function (n) {
-      var on = n[0] === state.tab;
-      return '<button type="button" class="navb' + (on ? " on" : "") + '" data-tab="' + n[0] + '"' + (on ? ' aria-current="page"' : "") + '>' +
-        '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="' + n[2] + '"></path><path class="o" d="' + n[2] + '"></path><path class="d" d="' + n[3] + '"></path></svg>' +
-        '<span>' + n[1] + '</span></button>';
-    }).join("");
-    return '<div class="shell">' +
-      '<nav class="rail" aria-label="Sections">' +
-        '<div class="brand"><span class="brand-mark" aria-hidden="true">' + mark() + '</span><span class="brand-name">Artiscope<br>Digital Home</span></div>' +
-        (state.inSite && s ? '<div class="where"><span class="small">Working in</span><b>' + esc(s.name) + '</b></div>' : "") +
-        '<div class="nav"><span class="well" aria-hidden="true" data-to="' + (to * 58) + '" style="top:' + (from * 58) + 'px"></span>' +
-          '<span class="bulge' + (from !== to ? " go" : "") + '" aria-hidden="true" data-to="' + (to * 58) + '" style="top:' + (from * 58) + 'px"><i></i></span>' + nav + '</div>' +
-        '<div class="rail-foot">' +
-          (demo ? '<span class="small">Sample mode. Example data only, nothing is saved.</span>' : '<span class="small">Signed in as ' + esc(state.email) + '</span>') +
-          '<button type="button" class="linklike small" data-act="refresh">Refresh</button>' +
-          (demo ? "" : '<button type="button" class="linklike small" data-act="signout">Sign out</button>') +
-          '<span class="small">Version ' + VERSION + '</span>' +
-        '</div>' +
-      '</nav>' +
+    var nav = navHtml();
+    return '<div class="shell">' + viewRail(nav) +
       '<main class="main">' +
         '<div class="island-row"><div class="island' + (islandBusy() ? " busy" : "") + '" role="status">' + islandInner() + '</div></div>' +
         '<div class="column fade">' +
           (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
           viewAsk() + inner +
         '</div></main></div>';
+  }
+  // The slim menu down the left, shared by every screen and the page editor.
+  function viewRail(nav) {
+    var who = demo ? "S" : String(state.email || "?").charAt(0).toUpperCase();
+    return '<nav class="rail" aria-label="Sections">' +
+        '<div class="brand"><span class="brand-mark" aria-hidden="true">' + mark() + '</span><span class="brand-name">Artiscope<br>Digital Home</span></div>' +
+        '<div class="nav">' + nav + '</div>' +
+        '<div class="rail-foot">' +
+          '<details class="acct"><summary aria-label="Your account">' + esc(who) + '</summary><div class="acct-menu">' +
+            (demo ? '<span class="small">Sample mode. Example data only, nothing is saved.</span>' : '<span class="small">Signed in as ' + esc(state.email) + '</span>') +
+            '<button type="button" class="linklike small" data-act="refresh">Refresh</button>' +
+            (demo ? "" : '<button type="button" class="linklike small" data-act="signout">Sign out</button>') +
+          '</div></details>' +
+          '<span class="small ver">Version ' + VERSION + '</span>' +
+        '</div>' +
+      '</nav>';
+  }
+  function navHtml() {
+    return navItems().map(function (n) {
+      var on = n[0] === state.tab || (n[0] === "pages" && state.tab === "pages");
+      return '<button type="button" class="navb' + (on ? " on" : "") + '" data-tab="' + n[0] + '"' + (on ? ' aria-current="page"' : "") + '>' +
+        '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="o" d="' + n[2] + '"></path><path class="d" d="' + n[3] + '"></path></svg>' +
+        '<span>' + n[1] + '</span></button>';
+    }).join("");
   }
 
   // After drawing, let the menu and tab highlights glide to their new place.
@@ -316,7 +357,7 @@
         '<span class="small" style="margin-top:8px">' + esc(statusLine(x)) + '</span>' +
         '<span class="small" style="color:var(--accent);margin-top:8px">' + (x.live ? "Open" : "Not built yet") + '</span></span></button>';
     }).join("");
-    return '<div class="page-head"><span class="small">' + esc(today()) + '</span><h1 style="font-size:48px">' + greeting() + '</h1>' +
+    return '<div class="page-head"><span class="small">' + esc(today()) + '</span><h1>' + greeting() + '</h1>' +
       '<p>Your five sites. Open one to work on its words, colours and photos. On the live site, Save goes straight to visitors. On a trial copy, nothing is seen until you make it live. Every step can be undone.</p></div>' +
       '<div class="sites">' + cards + '</div>';
   }
@@ -780,34 +821,34 @@
   }
   function viewPagesEditor(s) {
     var pgd = pgOf();
-    if (!pgd) return '<div class="ed"><div class="ed-top">' + edTop(s, null) + '</div><p class="loading" style="grid-column:1/-1">Reading the pages of ' + esc(s.name) + '</p></div>';
+    if (!pgd) return '<div class="ed">' + viewRail(navHtml()) + '<div class="ed-top">' + edTop(s, null) + '</div><p class="loading" style="grid-column:1/-1">Reading the pages of ' + esc(s.name) + '</p></div>';
     var right = edRight(pgd);
-    return '<div class="ed' + (right ? " with-right" : "") + '">' +
+    return '<div class="ed' + (right ? " with-right" : "") + '">' + viewRail(navHtml()) +
       '<div class="ed-top">' + edTop(s, pgd) + '</div>' +
       '<div class="ed-left">' + edList(pgd) + '</div>' +
       '<div class="ed-mid">' + viewLeave() + viewAsk() + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
-        '<div class="ed-frame ' + esc(pgd.mode) + '"><iframe id="ed-frame" title="The page being edited" src="' + esc(pgd.preview) + '"></iframe><div id="ed-float">' + edFloat(pgd) + '</div></div>' +
-        '<span class="small">The real page, redrawn as you edit. Click any part of it to open its settings. Nothing is kept until you press Save.</span></div>' +
+        '<div class="ed-frame ' + esc(pgd.mode) + '"><iframe id="ed-frame" title="The page being edited" src="' + esc(pgd.preview) + '"></iframe><div id="ed-float">' + edFloat(pgd) + '</div></div></div>' +
       (right ? '<div class="ed-right">' + right + '</div>' : "") + '</div>';
   }
   function edTop(s, pgd) {
-    var c = curCopy(), trial = c.kind === "trial";
-    return '<button type="button" class="linklike small" data-tab="overview">Overview</button><b class="island-name">' + esc(s.name) + '</b>' +
-      (copiesOf(s).length > 1 ? '<select class="copypick" data-change="copy" aria-label="Working on">' + copiesOf(s).map(function (x) { return '<option value="' + esc(x.kind === "live" ? "" : x.id) + '"' + (x.id === c.id ? " selected" : "") + '>' + esc(x.kind === "live" ? "Live site" : "Trial: " + x.name) + '</option>'; }).join("") + '</select>' : '<span class="chip quiet">' + (trial ? "Trial: " + esc(c.name) : "Live site") + '</span>') +
-      '<div class="mid">' + (pgd ? pagePicker(pgd) + '<button type="button" class="soft slim" data-act="ed-new">New</button>' : "") + '</div>' +
-      '<div class="seg mini"><button type="button" class="' + (!pgd || pgd.mode === "computer" ? "on" : "") + '" data-act="ed-mode" data-mode="computer">Computer</button><button type="button" class="' + (pgd && pgd.mode === "phone" ? "on" : "") + '" data-act="ed-mode" data-mode="phone">Phone</button></div>' +
-      '<button type="button" class="soft slim" data-act="undo-step"' + ((trial ? c.ahead > 0 : (c.steps || []).length > 0) && state.status !== "saving" ? "" : " disabled") + '>Undo</button>' +
-      '<button type="button" class="soft slim" data-act="redo-step"' + (c.canRedo && state.status !== "saving" ? "" : " disabled") + '>Redo</button>' +
-      '<span class="small" id="island-text">' + esc(state.status === "saving" ? "Saving" : pgd && pgd.dirty ? "Edited, not saved" : state.flash || (trial ? (c.ahead ? c.ahead + (c.ahead === 1 ? " change" : " changes") + " on this copy" : "Same as the live site") : "Live site")) + '</span>' +
-      (pgd && pgd.dirty ? '<button type="button" class="linklike small" data-act="ed-discard">Discard</button><button type="button" class="btn slim" data-act="ed-save"' + (state.status === "saving" ? " disabled" : "") + '>Save</button>'
-        : trial && c.ahead ? '<button type="button" class="btn slim" data-act="ask-makelive">Make live</button>' : "") +
-      '<span class="small" style="margin-left:6px">Version ' + VERSION + '</span>';
+    var c = curCopy(), trial = c.kind === "trial", saving = state.status === "saving";
+    var said = saving ? "Saving" : pgd && pgd.dirty ? "Edited, not saved" : state.flash || (trial ? (c.ahead ? c.ahead + (c.ahead === 1 ? " change" : " changes") + " on this copy" : "Same as the live site") : "Live site");
+    var dot = saving || (pgd && pgd.dirty) ? "warn" : trial ? "trial" : "live";
+    return '<div class="lefty"><button type="button" class="ed-site" data-tab="overview" title="Back to the overview">' + esc(s.name) + '</button>' +
+      (copiesOf(s).length > 1 ? '<select class="copypick" data-change="copy" aria-label="Working on">' + copiesOf(s).map(function (x) { return '<option value="' + esc(x.kind === "live" ? "" : x.id) + '"' + (x.id === c.id ? " selected" : "") + '>' + esc(x.kind === "live" ? "Live site" : "Trial: " + x.name) + '</option>'; }).join("") + '</select>' : '<span class="chip quiet">' + (trial ? "Trial: " + esc(c.name) : "Live site") + '</span>') + '</div>' +
+      '<div class="mid">' + (pgd ? pagePicker(pgd) + '<button type="button" class="ib" data-act="ed-new" aria-label="New page, article, artist or source" title="New page, article, artist or source">' + ic("plus", 18) + '</button>' : "") +
+        '<div class="seg mini icons"><button type="button" class="' + (!pgd || pgd.mode === "computer" ? "on" : "") + '" data-act="ed-mode" data-mode="computer" aria-label="Computer view" title="Computer view">' + ic("monitor", 18) + '</button><button type="button" class="' + (pgd && pgd.mode === "phone" ? "on" : "") + '" data-act="ed-mode" data-mode="phone" aria-label="Phone view" title="Phone view">' + ic("phone", 18) + '</button></div></div>' +
+      '<div class="righty"><button type="button" class="plain" data-act="undo-step"' + ((trial ? c.ahead > 0 : (c.steps || []).length > 0) && !saving ? "" : " disabled") + '>Undo</button>' +
+      '<button type="button" class="plain" data-act="redo-step"' + (c.canRedo && !saving ? "" : " disabled") + '>Redo</button>' +
+      '<span class="state"><i class="sdot ' + dot + '" aria-hidden="true"></i><span id="island-text">' + esc(said) + '</span></span>' +
+      (pgd && pgd.dirty ? '<button type="button" class="plain" data-act="ed-discard">Discard</button><button type="button" class="btn" data-act="ed-save"' + (saving ? " disabled" : "") + '>Save</button>'
+        : trial && c.ahead ? '<button type="button" class="btn" data-act="ask-makelive">Make live</button>' : "") + '</div>';
   }
   function edRow(pgd, where, id, sec, picked) {
     var k = pgd.kinds[sec.type] || { label: sec.type }, hidden = sec.visible === false;
     var row = '<div class="sec' + (picked && pgd.sel.block == null && !pgd.sel.pic ? " on" : "") + (hidden ? " off" : "") + '" data-act="ed-pick" data-where="' + where + '" data-id="' + esc(id) + '"' + (where === "page" ? ' draggable="true"' : "") + '>' +
-      (where === "page" ? '<span class="grip" aria-hidden="true"><i></i><i></i><i></i></span>' : '<span class="grip" aria-hidden="true"></span>') +
-      '<span class="nm">' + esc(k.label) + '<small id="sum-' + esc(where + "-" + id) + '">' + esc(pgSummary(pgd, where, id, sec)) + '</small></span>' + (hidden ? '<span class="eye">Hidden</span>' : "") + '</div>';
+      kindIc(sec.type) + '<span class="nm">' + esc(k.label) + '<small id="sum-' + esc(where + "-" + id) + '">' + esc(pgSummary(pgd, where, id, sec)) + '</small></span>' + (hidden ? '<span class="eye" title="Hidden">' + ic("eyeoff") + '<span class="vh">Hidden</span></span>' : "") +
+      (where === "page" ? '<span class="grip" aria-hidden="true" title="Drag to move"><i></i><i></i><i></i><i></i><i></i><i></i></span>' : "") + '</div>';
     var bk = k.blocks, list = bk ? (sec.settings || {})[bk.field] : null;
     var links = picked && where === "page" ? linkedOf(pgd, sec) : [];
     var linkRows = links.length ? '<div class="blocks pics"><div class="grp sm">Pictures shown here</div>' + links.map(function (l) {
@@ -821,7 +862,7 @@
       var on = picked && pgd.sel.block === i, off = blockHidden(item);
       return '<div class="sec blk' + (on ? " on" : "") + (off ? " off" : "") + '" data-act="ed-pick" data-where="' + where + '" data-id="' + esc(id) + '" data-block="' + i + '">' +
         '<span class="dot" aria-hidden="true"></span><span class="nm">' + esc(blockTitle(item, i)) + '</span>' + (off ? '<span class="eye">Hidden</span>' : "") + '</div>';
-    }).join("") + '<button type="button" class="addl blk" data-act="ed-add-block" data-where="' + where + '" data-id="' + esc(id) + '">+ &nbsp;' + esc(bk.add) + '</button></div>';
+    }).join("") + '<button type="button" class="addl blk" data-act="ed-add-block" data-where="' + where + '" data-id="' + esc(id) + '">' + ic("plus", 14) + esc(bk.add) + '</button></div>';
   }
   function edShared(pgd, keys) {
     var sel = pgd.sel || {}, sh = pgd.doc.shared || {};
@@ -842,9 +883,10 @@
     if (part.blocks) return n((it[part.blocks.field] || []).length, part.blocks.label.toLowerCase(), part.blocks.label.toLowerCase() + "s");
     return "";
   }
+  var PART_IC = { words: "text", picture: "picture", body: "text", sources: "links", settings: "gear", about: "person", details: "gear", sections: "list", glossary: "book", sales: "table", works: "picture", timeline: "clock", glance: "list" };
   function edPartRow(pgd, part, it) {
     var sel = pgd.sel || {}, picked = sel.where === "item" && sel.id === part.id;
-    var row = '<div class="sec' + (picked && sel.block == null ? " on" : "") + '" data-act="ed-pick" data-where="item" data-id="' + esc(part.id) + '"><span class="grip" aria-hidden="true"></span>' +
+    var row = '<div class="sec' + (picked && sel.block == null ? " on" : "") + '" data-act="ed-pick" data-where="item" data-id="' + esc(part.id) + '"><span class="kic">' + ic(PART_IC[part.id] || "block") + '</span>' +
       '<span class="nm">' + esc(part.label) + '<small>' + esc(partSummary(pgd, part, it)) + '</small></span></div>';
     var bk = part.blocks, list = bk ? it[bk.field] : null;
     if (!bk || !picked) return row;
@@ -852,23 +894,23 @@
       var off = blockHidden(item);
       return '<div class="sec blk' + (sel.block === i ? " on" : "") + (off ? " off" : "") + '" data-act="ed-pick" data-where="item" data-id="' + esc(part.id) + '" data-block="' + i + '">' +
         '<span class="dot" aria-hidden="true"></span><span class="nm">' + esc(blockTitle(item, i)) + '</span>' + (off ? '<span class="eye">Hidden</span>' : "") + '</div>';
-    }).join("") + '<button type="button" class="addl blk" data-act="ed-add-block" data-where="item" data-id="' + esc(part.id) + '">+ &nbsp;' + esc(bk.add) + '</button></div>';
+    }).join("") + '<button type="button" class="addl blk" data-act="ed-add-block" data-where="item" data-id="' + esc(part.id) + '">' + ic("plus", 14) + esc(bk.add) + '</button></div>';
   }
   function edList(pgd) {
     var sel = pgd.sel || {}, k = atKind(pgd), key = atKey(pgd), s = site(), mid = "";
     var kindWord = { page: key === "home" ? "Home page" : "Page", list: "List page", article: "Article", artist: pgd.gam ? "Artist market profile" : "Artist portfolio", site: "Used on every page", other: "Page" }[k];
     if (k === "page") {
-      mid = (key !== "home" || pgd.gam ? '<div class="sec' + (sel.where === "pageinfo" ? " on" : "") + '" data-act="ed-pick" data-where="pageinfo" data-id="' + esc(key) + '"><span class="grip" aria-hidden="true"></span><span class="nm">Page settings<small>' + (pgd.gam ? "Title and description for search engines" : "Title, menu bar, delete") + '</small></span></div>' : "") +
+      mid = (key !== "home" || pgd.gam ? '<div class="sec' + (sel.where === "pageinfo" ? " on" : "") + '" data-act="ed-pick" data-where="pageinfo" data-id="' + esc(key) + '">' + '<span class="kic">' + ic("gear") + '</span><span class="nm">Page settings<small>' + (pgd.gam ? "Title and description for search engines" : "Title, menu bar, delete") + '</small></span></div>' : "") +
         '<div class="grp">This page</div><div id="ed-sections">' + pgSections(pgd).map(function (x) { return edRow(pgd, "page", x.id, x, sel.where === "page" && sel.id === x.id); }).join("") + '</div>' +
-        '<button type="button" class="addl" data-act="ed-library">+ &nbsp;Add a section</button>';
+        '<button type="button" class="addl" data-act="ed-library">' + ic("plus") + 'Add a section</button>';
     } else if (k === "list") {
       var l = pgd.lists[key], entries = !pgd.site ? [] : key === "artists"
         ? pgd.site.artists.map(function (a) { return { hash: "artist-" + a.slug, title: a.name, note: a.published ? "" : "Not published" }; })
         : l.section ? pgd.site.articles.filter(function (a) { return a.section === l.section; }).map(function (a) { return { hash: "a-" + a.slug, title: a.title, note: a.hidden ? "Hidden" : "" }; }) : [];
-      mid = '<div class="grp">This page</div><div class="sec' + (sel.where === "list" ? " on" : "") + '" data-act="ed-pick" data-where="list" data-id="' + esc(key) + '"><span class="grip" aria-hidden="true"></span><span class="nm">Page heading<small>' + esc(((pgd.doc.lists || {})[key] || {}).eyebrow || "") + '</small></span></div>' +
+      mid = '<div class="grp">This page</div><div class="sec' + (sel.where === "list" ? " on" : "") + '" data-act="ed-pick" data-where="list" data-id="' + esc(key) + '"><span class="kic">' + ic("heading") + '</span><span class="nm">Page heading<small>' + esc(((pgd.doc.lists || {})[key] || {}).eyebrow || "") + '</small></span></div>' +
         (pgd.site && (key === "artists" || l.section) ? '<div class="grp">In this list</div>' + entries.map(function (x) {
           return '<button type="button" class="sec plain go" data-act="ed-go" data-hash="' + esc(x.hash) + '"><span class="nm">' + esc(x.title) + (x.note ? '<small>' + esc(x.note) + '</small>' : "") + '</span><span class="eye">Open</span></button>';
-        }).join("") + '<button type="button" class="addl" data-act="ed-new" data-what="' + (key === "artists" ? "artist" : "article") + '" data-section="' + esc(l.section || "") + '">+ &nbsp;' + (key === "artists" ? "Add an artist" : "Add an article to this list") + '</button>' : "");
+        }).join("") + '<button type="button" class="addl" data-act="ed-new" data-what="' + (key === "artists" ? "artist" : "article") + '" data-section="' + esc(l.section || "") + '">' + ic("plus") + (key === "artists" ? "Add an artist" : "Add an article to this list") + '</button>' : "");
     } else if (k === "article" || k === "artist" || k === "site") {
       var it = itemOf(pgd), ik = pgd.itemKinds[k];
       mid = '<div class="grp">' + ({ article: "This article", artist: pgd.gam ? "This market profile" : "This portfolio", site: "Across the whole site" })[k] + '</div>' + ik.parts.map(function (part) { return edPartRow(pgd, part, it); }).join("");
@@ -879,11 +921,7 @@
     return '<div class="lt">' + esc(pageLabel(pgd)) + '</div><span class="small lkind">' + esc(kindWord) + '</span>' +
       '<div class="grp">Top of every page</div>' + edShared(pgd, ["opening", "header"]) + mid +
       '<div class="grp">Bottom of every page</div>' + edShared(pgd, ["footer"]) +
-      '<div class="grp">Also on this site</div>' +
-      '<button type="button" class="sec plain" data-tab="theme"><span class="nm">Theme: colours and typefaces</span></button>' +
-      (edits ? "" : '<button type="button" class="sec plain" data-tab="content"><span class="nm">Content: articles, artists, sources</span></button>') +
-      '<button type="button" class="sec plain" data-tab="' + photosTab(site()) + '"><span class="nm">' + (photosTab(site()) === "files" ? "Files: every photo" : "Photos") + '</span></button>' +
-      '<button type="button" class="sec plain" data-tab="history"><span class="nm">History</span></button>';
+      '';
   }
   function edRight(pgd) { var sel = pgSel(pgd); return pgd.panel === "library" ? edLibrary(pgd) : pgd.panel === "new" ? edNew(pgd) : sel ? edSettings(pgd, sel) : ""; }
   // Making something new: a page, an article, an artist or a source.
@@ -988,10 +1026,10 @@
     var removing = state.confirm === "ed-remove|" + sel.id + "|" + (isBlock ? sel.block : "");
     return '<div class="float" role="toolbar" aria-label="Change the picked ' + word + '">' +
       (removing ? '<span class="small" style="padding:0 8px">Remove this ' + word + '?</span><button type="button" class="btn slim" data-act="ed-remove">Yes, remove</button><button type="button" class="soft slim" data-act="cancel">Keep it</button>'
-        : (movable ? '<button type="button" class="soft slim" data-act="ed-dup">Duplicate</button>' : "") +
-          (canHide ? '<button type="button" class="soft slim" data-act="ed-hide">' + (hid ? "Show" : "Hide") + '</button>' : "") +
-          (movable ? '<button type="button" class="soft slim" data-act="ed-move" data-dir="-1"' + (idx > 0 ? "" : " disabled") + '>Move up</button><button type="button" class="soft slim" data-act="ed-move" data-dir="1"' + (idx < n - 1 ? "" : " disabled") + '>Move down</button>' : "") +
-          (movable ? '<button type="button" class="linklike small" data-act="ask" data-k="ed-remove|' + esc(sel.id) + "|" + (isBlock ? sel.block : "") + '" style="margin:0 8px">Remove</button>' : "")) +
+        : (movable ? '<button type="button" class="fb" data-act="ed-dup" aria-label="Duplicate this ' + word + '" title="Duplicate">' + ic("copy", 17) + '</button>' : "") +
+          (canHide ? '<button type="button" class="fb" data-act="ed-hide" aria-label="' + (hid ? "Show" : "Hide") + ' this ' + word + '" title="' + (hid ? "Show" : "Hide") + '">' + ic(hid ? "eye" : "eyeoff", 17) + '</button>' : "") +
+          (movable ? '<button type="button" class="fw" data-act="ed-move" data-dir="-1"' + (idx > 0 ? "" : " disabled") + '>Move up</button><button type="button" class="fw" data-act="ed-move" data-dir="1"' + (idx < n - 1 ? "" : " disabled") + '>Move down</button>' : "") +
+          (movable ? '<button type="button" class="fb danger" data-act="ask" data-k="ed-remove|' + esc(sel.id) + "|" + (isBlock ? sel.block : "") + '" aria-label="Remove this ' + word + '" title="Remove">' + ic("bin", 17) + '</button>' : "")) +
       '</div>';
   }
   var FIELD_N = 0;
@@ -1588,7 +1626,7 @@
       if (state.confirm === k) action = '<div class="stack" style="gap:8px;flex:1 1 100%"><span class="muted">This puts that part of the site back to how it was just before this change. Later changes to the same content are undone too.</span>' +
         '<div class="row"><button type="button" class="btn" data-act="undo" data-sha="' + esc(h.sha) + '"' + (state.busy[k] ? " disabled" : "") + '>Yes, undo it</button><button type="button" class="soft" data-act="cancel">Leave it</button></div></div>';
       else if (h.canUndo) action = '<button type="button" class="soft" data-act="ask" data-k="' + esc(k) + '">Undo</button>';
-      return '<div class="card entry"><span aria-hidden="true" style="flex:none;width:10px;height:10px;border-radius:50%;background:' + (h.canUndo ? "var(--accent)" : "rgba(221,225,234,.25)") + '"></span>' +
+      return '<div class="card entry"><span aria-hidden="true" style="flex:none;width:10px;height:10px;border-radius:50%;background:' + (h.canUndo ? "var(--accent)" : "#D9D3E2") + '"></span>' +
         '<div class="body"><b style="font-size:16px">' + esc(h.what) + '</b><span class="small">' + esc(when(h.when)) + (h.by ? ", by " + esc(h.by) : "") + '</span></div>' + action + '</div>';
     }).join("");
     return head("History", "Every change to this site, newest first. Changes made in this console can be undone.") +
@@ -1598,7 +1636,7 @@
   function viewCopies() {
     var s = site(), list = copiesOf(s), cur = curCopy(), trials = list.filter(function (c) { return c.kind === "trial"; });
     function card(c) {
-      var live = c.kind === "live", on = c.id === cur.id, tone = s ? colours(s.id) : ["#1B2132", "#6F7890"];
+      var live = c.kind === "live", on = c.id === cur.id, tone = s ? colours(s.id) : ["#EDE8F3", "#5D5866"];
       var lines = [];
       if (live) lines.push("Saves here go straight to visitors. " + (c.steps && c.steps.length ? c.steps.length + (c.steps.length === 1 ? " recent step" : " recent steps") + " can be undone." : "Nothing to undo."));
       else {
@@ -1610,7 +1648,7 @@
         (!live && c.ahead ? '<button type="button" class="soft slim" data-act="ask-big" data-kind="makelive" data-copy="' + esc(c.id) + '">Make this the live site</button>' : "") +
         (!live && c.behind ? '<button type="button" class="linklike small" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Refresh from live</button>' : "") +
         (!live ? '<button type="button" class="linklike small" data-act="ask-big" data-kind="deletecopy" data-copy="' + esc(c.id) + '">Delete</button>' : "");
-      return '<div class="card copycard' + (on ? " on" : "") + '"><div class="copytop" style="background:' + (live ? tone[0] : "linear-gradient(120deg, #2E3A57, #55678C)") + ';color:' + (live ? tone[1] : "#EEF1F6") + '"><span>' + (live ? "Live site" : "Trial copy") + '</span></div>' +
+      return '<div class="card copycard' + (on ? " on" : "") + '"><div class="copytop" style="background:' + (live ? tone[0] : "#F1E6FC") + ';color:' + (live ? tone[1] : "#52057B") + '"><span>' + (live ? "Live site" : "Trial copy") + '</span></div>' +
         '<div class="stack copybody"><b class="copyname">' + esc(live ? "What visitors see" : c.name) + '</b>' +
         '<span class="small">' + esc(live ? (s ? s.domain : "") : (c.since ? "Copied from live on " + when(c.since).split(",")[0] : "A copy of the live site")) + '</span>' +
         lines.map(function (l) { return '<span>' + esc(l) + '</span>'; }).join("") + '<div class="row">' + acts + '</div></div></div>';

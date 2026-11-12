@@ -8,10 +8,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const click = (d) => el.listeners.click({ target: { closest: () => ({ dataset: d }) } });
 await wait(500);
 const adh = win.__adh, html = () => el.innerHTML;
-assert.ok(html().includes("Artiscope<br>Digital Home") && html().includes("Sample mode") && html().includes("Version 24"));
-assert.ok(html().includes("Pick a site to work on") && html().includes('class="bulge') && !html().includes('data-tab="content"'), "outside a site only All sites shows");
+assert.ok(html().includes("Artiscope<br>Digital Home") && html().includes("Sample mode") && html().includes("Version 25"));
+assert.ok(html().includes("Pick a site to work on") && html().includes('class="rail') && !html().includes('data-tab="content"'), "outside a site only All sites shows");
 adh.openSite("world-art-review"); await wait(400); adh.go("overview"); await wait(400);
-assert.ok(html().includes("Working in") && html().includes('data-tab="pages"') && !html().includes('class="navb" data-tab="content"') && html().includes("Live site and trial copies") && html().includes("Saves go straight to visitors"));
+assert.ok(html().includes("island-name\">World Art Review") && html().includes('data-tab="pages"') && !html().includes('class="navb" data-tab="content"') && html().includes("Live site and trial copies") && html().includes("Saves go straight to visitors"));
 
 // every screen draws, with no stray "undefined" and no long dashes
 for (const tab of ["overview", "theme", "files", "history", "home"]) {
@@ -21,7 +21,7 @@ for (const tab of ["overview", "theme", "files", "history", "home"]) {
   assert.ok(!/[–—]/.test(html()), tab + " has no long dashes");
   assert.ok(html().includes('data-tab="' + tab + '" aria-current="page"'), tab + " is marked in the menu");
 }
-assert.ok(!html().includes("Working in"), "home leaves the site");
+assert.ok(!html().includes("island-name\">World Art Review"), "home leaves the site");
 adh.openSite("site-3"); await wait(100); assert.ok(html().includes("Not built yet") && !html().includes('data-tab="content"'));
 adh.openSite("world-art-review"); await wait(300); assert.equal(adh.state.tab, "history", "a site opens where you left it");
 adh.go("overview"); await wait(100);

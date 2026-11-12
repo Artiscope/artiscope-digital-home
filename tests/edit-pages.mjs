@@ -20,7 +20,7 @@ try {
   const frame = () => page.frames().find((f) => f.url().startsWith(siteAt));
   const hash = () => frame().evaluate(() => location.hash);
   const settle = () => page.waitForTimeout(700);
-  assert.ok(!(await page.isVisible('.sec.plain[data-tab="content"]')), "Content has gone, everything is in Pages");
+  assert.ok(!(await page.isVisible('.navb[data-tab="content"]')), "Content has gone, everything is in Pages");
   const groups = await page.$$eval(".pagepick optgroup", (g) => g.map((x) => x.label));
   assert.deepEqual(groups, ["Pages", "Lists", "Articles", "Artist portfolios"]);
 
