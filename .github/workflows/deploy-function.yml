@@ -4,7 +4,8 @@ name: Deploy the server function
 # nobody has to copy and paste it into the Supabase dashboard any more.
 # It needs one secret in this repository's settings: SUPABASE_ACCESS_TOKEN.
 # The function keeps its name (dynamic-handler) and its own settings and
-# secrets in Supabase; only its code is replaced.
+# secrets in Supabase; only its code is replaced. Run it by hand from the
+# Actions tab with "Run workflow" if ever needed.
 
 on:
   push:
