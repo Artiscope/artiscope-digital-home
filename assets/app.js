@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "18";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "19";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -119,7 +119,9 @@
         var pgd = await api("pages", { site: s.id });
         var pref = state.edPrefs[s.id] || {};
         var pics = {}; (pgd.pictures || []).forEach(function (p) { pics[p.key] = p; });
-        state.pg[s.id] = { pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false };
+        state.pg[s.id] = { pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false,
+          site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, lists: pgd.lists || {}, listFields: pgd.listFields || [], at: pref.at || "" };
+        var made = state.pg[s.id]; if (made.at && !atKnown(made)) made.at = "";
         render();
       }
       if (state.tab === "files" && (force || !state.files[s.id])) {
@@ -185,7 +187,7 @@
   var NAV_FILES = ["files", "Files", "M4 6a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z", "M8 15l2.5-2.5 2 2 1.5-1.5 2 2"];
   function navItems() {
     var s = site(); if (!(state.inSite && s)) return NAV.slice(0, 1);
-    return s.files ? NAV.map(function (n) { return n[0] === "photos" ? NAV_FILES : n; }) : NAV;
+    return (s.files ? NAV.map(function (n) { return n[0] === "photos" ? NAV_FILES : n; }) : NAV).filter(function (n) { return !(s.edits && n[0] === "content"); });
   }
   function photosTab(s) { return s && s.files ? "files" : "photos"; }
   function navIndex(tab) { var i = navItems().findIndex(function (n) { return n[0] === tab; }); return i < 0 ? 0 : i; }
@@ -330,7 +332,8 @@
     return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><h1>' + esc(s.name) + '</h1>' +
       '<p>' + esc(s.domain) + '. Everything for this site is here. Saves on the live site reach visitors straight away. Use a trial copy to try things first.</p></div>' +
       '<div class="grid-3">' +
-        tile("content", entries, "Content", (cols ? cols.map(function (c) { return c.label.toLowerCase(); }).join(", ") : "Articles, artists and more"), "Edit, hide or delete") +
+        (s.edits ? tile("pages", "", "Pages", "Every page, article and artist portfolio, edited beside the real page", "Open the editor")
+          : tile("content", entries, "Content", (cols ? cols.map(function (c) { return c.label.toLowerCase(); }).join(", ") : "Articles, artists and more"), "Edit, hide or delete")) +
         tile("theme", colourCount == null ? "" : colourCount, "Theme", "Colours and typefaces", "Change the look") +
         (s.files ? tile("files", state.files[s.id] ? state.files[s.id].files.length : "", "Files", "Every photo on the site, what it shows and where it is used", "Upload and describe")
           : tile("photos", empty, "Photos", empty + " empty " + (empty === 1 ? "spot" : "spots") + ", " + waiting + " on the way", "Add photos")) +
@@ -525,7 +528,8 @@
   if (typeof window.addEventListener === "function") {
     window.addEventListener("message", function (ev) {
       if (!ev.data) return;
-      if (ev.data.type === "adh-click") { var pgd = pgOf(); if (!pgd) return; try { if (ev.origin !== new URL(pgd.preview).origin) return; } catch (e) { return; } pickSection(String(ev.data.id || ""), ev.data.block, true); return; }
+      if (ev.data.type === "adh-click") { var pgd = pgOf(); if (!pgd) return; try { if (ev.origin !== new URL(pgd.preview).origin) return; } catch (e) { return; } var vw = String(ev.data.view || ""), kk = atKind(pgd); if (vw && vw !== (kk === "other" ? "page" : kk)) return; pickSection(String(ev.data.id || ""), ev.data.block, true); return; }
+      if (ev.data.type === "adh-nav") { var pn = pgOf(); if (!pn) return; try { if (ev.origin !== new URL(pn.preview).origin) return; } catch (e) { return; } navTo(String(ev.data.hash || "home")); return; }
       var t = themeOf(); if (!t || ev.data.type !== "adh-ready") return;
       try { if (ev.origin !== new URL(t.spec.url).origin) return; } catch (e) { return; }
       if (!t.live) showLive(t, true);
@@ -586,6 +590,29 @@
   function pgSel(pgd) {
     var q = pgd.sel; if (!q) return null;
     var out;
+    if (q.where === "item") {
+      var it = itemOf(pgd), ik = pgd.itemKinds && pgd.itemKinds[atKind(pgd)], part = ik && ik.parts.find(function (x) { return x.id === q.id; });
+      if (!it || !part) return null;
+      if (part.picture) {
+        var ps = pgd.pictures[atKind(pgd) + ":" + atKey(pgd)]; if (!ps) return null;
+        return { where: "item", id: part.id, parent: { kind: { label: ik.label } }, pic: atKind(pgd) + ":" + atKey(pgd), spot: ps, sec: { type: "picture", settings: ps }, kind: picKind(ps), block: null };
+      }
+      out = { where: "item", id: part.id, sec: { type: "item", settings: it }, kind: { label: part.label, about: part.about || "", fields: part.fields, blocks: part.blocks } };
+    } else if (q.where === "source") {
+      var src = pgd.site && pgd.site.sources[q.id]; if (!src) return null;
+      return { where: "source", id: q.id, sec: { type: "source", settings: src }, kind: { label: "Source", about: "Shown in the numbered list of every article and portfolio that cites it.", fields: pgd.itemKinds.source.parts[0].fields }, block: null };
+    } else if (q.where === "list") {
+      if (!pgd.doc.lists || !pgd.doc.lists[q.id]) return null;
+      return { where: "list", id: q.id, sec: { type: "list", settings: pgd.doc.lists[q.id] }, kind: { label: "Page heading", about: "The heading and introduction at the top of " + pgd.lists[q.id].label + ".", fields: pgd.listFields }, block: null };
+    } else if (q.where === "pageinfo") {
+      var pgi = pgd.doc.pages[q.id]; if (!pgi || q.id === "home") return null;
+      return { where: "pageinfo", id: q.id, sec: { type: "pageinfo", settings: pgi }, kind: { label: "Page settings", about: "This page's title, and where to find it.", fields: [{ name: "title", label: "Page title", type: "text", hint: "Shown in the browser tab and in the page picker." }] }, block: null };
+    }
+    if (out) {
+      out.block = null; var ibk = out.kind.blocks;
+      if (ibk && q.block != null) { var il = out.sec.settings[ibk.field]; if (Array.isArray(il) && il[q.block] !== undefined) { out.block = q.block; out.item = il[q.block]; out.list = il; out.bk = ibk; out.bdef = out.kind.fields.find(function (f) { return f.name === ibk.field; }); } }
+      return out;
+    }
     if (q.where === "shared") { var part = pgd.doc.shared[q.id]; if (!part) return null; out = { where: "shared", id: q.id, sec: part, kind: pgd.kinds[part.type] }; }
     else { var sec = pgSections(pgd).find(function (x) { return x.id === q.id; }); if (!sec) return null; out = { where: "page", id: q.id, sec: sec, kind: pgd.kinds[sec.type] }; }
     out.block = null;
@@ -604,21 +631,23 @@
   // The name a block goes by in the list: its title, name or first words.
   function blockTitle(item, i) {
     if (Array.isArray(item)) return String(item[0] || "") || "Item " + (i + 1);
-    if (item && typeof item === "object") { var t = item.title || item.name || item.q || item.t || ""; return String(t).replace(/<[^>]*>/g, "") || "Item " + (i + 1); }
+    if (item && typeof item === "object") { var t = item.title || item.name || item.q || item.t || item.what || ""; return String(t).replace(/<[^>]*>/g, "") || "Item " + (i + 1); }
     return "Item " + (i + 1);
   }
   function blockHidden(item) { return !!(item && !Array.isArray(item) && item.hidden === true); }
   function blankFrom(fields) {
-    if (fields.some(function (g) { return typeof g.name === "number"; })) return fields.map(function () { return ""; });
-    return fields.reduce(function (o, g) { o[g.name] = g.type === "rows" || g.type === "lines" ? [] : g.type === "yesno" ? false : g.type === "number" ? 0 : ""; return o; }, {});
+    var listy = function (g) { return g.type === "rows" || g.type === "lines" || g.type === "sources" || g.type === "articles"; };
+    if (fields.some(function (g) { return typeof g.name === "number"; })) return fields.map(function (g) { return listy(g) ? [] : ""; });
+    return fields.reduce(function (o, g) { o[g.name] = listy(g) ? [] : g.type === "yesno" ? false : g.type === "number" ? 0 : ""; return o; }, {});
   }
   function pgSummary(pgd, where, key, sec) {
     var k = pgd.kinds[sec.type]; if (!k) return "";
     var own = pgd.summaries[(where === "shared" ? "shared:" : pgd.page + ":") + key];
     return own != null ? own : "";
   }
-  function pgMark(pgd) { pgd.dirty = canon(pgd.doc) !== pgd.base || JSON.stringify(pgd.pictures || {}) !== (pgd.picBase || "{}"); state.dirty = pgd.dirty; }
-  function pgReset(pgd) { pgd.doc = JSON.parse(pgd.base); pgd.pictures = JSON.parse(pgd.picBase || "{}"); pgd.dirty = false; state.dirty = false; }
+  function pgMark(pgd) { pgd.dirty = canon(pgd.doc) !== pgd.base || JSON.stringify(pgd.pictures || {}) !== (pgd.picBase || "{}") || siteChanged(pgd); state.dirty = pgd.dirty; }
+  function siteChanged(pgd) { return !!pgd.site && JSON.stringify(pgd.site) !== pgd.siteBase; }
+  function pgReset(pgd) { pgd.doc = JSON.parse(pgd.base); pgd.pictures = JSON.parse(pgd.picBase || "{}"); if (pgd.site) pgd.site = JSON.parse(pgd.siteBase); if (!atKnown(pgd)) pgd.at = ""; pgd.dirty = false; state.dirty = false; }
   // Pictures that belong to an artist or an article but show in a section of this page.
   var LATEST_DEFAULT = ["zara-muse-profile", "konn-artiss-profile", "review-anti-frieze"];
   function linkedOf(pgd, sec) {
@@ -647,6 +676,65 @@
     return { label: "Picture of " + sp.label, fields: f };
   }
 
+  // ----- which page the editor is on -----
+  // A page of sections (pgd.page), or with pgd.at set: "list:reviews", "article:slug", "artist:slug", or "other:standards".
+  var LIST_HASH = { artists: 1, reviews: 1, explained: 1, library: 1, guides: 1 };
+  function atKind(pgd) { return pgd.at ? pgd.at.split(":")[0] : "page"; }
+  function atKey(pgd) { return pgd.at ? pgd.at.slice(pgd.at.indexOf(":") + 1) : pgd.page; }
+  function atKnown(pgd) {
+    var k = atKind(pgd), key = atKey(pgd);
+    if (k === "page") return !!pgd.doc.pages[key];
+    if (k === "list") return !!pgd.lists[key];
+    if (k === "article") return !!(pgd.site && pgd.site.articles.some(function (a) { return a.slug === key; }));
+    if (k === "artist") return !!(pgd.site && pgd.site.artists.some(function (a) { return a.slug === key; }));
+    return k === "other";
+  }
+  function atHash(pgd) {
+    var k = atKind(pgd), key = atKey(pgd);
+    return k === "page" ? (key === "home" ? "home" : "page-" + key) : k === "list" ? key : k === "article" ? "a-" + key : k === "artist" ? "artist-" + key : key;
+  }
+  function itemOf(pgd) {
+    var k = atKind(pgd), key = atKey(pgd); if (!pgd.site) return null;
+    if (k === "article") return pgd.site.articles.find(function (a) { return a.slug === key; }) || null;
+    if (k === "artist") return pgd.site.artists.find(function (a) { return a.slug === key; }) || null;
+    return null;
+  }
+  function itemName(pgd) { var it = itemOf(pgd); return it ? (atKind(pgd) === "artist" ? it.name : it.title) || "" : ""; }
+  function pageLabel(pgd) {
+    var k = atKind(pgd), key = atKey(pgd);
+    if (k === "page") return (pgd.doc.pages[key] || {}).title || key;
+    if (k === "list") return pgd.lists[key].label;
+    if (k === "other") return key.charAt(0).toUpperCase() + key.slice(1);
+    return itemName(pgd);
+  }
+  // Goes to the page a link points at, as the site would.
+  function navTo(hash) {
+    var pgd = pgOf(); if (!pgd) return;
+    hash = String(hash || "home").replace(/^#/, "");
+    pgd.at = ""; pgd.page = "home";
+    if (hash.indexOf("page-") === 0 && pgd.doc.pages[hash.slice(5)]) pgd.page = hash.slice(5);
+    else if (LIST_HASH[hash] && pgd.lists[hash]) pgd.at = "list:" + hash;
+    else if (hash.indexOf("a-") === 0 && pgd.site) pgd.at = "article:" + hash.slice(2);
+    else if (hash.indexOf("artist-") === 0 && pgd.site) pgd.at = "artist:" + hash.slice(7);
+    else if (hash !== "home" && hash) pgd.at = "other:" + hash.replace(/[^a-z0-9-]/gi, "");
+    if (!atKnown(pgd)) { pgd.at = ""; pgd.page = "home"; }
+    pgd.sel = null; pgd.panel = ""; pgd.picker = ""; state.confirm = null; edRemember(); edPatch(); pushPreview("");
+  }
+  // Pages, lists, articles and portfolios, for the picker at the top.
+  function pagePicker(pgd) {
+    var cur = atHash(pgd), o = function (v, label) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + '>' + esc(label) + '</option>'; };
+    var pages = Object.keys(pgd.doc.pages).map(function (k) { return o(k === "home" ? "home" : "page-" + k, pgd.doc.pages[k].title || k); }).join("");
+    var lists = Object.keys(pgd.lists).map(function (k) { return o(k, pgd.lists[k].label); }).join("");
+    var out = '<optgroup label="Pages">' + pages + '</optgroup>' + (lists ? '<optgroup label="Lists">' + lists + '</optgroup>' : "");
+    if (pgd.site) {
+      var arts = pgd.site.articles.slice().sort(function (a, b) { return String(a.title).localeCompare(String(b.title)); });
+      out += '<optgroup label="Articles">' + arts.map(function (a) { return o("a-" + a.slug, a.title + (a.hidden ? " (hidden)" : "")); }).join("") + '</optgroup>';
+      out += '<optgroup label="Artist portfolios">' + pgd.site.artists.map(function (a) { return o("artist-" + a.slug, a.name + (a.published ? "" : " (not published)")); }).join("") + '</optgroup>';
+    }
+    if (atKind(pgd) === "other") out += o(cur, pageLabel(pgd) + " (not editable here)");
+    return '<select class="box pagepick" data-change="ed-goto" aria-label="Page being edited">' + out + '</select>';
+  }
+
   function viewLeave() {
     return state.leave ? '<div class="sunk stack ask"><b>You have changes that are not saved yet.</b>' +
       '<div class="row"><button type="button" class="btn" data-act="leave-save">Save</button><button type="button" class="soft" data-act="leave-go">Leave without saving</button><button type="button" class="linklike" data-act="leave-stay">Keep editing</button></div></div>' : "";
@@ -654,7 +742,7 @@
   function viewPagesEditor(s) {
     var pgd = pgOf();
     if (!pgd) return '<div class="ed"><div class="ed-top">' + edTop(s, null) + '</div><p class="loading" style="grid-column:1/-1">Reading the pages of ' + esc(s.name) + '</p></div>';
-    var sel = pgSel(pgd), right = pgd.panel === "library" ? edLibrary(pgd) : sel ? edSettings(pgd, sel) : "";
+    var right = edRight(pgd);
     return '<div class="ed' + (right ? " with-right" : "") + '">' +
       '<div class="ed-top">' + edTop(s, pgd) + '</div>' +
       '<div class="ed-left">' + edList(pgd) + '</div>' +
@@ -667,7 +755,7 @@
     var c = curCopy(), trial = c.kind === "trial";
     return '<button type="button" class="linklike small" data-tab="overview">Overview</button><b class="island-name">' + esc(s.name) + '</b>' +
       (copiesOf(s).length > 1 ? '<select class="copypick" data-change="copy" aria-label="Working on">' + copiesOf(s).map(function (x) { return '<option value="' + esc(x.kind === "live" ? "" : x.id) + '"' + (x.id === c.id ? " selected" : "") + '>' + esc(x.kind === "live" ? "Live site" : "Trial: " + x.name) + '</option>'; }).join("") + '</select>' : '<span class="chip quiet">' + (trial ? "Trial: " + esc(c.name) : "Live site") + '</span>') +
-      '<div class="mid"><div class="seg mini">' + (pgd ? Object.keys(pgd.doc.pages).map(function (k) { return '<button type="button" class="' + (k === pgd.page ? "on" : "") + '" data-act="ed-page" data-page="' + esc(k) + '">' + esc(pgd.doc.pages[k].title || k) + '</button>'; }).join("") : "") + '</div></div>' +
+      '<div class="mid">' + (pgd ? pagePicker(pgd) + '<button type="button" class="soft slim" data-act="ed-new">New</button>' : "") + '</div>' +
       '<div class="seg mini"><button type="button" class="' + (!pgd || pgd.mode === "computer" ? "on" : "") + '" data-act="ed-mode" data-mode="computer">Computer</button><button type="button" class="' + (pgd && pgd.mode === "phone" ? "on" : "") + '" data-act="ed-mode" data-mode="phone">Phone</button></div>' +
       '<button type="button" class="soft slim" data-act="undo-step"' + ((trial ? c.ahead > 0 : (c.steps || []).length > 0) && state.status !== "saving" ? "" : " disabled") + '>Undo</button>' +
       '<button type="button" class="soft slim" data-act="redo-step"' + (c.canRedo && state.status !== "saving" ? "" : " disabled") + '>Redo</button>' +
@@ -696,19 +784,80 @@
         '<span class="dot" aria-hidden="true"></span><span class="nm">' + esc(blockTitle(item, i)) + '</span>' + (off ? '<span class="eye">Hidden</span>' : "") + '</div>';
     }).join("") + '<button type="button" class="addl blk" data-act="ed-add-block" data-where="' + where + '" data-id="' + esc(id) + '">+ &nbsp;' + esc(bk.add) + '</button></div>';
   }
-  function edList(pgd) {
+  function edShared(pgd, keys) {
     var sel = pgd.sel || {}, sh = pgd.doc.shared || {};
-    var top = ["opening", "header"].filter(function (k) { return sh[k]; }), bottom = ["footer"].filter(function (k) { return sh[k]; });
-    return '<div class="lt">' + esc(pgPage(pgd).title || pgd.page) + ' page</div>' +
-      '<div class="grp">Top of every page</div>' + top.map(function (k) { return edRow(pgd, "shared", k, sh[k], sel.where === "shared" && sel.id === k); }).join("") +
-      '<div class="grp">This page</div><div id="ed-sections">' + pgSections(pgd).map(function (x) { return edRow(pgd, "page", x.id, x, sel.where === "page" && sel.id === x.id); }).join("") + '</div>' +
-      '<button type="button" class="addl" data-act="ed-library">+ &nbsp;Add a section</button>' +
-      '<div class="grp">Bottom of every page</div>' + bottom.map(function (k) { return edRow(pgd, "shared", k, sh[k], sel.where === "shared" && sel.id === k); }).join("") +
+    return keys.filter(function (k) { return sh[k]; }).map(function (k) { return edRow(pgd, "shared", k, sh[k], sel.where === "shared" && sel.id === k); }).join("");
+  }
+  function plainWords(html) { return String(html || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(); }
+  function partSummary(pgd, part, it) {
+    var k = atKind(pgd), n = function (x, one, many) { return x + " " + (x === 1 ? one : many); };
+    if (part.picture) { var ps = pgd.pictures[k + ":" + atKey(pgd)]; return ps && ps.image ? "Chosen" : "No picture yet"; }
+    if (part.id === "words") return k === "artist" ? (it.tag || "") : (it.kicker || "");
+    if (part.id === "body") return n(plainWords(it.body).split(" ").filter(Boolean).length, "word", "words");
+    if (part.id === "sources") return n((it.sources || []).length, "source", "sources");
+    if (part.id === "settings") return k === "article" ? (it.hidden ? "Hidden from the site" : "Shown on the site") : (it.published ? "Portfolio shown" : "Not published yet");
+    if (part.blocks) return n((it[part.blocks.field] || []).length, part.blocks.label.toLowerCase(), part.blocks.label.toLowerCase() + "s");
+    return "";
+  }
+  function edPartRow(pgd, part, it) {
+    var sel = pgd.sel || {}, picked = sel.where === "item" && sel.id === part.id;
+    var row = '<div class="sec' + (picked && sel.block == null ? " on" : "") + '" data-act="ed-pick" data-where="item" data-id="' + esc(part.id) + '"><span class="grip" aria-hidden="true"></span>' +
+      '<span class="nm">' + esc(part.label) + '<small>' + esc(partSummary(pgd, part, it)) + '</small></span></div>';
+    var bk = part.blocks, list = bk ? it[bk.field] : null;
+    if (!bk || !picked) return row;
+    return row + '<div class="blocks">' + (Array.isArray(list) ? list : []).map(function (item, i) {
+      var off = blockHidden(item);
+      return '<div class="sec blk' + (sel.block === i ? " on" : "") + (off ? " off" : "") + '" data-act="ed-pick" data-where="item" data-id="' + esc(part.id) + '" data-block="' + i + '">' +
+        '<span class="dot" aria-hidden="true"></span><span class="nm">' + esc(blockTitle(item, i)) + '</span>' + (off ? '<span class="eye">Hidden</span>' : "") + '</div>';
+    }).join("") + '<button type="button" class="addl blk" data-act="ed-add-block" data-where="item" data-id="' + esc(part.id) + '">+ &nbsp;' + esc(bk.add) + '</button></div>';
+  }
+  function edList(pgd) {
+    var sel = pgd.sel || {}, k = atKind(pgd), key = atKey(pgd), s = site(), mid = "";
+    var kindWord = { page: key === "home" ? "Home page" : "Page", list: "List page", article: "Article", artist: "Artist portfolio", other: "Page" }[k];
+    if (k === "page") {
+      mid = (key !== "home" ? '<div class="sec' + (sel.where === "pageinfo" ? " on" : "") + '" data-act="ed-pick" data-where="pageinfo" data-id="' + esc(key) + '"><span class="grip" aria-hidden="true"></span><span class="nm">Page settings<small>Title, menu bar, delete</small></span></div>' : "") +
+        '<div class="grp">This page</div><div id="ed-sections">' + pgSections(pgd).map(function (x) { return edRow(pgd, "page", x.id, x, sel.where === "page" && sel.id === x.id); }).join("") + '</div>' +
+        '<button type="button" class="addl" data-act="ed-library">+ &nbsp;Add a section</button>';
+    } else if (k === "list") {
+      var l = pgd.lists[key], entries = !pgd.site ? [] : key === "artists"
+        ? pgd.site.artists.map(function (a) { return { hash: "artist-" + a.slug, title: a.name, note: a.published ? "" : "Not published" }; })
+        : l.section ? pgd.site.articles.filter(function (a) { return a.section === l.section; }).map(function (a) { return { hash: "a-" + a.slug, title: a.title, note: a.hidden ? "Hidden" : "" }; }) : [];
+      mid = '<div class="grp">This page</div><div class="sec' + (sel.where === "list" ? " on" : "") + '" data-act="ed-pick" data-where="list" data-id="' + esc(key) + '"><span class="grip" aria-hidden="true"></span><span class="nm">Page heading<small>' + esc(((pgd.doc.lists || {})[key] || {}).eyebrow || "") + '</small></span></div>' +
+        (pgd.site && (key === "artists" || l.section) ? '<div class="grp">In this list</div>' + entries.map(function (x) {
+          return '<button type="button" class="sec plain go" data-act="ed-go" data-hash="' + esc(x.hash) + '"><span class="nm">' + esc(x.title) + (x.note ? '<small>' + esc(x.note) + '</small>' : "") + '</span><span class="eye">Open</span></button>';
+        }).join("") + '<button type="button" class="addl" data-act="ed-new" data-what="' + (key === "artists" ? "artist" : "article") + '" data-section="' + esc(l.section || "") + '">+ &nbsp;' + (key === "artists" ? "Add an artist" : "Add an article to this list") + '</button>' : "");
+    } else if (k === "article" || k === "artist") {
+      var it = itemOf(pgd), ik = pgd.itemKinds[k];
+      mid = '<div class="grp">' + (k === "article" ? "This article" : "This portfolio") + '</div>' + ik.parts.map(function (part) { return edPartRow(pgd, part, it); }).join("");
+    } else {
+      mid = '<p class="small" style="margin:10px 6px">' + esc(pageLabel(pgd)) + ' is drawn by the site\'s own code, so its words cannot be changed here yet. The menu bar and footer can.</p>';
+    }
+    var edits = s && s.edits;
+    return '<div class="lt">' + esc(pageLabel(pgd)) + '</div><span class="small lkind">' + esc(kindWord) + '</span>' +
+      '<div class="grp">Top of every page</div>' + edShared(pgd, ["opening", "header"]) + mid +
+      '<div class="grp">Bottom of every page</div>' + edShared(pgd, ["footer"]) +
       '<div class="grp">Also on this site</div>' +
       '<button type="button" class="sec plain" data-tab="theme"><span class="nm">Theme: colours and typefaces</span></button>' +
-      '<button type="button" class="sec plain" data-tab="content"><span class="nm">Content: articles, artists, sources</span></button>' +
+      (edits ? "" : '<button type="button" class="sec plain" data-tab="content"><span class="nm">Content: articles, artists, sources</span></button>') +
       '<button type="button" class="sec plain" data-tab="' + photosTab(site()) + '"><span class="nm">' + (photosTab(site()) === "files" ? "Files: every photo" : "Photos") + '</span></button>' +
       '<button type="button" class="sec plain" data-tab="history"><span class="nm">History</span></button>';
+  }
+  function edRight(pgd) { var sel = pgSel(pgd); return pgd.panel === "library" ? edLibrary(pgd) : pgd.panel === "new" ? edNew(pgd) : sel ? edSettings(pgd, sel) : ""; }
+  // Making something new: a page, an article, an artist or a source.
+  var NEW_WHAT = [["page", "Page"], ["article", "Article"], ["artist", "Artist"], ["source", "Source"]];
+  function edNew(pgd) {
+    var w = pgd.newWhat || "page", ok = function (x) { return x === "page" || !!pgd.site; };
+    var tabs = '<div class="seg mini">' + NEW_WHAT.filter(function (x) { return ok(x[0]); }).map(function (x) { return '<button type="button" class="' + (w === x[0] ? "on" : "") + '" data-act="ed-new" data-what="' + x[0] + '">' + x[1] + '</button>'; }).join("") + '</div>';
+    var f = function (id, label, hint, extra) { return '<div class="field"><label for="nw-' + id + '">' + esc(label) + '</label><input type="text" id="nw-' + id + '" name="' + id + '" maxlength="160"' + (extra || "") + '>' + (hint ? '<span class="small">' + esc(hint) + '</span>' : "") + '</div>'; };
+    var body = "";
+    if (w === "page") body = f("title", "Page title", "Such as Visit us or About the review.") + '<label class="chk"><input type="checkbox" name="menu" checked> Add it to the menu bar</label><span class="small">It starts with one text section. Add more from the section library.</span>';
+    else if (w === "article") body = f("title", "Title", "You can change it later.") + '<div class="field"><label for="nw-section">Which list it belongs to</label><select class="box" id="nw-section" name="section">' +
+      [["explained", "Art Explained"], ["library", "Collector's Library"], ["reviews", "Reviews"], ["features", "Artists A to Z"]].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === (pgd.newSection || "explained") ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div><span class="small">New articles start hidden, so you can write in peace. Show it from its Settings when it is ready.</span>';
+    else if (w === "artist") body = f("name", "Artist's name") + '<span class="small">The portfolio starts unpublished. The artist shows in Artists A to Z as In research until you publish it from Settings.</span>';
+    else body = f("title", "Title", "The title of the article, page or record.") + f("pub", "Publication or owner", "Such as The Guardian or Bonhams.") + f("date", "Date", "A year, or a full date.") + f("kind", "Kind of source", "Such as Independent news report or Gallery source.") + f("url", "Link", "The full web address, starting https://") +
+      (pgd.newCite ? '<span class="small">It is added to the sources you were choosing.</span>' : "");
+    return '<div class="rhead"><button type="button" class="linklike small" data-act="ed-panel-close">Cancel</button><h2>Make something new</h2>' + tabs + '</div>' +
+      '<form class="stack" data-form="ednew" data-what="' + w + '">' + body + '<div class="row"><button type="submit" class="btn slim">' + { page: "Make the page", article: "Make the article", artist: "Add the artist", source: "Add the source" }[w] + '</button></div></form>';
   }
   function edLibrary(pgd) {
     var kinds = Object.keys(pgd.kinds).filter(function (k) { return pgd.kinds[k].library; });
@@ -719,7 +868,7 @@
     var kind = sel.kind || { label: sel.sec.type, fields: [] }, st = sel.sec.settings || {};
     if (sel.pic) {
       var parentKind = sel.parent.kind || { label: sel.id };
-      return '<div class="rhead"><button type="button" class="linklike small" data-act="ed-pick" data-where="' + sel.where + '" data-id="' + esc(sel.id) + '">Back to ' + esc(parentKind.label) + '</button>' +
+      return '<div class="rhead">' + (sel.where === "item" ? '<button type="button" class="linklike small" data-act="ed-panel-close">Done</button>' : '<button type="button" class="linklike small" data-act="ed-pick" data-where="' + sel.where + '" data-id="' + esc(sel.id) + '">Back to ' + esc(parentKind.label) + '</button>') +
         '<h2>' + esc(kind.label) + '</h2><div class="shared-note"><b>A shared picture</b><span class="small">It belongs to ' + esc(sel.spot.kind === "artist" ? sel.spot.label : "the article") + ', so a change here also shows on ' + esc(sel.spot.also) + '.</span></div></div>' +
         '<form class="stack" data-form="section">' + kind.fields.map(function (f) { return edField(pgd, f, st[f.name], f.name); }).join("") + '</form>';
     }
@@ -737,13 +886,33 @@
     var blockNote = bk ? '<div class="blocknote"><b>' + ((st[bk.field] || []).length) + " " + esc(bk.label.toLowerCase()) + ((st[bk.field] || []).length === 1 ? "" : "s") + '</b><span class="small">Pick one in the list on the left to change it, or add another.</span><button type="button" class="soft slim" data-act="ed-add-block" data-where="' + sel.where + '" data-id="' + esc(sel.id) + '">' + esc(bk.add) + '</button></div>' : "";
     return '<div class="rhead"><button type="button" class="linklike small" data-act="ed-panel-close">Done</button><h2>' + esc(kind.label) + '</h2>' + (kind.about ? '<span class="small">' + esc(kind.about) + '</span>' : "") + (sel.sec.visible === false ? '<span class="chip quiet" style="align-self:flex-start">Hidden from the page</span>' : "") + '</div>' +
       '<form class="stack" data-form="section">' + (main.join("") || (bk ? "" : '<span class="small" style="margin:0 6px">Nothing to set here.</span>')) + blockNote +
-      (look.length ? '<div class="sub">Look</div>' + look.join("") : "") + '</form>';
+      (look.length ? '<div class="sub">Look</div>' + look.join("") : "") + '</form>' + edExtras(pgd, sel);
   }
+  // Things that sit under the settings: the menu bar for a page, deleting a page or an article.
+  function edExtras(pgd, sel) {
+    var asking = function (k) { return state.confirm === k; };
+    if (sel.where === "pageinfo") {
+      var links = ((pgd.doc.shared.header || {}).settings || {}).links || [], href = "#page-" + sel.id, inMenu = links.some(function (l) { return l[1] === href; });
+      return '<div class="stack extras"><div class="sub">Menu bar</div><span class="small">' + (inMenu ? "This page is in the menu bar." : "This page is not in the menu bar. Visitors reach it from links you add.") + '</span>' +
+        '<button type="button" class="soft slim" data-act="ed-menu" data-id="' + esc(sel.id) + '">' + (inMenu ? "Take it out of the menu bar" : "Add it to the menu bar") + '</button>' +
+        '<div class="sub">Delete</div>' + (asking("ed-delpage") ? '<span class="small">Delete this page and its sections?</span><div class="row"><button type="button" class="btn slim" data-act="ed-delpage" data-id="' + esc(sel.id) + '">Yes, delete</button><button type="button" class="linklike small" data-act="cancel">Keep it</button></div>'
+          : '<button type="button" class="linklike small" data-act="ask" data-k="ed-delpage">Delete this page</button>') + '</div>';
+    }
+    if (sel.where === "item" && sel.id === "settings" && atKind(pgd) === "article") {
+      return '<div class="stack extras"><div class="sub">Delete</div>' + (asking("ed-delart") ? '<span class="small">Delete this article for good? Undo can still bring it back after saving.</span><div class="row"><button type="button" class="btn slim" data-act="ed-delart">Yes, delete</button><button type="button" class="linklike small" data-act="cancel">Keep it</button></div>'
+        : '<button type="button" class="linklike small" data-act="ask" data-k="ed-delart">Delete this article</button><span class="small">Hiding it keeps it for later.</span>') + '</div>';
+    }
+    if (sel.where === "source") return '<div class="stack extras"><span class="small">Short name: ' + esc(sel.id) + '. Cited ' + citedCount(pgd, sel.id) + ' times across the site.</span></div>';
+    return "";
+  }
+  function citedCount(pgd, id) { var txt = JSON.stringify({ a: (pgd.site || {}).artists, b: (pgd.site || {}).articles }); return txt.split('"' + id + '"').length - 1 + txt.split('data-src=\\"' + id + '\\"').length - 1; }
+
   // The floating bar over the page: acts on whatever is picked.
   function edFloat(pgd) {
     var sel = pgSel(pgd); if (!sel || sel.pic) return "";
     var isBlock = sel.block != null, page = sel.where === "page", idx, n, hid, canHide = true;
-    if (isBlock) { idx = sel.block; n = sel.list.length; hid = blockHidden(sel.item); canHide = !Array.isArray(sel.item); }
+    if (!isBlock && sel.where !== "page" && sel.where !== "shared") return "";
+    if (isBlock) { idx = sel.block; n = sel.list.length; hid = blockHidden(sel.item); canHide = !Array.isArray(sel.item) && (sel.where !== "item" || sel.bk.field === "works"); }
     else { idx = page ? pgSections(pgd).findIndex(function (x) { return x.id === sel.id; }) : -1; n = pgSections(pgd).length; hid = sel.sec.visible === false; }
     var movable = isBlock || page, word = isBlock ? sel.bk.label.toLowerCase() : "section";
     var removing = state.confirm === "ed-remove|" + sel.id + "|" + (isBlock ? sel.block : "");
@@ -762,7 +931,7 @@
     if (t === "text") input = '<input type="text" id="' + id + '" data-pf="' + esc(path) + '" value="' + esc(v == null ? "" : v) + '">';
     else if (t === "long") {
       if (f.plain) input = '<textarea id="' + id + '" data-pf="' + esc(path) + '">' + esc(v == null ? "" : v) + '</textarea>';
-      else { richSource[path] = { html: String(v || ""), dirty: false }; input = '<div class="rt">' + richTools(id, true) + '<div class="rt-page short" id="' + id + '" data-rich="' + esc(path) + '" data-pf-rich="1" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" lang="en-GB"></div></div>'; }
+      else { richSource[path] = { html: String(v || ""), dirty: false }; input = '<div class="rt">' + richTools(id, !f.cite, f.cite && pgd.site ? pgd.site.sources : null) + '<div class="rt-page' + (f.cite ? "" : " short") + '" id="' + id + '" data-rich="' + esc(path) + '" data-pf-rich="1" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" lang="en-GB"></div></div>'; }
     } else if (t === "lines") input = '<textarea id="' + id + '" data-pf="' + esc(path) + '" data-kind="lines" rows="3">' + esc((Array.isArray(v) ? v : [v || ""]).join("\n")) + '</textarea>' + (f.hint ? "" : '<span class="small">One line each.</span>');
     else if (t === "number") input = '<input type="number" step="1" id="' + id + '" data-pf="' + esc(path) + '" data-kind="number" value="' + esc(v == null ? "" : v) + '" style="max-width:140px">';
     else if (t === "yesno") input = '<select class="box" id="' + id + '" data-pf="' + esc(path) + '" data-kind="yesno"><option value="true"' + (v === true ? " selected" : "") + '>Yes</option><option value="false"' + (v === true ? "" : " selected") + '>No</option></select>';
@@ -780,6 +949,20 @@
         (open ? '<div class="picgrid">' + (pgd.images.length ? pgd.images.map(function (im) { var about = (pgd.imageMeta[im] || {}).alt; return '<button type="button" class="pictile' + (im === v ? " on" : "") + '" data-act="ed-pic-choose" data-path="' + esc(path) + '" data-name="' + esc(im) + '" title="' + esc(about || im) + '"><img src="' + esc(pgd.imageBase + im) + '" alt="" loading="lazy"><span>' + esc(about || im) + '</span></button>'; }).join("") : '<span class="small">No photos on the site yet. Upload one.</span>') + '</div>' : "") +
         '<span class="small">JPG or PNG. Resized for the web, never cropped. Kept when you press Save.</span>';
       hint = "";
+    }
+    else if (t === "sources" || t === "articles") {
+      var opts = t === "sources" ? Object.keys(pgd.site ? pgd.site.sources : {}).map(function (k) { var x = pgd.site.sources[k]; return [k, (x.title || k) + (x.pub ? ", " + x.pub : "")]; })
+        : (pgd.site ? pgd.site.articles : []).map(function (a) { return ["a-" + a.slug, a.title]; });
+      var chosen = Array.isArray(v) ? v : [], nameOf = function (x) { var o = opts.find(function (y) { return y[0] === x; }); return o ? o[1] : x; };
+      input = '<div class="picklist">' + (chosen.length ? '<ol>' + chosen.map(function (x, i) {
+        return '<li><span class="pk-name">' + (t === "sources" ? '<b>' + (i + 1) + '</b> ' : "") + esc(nameOf(x)) + '</span><span class="pk-act">' +
+          (i ? '<button type="button" class="linklike small" data-act="ed-pk" data-op="up" data-path="' + esc(path) + '" data-i="' + i + '">Up</button>' : "") +
+          (t === "sources" ? '<button type="button" class="linklike small" data-act="ed-pk" data-op="edit" data-path="' + esc(path) + '" data-i="' + i + '">Details</button>' : "") +
+          '<button type="button" class="linklike small" data-act="ed-pk" data-op="del" data-path="' + esc(path) + '" data-i="' + i + '">Remove</button></span></li>';
+      }).join("") + '</ol>' : '<span class="small">None chosen yet.</span>') +
+        '<select class="box" id="' + id + '" data-change="ed-pk-add" data-path="' + esc(path) + '"><option value="">' + (t === "sources" ? "Add a source" : "Add an article") + '</option>' +
+        opts.filter(function (o) { return chosen.indexOf(o[0]) < 0; }).map(function (o) { return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>'; }).join("") +
+        (t === "sources" ? '<option value="+new">A new source, not listed yet</option>' : "") + '</select></div>';
     }
     else if (t === "artists") {
       if (f.one) input = '<select class="box" id="' + id + '" data-pf="' + esc(path) + '"><option value="">First published artist</option>' + pgd.artists.map(function (a) { return '<option value="' + esc(a.slug) + '"' + (a.slug === v ? " selected" : "") + '>' + esc(a.name) + '</option>'; }).join("") + '</select>';
@@ -816,10 +999,10 @@
       label = sel.kind ? sel.kind.label : "";
       if (sel.block != null && !blockHidden(sel.item)) { block = sel.list.slice(0, sel.block).filter(function (x) { return !blockHidden(x); }).length; label = sel.bk.label + ": " + blockTitle(sel.item, sel.block); }
     }
-    var id = pick != null ? pick : (sel ? sel.id : "");
+    var id = pick != null ? pick : (sel ? (sel.where === "list" ? "listhead" : sel.where === "pageinfo" || sel.where === "source" ? "" : sel.id) : "");
     var pictures = Object.keys(pgd.pictures || {}).map(function (k) { var p = pgd.pictures[k]; return { key: k, image: p.image, alt: p.alt, credit: p.credit }; });
     if (sel && sel.pic) label = sel.kind.label;
-    try { frame.contentWindow.postMessage({ type: "adh-pages", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages }, images: images, pictures: pictures, pick: id, block: id ? block : -1, label: id ? label : "", scroll: !!pgd.scrollNext }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
+    try { frame.contentWindow.postMessage({ type: "adh-pages", at: atHash(pgd), content: pgd.site || undefined, show: atKind(pgd) === "article" ? atKey(pgd) : "", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages, lists: pgd.doc.lists }, images: images, pictures: pictures, pick: id, block: id ? block : -1, label: id ? label : "", scroll: !!pgd.scrollNext }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
     pgd.scrollNext = false;
   }
   function pushSoon() { clearTimeout(pushTimer); pushTimer = setTimeout(function () { pushPreview(); }, 150); }
@@ -847,7 +1030,7 @@
   function edPatch() {
     var ed = app.querySelector && app.querySelector(".ed"), s = site(), pgd = pgOf();
     if (!ed || !s || !pgd) { render(); return; }
-    var sel = pgSel(pgd), right = pgd.panel === "library" ? edLibrary(pgd) : sel ? edSettings(pgd, sel) : "";
+    var right = edRight(pgd);
     ed.className = "ed" + (right ? " with-right" : "");
     ed.querySelector(".ed-top").innerHTML = edTop(s, pgd);
     ed.querySelector(".ed-left").innerHTML = edList(pgd);
@@ -859,13 +1042,17 @@
     var fl = ed.querySelector("#ed-float"); if (fl) fl.innerHTML = edFloat(pgd);
     mountRich(); mountDrag();
   }
-  function edRemember() { var s = site(), p = pgOf(); if (s && p) state.edPrefs[s.id] = { mode: p.mode, page: p.page, sel: p.sel }; }
-  function pickSection(id, block, fromPage) {
+  function edRemember() { var s = site(), p = pgOf(); if (s && p) state.edPrefs[s.id] = { mode: p.mode, page: p.page, sel: p.sel, at: p.at }; }
+  function pickSection(id, block, fromPage, where) {
     var pgd = pgOf(); if (!pgd) return;
-    var b = block == null || block === "" || Number(block) < 0 ? null : Number(block);
+    var b = block == null || block === "" || Number(block) < 0 ? null : Number(block), k = atKind(pgd);
     if (id === "header" || id === "footer" || id === "opening") pgd.sel = { where: "shared", id: id, block: b };
+    else if (where === "item" || (!where && (k === "article" || k === "artist"))) pgd.sel = { where: "item", id: id, block: b };
+    else if (where === "list" || (!where && k === "list")) pgd.sel = { where: "list", id: atKey(pgd), block: null };
+    else if (where === "pageinfo" || where === "source") pgd.sel = { where: where, id: id, block: null };
     else if (pgSections(pgd).some(function (x) { return x.id === id; })) pgd.sel = { where: "page", id: id, block: b };
     else return;
+    if (!pgSel(pgd)) { pgd.sel = null; return; }
     // a click on the page counts hidden blocks out, so find the real one
     var sel = pgSel(pgd);
     if (fromPage && b != null && sel && sel.kind && sel.kind.blocks) {
@@ -887,6 +1074,8 @@
       k.fields.forEach(function (f) { if (f.type === "image" && f.alt && (sec.settings || {})[f.name] && !String((sec.settings || {})[f.alt] || "").trim()) found = { page: pk, id: sec.id, label: k.label }; });
     }); });
     if (found) return found;
+    (pgd.site ? pgd.site.artists : []).some(function (a) { return (a.works || []).some(function (w, i) { if (w && w.image && !String(w.alt || "").trim()) { found = { at: "artist:" + a.slug, part: "works", block: i, label: "the artwork " + (w.title || i + 1) }; return true; } return false; }); });
+    if (found) return found;
     var ch = picChanges(pgd);
     Object.keys(ch).some(function (k) {
       if (!ch[k].image || String(ch[k].alt || "").trim()) return false;
@@ -903,14 +1092,17 @@
   function savePages() {
     var s = site(), pgd = pgOf(); if (!s || !pgd || !pgd.dirty) return;
     var miss = missingDescription(pgd);
-    if (miss) { pgd.page = miss.page; pgd.sel = miss.id ? { where: "page", id: miss.id, block: null, pic: miss.pic || "" } : null; state.notice = { text: "Please describe the picture in " + miss.label + " before saving. It is read out to people who cannot see it.", problem: true }; edPatch(); pushPreview(); return; }
+    if (miss && miss.at) { pgd.at = miss.at; pgd.sel = { where: "item", id: miss.part, block: miss.block }; state.notice = { text: "Please describe the picture of " + miss.label + " before saving. It is read out to people who cannot see it.", problem: true }; edPatch(); pushPreview(); return; }
+    if (miss) { if (miss.page) { pgd.page = miss.page; pgd.at = ""; } pgd.sel = miss.id ? { where: "page", id: miss.id, block: null, pic: miss.pic || "" } : null; state.notice = { text: "Please describe the picture in " + miss.label + " before saving. It is read out to people who cannot see it.", problem: true }; edPatch(); pushPreview(); return; }
     var doc = JSON.parse(JSON.stringify(pgd.doc)), what = pgd.what || (pgPage(pgd).title || pgd.page);
     var pics = picChanges(pgd), picNames = Object.keys(pics).map(function (k) { return pgd.pictures[k].label; });
     if (canon(doc) === pgd.base && picNames.length) what = "Picture of " + picNames.join(", ");
-    var used = canon(doc) + canon(pics), uploads = Object.keys(pgd.uploads || {}).filter(function (k) { return used.indexOf(JSON.stringify(k)) >= 0; }).map(function (k) { var u = pgd.uploads[k]; return { key: k, name: u.name, ext: u.ext, content: u.content }; });
+    var contentNow = siteChanged(pgd) ? JSON.parse(JSON.stringify(pgd.site)) : undefined;
+    if (canon(doc) === pgd.base && !picNames.length && contentNow) what = pgd.what || "Edit " + (itemName(pgd) || "content");
+    var used = canon(doc) + canon(pics) + (contentNow ? canon(contentNow) : ""), uploads = Object.keys(pgd.uploads || {}).filter(function (k) { return used.indexOf(JSON.stringify(k)) >= 0; }).map(function (k) { var u = pgd.uploads[k]; return { key: k, name: u.name, ext: u.ext, content: u.content }; });
     edRemember(); state.notice = null;
     onLive(function () {
-      change(key("pages", s.id), function () { return api("savePages", { site: s.id, pages: doc, what: what, uploads: uploads, pictures: pics }); }, function () { state.dirty = false; }, curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes");
+      change(key("pages", s.id), function () { return api("savePages", { site: s.id, pages: doc, what: what, uploads: uploads, pictures: pics, content: contentNow }); }, function () { state.dirty = false; }, curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes");
     }, (picNames.length ? "This change, including the shared " + (picNames.length === 1 ? "picture of " + picNames[0] + "," : "pictures of " + picNames.join(" and ") + ",") : "This page change") + (uploads.length ? (uploads.length === 1 ? " and its new photo" : " and its " + uploads.length + " new photos") : ""));
   }
 
@@ -1026,13 +1218,14 @@
     });
     try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch (e) { /* older browsers */ }
   }
-  function richTools(id, short) {
+  function richTools(id, short, sources) {
     function b(cmd, label, extra) { return '<button type="button" class="rt-b" data-rt="' + cmd + '"' + (extra || "") + '>' + label + '</button>'; }
     return '<div class="rt-bar" role="toolbar" aria-label="Formatting">' +
       b("bold", "<b>Bold</b>") + b("italic", "<i>Italic</i>") + '<span class="rt-gap"></span>' +
       (short ? "" : b("h2", "Heading") + b("h3", "Small heading") + b("p", "Normal text") + '<span class="rt-gap"></span>' +
       b("ul", "Bullet list") + b("ol", "Numbered list") + '<span class="rt-gap"></span>') +
-      b("link", "Link") + b("unlink", "Remove link") + '</div>' +
+      b("link", "Link") + b("unlink", "Remove link") +
+      (sources ? '<span class="rt-gap"></span><select class="rt-cite" data-cite="1" aria-label="Cite a source where the cursor is"><option value="">Cite a source</option>' + Object.keys(sources).map(function (k) { return '<option value="' + esc(k) + '">' + esc(sources[k].title || k) + '</option>'; }).join("") + '</select>' : "") + '</div>' +
       '<div class="rt-link" hidden><input type="text" aria-label="Web address for the link" placeholder="Paste the web address, for example https://www.tate.org.uk">' +
       '<button type="button" class="soft" data-rt="link-add">Add link</button><button type="button" class="linklike" data-rt="link-cancel">Cancel</button></div>' +
       '<span class="small rt-say" hidden>Select the words for the link first, then press Link.</span>';
@@ -1497,6 +1690,68 @@
     if (rich[ed.dataset.rich]) rich[ed.dataset.rich].dirty = true;
   });
 
+  // ----- making a page, an article, an artist or a source -----
+  function slugFrom(t) { return String(t || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50); }
+  function freeSlug(base, taken) { base = base || "new"; var n = 2, out = base; while (taken.indexOf(out) >= 0) out = base + "-" + (n++); return out; }
+  var RESERVED_PAGES = ["home", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search"];
+  function makeNew(form) {
+    var pgd = pgOf(); if (!pgd) return;
+    var val = function (n) { var x = form.querySelector('[name="' + n + '"]'); return x ? (x.type === "checkbox" ? x.checked : x.value.trim()) : ""; };
+    var w = form.dataset.what, say = function (t) { state.notice = { text: t, problem: true }; edPatch(); };
+    state.notice = null;
+    if (w === "page") {
+      var title = val("title"); if (!title) return say("Please give the page a title.");
+      var key = freeSlug(slugFrom(title) || "page", Object.keys(pgd.doc.pages).concat(RESERVED_PAGES));
+      var starter = JSON.parse(JSON.stringify((pgd.kinds.text && pgd.kinds.text.starter) || {})); starter.heading = [title];
+      pgd.doc.pages[key] = { title: title, sections: [{ id: "text-1", type: "text", visible: true, settings: starter }] };
+      if (val("menu")) { var links = pgd.doc.shared.header.settings.links = pgd.doc.shared.header.settings.links || []; links.push([title, "#page-" + key]); }
+      pgd.what = "Add page: " + title; pgMark(pgd); navTo("page-" + key); return;
+    }
+    if (!pgd.site) return;
+    if (w === "article") {
+      var at = val("title"); if (!at) return say("Please give the article a title.");
+      var slug = freeSlug(slugFrom(at) || "article", pgd.site.articles.map(function (x) { return x.slug; }));
+      pgd.site.articles.push({ slug: slug, section: val("section") || "explained", kicker: "", artists: [], tone: "#D3C5AA", title: at, dek: "", credit: "", minutes: 5, updated: new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" }), status: "Draft for review", sources: [], body: "<p>Write here.</p>", hidden: true, image: null, alt: "" });
+      pgd.pictures["article:" + slug] = { key: "article:" + slug, kind: "article", label: at, group: "Articles", also: "the article and its card in every list", image: "", alt: "", credit: "", hasCredit: true, hidden: true, section: val("section") };
+      pgd.what = "Add article: " + at; pgMark(pgd); navTo("a-" + slug); pickSection("words", null, false, "item"); return;
+    }
+    if (w === "artist") {
+      var name = val("name"); if (!name) return say("Please give the artist's name.");
+      var aslug = freeSlug(slugFrom(name) || "artist", pgd.site.artists.map(function (x) { return x.slug; }));
+      pgd.site.artists.push({ slug: aslug, name: name, letter: name.charAt(0).toUpperCase(), published: false, image: null, alt: "", ghostWords: [name, "", "", ""], tag: "", place: "", tone: "#D3C5AA", heroTone: "#D9CCB4", summary: "", dek: "", heroCredit: "", checked: "", glance: [], sections: [], works: [], timeline: [], seen: "", related: [], research: ["Biography and background"] });
+      pgd.pictures["artist:" + aslug] = { key: "artist:" + aslug, kind: "artist", label: name, group: "Artists", also: name + "'s portfolio and the home page", image: "", alt: "", credit: "", hasCredit: true, published: false };
+      pgd.artists.push({ slug: aslug, name: name });
+      pgd.what = "Add artist: " + name; pgMark(pgd); navTo("artist-" + aslug); pickSection("words", null, false, "item"); return;
+    }
+    if (w === "source") {
+      var st = val("title"), url = val("url"); if (!st) return say("Please give the source a title.");
+      if (url && !/^https?:\/\//i.test(url)) return say("The link must start with https://");
+      var id = freeSlug(slugFrom((val("pub") + " " + st).split(" ").slice(0, 5).join(" ")).slice(0, 40) || "source", Object.keys(pgd.site.sources));
+      pgd.site.sources[id] = { title: st, pub: val("pub"), date: val("date"), kind: val("kind"), url: url };
+      var cite = pgd.newCite; pgd.newCite = ""; pgd.panel = "";
+      if (cite) { pgd.at = cite.at; pgd.page = cite.page; pgd.sel = cite.sel; var cs = pgSel(pgd); if (cs) { var l2 = pgGet(cs.sec.settings, cite.path); if (!Array.isArray(l2)) { l2 = []; pgSet(cs.sec.settings, cite.path, l2); } l2.push(id); } }
+      else pgd.sel = { where: "source", id: id, block: null };
+      pgd.what = "Add source: " + st; pgMark(pgd); edPatch(); pushPreview();
+    }
+  }
+
+  // Moving between pages keeps unsaved changes: they belong to the whole site until Save.
+  function guardless(fn) { fn(); }
+  // Puts a numbered citation where the cursor was in the text being edited.
+  var citeAt = null;
+  if (typeof document.addEventListener === "function") document.addEventListener("selectionchange", function () {
+    var sel = window.getSelection(); if (!sel || !sel.rangeCount) return;
+    var node = sel.anchorNode, ed = node && (node.nodeType === 1 ? node : node.parentNode); ed = ed && ed.closest && ed.closest("[data-pf-rich]");
+    if (ed) citeAt = { ed: ed, range: sel.getRangeAt(0).cloneRange() };
+  });
+  function citeHere(id) {
+    if (!id) return;
+    var c = citeAt;
+    if (!c || !document.body.contains(c.ed)) { state.notice = { text: "Click in the text where the source belongs first, then choose it.", problem: true }; edPatch(); return; }
+    c.ed.focus(); var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(c.range); sel.collapseToEnd();
+    document.execCommand("insertHTML", false, '<sup class="cite"><a data-src="' + esc(id) + '">[' + esc(id) + ']</a></sup>&#8203;');
+  }
+
   // Asks before leaving an entry that has typing in it.
   function guard(next) {
     var pgd = pgOf();
@@ -1531,7 +1786,34 @@
     else if (a === "files-remove") filesWrite("Deleting " + el.dataset.name, { op: "remove", name: el.dataset.name }, null, "Photo deleted");
     else if (a === "files-send") filesSend();
     else if (a === "fadd-drop") { var dp = state.fileAdd.splice(Number(el.dataset.i), 1)[0]; if (dp) URL.revokeObjectURL(dp.url); render(); }
-    else if (a === "ed-pick") pickSection(el.dataset.id, el.dataset.block);
+    else if (a === "ed-pick") pickSection(el.dataset.id, el.dataset.block, false, el.dataset.where);
+    else if (a === "ed-go") navTo(el.dataset.hash);
+    else if (a === "ed-new") { var pw = pgOf(); if (pw) { pw.panel = "new"; pw.newWhat = el.dataset.what || pw.newWhat || "page"; if (el.dataset.section != null) pw.newSection = el.dataset.section; if (!el.dataset.keep) pw.newCite = ""; state.notice = null; edPatch(); var nf = app.querySelector('form[data-form="ednew"] input[type=text]'); if (nf) nf.focus(); } }
+    else if (a === "ed-menu") {
+      var pm2 = pgOf(); if (!pm2) return; var hl = pm2.doc.shared.header.settings.links = pm2.doc.shared.header.settings.links || [], hh = "#page-" + el.dataset.id, at2 = hl.findIndex(function (l) { return l[1] === hh; });
+      if (at2 >= 0) { hl.splice(at2, 1); pm2.what = "Take a page out of the menu bar"; } else { hl.push([pm2.doc.pages[el.dataset.id].title, hh]); pm2.what = "Add a page to the menu bar"; }
+      pgMark(pm2); edPatch(); pushPreview();
+    }
+    else if (a === "ed-delpage") {
+      var pz2 = pgOf(), dk = el.dataset.id; if (!pz2 || dk === "home") return;
+      var title2 = pz2.doc.pages[dk].title; delete pz2.doc.pages[dk];
+      var hl2 = ((pz2.doc.shared.header || {}).settings || {}).links; if (hl2) pz2.doc.shared.header.settings.links = hl2.filter(function (l) { return l[1] !== "#page-" + dk; });
+      pz2.what = "Delete page: " + title2; state.confirm = null; pgMark(pz2); navTo("home");
+    }
+    else if (a === "ed-delart") {
+      var pz3 = pgOf(), it3 = pz3 && itemOf(pz3); if (!it3) return;
+      var sec3 = it3.section; pz3.site.articles = pz3.site.articles.filter(function (x) { return x !== it3; }); delete pz3.pictures["article:" + it3.slug];
+      pz3.what = "Delete article: " + it3.title; state.confirm = null; pgMark(pz3);
+      navTo(({ explained: "explained", library: "library", reviews: "reviews", features: "artists" })[sec3] || "home");
+    }
+    else if (a === "ed-pk") {
+      var pp2 = pgOf(), ps2 = pp2 && pgSel(pp2); if (!ps2) return;
+      var arr2 = pgGet(ps2.sec.settings, el.dataset.path), i2 = Number(el.dataset.i); if (!Array.isArray(arr2)) return;
+      if (el.dataset.op === "up" && i2 > 0) { var t2 = arr2[i2 - 1]; arr2[i2 - 1] = arr2[i2]; arr2[i2] = t2; }
+      else if (el.dataset.op === "del") arr2.splice(i2, 1);
+      else if (el.dataset.op === "edit") { pp2.sel = { where: "source", id: arr2[i2], block: null }; pp2.panel = ""; edPatch(); return; }
+      pp2.what = "Edit " + (itemName(pp2) || ps2.kind.label); pgMark(pp2); edPatch(); pushPreview();
+    }
     else if (a === "ed-pick-pic") { var pi = pgOf(); if (pi && pi.pictures[el.dataset.key]) { pi.sel = { where: "page", id: el.dataset.id, block: null, pic: el.dataset.key }; pi.panel = ""; pi.picker = ""; edRemember(); edPatch(); pushPreview(); } }
     else if (a === "ed-panel-close") { var pq = pgOf(); if (pq) { pq.panel = ""; pq.sel = null; pq.picker = ""; edPatch(); pushPreview(""); } }
     else if (a === "ed-library") { var pl = pgOf(); if (pl) { pl.panel = "library"; edPatch(); } }
@@ -1552,7 +1834,7 @@
     }
     else if (a === "ed-dup") {
       var pd = pgOf(), ds = pd && pgSel(pd); if (!ds) return;
-      if (ds.block != null) { ds.list.splice(ds.block + 1, 0, JSON.parse(JSON.stringify(ds.item))); pd.sel.block = ds.block + 1; pd.what = "Add " + ds.bk.label.toLowerCase() + ": copy of " + blockTitle(ds.item, ds.block); }
+      if (ds.block != null) { var dupe = JSON.parse(JSON.stringify(ds.item)); if (dupe && !Array.isArray(dupe) && dupe.id) dupe.id = dupe.id + "-copy"; ds.list.splice(ds.block + 1, 0, dupe); pd.sel.block = ds.block + 1; pd.what = "Add " + ds.bk.label.toLowerCase() + ": copy of " + blockTitle(ds.item, ds.block); }
       else { if (ds.where !== "page") return; var copy = JSON.parse(JSON.stringify(ds.sec)); copy.id = newSectionId(pd, ds.sec.type);
         var dl = pgSections(pd), di = dl.findIndex(function (x) { return x.id === ds.id; }); dl.splice(di + 1, 0, copy);
         pd.summaries[pd.page + ":" + copy.id] = pd.summaries[pd.page + ":" + ds.id] || ""; pd.sel = { where: "page", id: copy.id, block: null }; pd.what = "Add section: copy of " + (ds.kind ? ds.kind.label : ds.id); }
@@ -1577,7 +1859,8 @@
       var ks = pgSel(pk); if (!ks || !ks.kind || !ks.kind.blocks) return;
       var bf = ks.kind.fields.find(function (f) { return f.name === ks.kind.blocks.field; }); if (!bf) return;
       var arr = ks.sec.settings[ks.kind.blocks.field]; if (!Array.isArray(arr)) { arr = []; ks.sec.settings[ks.kind.blocks.field] = arr; }
-      arr.push(blankFrom(bf.fields)); pk.sel.block = arr.length - 1; pk.what = ks.kind.blocks.add + " in " + ks.kind.label;
+      var blank = blankFrom(bf.fields); if (ks.where === "item" && ks.kind.blocks.field === "sections") { var sn = 1; while (arr.some(function (x) { return x && x.id === "part-" + sn; })) sn++; blank.id = "part-" + sn; }
+      arr.push(blank); pk.sel.block = arr.length - 1; pk.what = ks.kind.blocks.add + " in " + (ks.where === "item" ? itemName(pk) : ks.kind.label);
       pgMark(pk); pk.scrollNext = true; edPatch(); pushPreview();
     }
     else if (a === "ed-picker") { var pq2 = pgOf(); if (pq2) { pq2.picker = pq2.picker === el.dataset.path ? "" : el.dataset.path; edPatch(); } }
@@ -1648,7 +1931,8 @@
     else if (kind === "colour") { v = t.value.toUpperCase(); var sw2 = app.querySelector('[data-swatch="' + path + '"]'); if (sw2) sw2.style.background = v; }
     else v = t.value;
     pgSet(sel.sec.settings, path, v);
-    pgd.what = "Edit " + (sel.kind ? sel.kind.label : sel.id); pgMark(pgd); patchEdTop(); pushSoon();
+    pgd.what = sel.where === "item" ? "Edit " + itemName(pgd) : sel.where === "source" ? "Edit source: " + (sel.sec.settings.title || sel.id) : "Edit " + (sel.kind ? sel.kind.label : sel.id); pgMark(pgd); patchEdTop(); pushSoon();
+    if (sel.where === "item" && (path === "title" || path === "name")) { var lt = app.querySelector(".ed-left .lt"); if (lt) lt.textContent = v; }
   }
   function patchEdTop() { var top = app.querySelector && app.querySelector(".ed-top"), s = site(); if (top && s) top.innerHTML = edTop(s, pgOf()); }
 
@@ -1673,6 +1957,15 @@
     var t = ev.target, kind = t.dataset.change;
     if (t.dataset && t.dataset.upload) { uploadInto(t); return; }
     if (kind === "files-replace") { filesReplace(t); t.value = ""; return; }
+    if (kind === "ed-goto") { var gt = t.value; guardless(function () { navTo(gt); }); return; }
+    if (kind === "ed-pk-add") {
+      var pa2 = pgOf(), sa2 = pa2 && pgSel(pa2); if (!sa2 || !t.value) return;
+      if (t.value === "+new") { pa2.panel = "new"; pa2.newWhat = "source"; pa2.newCite = { sel: JSON.parse(JSON.stringify(pa2.sel)), path: t.dataset.path, at: pa2.at, page: pa2.page }; edPatch(); var nf2 = app.querySelector('form[data-form="ednew"] input[type=text]'); if (nf2) nf2.focus(); return; }
+      var list2 = pgGet(sa2.sec.settings, t.dataset.path); if (!Array.isArray(list2)) { list2 = []; pgSet(sa2.sec.settings, t.dataset.path, list2); }
+      if (list2.indexOf(t.value) < 0) list2.push(t.value);
+      pa2.what = "Edit " + (itemName(pa2) || sa2.kind.label); pgMark(pa2); edPatch(); pushPreview(); return;
+    }
+    if (t.dataset && t.dataset.cite) { citeHere(t.value); t.value = ""; return; }
     if (kind === "files-add") {
       var bad = 0;
       Array.prototype.forEach.call(t.files, function (f) { if (!/^image\/(jpeg|png)$/.test(f.type)) { bad++; return; } if (state.fileAdd.length < 12) state.fileAdd.push({ file: f, url: URL.createObjectURL(f), alt: "", caption: "" }); });
@@ -1739,6 +2032,7 @@
     ev.preventDefault();
     var form = ev.target;
     if (form.dataset.form === "entry") { saveEntry(form); return; }
+    if (form.dataset.form === "ednew") { makeNew(form); return; }
     if (form.dataset.form === "fdesc") {
       var dn = form.dataset.name, dalt = form.querySelector('[name="alt"]').value.trim(), dcap = form.querySelector('[name="caption"]').value.trim();
       filesWrite("The description of " + dn, { op: "describe", name: dn, alt: dalt, caption: dcap }, null, "Description saved"); return;
@@ -1774,7 +2068,7 @@
     { id: "sources", label: "Sources", singular: "source", canHide: false, canDelete: false, entries: [] },
   ];
   var demoData = { user: { email: "sample" }, sites: [
-    { id: "world-art-review", name: "World Art Review", domain: "worldartreview.com", live: true, files: true, artists: [], inbox: [],
+    { id: "world-art-review", name: "World Art Review", domain: "worldartreview.com", live: true, files: true, edits: true, artists: [], inbox: [],
       slots: [{ id: "artist-zara-muse", group: "Artist main images", label: "Zara Muse", filled: true, waiting: false }, { id: "artist-konn-artiss", group: "Artist main images", label: "Konn Artiss", filled: false, waiting: false }, { id: "article-sample", group: "Articles", label: "[Sample] An article", filled: false, waiting: false }] },
     { id: "global-art-monitor", name: "Global Art Monitor", domain: "globalartmonitor.com", live: true, artists: [], inbox: ["slot--artist-zara-muse.jpg"],
       slots: [{ id: "artist-zara-muse", group: "Artist profile images", label: "Zara Muse", filled: false, waiting: true }, { id: "artist-konn-artiss", group: "Artist profile images", label: "Konn Artiss", filled: true, waiting: false }] },
@@ -1816,7 +2110,9 @@
   var demoMeta = { "zara-muse-portrait.jpg": { alt: "Zara Muse's portrait, painted with a palette knife in warm reds and gold", caption: "" } };
   var demoSpots = [{"key":"artist:zara-muse","kind":"artist","label":"Zara Muse","group":"Artists","also":"Zara Muse's portfolio and the home page","image":"zara-muse-portrait.jpg","alt":"A painting in thick palette knife strokes of a woman seen from behind, with a pale blonde bob and bare shoulders, against a deep blue background.","credit":"Image: painting by Zara Muse. Supplied by Grove Gallery","published":true,"slot":"artist-zara-muse","hasCredit":true},{"key":"work:zara-muse:0","kind":"work","label":"Malala Yousafzai","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-malala-yousafzai","hasCredit":false},{"key":"work:zara-muse:1","kind":"work","label":"Bella Dama del Sol","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-bella-dama-del-sol","hasCredit":false},{"key":"work:zara-muse:2","kind":"work","label":"Delicada Belleza","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-delicada-belleza","hasCredit":false},{"key":"work:zara-muse:3","kind":"work","label":"Ecos de Azul","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-ecos-de-azul","hasCredit":false},{"key":"work:zara-muse:4","kind":"work","label":"Gracia de Azafra","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-gracia-de-azafra","hasCredit":false},{"key":"work:zara-muse:5","kind":"work","label":"Oro Roja","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-oro-roja","hasCredit":false},{"key":"work:zara-muse:6","kind":"work","label":"Viento del Sur","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-viento-del-sur","hasCredit":false},{"key":"work:zara-muse:7","kind":"work","label":"A Moment in Amber","group":"Artworks: Zara Muse","also":"Zara Muse's portfolio","image":"","alt":"","credit":"","slot":"work-zara-muse-a-moment-in-amber","hasCredit":false},{"key":"artist:konn-artiss","kind":"artist","label":"Konn Artiss","group":"Artists","also":"Konn Artiss's portfolio and the home page","image":"","alt":"","credit":"Image: ANTI-FRIEZE, London, October 2025. Courtesy Konn Artiss","published":true,"slot":"artist-konn-artiss","hasCredit":true},{"key":"work:konn-artiss:0","kind":"work","label":"The Washington Ghost","group":"Artworks: Konn Artiss","also":"Konn Artiss's portfolio","image":"","alt":"","credit":"","slot":"work-konn-artiss-the-washington-ghost","hasCredit":false},{"key":"work:konn-artiss:1","kind":"work","label":"Venice canal effigy","group":"Artworks: Konn Artiss","also":"Konn Artiss's portfolio","image":"","alt":"","credit":"","slot":"work-konn-artiss-venice-canal-effigy","hasCredit":false},{"key":"work:konn-artiss:2","kind":"work","label":"ANTI-FRIEZE","group":"Artworks: Konn Artiss","also":"Konn Artiss's portfolio","image":"","alt":"","credit":"","slot":"work-konn-artiss-anti-frieze","hasCredit":false},{"key":"work:konn-artiss:3","kind":"work","label":"Frieze week ice blocks","group":"Artworks: Konn Artiss","also":"Konn Artiss's portfolio","image":"","alt":"","credit":"","slot":"work-konn-artiss-frieze-week-ice-blocks","hasCredit":false},{"key":"artist:zen-xander","kind":"artist","label":"Zen Xander","group":"Artists","also":"Zen Xander's portfolio and the home page","image":"","alt":"","credit":"","published":false,"slot":"artist-zen-xander","hasCredit":true},{"key":"article:zara-muse-profile","kind":"article","label":"Zara Muse: biography, artistic style and career","group":"Articles: Features","section":"features","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: Zara Muse portrait, detail. Supplied by Grove Gallery","slot":"article-zara-muse-profile","hasCredit":true},{"key":"article:konn-artiss-profile","kind":"article","label":"Konn Artiss: artist profile and selected works","group":"Articles: Features","section":"features","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: ANTI-FRIEZE, London, 2025. Courtesy Konn Artiss","slot":"article-konn-artiss-profile","hasCredit":true},{"key":"article:palette-knife-painting","kind":"article","label":"Understanding palette-knife painting","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"article-palette-knife-painting.jpg","alt":"Looking close on the strokes","credit":"Image: palette-knife detail.","slot":"article-palette-knife-painting","hasCredit":true},{"key":"article:texture-in-portraiture","kind":"article","label":"The role of texture in contemporary portraiture","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: portrait surface, raking light. [Image to supply]","slot":"article-texture-in-portraiture","hasCredit":true},{"key":"article:how-to-look-at-a-painting","kind":"article","label":"How to look at a painting in ten minutes","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: a visitor in front of a painting. [Image to supply]","slot":"article-how-to-look-at-a-painting","hasCredit":true},{"key":"article:oil-and-acrylic","kind":"article","label":"Oil or acrylic: what the difference means for the person who owns it","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: tubes of oil and acrylic paint. [Image to supply]","slot":"article-oil-and-acrylic","hasCredit":true},{"key":"article:glossary-of-paint","kind":"article","label":"A short glossary of paint, from impasto to sgraffito","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"","slot":"article-glossary-of-paint","hasCredit":true},{"key":"article:what-is-an-intervention","kind":"article","label":"What is an art intervention?","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: ANTI-FRIEZE, London, 2025. Courtesy Konn Artiss","slot":"article-what-is-an-intervention","hasCredit":true},{"key":"article:how-prints-are-made","kind":"article","label":"How prints are made: screenprint, etching, lithograph and giclée","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: a screenprinting squeegee. [Image to supply]","slot":"article-how-prints-are-made","hasCredit":true},{"key":"article:research-emerging-artist","kind":"article","label":"How to research an emerging artist","group":"Articles: Collecting library","section":"library","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"","slot":"article-research-emerging-artist","hasCredit":true},{"key":"article:original-vs-print","kind":"article","label":"Original, limited edition or open print?","group":"Articles: Collecting library","section":"library","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"","slot":"article-original-vs-print","hasCredit":true},{"key":"article:provenance-certificates","kind":"article","label":"Provenance and certificates, explained","group":"Articles: Collecting library","section":"library","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"","slot":"article-provenance-certificates","hasCredit":true},{"key":"article:mixed-media","kind":"article","label":"Mixed-media art: materials, meaning and conservation","group":"Articles: Art explained","section":"explained","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: ANTI-FRIEZE, 2025. Courtesy Konn Artiss","slot":"article-mixed-media","hasCredit":true},{"key":"article:review-anti-frieze","kind":"article","label":"ANTI-FRIEZE: what melts when the art market is put on ice","group":"Articles: Reviews","section":"reviews","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: ANTI-FRIEZE, London, October 2025. Courtesy Konn Artiss","slot":"article-review-anti-frieze","hasCredit":true},{"key":"article:review-washington-ghost","kind":"article","label":"The Washington Ghost: satire as a printed newspaper","group":"Articles: Reviews","section":"reviews","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"Image: The Washington Ghost, Venice, 2025. [Image to supply]","slot":"article-review-washington-ghost","hasCredit":true},{"key":"article:compare-muse-artiss","kind":"article","label":"Zara Muse and Konn Artiss: two ways to talk about value","group":"Articles: Reviews","section":"reviews","hidden":false,"also":"the article and its card in every list","image":"","alt":"","credit":"","slot":"article-compare-muse-artiss","hasCredit":true}];
   var demoSummaries = { "shared:opening": "World Art Review", "shared:header": "3 links", "shared:footer": "3 columns", "home:hero": "Discover Artists.", "home:featured": "All published", "home:sections": "4 rows", "home:explainedHome": "2 articles", "home:numbers": "Four figures", "home:method": "3 cards" };
+  var demoSite = null;   // the sample site's articles, artists and sources, read once from assets/demo-site.json
   function demoApi(body) {
+    if (body.action === "pages" && !demoSite) return fetch("assets/demo-site.json").then(function (r) { return r.json(); }).then(function (d) { demoSite = d; if (!demoPages.lists) demoPages.lists = d.pageLists; return demoApi(body); }, function () { demoSite = { site: null, itemKinds: null, lists: {}, listFields: [] }; return demoApi(body); });
     return new Promise(function (resolve, reject) {
       setTimeout(function () {
         var a = body.action, c = body.site ? demoCopy(body) : null, l = body.site ? demoList(body.site) : null;
@@ -1828,11 +2124,12 @@
         }
         else if (a === "content") resolve({ collections: JSON.parse(JSON.stringify(demoContent)) });
         else if (a === "history") resolve({ changes: demoHistory });
-        else if (a === "pages") resolve({ pictures: JSON.parse(JSON.stringify(demoSpots.filter(function (x) { return x.kind !== "work"; }))), imageMeta: JSON.parse(JSON.stringify(demoMeta)), pages: JSON.parse(JSON.stringify(demoPages)), kinds: demoKinds, summaries: demoSummaries, images: demoFiles.slice(), imageBase: (params.get("preview") || "https://worldartreview.com/") + "images/", artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }], preview: params.get("preview") || "https://worldartreview.com/" });
+        else if (a === "pages") resolve({ site: demoSite.site ? JSON.parse(JSON.stringify(demoSite.site)) : null, itemKinds: demoSite.itemKinds, lists: demoSite.lists, listFields: demoSite.listFields, pictures: JSON.parse(JSON.stringify(demoSpots.filter(function (x) { return x.kind !== "work"; }))), imageMeta: JSON.parse(JSON.stringify(demoMeta)), pages: JSON.parse(JSON.stringify(demoPages)), kinds: demoKinds, summaries: demoSummaries, images: demoFiles.slice(), imageBase: (params.get("preview") || "https://worldartreview.com/") + "images/", artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }], preview: params.get("preview") || "https://worldartreview.com/" });
         else if (a === "savePages") {
           var named = {}; (body.uploads || []).forEach(function (u) { var n = String(u.name || "photo").toLowerCase().replace(/\.[a-z]+$/, "").replace(/[^a-z0-9]+/g, "-") + "." + u.ext; named[u.key] = n; if (demoFiles.indexOf(n) < 0) demoFiles.push(n); });
           var fix = function (v) { return JSON.parse(JSON.stringify(v), function (k, x) { return typeof x === "string" && named[x] ? named[x] : x; }); };
           demoPages = fix(body.pages);
+          if (body.content) demoSite.site = fix(body.content);
           var pics = fix(body.pictures || {}); Object.keys(pics).forEach(function (k) { var sp = demoSpots.find(function (x) { return x.key === k; }); if (sp) Object.assign(sp, pics[k]); });
           var keepAlt = function (x) { if (Array.isArray(x)) return x.forEach(keepAlt); if (!x || typeof x !== "object") return; Object.keys(x).forEach(function (k) { if (k !== "alt" && typeof x[k] === "string" && Object.keys(named).some(function (u) { return named[u] === x[k]; }) && x.alt && !demoMeta[x[k]]) demoMeta[x[k]] = { alt: x.alt, caption: "" }; keepAlt(x[k]); }); };
           keepAlt(demoPages); keepAlt(pics);

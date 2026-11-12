@@ -138,16 +138,103 @@ WAR_SECTIONS.numbers.library = "Figures from the site, in a band"; WAR_SECTIONS.
 WAR_SECTIONS.method.library = "Three cards in a row"; WAR_SECTIONS.method.starter = { eyebrow: "How we research", heading: ["The work first,", "then the story"], cards: [{ n: "1", text: "Write here.", title: "A title", sub: "A small line" }] };
 WAR_SECTIONS.articles.library = "Fills itself from Content";
 
+// ----- articles, artist portfolios and sources, edited in place on their own pages -----
+// Each is a set of parts shown in the list on the left. A part with picture: true is the
+// item's shared picture. Fields not listed here (tone, letter, compare and so on) are kept as they are.
+const SRC_FIELD = { name: "src", label: "Sources", type: "sources", hint: "The sources behind this. Their numbers appear on the page." };
+const WAR_ITEMS = {
+  article: { label: "Article", parts: [
+    { id: "words", label: "Title and summary", about: "The heading of the article and how it is listed.", fields: [
+      { name: "title", label: "Title", type: "text", hint: "A colon splits it over two lines." },
+      { name: "kicker", label: "Label above the title", type: "text", hint: "One or two words, such as Technique or Review." },
+      { name: "dek", label: "Summary line", type: "long", plain: true, hint: "One sentence under the title, also used in lists." },
+      { name: "section", label: "Which list it belongs to", type: "choice", options: [["explained", "Art Explained"], ["library", "Collector's Library"], ["reviews", "Reviews"], ["features", "Artists A to Z"]] },
+      { name: "artists", label: "Artists in this article", type: "artists", hint: "Shown beside the article with a link to each portfolio." },
+      { name: "minutes", label: "Reading time, minutes", type: "number" },
+      { name: "updated", label: "Updated", type: "text", hint: "For example November 2026." },
+      { name: "status", label: "Status label", type: "text", hint: "For example Draft for review. Leave empty to hide it." },
+    ] },
+    { id: "picture", label: "Picture", picture: true },
+    { id: "body", label: "Body", about: "The text of the article.", fields: [{ name: "body", label: "Text", type: "long", cite: true, hint: "Type as you would in a document. Cite a source where a fact needs one." }] },
+    { id: "sources", label: "Sources", about: "The numbered list at the end.", fields: [{ name: "sources", label: "Sources listed at the end", type: "sources", hint: "Numbered in this order. Sources cited in the text are added after these." }] },
+    { id: "settings", label: "Settings", about: "Whether visitors can see the article.", fields: [{ name: "hidden", label: "Hidden from the site", type: "yesno", hint: "A hidden article is kept but not shown or listed anywhere. New articles start hidden." }] },
+  ] },
+  artist: { label: "Artist portfolio", parts: [
+    { id: "words", label: "Words", about: "The name and the lines about the artist.", fields: [
+      { name: "name", label: "Name", type: "text" },
+      { name: "tag", label: "Type of work", type: "text", hint: "Shown under the name, such as Portraiture." },
+      { name: "place", label: "Based in", type: "text" },
+      { name: "summary", label: "Short summary", type: "long", plain: true, hint: "Used on the artist's card on the home page." },
+      { name: "dek", label: "Opening line", type: "long", plain: true, hint: "Under the name at the top of the portfolio." },
+      { name: "ghostWords", label: "Large background words", type: "lines", hint: "Four short words, one per line, shown large behind the artist on the home page." },
+      { name: "checked", label: "Last checked", type: "text", hint: "For example 9 November 2026." },
+    ] },
+    { id: "picture", label: "Picture", picture: true },
+    { id: "glance", label: "At a glance", about: "The facts beside the picture.", fields: [{ name: "glance", label: "Rows", type: "rows", fields: [{ name: 0, label: "Label", type: "text", hint: "Such as Medium or Based in." }, { name: 1, label: "Value", type: "text" }, { name: 2, label: "Sources", type: "sources", hint: "The sources behind this fact." }] }], blocks: { field: "glance", label: "Fact", add: "Add a fact" } },
+    { id: "sections", label: "Portfolio sections", about: "The written parts of the portfolio, and where to see the work.", fields: [
+      { name: "sections", label: "Sections", type: "rows", keep: ["id"], fields: [{ name: "title", label: "Heading", type: "text" }, { name: "html", label: "Text", type: "long", cite: true }] },
+      { name: "seen", label: "Where to see the work", type: "long", cite: true, hint: "Shown near the end of the portfolio." },
+    ], blocks: { field: "sections", label: "Section", add: "Add a section" } },
+    { id: "timeline", label: "Timeline", about: "The career timeline.", fields: [{ name: "timeline", label: "Events", type: "rows", keep: ["todo"], fields: [
+      { name: "when", label: "When", type: "text", nullable: true, hint: "A year or date. Leave empty and the page says Year to confirm." },
+      { name: "what", label: "What happened", type: "text" },
+      { name: "reported", label: "Only reported, not confirmed", type: "yesno", hint: "Marks it Reported, for claims that come only from publicity." },
+      SRC_FIELD,
+    ] }], blocks: { field: "timeline", label: "Event", add: "Add an event" } },
+    { id: "works", label: "Artworks", about: "The documented works.", fields: [{ name: "works", label: "Works", type: "rows", keep: ["tone"], fields: [
+      { name: "title", label: "Title", type: "text", nullable: true, hint: "Leave empty and the page says Title to be documented." },
+      { name: "image", label: "Picture", type: "image", alt: "alt", path: "images/" },
+      { name: "alt", label: "Describe the picture", type: "text", hint: "Read aloud to people who cannot see it." },
+      { name: "year", label: "Year", type: "text", nullable: true },
+      { name: "medium", label: "Medium", type: "text", nullable: true },
+      { name: "size", label: "Size", type: "text", nullable: true, none: true, hint: "Leave empty if not known yet. Type none when a size does not apply, such as for a performance." },
+      { name: "note", label: "Note", type: "long", plain: true, nullable: true },
+      SRC_FIELD,
+    ] }], blocks: { field: "works", label: "Work", add: "Add a work" } },
+    { id: "settings", label: "Settings", about: "Whether the portfolio is shown, and what to read next.", fields: [
+      { name: "published", label: "Portfolio shown on the site", type: "yesno", hint: "New portfolios start unpublished. The artist still appears in Artists A to Z as In research." },
+      { name: "related", label: "Read next", type: "articles", hint: "Articles listed at the end of the portfolio." },
+      { name: "research", label: "Still to research", type: "lines", hint: "One item per line. Shown on the research desk, not to visitors." },
+    ] },
+  ] },
+  source: { label: "Source", parts: [{ id: "words", label: "Source", fields: [
+    { name: "title", label: "Title", type: "text", hint: "The title of the article, page or record." },
+    { name: "pub", label: "Publication or owner", type: "text", hint: "Such as The Guardian or Bonhams." },
+    { name: "date", label: "Date", type: "text", hint: "A year, or a full date." },
+    { name: "kind", label: "Kind of source", type: "text", hint: "Such as Independent news report, Interview with the artist or Gallery source." },
+    { name: "url", label: "Link", type: "text", hint: "The full web address, starting https://" },
+  ] }] },
+};
+// The heading and introduction at the top of each list page.
+export const LIST_FIELDS = [EYEBROW, { ...HEADING, label: "Heading", hint: "Each line of the large heading on its own line." }, { name: "intro", label: "Introduction", type: "long", plain: true, hint: "One or two sentences under the heading." }];
+const WAR_LISTS = {
+  artists: { label: "Artists A to Z", start: { eyebrow: "Artists A to Z", heading: ["Every artist,", "researched and sourced"], intro: "Each portfolio brings together biography, documented works, a career timeline and the sources behind every fact. Portfolios marked in research are being compiled now." } },
+  reviews: { label: "Reviews", section: "reviews", start: { eyebrow: "Reviews", heading: ["Recent reviews", "and comparisons"], intro: "Considered responses to individual works and projects, and side-by-side comparisons of artists." } },
+  explained: { label: "Art Explained", section: "explained", start: { eyebrow: "Art Explained", heading: ["How the work is made,", "and why it matters"], intro: "Plain-language guides to the techniques, materials and ideas behind the artworks." } },
+  library: { label: "Collector's Library", section: "library", start: { eyebrow: "Collector's Library", heading: ["Buy with your", "eyes open"], intro: "Practical, independent guidance on researching artists, understanding what you are buying and keeping good records." } },
+  guides: { label: "Exhibition Guides", start: { eyebrow: "Exhibition Guides", heading: ["What to see,", "and how to see it"], intro: "Short, practical guides to current exhibitions featuring the artists we cover." } },
+};
+
 function cleanField(f, v, site) {
   const t = f.type;
-  if (t === "text") return String(v == null ? "" : v).replace(/—/g, ",").slice(0, 400);
-  if (t === "long") return String(v == null ? "" : v).replace(/—/g, ",").slice(0, 20000);
+  if (t === "text") {
+    if (f.none && (v === false || /^\s*none\s*$/i.test(String(v == null ? "" : v)))) return false;
+    const x = String(v == null ? "" : v).replace(/—/g, ",").slice(0, 400);
+    return f.nullable && !x.trim() ? null : x;
+  }
+  if (t === "long") { const x = String(v == null ? "" : v).replace(/—/g, ",").slice(0, 60000); return f.nullable && !x.trim() ? null : x; }
+  if (t === "sources") { const ok = site.sourceIds || []; return [...new Set((Array.isArray(v) ? v : []).map(String))].filter((x) => ok.includes(x)).slice(0, 40); }
+  if (t === "articles") { const ok = site.articleSlugs || []; return [...new Set((Array.isArray(v) ? v : []).map(String))].filter((x) => ok.includes(x.replace(/^a-/, ""))).map((x) => "a-" + x.replace(/^a-/, "")).slice(0, 12); }
   if (t === "lines") return (Array.isArray(v) ? v : String(v == null ? "" : v).split(/\n\s*\n/)).map((x) => String(x).trim()).filter(Boolean).slice(0, 40);
   if (t === "number") { const n = Number(v); return Number.isFinite(n) ? n : 0; }
   if (t === "yesno") return v === true || v === "true";
   if (t === "choice") { const ok = f.options.map((o) => o[0]); return ok.includes(String(v == null ? "" : v)) ? String(v) : ok[0]; }
   if (t === "colour") { const x = String(v == null ? "" : v).trim(); const themeOk = (f.theme || []).map((o) => o[0]); return themeOk.includes(x) ? x : (/^#[0-9a-fA-F]{6}$/.test(x) ? x.toUpperCase() : (themeOk[0] || "")); }
-  if (t === "image") { const x = String(v == null ? "" : v).trim(); return /^[A-Za-z0-9._-]{0,120}$/.test(x) ? x : ""; }
+  if (t === "image") {
+    let x = String(v == null ? "" : v).trim();
+    if (f.path) { x = x.startsWith(f.path) ? x.slice(f.path.length) : x; return /^[A-Za-z0-9._-]{1,120}$/.test(x) ? f.path + x : null; }
+    return /^[A-Za-z0-9._-]{0,120}$/.test(x) ? x : "";
+  }
   if (t === "artists") { const ok = (site.artists || []).map((a) => a.slug); if (f.one) return ok.includes(String(v)) ? String(v) : ""; return (Array.isArray(v) ? v : []).map(String).filter((x) => ok.includes(x)).slice(0, 20); }
   if (t === "rows") {
     const rows = (Array.isArray(v) ? v : []).slice(0, 40);
@@ -156,6 +243,8 @@ function cleanField(f, v, site) {
       const out = isList ? [] : {};
       for (const g of f.fields) out[g.name] = cleanField(g, row && row[g.name], site);
       if (!isList && row && row.hidden === true) out.hidden = true;
+      // a few small values kept as they are, such as a section's address or an artwork's colour
+      for (const k of f.keep || []) { const x = row && row[k]; if (typeof x === "boolean" || x === null || (typeof x === "string" && x.length <= 80 && !/[<>"]/.test(x))) { if (x !== undefined) out[k] = x; } }
       return out;
     });
   }
@@ -231,6 +320,14 @@ export function applyPictures(data, changes, slotsData) {
   }
   return { done: done.map((x) => x.label), slotsChanged };
 }
+// New artists, articles and artworks get a spot in image-slots.json, for the agents.
+export function keepSlots(slotsData, data) {
+  if (!slotsData || !Array.isArray(slotsData.slots)) return;
+  for (const sp of pictureSpots(data)) {
+    if (!sp.slot || slotsData.slots.some((x) => x.id === sp.slot)) continue;
+    slotsData.slots.push({ id: sp.slot, group: sp.group, label: sp.label, filled: !!sp.image });
+  }
+}
 // Every place a photo is used: sections of the pages, and the shared pictures.
 export function usageOf(name, pagesDoc, kinds, spots) {
   const has = (v) => (Array.isArray(v) ? v.some(has) : v && typeof v === "object" ? Object.values(v).some(has) : v === name);
@@ -257,6 +354,90 @@ export function fillDescriptions(v, name, alt) {
   return n;
 }
 
+// ----- saving articles, portfolios and sources -----
+const SLUG = /^[a-z0-9][a-z0-9-]{0,60}$/;
+export function slugFrom(text) { return String(text || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60); }
+function itemFields(kind) { return kind.parts.filter((x) => !x.picture).flatMap((x) => x.fields); }
+// Only the fields that really changed are written, so everything else keeps its exact form.
+function cleanItem(kind, given, current, ctx) {
+  const out = JSON.parse(JSON.stringify(current));
+  for (const f of itemFields(kind)) {
+    const now = cleanField(f, current[f.name], ctx), want = cleanField(f, given ? given[f.name] : undefined, ctx);
+    if (canon(now) !== canon(want)) out[f.name] = want;
+  }
+  return out;
+}
+function today() { return new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" }); }
+function newArticle(slug, g) { return { slug, section: "explained", kicker: "", artists: [], tone: "#D3C5AA", title: String((g && g.title) || "New article"), dek: "", credit: "", minutes: 5, updated: today(), status: "Draft for review", sources: [], body: "<p>Write here.</p>", hidden: true, image: null, alt: "" }; }
+function newArtist(slug, g) {
+  const name = String((g && g.name) || "New artist");
+  return { slug, name, letter: (name.trim()[0] || "A").toUpperCase(), published: false, image: null, alt: "", ghostWords: [name, "", "", ""], tag: "", place: "", tone: "#D3C5AA", heroTone: "#D9CCB4", summary: "", dek: "", heroCredit: "", checked: "", glance: [], sections: [], works: [], timeline: [], seen: "", related: [], research: ["Biography and background"] };
+}
+// Checks the articles, artists and sources sent from the editor against the ones on the site.
+// Returns the new content and a short note of what changed, or throws with a plain reason.
+export function cleanSite(kinds, given, current) {
+  if (!given || typeof given !== "object") throw new Error("The content could not be read.");
+  const out = JSON.parse(JSON.stringify(current)), changed = [];
+  // sources first, so articles and portfolios can cite new ones
+  const gs = given.sources && typeof given.sources === "object" && !Array.isArray(given.sources) ? given.sources : current.sources || {};
+  const sources = {};
+  for (const id of Object.keys(current.sources || {})) sources[id] = current.sources[id];
+  for (const id of Object.keys(gs)) {
+    const cur = (current.sources || {})[id];
+    if (!cur && !SLUG.test(id)) throw new Error("A new source needs a short name of letters, digits and hyphens.");
+    const blank = { title: "", pub: "", date: "", kind: "", url: "" }, next = cleanItem(kinds.source, cur ? gs[id] : { ...blank, ...gs[id] }, cur || blank, {});
+    if (next.url && !/^https?:\/\//i.test(next.url)) throw new Error("A source's link must start with https://");
+    if (!cur) { if (!String(next.title).trim()) throw new Error("A new source needs a title."); changed.push("Add source: " + next.title); }
+    else if (canon(next) !== canon(cur)) changed.push("Edit source: " + next.title);
+    sources[id] = next;
+  }
+  if (Object.keys(sources).length > 400) throw new Error("There are too many sources.");
+  out.sources = sources;
+  const ga = Array.isArray(given.articles) ? given.articles : current.articles || [];
+  const gr = Array.isArray(given.artists) ? given.artists : current.artists || [];
+  const ctx = { sourceIds: Object.keys(sources), articleSlugs: ga.map((x) => String((x && x.slug) || "")), artists: gr.map((x) => ({ slug: String((x && x.slug) || "") })) };
+  // artists: changed or added, never removed here
+  const curArtists = current.artists || [], seenA = new Set(), artists = [];
+  for (const g of gr) {
+    const slug = String((g && g.slug) || ""), cur = curArtists.find((x) => x.slug === slug);
+    if (seenA.has(slug)) throw new Error("Two artists have the same web address.");
+    seenA.add(slug);
+    if (!cur && !SLUG.test(slug)) throw new Error("A new artist needs a web address of letters, digits and hyphens.");
+    const base = cur || newArtist(slug, g), next = cleanItem(kinds.artist, cur ? g : { ...base, ...g }, base, ctx);
+    if (!String(next.name || "").trim()) throw new Error("Every artist needs a name.");
+    if (!cur || next.name !== cur.name) next.letter = (String(next.name).trim()[0] || "A").toUpperCase();
+    if (!cur) changed.push("Add artist: " + next.name); else if (canon(next) !== canon(cur)) changed.push("Edit portfolio: " + next.name);
+    artists.push(next);
+  }
+  for (const cur of curArtists) if (!seenA.has(cur.slug)) throw new Error("Artists cannot be removed here. Unpublish the portfolio instead.");
+  if (artists.length > 60) throw new Error("There are too many artists.");
+  out.artists = artists;
+  // articles: changed, added, moved or deleted
+  const curArticles = current.articles || [], seen = new Set(), articles = [];
+  for (const g of ga) {
+    const slug = String((g && g.slug) || ""), cur = curArticles.find((x) => x.slug === slug);
+    if (seen.has(slug)) throw new Error("Two articles have the same web address.");
+    seen.add(slug);
+    if (!cur && !SLUG.test(slug)) throw new Error("A new article needs a web address of letters, digits and hyphens.");
+    const base = cur || newArticle(slug, g), next = cleanItem(kinds.article, cur ? g : { ...base, ...g }, base, ctx);
+    if (!String(next.title || "").trim()) throw new Error("Every article needs a title.");
+    if (next.hidden === false && (!cur || !("hidden" in cur))) delete next.hidden;
+    if (!cur) changed.push("Add article: " + next.title); else if (canon(next) !== canon(cur)) changed.push((cur.hidden === true && next.hidden !== true ? "Show article: " : next.hidden === true && cur.hidden !== true ? "Hide article: " : "Edit article: ") + next.title);
+    articles.push(next);
+  }
+  for (const cur of curArticles) if (!seen.has(cur.slug)) changed.push("Delete article: " + cur.title);
+  if (articles.length > 400) throw new Error("There are too many articles.");
+  if (curArticles.map((x) => x.slug).join() !== articles.map((x) => x.slug).join() && !changed.length) changed.push("Reorder articles");
+  out.articles = articles;
+  return { data: out, changed };
+}
+// Item data as the editor sees it: artwork pictures by file name, like every other picture.
+export function siteForEditor(data) {
+  const out = JSON.parse(JSON.stringify(data || {}));
+  for (const a of out.artists || []) for (const w of a.works || []) if (w && typeof w === "object") { w.image = picName(w.image); if (!("alt" in w)) w.alt = ""; }
+  return out;
+}
+
 export function cleanPages(site, given, current) {
   const spec = site.sectionKinds;
   if (!given || typeof given !== "object") throw new Error("The page could not be read.");
@@ -266,22 +447,41 @@ export function cleanPages(site, given, current) {
     if (!spec[cur.type]) { out.shared[key] = cur; continue; }
     out.shared[key] = { type: cur.type, visible: g.visible !== false, settings: cleanSettings(spec[cur.type], g.settings, site) };
   }
-  for (const key of Object.keys(current.pages || {})) {
-    const cur = current.pages[key], g = (given.pages || {})[key] || cur;
-    const list = Array.isArray(g.sections) ? g.sections : [];
+  // the home page is always there; other pages can be added and removed
+  const gp = given.pages && typeof given.pages === "object" ? given.pages : current.pages || {};
+  const keys = Object.keys(gp);
+  if (!keys.includes("home")) keys.unshift("home");
+  if (keys.length > 30) throw new Error("A site can have up to 30 pages.");
+  for (const key of keys) {
+    const cur = (current.pages || {})[key], g = gp[key] || cur;
+    if (!cur && (!PAGE_KEY.test(key) || RESERVED.includes(key))) throw new Error("A new page needs a short web address of letters, digits and hyphens, not already used by the site.");
+    const list = Array.isArray(g && g.sections) ? g.sections : [];
     if (list.length > 40) throw new Error("A page can hold up to 40 sections.");
     const seen = new Set(), sections = [];
     for (const sec of list) {
       if (!sec || typeof sec !== "object" || !spec[sec.type]) throw new Error("One of the sections is of a kind this site cannot draw.");
+      if (key !== "home" && !spec[sec.type].library) throw new Error("The " + spec[sec.type].label + " section can only be on the home page.");
       const id = String(sec.id || "");
       if (!SECTION_ID.test(id) || seen.has(id)) throw new Error("Every section needs its own short name.");
       seen.add(id);
       sections.push({ id, type: sec.type, visible: sec.visible !== false, settings: cleanSettings(spec[sec.type], sec.settings, site) });
     }
-    out.pages[key] = { ...cur, sections };
+    const title = cleanText(g && g.title, 60) || (cur && cur.title) || "";
+    if (!title) throw new Error("Every page needs a title.");
+    out.pages[key] = { ...(cur || {}), title, sections };
+  }
+  // the heading and introduction of each list page
+  if (site.lists) {
+    out.lists = {};
+    for (const [k, l] of Object.entries(site.lists)) {
+      const g = (given.lists || {})[k] || (current.lists || {})[k] || l.start;
+      out.lists[k] = cleanSettings({ fields: LIST_FIELDS }, g, site);
+    }
   }
   return out;
 }
+const PAGE_KEY = /^[a-z][a-z0-9-]{0,40}$/;
+const RESERVED = ["home", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search"];
 // What the console needs to draw the editor: each kind's label, fields and starter.
 function kindsFor(site) {
   const out = {};
@@ -313,6 +513,8 @@ export const SITES = [
     ],
     pages: { file: "content/pages.json", images: "images", meta: "content/files.json", content: "content/site.json" },
     sectionKinds: WAR_SECTIONS,
+    items: WAR_ITEMS,
+    lists: WAR_LISTS,
     theme: {
       file: "content/theme.json",
       colours: [
@@ -764,7 +966,7 @@ async function inboxOf(repo, ref = "") {
 
 
 const CONTENT_FILES = ["content/site.json", "content/files.json", "data/content.json", "data/sales.json", "data/images.json", "image-slots.json", "content/theme.json", "data/theme.json", "content/pages.json", "data/pages.json"];
-const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Mark spot |Add photo|Photo description|Place photos|Replace photo|Theme: |Publish: |Make live: |Undo: |Redo: |Add section|Remove section|Move section)/;
+const UNDOABLE = /^(Edit|Hide |Show |Delete |Remove photo|Mark spot |Add |Photo description|Place photos|Replace photo|Theme: |Publish: |Make live: |Undo: |Redo: |Add section|Remove section|Move section)/;
 
 // ---------- copies of a site: the live one being worked on, and trial copies ----------
 //
@@ -870,7 +1072,7 @@ async function branchForWriting(site, copy, _who) {
 }
 
 async function siteOverview(site, wanted = "") {
-  const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta) };
+  const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta), edits: !!site.items };
   if (!site.live) return base;
   try {
     const copies = await copiesOf(site);
@@ -1077,7 +1279,9 @@ export async function handle(req) {
       const preview = copy.kind === "trial" ? copy.preview : "https://" + site.domain + "/";
       const pictures = c ? pictureSpots(c.data).filter((x) => x.kind !== "work").map(publicSpot) : [];
       const imageMeta = meta && meta.data && meta.data.files && typeof meta.data.files === "object" ? meta.data.files : {};
-      return json({ pages: f.data, kinds: kindsFor(site), summaries: summariesFor(site, f.data), images, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: site.artists, preview, sha: f.sha });
+      let doc = f.data; try { doc = cleanPages(site, f.data, f.data); } catch (_e) { /* shown as it is */ }
+      const extra = site.items && c ? { site: siteForEditor(c.data), itemKinds: site.items, lists: Object.fromEntries(Object.entries(site.lists || {}).map(([k, l]) => [k, { label: l.label, section: l.section || "" }])), listFields: LIST_FIELDS } : {};
+      return json({ pages: doc, kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: c && site.items ? (c.data.artists || []).map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, ...extra });
     }
     let next;
     try { next = cleanPages(site, body.pages, f.data); } catch (e) { return json({ error: e.message }, 400); }
@@ -1085,7 +1289,8 @@ export async function handle(req) {
     const what = cleanText(body.what, 80) || "Edit page";
     const uploads = Array.isArray(body.uploads) ? body.uploads.slice(0, 12) : [];
     const pics = body.pictures && typeof body.pictures === "object" && !Array.isArray(body.pictures) ? body.pictures : {};
-    const hasPics = Object.keys(pics).length > 0;
+    const hasSite = !!(body.content && typeof body.content === "object" && site.items);
+    const hasPics = Object.keys(pics).length > 0 || hasSite;
     if (canon(next) === canon(was) && !uploads.length && !hasPics) return json({ ok: true, unchanged: true });
     if (!uploads.length && !hasPics) {
       const put = await saveJson(ps.file, next, f.sha, "Edit page: " + what);
@@ -1110,12 +1315,18 @@ export async function handle(req) {
     let withPhotos, picsFixed = fix(pics), res = { done: [], slotsChanged: false };
     try { withPhotos = cleanPages(site, fix(body.pages), f.data); } catch (e) { return json({ error: e.message }, 400); }
     const slots = hasPics ? await loadJson("image-slots.json") : null;
+    let items = { changed: [] };
+    if (hasSite) {
+      try { items = cleanSite(site.items, fix(body.content), c.data); } catch (e) { return json({ error: e.message }, 400); }
+      if (items.changed.length) { c.data = items.data; if (slots) keepSlots(slots.data, c.data); }
+    }
     if (hasPics) { try { res = applyPictures(c.data, picsFixed, slots ? slots.data : null); } catch (e) { return json({ error: e.message }, 400); } }
+    if (items.changed.length) res.done = res.done.concat(items.changed);
     if (!uploads.length && !res.done.length && canon(withPhotos) === canon(was)) return json({ ok: true, unchanged: true });
     try {
       if (canon(withPhotos) !== canon(was)) await textBlob(tree, ps.file, withPhotos);
       if (res.done.length) await textBlob(tree, ps.content, c.data);
-      if (res.slotsChanged && slots) await textBlob(tree, "image-slots.json", slots.data);
+      if ((res.slotsChanged || items.changed.length) && slots) await textBlob(tree, "image-slots.json", slots.data);
       // a new photo keeps the description it was given, for next time it is chosen
       if (uploads.length && ps.meta) {
         const m = await loadJson(ps.meta);
@@ -1131,7 +1342,9 @@ export async function handle(req) {
         if (wrote) await textBlob(tree, ps.meta, doc);
       }
     } catch (e) { return failed(e); }
-    const label = res.done.length && canon(withPhotos) === canon(was) && !uploads.length ? "Edit picture: " + res.done.join(", ").slice(0, 80) : "Edit page: " + what;
+    const onlyItems = items.changed.length && canon(withPhotos) === canon(was) && !uploads.length;
+    const label = onlyItems ? (items.changed.length === 1 && res.done.length === 1 ? items.changed[0] : "Edit: " + what).slice(0, 120)
+      : res.done.length && canon(withPhotos) === canon(was) && !uploads.length ? "Edit picture: " + res.done.join(", ").slice(0, 80) : "Edit page: " + what;
     const problem = await commitTree(tree, label);
     if (problem) return problem;
     return json({ ok: true, photos: renamed, summaries: summariesFor(site, withPhotos) });

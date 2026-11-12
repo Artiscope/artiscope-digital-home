@@ -63,13 +63,13 @@ try {
   await page.screenshot({ path: "/tmp/topbar.png", clip: { x: 0, y: 0, width: 1440, height: 420 } });
   await page.fill("#copy-name", "Winter look"); await page.click('form[data-form="copy"] button[type=submit]');
   await page.waitForSelector("text=Trial copy made"); assert.equal(await page.inputValue("#copy-pick"), "trial-winter-look-000001");
-  await page.click('[data-tab="content"]'); await page.click('[data-act="open"]'); await page.fill("#f-0", "A trial title"); await page.click('button[type="submit"]'); await page.waitForSelector("text=Saved on this copy");
+  await page.evaluate(() => window.__adh.go("content")); await page.click('[data-act="open"]'); await page.fill("#f-0", "A trial title"); await page.click('button[type="submit"]'); await page.waitForSelector("text=Saved on this copy");
   await page.click('[data-tab="overview"]'); await page.waitForSelector("text=1 change saved on this copy"); await page.screenshot({ path: "/tmp/sites.png", fullPage: true });
   await page.selectOption("#copy-pick", ""); await page.waitForSelector(".copycard.on >> text=What visitors see");
   assert.ok((await page.innerText(".island")).includes("Saves go straight to visitors"));
 
   // content: the editor is split into parts, and asks before losing typing
-  await page.click('[data-tab="content"]'); await page.click('[data-act="ctab"][data-i="1"]'); await page.click('[data-act="open"]');
+  await page.evaluate(() => window.__adh.go("content")); await page.click('[data-act="ctab"][data-i="1"]'); await page.click('[data-act="open"]');
   assert.deepEqual(await page.locator(".seg.wide button").allInnerTexts(), ["Details", "At a glance", "Portfolio sections", "Timeline"]);
   assert.equal(await page.locator(".egroup:not([hidden])").count(), 1);
   await page.click('.seg.wide button >> nth=2'); assert.ok(await page.isVisible(".egroup:not([hidden]) .rt-page")); assert.ok(!(await page.isVisible("#f-0")));
@@ -85,7 +85,7 @@ try {
   await page.click('[data-tab="files"]'); await page.click('[data-act="leave-go"]'); await page.waitForSelector(".files");
   assert.equal(await page.evaluate(() => window.__adh.state.tab), "files");
   // long lists open short, and search looks through all of them
-  await page.click('[data-tab="content"]'); await page.waitForSelector("#clist"); await page.click('[data-act="ctab"][data-i="0"]');
+  await page.evaluate(() => window.__adh.go("content")); await page.waitForSelector("#clist"); await page.click('[data-act="ctab"][data-i="0"]');
   await page.evaluate(() => { const st = window.__adh.state, c = st.content[Object.keys(st.content)[0]][0]; for (let i = 1; i <= 12; i++) c.entries.push(Object.assign({}, c.entries[0], { id: "x" + i, title: "Extra piece " + i, sub: "Looking" })); window.__adh.render(); });
   const showing = () => page.locator("#clist .entry:not([hidden])").count();
   assert.equal(await showing(), 8); assert.ok(await page.isVisible("#cmore"));
@@ -99,6 +99,6 @@ try {
 
   // phone width: nothing runs off the side
   await page.setViewportSize({ width: 390, height: 800 });
-  for (const tab of ["theme", "content"]) { await page.click('[data-tab="' + tab + '"]'); await page.waitForTimeout(400); const wide = await page.evaluate(() => document.documentElement.scrollWidth <= 392 ? "" : ([...document.querySelectorAll("#app *")].filter((e) => e.getBoundingClientRect().right > 392).slice(0, 6).map((e) => e.tagName + "." + e.className + "#" + e.id + " " + Math.round(e.getBoundingClientRect().right)).join(" | ") || "page " + document.documentElement.scrollWidth)); assert.equal(wide, "", tab + " fits a phone"); }
+  for (const tab of ["theme", "files"]) { await page.click('[data-tab="' + tab + '"]'); await page.waitForTimeout(400); const wide = await page.evaluate(() => document.documentElement.scrollWidth <= 392 ? "" : ([...document.querySelectorAll("#app *")].filter((e) => e.getBoundingClientRect().right > 392).slice(0, 6).map((e) => e.tagName + "." + e.className + "#" + e.id + " " + Math.round(e.getBoundingClientRect().right)).join(" | ") || "page " + document.documentElement.scrollWidth)); assert.equal(wide, "", tab + " fits a phone"); }
   console.log("theme and editor: all good");
 } finally { await browser.close(); servers.forEach((s) => s.kill()); }

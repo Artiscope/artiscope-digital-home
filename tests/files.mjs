@@ -6,6 +6,9 @@ const { makeGitHub } = await import("./fakegit.mjs");
 const WAR = "/home/claude/world-art-review/";
 const war = JSON.parse(fs.readFileSync(WAR + "content/site.json", "utf8"));
 const WR = "Artiscope/World-art-review";
+// start from Konn Artiss without a picture, whatever the live site has now
+Object.assign(war.artists.find((a) => a.slug === "konn-artiss"), { image: null, alt: "" });
+const slotsSeed = JSON.parse(fs.readFileSync(WAR + "image-slots.json", "utf8")); slotsSeed.slots.find((x) => x.id === "artist-konn-artiss").filled = false;
 
 // the pure parts first
 {
@@ -16,7 +19,7 @@ const WR = "Artiscope/World-art-review";
   assert.equal(spots.filter((x) => x.kind === "work").length, 12);
   assert.equal(spots.find((x) => x.kind === "work").slot, "work-zara-muse-malala-yousafzai");
   assert.equal(spots.find((x) => x.key === "article:palette-knife-painting").image, "article-palette-knife-painting.jpg");
-  const slots = JSON.parse(fs.readFileSync(WAR + "image-slots.json", "utf8"));
+  const slots = JSON.parse(JSON.stringify(slotsSeed));
   const res = applyPictures(data, { "artist:konn-artiss": { image: "ice.jpg", alt: "Ice blocks", credit: "Photo: x" }, "artist:zara-muse": { alt: "Zara Muse's portrait" } }, slots);
   assert.deepEqual(res.done.sort(), ["Konn Artiss", "Zara Muse"]); assert.equal(res.slotsChanged, true);
   const konn = data.artists.find((a) => a.slug === "konn-artiss");
@@ -33,7 +36,7 @@ const WR = "Artiscope/World-art-review";
 }
 
 const hub = makeGitHub({ [WR]: {
-  "content/site.json": JSON.stringify(war), "content/pages.json": fs.readFileSync(WAR + "content/pages.json", "utf8"), "image-slots.json": fs.readFileSync(WAR + "image-slots.json", "utf8"),
+  "content/site.json": JSON.stringify(war), "content/pages.json": fs.readFileSync(WAR + "content/pages.json", "utf8"), "image-slots.json": JSON.stringify(slotsSeed),
   "images/zara-muse-portrait.jpg": "zara", "images/article-palette-knife-painting.jpg": "knife", "images/spare.jpg": "spare",
 } });
 globalThis.fetch = async (url, init = {}) => String(url).includes("/auth/v1/user") ? new Response(JSON.stringify({ email: "me@x.com" })) : hub.fetch(url, init);
@@ -52,7 +55,7 @@ const site = () => JSON.parse(hub.read(WR, "main", "content/site.json"));
   const doc = JSON.parse(JSON.stringify(pg.pages));
   Object.assign(doc.pages.home.sections.find((x) => x.type === "hero").settings, { image: "spare.jpg", alt: "A spare photo", credit: "Studio photo" });
   let r = await call({ action: "savePages", pages: doc, what: "Edit Opening banner", pictures: { "artist:konn-artiss": { image: "upload:1", alt: "Konn Artiss's ice blocks", credit: "" } }, uploads: [{ key: "upload:1", name: "Ice.JPG", ext: "jpg", content: "aWNl" }] });
-  assert.equal(r.status, 200); assert.equal(r.photos["upload:1"], "ice.jpg");
+  if (r.status !== 200) console.log(r); assert.equal(r.status, 200); assert.equal(r.photos["upload:1"], "ice.jpg");
   assert.equal(hub.read(WR, "main", "images/ice.jpg"), "ice");
   const konn = site().artists.find((a) => a.slug === "konn-artiss"); assert.equal(konn.image, "images/ice.jpg"); assert.equal(konn.alt, "Konn Artiss's ice blocks");
   assert.equal(JSON.parse(hub.read(WR, "main", "image-slots.json")).slots.find((x) => x.id === "artist-konn-artiss").filled, true);
@@ -61,7 +64,7 @@ const site = () => JSON.parse(hub.read(WR, "main", "content/site.json"));
   assert.deepEqual(JSON.parse(hub.read(WR, "main", "content/files.json")).files["ice.jpg"], { alt: "Konn Artiss's ice blocks", caption: "" }, "the new photo keeps its description");
   assert.match(hub.lastMessage(WR, "main"), /^Edit page: Edit Opening banner/);
   // a picture change on its own
-  r = await call({ action: "savePages", pages: doc, pictures: { "article:texture-in-portraiture": { image: "spare.jpg", alt: "Spare" } } });
+  r = await call({ action: "savePages", pages: doc, pictures: { "article:texture-in-portraiture": { image: "spare.jpg", alt: "Spare" } } }); if (r.status !== 200) console.log(r);
   assert.equal(r.status, 200); assert.match(hub.lastMessage(WR, "main"), /^Edit picture: The role of texture/);
   // nothing new: nothing saved
   assert.equal((await call({ action: "savePages", pages: doc, pictures: { "article:texture-in-portraiture": { image: "spare.jpg", alt: "Spare" } } })).unchanged, true);

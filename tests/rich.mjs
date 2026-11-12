@@ -14,7 +14,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
 await page.route(/^https?:/, (r) => r.abort());
 await page.goto("file://" + here + "/index.html?demo");
-await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="world-art-review"]'); await page.waitForSelector('[data-tab="content"]');
+await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="world-art-review"]'); await page.waitForSelector('[data-tab="theme"]');
 
 // 1. nothing is lost: every real body survives a trip through the editor
 const results = await page.evaluate((list) => list.map((html) => {
@@ -38,7 +38,7 @@ assert.ok(!/onclick|onerror|javascript:|<script|<iframe|<img/i.test(bad.shown), 
 assert.equal(await page.evaluate(() => window.bad), undefined);
 
 // 2. the editor on screen
-await page.click('[data-tab="content"]'); await page.click('[data-act="open"]');
+await page.evaluate(() => window.__adh.go("content")); await page.click('[data-act="open"]');
 await page.click('.seg.wide button:has-text("Body")');
 await page.waitForSelector(".rt-page");
 const shown = await page.innerHTML(".rt-page");
