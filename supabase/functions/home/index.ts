@@ -80,53 +80,54 @@ export function cleanTheme(spec, given) {
 // the site's artists), rows (a list of small records with their own fields),
 // links (label and address pairs).
 
-const BG = { name: "bg", label: "Background", type: "colour", theme: [["paper", "Page background"], ["deep", "Deeper paper"], ["green", "Bands and buttons"]] };
-const FG = { name: "fg", label: "Text colour", type: "colour", theme: [["", "Automatic"]] };
-const HEADING = { name: "heading", label: "Heading", type: "lines", hint: "One line of the heading per paragraph." };
-const EYEBROW = { name: "eyebrow", label: "Small line above the heading", type: "text" };
-const LINK_ROWS = { name: "links", label: "Links", type: "rows", fields: [{ name: 0, label: "Words", type: "text" }, { name: 1, label: "Address", type: "text", hint: "A page on this site starts with #, for example #artists." }] };
+const BG = { name: "bg", label: "Background", type: "colour", group: "Look", theme: [["paper", "Page background"], ["deep", "Deeper paper"], ["green", "Bands and buttons"]], hint: "Theme colours keep the site consistent. Choose Any colour for something else." };
+const FG = { name: "fg", label: "Text colour", type: "colour", group: "Look", theme: [["", "Automatic"]], hint: "Automatic picks dark or light text to suit the background." };
+const HEADING = { name: "heading", label: "Heading", type: "lines", hint: "Each line of the heading on its own line. Two short lines read best." };
+const EYEBROW = { name: "eyebrow", label: "Small line above the heading", type: "text", hint: "Shown in small italics. Leave empty to hide." };
+const ADDRESS = { name: 1, label: "Address", type: "text", hint: "A page on this site starts with #, for example #artists. Or paste a full web address." };
+const LINK_ROWS = { name: "links", label: "Links", type: "rows", fields: [{ name: 0, label: "Words", type: "text", hint: "What visitors see." }, ADDRESS] };
 
 const WAR_SECTIONS = {
-  opening: { label: "Opening screen", summary: (st) => st.name || "", fields: [{ name: "name", label: "Site name", type: "text" }, { name: "tagline", label: "Tagline", type: "text" }] },
-  header: { label: "Menu bar", summary: (st) => ((st.links || []).length + " links"), fields: [{ name: "name", label: "Site name", type: "text" }, LINK_ROWS] },
-  footer: { label: "Newsletter and footer", summary: (st) => ((st.columns || []).length + " columns"), fields: [
-    EYEBROW, HEADING, { name: "button", label: "Button words", type: "text" }, { name: "blurb", label: "Short description of the site", type: "long" },
-    { name: "columns", label: "Link columns", type: "rows", fields: [{ name: "title", label: "Column title", type: "text" }, { ...LINK_ROWS, label: "Links in this column" }] },
+  opening: { label: "Opening screen", about: "The short screen shown while the site loads.", summary: (st) => st.name || "", fields: [{ name: "name", label: "Site name", type: "text", hint: "Shown beside the logo." }, { name: "tagline", label: "Tagline", type: "text", hint: "Small words under the name." }] },
+  header: { label: "Menu bar", about: "The bar at the top of every page.", summary: (st) => ((st.links || []).length + " links"), blocks: { field: "links", label: "Link", add: "Add a link", title: (b) => b[0] }, fields: [{ name: "name", label: "Site name", type: "text", hint: "Shown in the middle of the bar." }, LINK_ROWS] },
+  footer: { label: "Newsletter and footer", about: "The sign-up band and the links at the bottom of every page.", summary: (st) => ((st.columns || []).length + " columns"), blocks: { field: "columns", label: "Column", add: "Add a column", title: (b) => b.title }, fields: [
+    EYEBROW, HEADING, { name: "button", label: "Button words", type: "text", hint: "The button opens the sign-up form." }, { name: "blurb", label: "Short description of the site", type: "long", hint: "Shown under the name, at the bottom left." },
+    { name: "columns", label: "Link columns", type: "rows", fields: [{ name: "title", label: "Column title", type: "text", hint: "A short word or two, such as Read." }, { ...LINK_ROWS, label: "Links in this column" }] },
     { name: "copyright", label: "Copyright line", type: "text" }, { name: "elsewhere", label: "Links in the bottom bar", type: "rows", fields: LINK_ROWS.fields },
   ] },
-  hero: { label: "Opening banner", summary: (st) => (st.headline || []).map((x) => x.t).join(" "), fields: [
-    { name: "headline", label: "Headline", type: "rows", fields: [{ name: "t", label: "Words", type: "text" }, { name: "ital", label: "In italics", type: "yesno" }] },
-    { name: "tagline", label: "Tagline", type: "rows", fields: [{ name: "t", label: "Words", type: "text" }, { name: "ital", label: "In italics", type: "yesno" }] },
+  hero: { label: "Opening banner", about: "The large green band at the top of the home page.", summary: (st) => (st.headline || []).map((x) => x.t).join(" "), fields: [
+    { name: "headline", label: "Headline", type: "rows", hint: "Each line of the large headline. Italic lines are set in the slanted style.", fields: [{ name: "t", label: "Words", type: "text" }, { name: "ital", label: "In italics", type: "yesno" }] },
+    { name: "tagline", label: "Tagline", type: "rows", hint: "The smaller words at the bottom left of the banner.", fields: [{ name: "t", label: "Words", type: "text" }, { name: "ital", label: "In italics", type: "yesno" }] },
     { name: "artist", label: "Whose work is shown", type: "artists", one: true, hint: "Leave empty for the first published artist." },
-    { name: "rule_label", label: "Rule box, small line", type: "text" }, { name: "rule_text", label: "Rule box, text", type: "text" }, { name: "rule_link", label: "Rule box, link words", type: "text" },
+    { name: "rule_label", label: "Rule box, small line", type: "text", hint: "The box at the bottom right of the banner." }, { name: "rule_text", label: "Rule box, text", type: "text" }, { name: "rule_link", label: "Rule box, link words", type: "text", hint: "The link opens the page about sources." },
     { name: "latest", label: "Pieces in the Latest box", type: "lines", hint: "Article names as they appear in web addresses, for example zara-muse-profile." },
   ] },
-  featured: { label: "Featured artists", summary: (st) => ((st.artists || []).length ? (st.artists || []).length + " chosen" : "All published"), fields: [
-    { name: "badge", label: "Badge words", type: "text" }, { name: "artists", label: "Which artists", type: "artists", hint: "Leave empty to show every published artist." },
+  featured: { label: "Featured artists", about: "The artist carousel under the banner.", summary: (st) => ((st.artists || []).length ? (st.artists || []).length + " chosen" : "All published"), fields: [
+    { name: "badge", label: "Badge words", type: "text", hint: "Under the number in the small square." }, { name: "artists", label: "Which artists", type: "artists", hint: "Tick the artists to show, in the order ticked. Leave all empty to show every published artist." },
   ] },
-  "section-list": { label: "Read by section", summary: (st) => ((st.rows || []).length + " rows"), fields: [
+  "section-list": { label: "Read by section", about: "A list of the parts of the site, each with a count.", summary: (st) => ((st.rows || []).length + " rows"), blocks: { field: "rows", label: "Row", add: "Add a row", title: (b) => b.name }, fields: [
     EYEBROW, HEADING,
-    { name: "rows", label: "Rows", type: "rows", fields: [{ name: "n", label: "Number", type: "text" }, { name: "name", label: "Name", type: "text" }, { name: "desc", label: "Description", type: "text" }, { name: "href", label: "Address", type: "text" }, { name: "count", label: "Count shown", type: "choice", options: [["artists", "Artists"], ["reviews", "Reviews"], ["explained", "Art explained pieces"], ["library", "Library guides"], ["articles", "All articles"], ["sources", "Sources"]] }, { name: "unit", label: "Count word", type: "text" }] },
+    { name: "rows", label: "Rows", type: "rows", fields: [{ name: "n", label: "Number", type: "text", hint: "Shown small on the left, such as 01." }, { name: "name", label: "Name", type: "text" }, { name: "desc", label: "Description", type: "text", hint: "One short sentence." }, { name: "href", label: "Address", type: "text", hint: "Where the row leads. A page on this site starts with #." }, { name: "count", label: "Count shown", hint: "The number on the right is counted for you.", type: "choice", options: [["artists", "Artists"], ["reviews", "Reviews"], ["explained", "Art explained pieces"], ["library", "Library guides"], ["articles", "All articles"], ["sources", "Sources"]] }, { name: "unit", label: "Count word", type: "text" }] },
   ] },
-  explained: { label: "Art, explained", summary: (st) => ((Number(st.count) || 2) + " articles"), fields: [HEADING, { name: "text", label: "Text", type: "long", plain: true }, { name: "count", label: "How many articles", type: "number" }] },
-  numbers: { label: "Numbers band", summary: () => "Four figures", fields: [EYEBROW, HEADING, { name: "labels", label: "The four labels", type: "lines" }] },
-  method: { label: "How we research", summary: (st) => ((st.cards || []).length + " cards"), fields: [
+  explained: { label: "Art, explained", about: "Two Art Explained articles beside a short introduction.", summary: (st) => ((Number(st.count) || 2) + " articles"), fields: [HEADING, { name: "text", label: "Text", type: "long", plain: true, hint: "One or two sentences." }, { name: "count", label: "How many articles", type: "number", hint: "The newest Art Explained articles are shown." }] },
+  numbers: { label: "Numbers band", about: "Four figures counted from the site.", summary: () => "Four figures", fields: [EYEBROW, HEADING, { name: "labels", label: "The four labels", type: "lines", hint: "One label per line. The numbers are counted for you." }] },
+  method: { label: "How we research", about: "Three cards explaining the method.", summary: (st) => ((st.cards || []).length + " cards"), blocks: { field: "cards", label: "Card", add: "Add a card", title: (b) => b.title }, fields: [
     EYEBROW, HEADING,
-    { name: "cards", label: "Cards", type: "rows", fields: [{ name: "n", label: "Number", type: "text" }, { name: "text", label: "Text", type: "long" }, { name: "title", label: "Title", type: "text" }, { name: "sub", label: "Small line", type: "text" }] },
+    { name: "cards", label: "Cards", type: "rows", fields: [{ name: "n", label: "Number", type: "text", hint: "Shown large at the top of the card." }, { name: "title", label: "Title", type: "text", hint: "Shown in bold at the foot of the card." }, { name: "text", label: "Text", type: "long", hint: "Two or three short sentences read best." }, { name: "sub", label: "Small line", type: "text", hint: "Grey text under the title. Leave empty to hide." }] },
   ] },
-  text: { label: "Text", summary: (st) => ((st.heading || [])[0] || "Text"), library: "A heading and paragraphs", fields: [EYEBROW, HEADING, { name: "body", label: "Text", type: "long" }, { name: "align", label: "Placing", type: "choice", options: [["", "Left"], ["centre", "Centred"]] }, BG, FG],
+  text: { label: "Text", about: "A heading and a few paragraphs.", summary: (st) => ((st.heading || [])[0] || "Text"), library: "A heading and paragraphs", fields: [EYEBROW, HEADING, { name: "body", label: "Text", type: "long", hint: "Type as you would in a document." }, { name: "align", label: "Placing", type: "choice", group: "Look", options: [["", "Left"], ["centre", "Centred"]] }, BG, FG],
     starter: { eyebrow: "", heading: ["A new heading"], body: "<p>Write here.</p>", align: "", bg: "paper", fg: "" } },
-  "text-picture": { label: "Text with picture", summary: (st) => ((st.heading || [])[0] || "Text with picture"), library: "Words beside a photo", fields: [EYEBROW, HEADING, { name: "body", label: "Text", type: "long" }, { name: "image", label: "Picture", type: "image" }, { name: "alt", label: "Picture description", type: "text" }, { name: "caption", label: "Caption", type: "text" }, { name: "side", label: "Picture on the", type: "choice", options: [["right", "Right"], ["left", "Left"]] }, BG, FG],
+  "text-picture": { label: "Text with picture", about: "Words on one side, a photo on the other.", summary: (st) => ((st.heading || [])[0] || "Text with picture"), library: "Words beside a photo", fields: [EYEBROW, HEADING, { name: "body", label: "Text", type: "long" }, { name: "image", label: "Picture", type: "image", alt: "alt" }, { name: "alt", label: "Describe the picture", type: "text", hint: "For people who cannot see it. Needed before you save." }, { name: "caption", label: "Caption", type: "text", hint: "Small text under the picture. Leave empty to hide." }, { name: "side", group: "Look", label: "Picture on the", type: "choice", options: [["right", "Right"], ["left", "Left"]] }, BG, FG],
     starter: { eyebrow: "", heading: ["A new heading"], body: "<p>Write here.</p>", image: "", alt: "", caption: "", side: "right", bg: "paper", fg: "" } },
-  picture: { label: "Picture", summary: (st) => (st.caption || st.image || "Picture"), library: "One large photo, with a caption", fields: [{ name: "image", label: "Picture", type: "image" }, { name: "alt", label: "Picture description", type: "text" }, { name: "caption", label: "Caption", type: "text" }, { name: "size", label: "Width", type: "choice", options: [["", "Full width"], ["contained", "Contained"]] }, BG],
+  picture: { label: "Picture", about: "One large photo with a caption.", summary: (st) => (st.caption || st.image || "Picture"), library: "One large photo, with a caption", fields: [{ name: "image", label: "Picture", type: "image", alt: "alt" }, { name: "alt", label: "Describe the picture", type: "text", hint: "For people who cannot see it. Needed before you save." }, { name: "caption", label: "Caption", type: "text", hint: "Small text under the picture. Leave empty to hide." }, { name: "size", group: "Look", label: "Width", type: "choice", options: [["", "Full width"], ["contained", "Contained"]] }, BG],
     starter: { image: "", alt: "", caption: "", size: "", bg: "paper" } },
-  quote: { label: "Quote", summary: (st) => (Array.isArray(st.text) ? st.text[0] : String(st.text || "").split("\n")[0]) || "", library: "A short line that stands out", fields: [{ name: "text", label: "The quote", type: "lines", hint: "One line per paragraph." }, { name: "who", label: "Who said it", type: "text" }, BG, FG],
+  quote: { label: "Quote", about: "One line, shown large.", summary: (st) => (Array.isArray(st.text) ? st.text[0] : String(st.text || "").split("\n")[0]) || "", library: "A short line that stands out", fields: [{ name: "text", label: "The quote", type: "lines", hint: "Each line of the quote on its own line." }, { name: "who", label: "Who said it", type: "text", hint: "Leave empty to hide." }, BG, FG],
     starter: { text: ["A line worth remembering."], who: "", bg: "green", fg: "" } },
-  articles: { label: "Latest articles", summary: (st) => ((Number(st.count) || 3) + " from " + (st.section && st.section !== "all" ? st.section : "all")), library: "Fills itself from Content", fields: [EYEBROW, HEADING, { name: "section", label: "Which articles", type: "choice", options: [["all", "All"], ["reviews", "Reviews"], ["explained", "Art explained"], ["library", "Collector's library"], ["features", "Artist portfolios"]] }, { name: "count", label: "How many", type: "number" }, BG, FG],
+  articles: { label: "Latest articles", about: "Article cards, filled in from Content.", summary: (st) => ((Number(st.count) || 3) + " from " + (st.section && st.section !== "all" ? st.section : "all")), library: "Fills itself from Content", fields: [EYEBROW, HEADING, { name: "section", label: "Which articles", type: "choice", options: [["all", "All"], ["reviews", "Reviews"], ["explained", "Art explained"], ["library", "Collector's library"], ["features", "Artist portfolios"]] }, { name: "count", label: "How many", type: "number" }, BG, FG],
     starter: { eyebrow: "Latest", heading: ["Recent pieces"], section: "all", count: 3, bg: "paper", fg: "" } },
-  faq: { label: "Questions and answers", summary: (st) => ((st.items || []).length + " questions"), library: "A list that opens and closes", fields: [EYEBROW, HEADING, { name: "items", label: "Questions", type: "rows", fields: [{ name: "q", label: "Question", type: "text" }, { name: "a", label: "Answer", type: "long" }] }, BG, FG],
+  faq: { label: "Questions and answers", about: "Questions that open to show their answer.", summary: (st) => ((st.items || []).length + " questions"), blocks: { field: "items", label: "Question", add: "Add a question", title: (b) => b.q }, library: "A list that opens and closes", fields: [EYEBROW, HEADING, { name: "items", label: "Questions", type: "rows", fields: [{ name: "q", label: "Question", type: "text", hint: "Keep it short. Visitors click it to open the answer." }, { name: "a", label: "Answer", type: "long" }] }, BG, FG],
     starter: { eyebrow: "", heading: ["Questions"], items: [{ q: "A question?", a: "<p>The answer.</p>" }], bg: "paper", fg: "" } },
-  button: { label: "Button or link", summary: (st) => (st.label || "Button"), library: "Send visitors somewhere", fields: [HEADING, { name: "text", label: "Text", type: "text" }, { name: "label", label: "Button words", type: "text" }, { name: "href", label: "Where it goes", type: "text", hint: "A page on this site starts with #, or a full web address." }, { name: "style", label: "Style", type: "choice", options: [["green", "Green"], ["paper", "Paper"], ["outline", "Outline"]] }, BG, FG],
+  button: { label: "Button or link", about: "A heading, a line and one button.", summary: (st) => (st.label || "Button"), library: "Send visitors somewhere", fields: [HEADING, { name: "text", label: "Text", type: "text" }, { name: "label", label: "Button words", type: "text" }, { name: "href", label: "Where it goes", type: "text", hint: "A page on this site starts with #, or a full web address." }, { name: "style", label: "Style", type: "choice", group: "Look", options: [["green", "Green"], ["paper", "Paper"], ["outline", "Outline"]] }, BG, FG],
     starter: { heading: ["Find out more"], text: "", label: "Read on", href: "#artists", style: "green", bg: "paper", fg: "" } },
 };
 // Sections of the original design can be added again from the library too.
@@ -151,6 +152,7 @@ function cleanField(f, v, site) {
       const isList = f.fields.some((g) => typeof g.name === "number");
       const out = isList ? [] : {};
       for (const g of f.fields) out[g.name] = cleanField(g, row && row[g.name], site);
+      if (!isList && row && row.hidden === true) out.hidden = true;
       return out;
     });
   }
@@ -170,6 +172,15 @@ export function canon(v) {
 }
 
 // Checks a whole page document from the console and returns a clean copy, or throws.
+// A safe, unused file name for a photo sent from the editor.
+export function photoFileName(wanted, ext, taken) {
+  const base = String(wanted || "photo").toLowerCase().replace(/\.[a-z0-9]+$/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "photo";
+  const e = ext === "png" ? "png" : "jpg";
+  let name = base + "." + e, n = 2;
+  while (taken.includes(name)) name = base + "-" + (n++) + "." + e;
+  return name;
+}
+
 export function cleanPages(site, given, current) {
   const spec = site.sectionKinds;
   if (!given || typeof given !== "object") throw new Error("The page could not be read.");
@@ -198,7 +209,10 @@ export function cleanPages(site, given, current) {
 // What the console needs to draw the editor: each kind's label, fields and starter.
 function kindsFor(site) {
   const out = {};
-  for (const [k, v] of Object.entries(site.sectionKinds || {})) out[k] = { label: v.label, fields: v.fields, library: v.library || "", starter: v.starter || null };
+  for (const [k, v] of Object.entries(site.sectionKinds || {})) {
+    out[k] = { label: v.label, about: v.about || "", fields: v.fields, library: v.library || "", starter: v.starter || null };
+    if (v.blocks) out[k].blocks = { field: v.blocks.field, label: v.blocks.label, add: v.blocks.add };
+  }
   return out;
 }
 function summariesFor(site, pages) {
@@ -951,17 +965,52 @@ export async function handle(req) {
       const imgs = await gh("/repos/" + site.repo + "/contents/" + ps.images + "?ref=" + encodeURIComponent(ref));
       const images = Array.isArray(imgs.data) ? imgs.data.filter((x) => x.type === "file" && /\.(jpe?g|png|webp)$/i.test(x.name)).map((x) => x.name) : [];
       const preview = copy.kind === "trial" ? copy.preview : "https://" + site.domain + "/";
-      return json({ pages: f.data, kinds: kindsFor(site), summaries: summariesFor(site, f.data), images, artists: site.artists, preview, sha: f.sha });
+      return json({ pages: f.data, kinds: kindsFor(site), summaries: summariesFor(site, f.data), images, imageBase: preview + ps.images + "/", artists: site.artists, preview, sha: f.sha });
     }
     let next;
     try { next = cleanPages(site, body.pages, f.data); } catch (e) { return json({ error: e.message }, 400); }
     let was; try { was = cleanPages(site, f.data, f.data); } catch (_e) { was = f.data; }
     if (canon(next) === canon(was)) return json({ ok: true, unchanged: true });
     const what = cleanText(body.what, 80) || "Edit page";
-    const put = await saveJson(ps.file, next, f.sha, "Edit page: " + what);
-    if (put.status === 409) return json({ error: "Someone else changed this page at the same moment. Refresh and try again." }, 409);
-    if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save the page. Please try again.") }, 502);
-    return json({ ok: true, summaries: summariesFor(site, next) });
+    const uploads = Array.isArray(body.uploads) ? body.uploads.slice(0, 8) : [];
+    if (!uploads.length) {
+      const put = await saveJson(ps.file, next, f.sha, "Edit page: " + what);
+      if (put.status === 409) return json({ error: "Someone else changed this page at the same moment. Refresh and try again." }, 409);
+      if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save the page. Please try again.") }, 502);
+      return json({ ok: true, summaries: summariesFor(site, next) });
+    }
+    // New photos and the page go in together, as one step that one Undo takes back.
+    const repo = "/repos/" + site.repo;
+    const listing = await gh(repo + "/contents/" + ps.images + "?ref=" + encodeURIComponent(ref));
+    const taken = Array.isArray(listing.data) ? listing.data.map((x) => x.name) : [];
+    const renamed = {}, tree = [];
+    for (const u of uploads) {
+      const content = String((u && u.content) || "");
+      if (!content || content.length > 7_500_000 || /[^A-Za-z0-9+/=]/.test(content)) return json({ error: "One of the photos is too large or could not be read." }, 400);
+      const name = photoFileName(u.name, u.ext, taken); taken.push(name);
+      renamed[String(u.key || "")] = name;
+      const blob = await gh(repo + "/git/blobs", { method: "POST", body: JSON.stringify({ content, encoding: "base64" }) });
+      if (!blob.ok) return json({ error: writeProblem(blob, "GitHub did not accept the photo. Please try again.") }, 502);
+      tree.push({ path: ps.images + "/" + name, mode: "100644", type: "blob", sha: blob.data.sha });
+    }
+    // point the sections at the photos' final names
+    const fix = (v) => { if (Array.isArray(v)) return v.map(fix); if (v && typeof v === "object") { const o = {}; for (const k of Object.keys(v)) o[k] = fix(v[k]); return o; } return typeof v === "string" && renamed[v] ? renamed[v] : v; };
+    let withPhotos;
+    try { withPhotos = cleanPages(site, fix(body.pages), f.data); } catch (e) { return json({ error: e.message }, 400); }
+    const pageBlob = await gh(repo + "/git/blobs", { method: "POST", body: JSON.stringify({ content: encodeBase64Utf8(JSON.stringify(withPhotos, null, 2) + "\n"), encoding: "base64" }) });
+    if (!pageBlob.ok) return json({ error: writeProblem(pageBlob, "GitHub did not save the page. Please try again.") }, 502);
+    tree.push({ path: ps.file, mode: "100644", type: "blob", sha: pageBlob.data.sha });
+    const head = await gh(repo + "/git/ref/heads/" + ref);
+    const headSha = head.ok && head.data.object ? head.data.object.sha : "";
+    const headCommit = headSha ? await gh(repo + "/git/commits/" + headSha) : null;
+    if (!headCommit || !headCommit.ok) return json({ error: "The site could not be read. Please try again." }, 502);
+    const made = await gh(repo + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: headCommit.data.tree.sha, tree }) });
+    if (!made.ok) return json({ error: writeProblem(made, "GitHub did not save the page. Please try again.") }, 502);
+    const commit = await gh(repo + "/git/commits", { method: "POST", body: JSON.stringify({ message: "Edit page: " + what + who, tree: made.data.sha, parents: [headSha] }) });
+    if (!commit.ok) return json({ error: writeProblem(commit, "GitHub did not save the page. Please try again.") }, 502);
+    const moved = await moveBranch(site, ref, commit.data.sha, false);
+    if (!moved.ok) return json({ error: "Someone else changed this site at the same moment. Refresh and try again." }, 409);
+    return json({ ok: true, photos: renamed, summaries: summariesFor(site, withPhotos) });
   }
 
   if (action === "theme" || action === "saveTheme") {

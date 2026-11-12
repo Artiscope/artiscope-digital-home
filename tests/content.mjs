@@ -213,4 +213,27 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   fs.writeFileSync("/tmp/pages-saved.json", JSON.stringify(saved, null, 2));
   assert.equal((await call({ action: "pages", site: "global-art-monitor" })).status, 400, "Global Art Monitor waits for part 2");
 }
+
+// photos sent with a page are saved with it, as one step
+{
+  const site = "world-art-review", call = async (b) => { const r = await handle(post({ site, ...b })); return { status: r.status, ...(await r.json()) }; };
+  const { photoFileName } = await import("./home.mjs");
+  assert.equal(photoFileName("My Photo!.JPG", "jpg", []), "my-photo.jpg"); assert.equal(photoFileName("a.png", "png", ["a.png", "a-2.png"]), "a-3.png"); assert.equal(photoFileName("", "gif", []), "photo.jpg");
+  const pg = await call({ action: "pages" }); assert.equal(pg.imageBase, "https://worldartreview.com/images/"); assert.ok(pg.kinds.method.blocks && pg.kinds.method.blocks.field === "cards" && pg.kinds.method.about);
+  const doc = JSON.parse(JSON.stringify(pg.pages));
+  doc.pages.home.sections.push({ id: "picture-1", type: "picture", visible: true, settings: { image: "upload:1", alt: "A studio", caption: "", size: "", bg: "paper" } });
+  doc.pages.home.sections.find((x) => x.id === "method").settings.cards[1].hidden = true;
+  const before = Object.keys(hub.refs(WR)).length, headBefore = hub.refs(WR).main;
+  const r = await call({ action: "savePages", pages: doc, what: "Add section: Picture", uploads: [{ key: "upload:1", name: "Studio Shot.jpeg", ext: "jpg", content: "QUJD" }] });
+  assert.equal(r.status, 200); assert.equal(r.photos["upload:1"], "studio-shot.jpg");
+  assert.equal(hub.read(WR, "main", "images/studio-shot.jpg"), "ABC");
+  const saved = JSON.parse(hub.read(WR, "main", "content/pages.json"));
+  assert.equal(saved.pages.home.sections.at(-1).settings.image, "studio-shot.jpg");
+  assert.equal(saved.pages.home.sections.find((x) => x.id === "method").settings.cards[1].hidden, true, "a hidden block stays hidden");
+  assert.match(hub.lastMessage(WR, "main"), /^Edit page: Add section: Picture \(me@x\.com\)$/);
+  assert.equal((await call({ action: "savePages", pages: doc, uploads: [{ key: "x", name: "a", ext: "jpg", content: "not base64!" }] })).status, 400);
+  // one Undo takes both back
+  assert.equal((await call({ action: "undoStep" })).ok, true);
+  assert.equal(hub.read(WR, "main", "images/studio-shot.jpg"), null); assert.ok(!hub.read(WR, "main", "content/pages.json").includes("studio-shot"));
+}
 console.log("CONTENT CHECKS PASSED");

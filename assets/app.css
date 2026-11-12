@@ -316,3 +316,25 @@ select.fontpick { width: auto; min-width: 190px; max-width: 210px; min-height: 4
 .kind .small { font-size: 12px; }
 .chk { display: flex; gap: 8px; align-items: center; font-size: 14px; }
 @media (max-width: 1100px) { .ed, .ed.with-right { grid-template-columns: 1fr; grid-template-rows: auto auto minmax(300px, 1fr) auto; position: static; min-height: 100vh; } .ed-left { border-radius: 0; max-height: 40vh; } .ed-right { border-radius: 0; } .ed-mid { min-height: 60vh; } }
+
+/* ---------- blocks, the floating bar and the photo picker ---------- */
+.ed .lt { font-family: var(--serif); font-size: 19px; color: #FFFFFF; margin: 6px 6px 4px; }
+.ed .blocks { margin: 0 0 4px; }
+.ed .sec.blk { padding-left: 34px; font-size: 13.5px; }
+.ed .sec.blk .dot { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 2px currentColor; opacity: .7; flex: none; }
+.ed .sec.on { background: var(--metal); color: #0A0D15; font-weight: 600; box-shadow: none; }
+.ed .sec.on small, .ed .sec.on .eye { color: #2E3A57; }
+.ed .addl.blk { padding-left: 34px; font-size: 12.5px; }
+.ed-frame #ed-float { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 3; }
+.float { display: flex; gap: 6px; align-items: center; padding: 6px; border-radius: 16px; background: rgba(20, 25, 39, .92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 14px 34px rgba(0, 0, 0, .5); white-space: nowrap; }
+.ed-right .sub { font-size: 12.5px; color: var(--muted); font-weight: 600; margin: 18px 6px 10px; }
+.blocknote { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin: 0 6px 16px; padding: 14px 16px; border-radius: 16px; background: var(--well); box-shadow: var(--sink-small); }
+.picrow { display: flex; gap: 14px; align-items: center; }
+.picthumb { width: 112px; height: 112px; border-radius: 14px; object-fit: cover; box-shadow: var(--lift-small); flex: none; background: var(--well); }
+.picthumb.none { display: flex; align-items: center; justify-content: center; text-align: center; font-size: 12px; color: var(--muted); box-shadow: var(--sink-small); padding: 8px; }
+label.upl { display: inline-flex; align-items: center; cursor: pointer; }
+.picgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0 6px; padding: 10px; border-radius: 16px; background: var(--well); box-shadow: var(--sink-small); }
+.pictile { border: 0; padding: 0; background: none; cursor: pointer; display: flex; flex-direction: column; gap: 4px; text-align: left; color: var(--muted); font: inherit; font-size: 11px; min-width: 0; }
+.pictile img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 11px; box-shadow: var(--lift-small); }
+.pictile.on img { box-shadow: 0 0 0 3px var(--accent); }
+.pictile span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "16";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "17";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -115,7 +115,7 @@
       if (state.tab === "pages" && !state.pg[s.id]) {
         var pgd = await api("pages", { site: s.id });
         var pref = state.edPrefs[s.id] || {};
-        state.pg[s.id] = { doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false };
+        state.pg[s.id] = { doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false };
         render();
       }
       if (state.tab === "history" && (force || !state.history[s.id])) {
@@ -510,7 +510,7 @@
   if (typeof window.addEventListener === "function") {
     window.addEventListener("message", function (ev) {
       if (!ev.data) return;
-      if (ev.data.type === "adh-click") { var pgd = pgOf(); if (!pgd) return; try { if (ev.origin !== new URL(pgd.preview).origin) return; } catch (e) { return; } pickSection(String(ev.data.id || "")); return; }
+      if (ev.data.type === "adh-click") { var pgd = pgOf(); if (!pgd) return; try { if (ev.origin !== new URL(pgd.preview).origin) return; } catch (e) { return; } pickSection(String(ev.data.id || ""), ev.data.block, true); return; }
       var t = themeOf(); if (!t || ev.data.type !== "adh-ready") return;
       try { if (ev.origin !== new URL(t.spec.url).origin) return; } catch (e) { return; }
       if (!t.live) showLive(t, true);
@@ -570,9 +570,30 @@
   function pgSections(pgd) { return pgPage(pgd).sections || []; }
   function pgSel(pgd) {
     var q = pgd.sel; if (!q) return null;
-    if (q.where === "shared") { var part = pgd.doc.shared[q.id]; return part ? { where: "shared", id: q.id, sec: part, kind: pgd.kinds[part.type] } : null; }
-    var sec = pgSections(pgd).find(function (x) { return x.id === q.id; });
-    return sec ? { where: "page", id: q.id, sec: sec, kind: pgd.kinds[sec.type] } : null;
+    var out;
+    if (q.where === "shared") { var part = pgd.doc.shared[q.id]; if (!part) return null; out = { where: "shared", id: q.id, sec: part, kind: pgd.kinds[part.type] }; }
+    else { var sec = pgSections(pgd).find(function (x) { return x.id === q.id; }); if (!sec) return null; out = { where: "page", id: q.id, sec: sec, kind: pgd.kinds[sec.type] }; }
+    out.block = null;
+    var bk = out.kind && out.kind.blocks;
+    if (bk && q.block != null) {
+      var list = (out.sec.settings || {})[bk.field];
+      if (Array.isArray(list) && list[q.block] !== undefined) {
+        out.block = q.block; out.item = list[q.block]; out.list = list; out.bk = bk;
+        out.bdef = out.kind.fields.find(function (f) { return f.name === bk.field; });
+      }
+    }
+    return out;
+  }
+  // The name a block goes by in the list: its title, name or first words.
+  function blockTitle(item, i) {
+    if (Array.isArray(item)) return String(item[0] || "") || "Item " + (i + 1);
+    if (item && typeof item === "object") { var t = item.title || item.name || item.q || item.t || ""; return String(t).replace(/<[^>]*>/g, "") || "Item " + (i + 1); }
+    return "Item " + (i + 1);
+  }
+  function blockHidden(item) { return !!(item && !Array.isArray(item) && item.hidden === true); }
+  function blankFrom(fields) {
+    if (fields.some(function (g) { return typeof g.name === "number"; })) return fields.map(function () { return ""; });
+    return fields.reduce(function (o, g) { o[g.name] = g.type === "rows" || g.type === "lines" ? [] : g.type === "yesno" ? false : g.type === "number" ? 0 : ""; return o; }, {});
   }
   function pgSummary(pgd, where, key, sec) {
     var k = pgd.kinds[sec.type]; if (!k) return "";
@@ -593,7 +614,7 @@
       '<div class="ed-top">' + edTop(s, pgd) + '</div>' +
       '<div class="ed-left">' + edList(pgd) + '</div>' +
       '<div class="ed-mid">' + viewLeave() + viewAsk() + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
-        '<div class="ed-frame ' + esc(pgd.mode) + '"><iframe id="ed-frame" title="The page being edited" src="' + esc(pgd.preview) + '"></iframe></div>' +
+        '<div class="ed-frame ' + esc(pgd.mode) + '"><iframe id="ed-frame" title="The page being edited" src="' + esc(pgd.preview) + '"></iframe><div id="ed-float">' + edFloat(pgd) + '</div></div>' +
         '<span class="small">The real page, redrawn as you edit. Click any part of it to open its settings. Nothing is kept until you press Save.</span></div>' +
       (right ? '<div class="ed-right">' + right + '</div>' : "") + '</div>';
   }
@@ -612,15 +633,23 @@
   }
   function edRow(pgd, where, id, sec, picked) {
     var k = pgd.kinds[sec.type] || { label: sec.type }, hidden = sec.visible === false;
-    return '<div class="sec' + (picked ? " on" : "") + (hidden ? " off" : "") + '" data-act="ed-pick" data-where="' + where + '" data-id="' + esc(id) + '"' + (where === "page" ? ' draggable="true"' : "") + '>' +
+    var row = '<div class="sec' + (picked && (pgd.sel.block == null) ? " on" : "") + (hidden ? " off" : "") + '" data-act="ed-pick" data-where="' + where + '" data-id="' + esc(id) + '"' + (where === "page" ? ' draggable="true"' : "") + '>' +
       (where === "page" ? '<span class="grip" aria-hidden="true"><i></i><i></i><i></i></span>' : '<span class="grip" aria-hidden="true"></span>') +
       '<span class="nm">' + esc(k.label) + '<small id="sum-' + esc(where + "-" + id) + '">' + esc(pgSummary(pgd, where, id, sec)) + '</small></span>' + (hidden ? '<span class="eye">Hidden</span>' : "") + '</div>';
+    var bk = k.blocks, list = bk ? (sec.settings || {})[bk.field] : null;
+    if (!bk || !Array.isArray(list)) return row;
+    return row + '<div class="blocks">' + list.map(function (item, i) {
+      var on = picked && pgd.sel.block === i, off = blockHidden(item);
+      return '<div class="sec blk' + (on ? " on" : "") + (off ? " off" : "") + '" data-act="ed-pick" data-where="' + where + '" data-id="' + esc(id) + '" data-block="' + i + '">' +
+        '<span class="dot" aria-hidden="true"></span><span class="nm">' + esc(blockTitle(item, i)) + '</span>' + (off ? '<span class="eye">Hidden</span>' : "") + '</div>';
+    }).join("") + '<button type="button" class="addl blk" data-act="ed-add-block" data-where="' + where + '" data-id="' + esc(id) + '">+ &nbsp;' + esc(bk.add) + '</button></div>';
   }
   function edList(pgd) {
     var sel = pgd.sel || {}, sh = pgd.doc.shared || {};
     var top = ["opening", "header"].filter(function (k) { return sh[k]; }), bottom = ["footer"].filter(function (k) { return sh[k]; });
-    return '<div class="grp">Top of every page</div>' + top.map(function (k) { return edRow(pgd, "shared", k, sh[k], sel.where === "shared" && sel.id === k); }).join("") +
-      '<div class="grp">' + esc(pgPage(pgd).title || pgd.page) + '</div><div id="ed-sections">' + pgSections(pgd).map(function (x) { return edRow(pgd, "page", x.id, x, sel.where === "page" && sel.id === x.id); }).join("") + '</div>' +
+    return '<div class="lt">' + esc(pgPage(pgd).title || pgd.page) + ' page</div>' +
+      '<div class="grp">Top of every page</div>' + top.map(function (k) { return edRow(pgd, "shared", k, sh[k], sel.where === "shared" && sel.id === k); }).join("") +
+      '<div class="grp">This page</div><div id="ed-sections">' + pgSections(pgd).map(function (x) { return edRow(pgd, "page", x.id, x, sel.where === "page" && sel.id === x.id); }).join("") + '</div>' +
       '<button type="button" class="addl" data-act="ed-library">+ &nbsp;Add a section</button>' +
       '<div class="grp">Bottom of every page</div>' + bottom.map(function (k) { return edRow(pgd, "shared", k, sh[k], sel.where === "shared" && sel.id === k); }).join("") +
       '<div class="grp">Also on this site</div>' +
@@ -635,19 +664,37 @@
       '<div class="kinds">' + kinds.map(function (k) { return '<button type="button" class="kind" data-act="ed-add" data-kind="' + esc(k) + '"><b>' + esc(pgd.kinds[k].label) + '</b><span class="small">' + esc(pgd.kinds[k].library) + '</span></button>'; }).join("") + '</div>';
   }
   function edSettings(pgd, sel) {
-    var kind = sel.kind || { label: sel.sec.type, fields: [] }, st = sel.sec.settings || {}, page = sel.where === "page";
-    var idx = page ? pgSections(pgd).findIndex(function (x) { return x.id === sel.id; }) : -1, n = pgSections(pgd).length;
-    var fields = kind.fields.map(function (f) { return edField(pgd, f, st[f.name], f.name); }).join("");
-    var removing = state.confirm === "ed-remove|" + sel.id;
-    return '<div class="rhead"><button type="button" class="linklike small" data-act="ed-panel-close">Done</button><h2>' + esc(kind.label) + '</h2>' + (sel.sec.visible === false ? '<span class="chip quiet" style="align-self:flex-start">Hidden from the page</span>' : "") + '</div>' +
-      '<form class="stack" data-form="section">' + (fields || '<span class="small" style="margin:0 6px">Nothing to set here.</span>') + '</form>' +
-      '<div class="row edacts">' +
-        '<button type="button" class="soft slim" data-act="ed-hide">' + (sel.sec.visible === false ? "Show" : "Hide") + '</button>' +
-        (page ? '<button type="button" class="soft slim" data-act="ed-dup">Duplicate</button>' +
-          '<button type="button" class="soft slim" data-act="ed-move" data-dir="-1"' + (idx > 0 ? "" : " disabled") + '>Move up</button>' +
-          '<button type="button" class="soft slim" data-act="ed-move" data-dir="1"' + (idx < n - 1 ? "" : " disabled") + '>Move down</button>' +
-          (removing ? '<span class="small">Remove it? </span><button type="button" class="btn slim" data-act="ed-remove">Yes, remove</button><button type="button" class="linklike small" data-act="cancel">Keep</button>'
-            : '<button type="button" class="linklike small" data-act="ask" data-k="ed-remove|' + esc(sel.id) + '">Remove</button>') : "") +
+    var kind = sel.kind || { label: sel.sec.type, fields: [] }, st = sel.sec.settings || {};
+    if (sel.block != null) {
+      var n = sel.list.length, fieldsB = (sel.bdef ? sel.bdef.fields : []).map(function (g) { return edField(pgd, g, Array.isArray(sel.item) ? sel.item[g.name] : (sel.item || {})[g.name], sel.bk.field + "." + sel.block + "." + g.name); }).join("");
+      return '<div class="rhead"><div class="row between"><button type="button" class="linklike small" data-act="ed-pick" data-where="' + sel.where + '" data-id="' + esc(sel.id) + '">Back to ' + esc(kind.label) + '</button><span class="small">' + esc(sel.bk.label) + " " + (sel.block + 1) + " of " + n + '</span></div>' +
+        '<h2>' + esc(blockTitle(sel.item, sel.block)) + '</h2><span class="small">' + esc("A " + sel.bk.label.toLowerCase() + " in " + kind.label + ".") + '</span>' + (blockHidden(sel.item) ? '<span class="chip quiet" style="align-self:flex-start">Hidden from the page</span>' : "") + '</div>' +
+        '<form class="stack" data-form="section">' + fieldsB + '</form>';
+    }
+    var bk = kind.blocks, main = [], look = [];
+    kind.fields.forEach(function (f) {
+      if (bk && f.name === bk.field) return;
+      (f.group === "Look" ? look : main).push(edField(pgd, f, st[f.name], f.name));
+    });
+    var blockNote = bk ? '<div class="blocknote"><b>' + ((st[bk.field] || []).length) + " " + esc(bk.label.toLowerCase()) + ((st[bk.field] || []).length === 1 ? "" : "s") + '</b><span class="small">Pick one in the list on the left to change it, or add another.</span><button type="button" class="soft slim" data-act="ed-add-block" data-where="' + sel.where + '" data-id="' + esc(sel.id) + '">' + esc(bk.add) + '</button></div>' : "";
+    return '<div class="rhead"><button type="button" class="linklike small" data-act="ed-panel-close">Done</button><h2>' + esc(kind.label) + '</h2>' + (kind.about ? '<span class="small">' + esc(kind.about) + '</span>' : "") + (sel.sec.visible === false ? '<span class="chip quiet" style="align-self:flex-start">Hidden from the page</span>' : "") + '</div>' +
+      '<form class="stack" data-form="section">' + (main.join("") || (bk ? "" : '<span class="small" style="margin:0 6px">Nothing to set here.</span>')) + blockNote +
+      (look.length ? '<div class="sub">Look</div>' + look.join("") : "") + '</form>';
+  }
+  // The floating bar over the page: acts on whatever is picked.
+  function edFloat(pgd) {
+    var sel = pgSel(pgd); if (!sel) return "";
+    var isBlock = sel.block != null, page = sel.where === "page", idx, n, hid, canHide = true;
+    if (isBlock) { idx = sel.block; n = sel.list.length; hid = blockHidden(sel.item); canHide = !Array.isArray(sel.item); }
+    else { idx = page ? pgSections(pgd).findIndex(function (x) { return x.id === sel.id; }) : -1; n = pgSections(pgd).length; hid = sel.sec.visible === false; }
+    var movable = isBlock || page, word = isBlock ? sel.bk.label.toLowerCase() : "section";
+    var removing = state.confirm === "ed-remove|" + sel.id + "|" + (isBlock ? sel.block : "");
+    return '<div class="float" role="toolbar" aria-label="Change the picked ' + word + '">' +
+      (removing ? '<span class="small" style="padding:0 8px">Remove this ' + word + '?</span><button type="button" class="btn slim" data-act="ed-remove">Yes, remove</button><button type="button" class="soft slim" data-act="cancel">Keep it</button>'
+        : (movable ? '<button type="button" class="soft slim" data-act="ed-dup">Duplicate</button>' : "") +
+          (canHide ? '<button type="button" class="soft slim" data-act="ed-hide">' + (hid ? "Show" : "Hide") + '</button>' : "") +
+          (movable ? '<button type="button" class="soft slim" data-act="ed-move" data-dir="-1"' + (idx > 0 ? "" : " disabled") + '>Move up</button><button type="button" class="soft slim" data-act="ed-move" data-dir="1"' + (idx < n - 1 ? "" : " disabled") + '>Move down</button>' : "") +
+          (movable ? '<button type="button" class="linklike small" data-act="ask" data-k="ed-remove|' + esc(sel.id) + "|" + (isBlock ? sel.block : "") + '" style="margin:0 8px">Remove</button>' : "")) +
       '</div>';
   }
   var FIELD_N = 0;
@@ -666,7 +713,16 @@
       var theme = f.theme || [], isTheme = theme.some(function (o) { return o[0] === String(v == null ? "" : v); }), custom = isTheme ? "#1D4A35" : (v || "#1D4A35");
       input = '<div class="row"><select class="box" id="' + id + '" data-pf="' + esc(path) + '" data-kind="colour-pick" style="max-width:220px">' + theme.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (isTheme && o[0] === String(v == null ? "" : v) ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '<option value="custom"' + (isTheme ? "" : " selected") + '>Any colour</option></select>' +
         '<label class="sw small" style="background:' + esc(custom) + '"' + (isTheme ? ' hidden' : "") + ' data-swatch="' + esc(path) + '"><input type="color" data-pf="' + esc(path) + '" data-kind="colour" value="' + esc(custom) + '" aria-label="' + esc(f.label) + ', any colour"></label></div>';
-    } else if (t === "image") input = '<select class="box" id="' + id + '" data-pf="' + esc(path) + '"><option value="">No picture yet</option>' + pgd.images.map(function (im) { return '<option value="' + esc(im) + '"' + (im === v ? " selected" : "") + '>' + esc(im) + '</option>'; }).join("") + '</select><span class="small">Photos sent from the Photos screen appear here.</span>';
+    } else if (t === "image") {
+      var src = imageSrc(pgd, v), open = pgd.picker === path;
+      input = '<div class="picrow">' + (src ? '<img class="picthumb" src="' + esc(src) + '" alt="">' : '<span class="picthumb none">No picture yet</span>') +
+        '<div class="stack" style="gap:8px"><label class="btn slim upl">Upload a photo<input type="file" accept="image/jpeg,image/png" data-upload="' + esc(path) + '" hidden></label>' +
+        '<button type="button" class="soft slim" data-act="ed-picker" data-path="' + esc(path) + '">' + (open ? "Close the photos" : "Choose from the site") + '</button>' +
+        (v ? '<button type="button" class="linklike small" data-act="ed-pic-none" data-path="' + esc(path) + '" style="align-self:flex-start">Remove picture</button>' : "") + '</div></div>' +
+        (open ? '<div class="picgrid">' + (pgd.images.length ? pgd.images.map(function (im) { return '<button type="button" class="pictile' + (im === v ? " on" : "") + '" data-act="ed-pic-choose" data-path="' + esc(path) + '" data-name="' + esc(im) + '"><img src="' + esc(pgd.imageBase + im) + '" alt="" loading="lazy"><span>' + esc(im) + '</span></button>'; }).join("") : '<span class="small">No photos on the site yet. Upload one.</span>') + '</div>' : "") +
+        '<span class="small">JPG or PNG. Resized for the web, never cropped. Kept when you press Save.</span>';
+      hint = "";
+    }
     else if (t === "artists") {
       if (f.one) input = '<select class="box" id="' + id + '" data-pf="' + esc(path) + '"><option value="">First published artist</option>' + pgd.artists.map(function (a) { return '<option value="' + esc(a.slug) + '"' + (a.slug === v ? " selected" : "") + '>' + esc(a.name) + '</option>'; }).join("") + '</select>';
       else input = '<div class="stack" style="gap:6px">' + pgd.artists.map(function (a) { return '<label class="chk"><input type="checkbox" data-pf="' + esc(path) + '" data-kind="artists" value="' + esc(a.slug) + '"' + ((v || []).indexOf(a.slug) >= 0 ? " checked" : "") + '> ' + esc(a.name) + '</label>'; }).join("") + '</div>';
@@ -680,6 +736,11 @@
     return '<div class="field">' + label + input + hint + '</div>';
   }
 
+  function imageSrc(pgd, v) {
+    if (!v) return "";
+    if (pgd.uploads && pgd.uploads[v]) return pgd.uploads[v].dataUrl;
+    return pgd.imageBase ? pgd.imageBase + v : "";
+  }
   // Reading and writing one setting by its path, such as "items.0.q".
   function pgGet(obj, path) { var cur = obj; path.split(".").forEach(function (k) { cur = cur == null ? undefined : cur[k]; }); return cur; }
   function pgSet(obj, path, value) {
@@ -690,7 +751,16 @@
   var pushTimer = null;
   function pushPreview(pick) {
     var pgd = pgOf(), frame = app.querySelector && app.querySelector("#ed-frame"); if (!pgd || !frame || !frame.contentWindow) return;
-    try { frame.contentWindow.postMessage({ type: "adh-pages", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages }, pick: pick || (pgd.sel ? (pgd.sel.where === "shared" ? pgd.sel.id : pgd.sel.id) : "") }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
+    var sel = pgSel(pgd), images = {};
+    Object.keys(pgd.uploads || {}).forEach(function (k) { images[k] = pgd.uploads[k].dataUrl; });
+    var block = -1, label = "";
+    if (sel) {
+      label = sel.kind ? sel.kind.label : "";
+      if (sel.block != null && !blockHidden(sel.item)) { block = sel.list.slice(0, sel.block).filter(function (x) { return !blockHidden(x); }).length; label = sel.bk.label + ": " + blockTitle(sel.item, sel.block); }
+    }
+    var id = pick != null ? pick : (sel ? sel.id : "");
+    try { frame.contentWindow.postMessage({ type: "adh-pages", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages }, images: images, pick: id, block: id ? block : -1, label: id ? label : "", scroll: !!pgd.scrollNext }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
+    pgd.scrollNext = false;
   }
   function pushSoon() { clearTimeout(pushTimer); pushTimer = setTimeout(function () { pushPreview(); }, 150); }
   function mountPages() {
@@ -703,11 +773,11 @@
     var pgd = pgOf(); if (!pgd) return;
     var list = app.querySelector("#ed-sections"); if (!list || !list.addEventListener) return;
     var dragId = null;
-    list.addEventListener("dragstart", function (ev) { var row = ev.target.closest && ev.target.closest(".sec"); if (!row) return; dragId = row.dataset.id; try { ev.dataTransfer.setData("text/plain", dragId); ev.dataTransfer.effectAllowed = "move"; } catch (e) { /* fine */ } });
+    list.addEventListener("dragstart", function (ev) { var row = ev.target.closest && ev.target.closest(".sec:not(.blk)"); if (!row) return; dragId = row.dataset.id; try { ev.dataTransfer.setData("text/plain", dragId); ev.dataTransfer.effectAllowed = "move"; } catch (e) { /* fine */ } });
     list.addEventListener("dragover", function (ev) { if (dragId) { ev.preventDefault(); var row = ev.target.closest && ev.target.closest(".sec"); Array.prototype.forEach.call(list.querySelectorAll(".sec"), function (x) { x.classList.toggle("over", x === row); }); } });
     list.addEventListener("dragleave", function () { });
     list.addEventListener("drop", function (ev) {
-      ev.preventDefault(); var row = ev.target.closest && ev.target.closest(".sec"); if (!row || !dragId || row.dataset.id === dragId) { dragId = null; return; }
+      ev.preventDefault(); var row = ev.target.closest && ev.target.closest(".sec"); if (row && row.classList.contains("blk")) { var up = row.parentNode && row.parentNode.previousElementSibling; row = up && up.classList.contains("sec") ? up : null; } if (!row || !dragId || row.dataset.id === dragId) { dragId = null; return; }
       var secs = pgSections(pgd), from = secs.findIndex(function (x) { return x.id === dragId; }), to = secs.findIndex(function (x) { return x.id === row.dataset.id; });
       if (from < 0 || to < 0) return;
       var moved = secs.splice(from, 1)[0]; secs.splice(to, 0, moved); dragId = null; pgMark(pgd); edPatch(); pushPreview();
@@ -726,28 +796,48 @@
     else if (rp) rp.remove();
     var mid = ed.querySelector(".ed-mid"), notes = mid.querySelectorAll(".ask, .notice"); Array.prototype.forEach.call(notes, function (x) { x.remove(); });
     mid.insertAdjacentHTML("afterbegin", viewLeave() + viewAsk() + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : ""));
+    var fl = ed.querySelector("#ed-float"); if (fl) fl.innerHTML = edFloat(pgd);
     mountRich(); mountDrag();
   }
   function edRemember() { var s = site(), p = pgOf(); if (s && p) state.edPrefs[s.id] = { mode: p.mode, page: p.page, sel: p.sel }; }
-  function pickSection(id) {
+  function pickSection(id, block, fromPage) {
     var pgd = pgOf(); if (!pgd) return;
-    if (id === "header" || id === "footer" || id === "opening") pgd.sel = { where: "shared", id: id };
-    else if (pgSections(pgd).some(function (x) { return x.id === id; })) pgd.sel = { where: "page", id: id };
+    var b = block == null || block === "" || Number(block) < 0 ? null : Number(block);
+    if (id === "header" || id === "footer" || id === "opening") pgd.sel = { where: "shared", id: id, block: b };
+    else if (pgSections(pgd).some(function (x) { return x.id === id; })) pgd.sel = { where: "page", id: id, block: b };
     else return;
-    pgd.panel = ""; state.confirm = null; edRemember(); edPatch(); pushPreview();
+    // a click on the page counts hidden blocks out, so find the real one
+    var sel = pgSel(pgd);
+    if (fromPage && b != null && sel && sel.kind && sel.kind.blocks) {
+      var list = (sel.sec.settings || {})[sel.kind.blocks.field] || [], seen = -1;
+      for (var i = 0; i < list.length; i++) { if (!blockHidden(list[i])) seen++; if (seen === b) { pgd.sel.block = i; break; } }
+    }
+    pgd.panel = ""; pgd.picker = ""; state.confirm = null; pgd.scrollNext = !fromPage; edRemember(); edPatch(); pushPreview();
   }
   function newSectionId(pgd, type) {
     var n = 1, used = pgSections(pgd).map(function (x) { return x.id; });
     while (used.indexOf(type + "-" + n) >= 0) n++;
     return type + "-" + n;
   }
+  // Every picture needs a description before it is saved.
+  function missingDescription(pgd) {
+    var found = null;
+    Object.keys(pgd.doc.pages).forEach(function (pk) { (pgd.doc.pages[pk].sections || []).forEach(function (sec) {
+      var k = pgd.kinds[sec.type]; if (!k || found) return;
+      k.fields.forEach(function (f) { if (f.type === "image" && f.alt && (sec.settings || {})[f.name] && !String((sec.settings || {})[f.alt] || "").trim()) found = { page: pk, id: sec.id, label: k.label }; });
+    }); });
+    return found;
+  }
   function savePages() {
     var s = site(), pgd = pgOf(); if (!s || !pgd || !pgd.dirty) return;
+    var miss = missingDescription(pgd);
+    if (miss) { pgd.page = miss.page; pgd.sel = { where: "page", id: miss.id, block: null }; state.notice = { text: "Please describe the picture in " + miss.label + " before saving. It is read out to people who cannot see it.", problem: true }; edPatch(); pushPreview(); return; }
     var doc = JSON.parse(JSON.stringify(pgd.doc)), what = pgd.what || (pgPage(pgd).title || pgd.page);
-    edRemember();
+    var used = canon(doc), uploads = Object.keys(pgd.uploads || {}).filter(function (k) { return used.indexOf(JSON.stringify(k)) >= 0; }).map(function (k) { var u = pgd.uploads[k]; return { key: k, name: u.name, ext: u.ext, content: u.content }; });
+    edRemember(); state.notice = null;
     onLive(function () {
-      change(key("pages", s.id), function () { return api("savePages", { site: s.id, pages: doc, what: what }); }, function () { state.dirty = false; }, curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes");
-    }, "This page change");
+      change(key("pages", s.id), function () { return api("savePages", { site: s.id, pages: doc, what: what, uploads: uploads }); }, function () { state.dirty = false; }, curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes");
+    }, uploads.length ? "This page change and " + (uploads.length === 1 ? "its new photo" : "its " + uploads.length + " new photos") : "This page change");
   }
 
   // ---------- formatted text, edited as plain writing ----------
@@ -1249,8 +1339,8 @@
       Array.prototype.forEach.call(app.querySelectorAll('[data-act="egroup"]'), function (x) { x.className = x.dataset.g === el.dataset.g ? "on" : ""; });
     }
     else if (a === "cmore") { state.cmore = true; filterList(); }
-    else if (a === "ed-pick") pickSection(el.dataset.id);
-    else if (a === "ed-panel-close") { var pq = pgOf(); if (pq) { pq.panel = ""; pq.sel = null; edPatch(); pushPreview(""); } }
+    else if (a === "ed-pick") pickSection(el.dataset.id, el.dataset.block);
+    else if (a === "ed-panel-close") { var pq = pgOf(); if (pq) { pq.panel = ""; pq.sel = null; pq.picker = ""; edPatch(); pushPreview(""); } }
     else if (a === "ed-library") { var pl = pgOf(); if (pl) { pl.panel = "library"; edPatch(); } }
     else if (a === "ed-page") { var pp = pgOf(); if (pp) { pp.page = el.dataset.page; pp.sel = null; pp.panel = ""; edRemember(); edPatch(); pushPreview(); } }
     else if (a === "ed-mode") { var pm = pgOf(); if (pm) { pm.mode = el.dataset.mode; edRemember(); var fr = app.querySelector(".ed-frame"); if (fr) fr.className = "ed-frame " + pm.mode; patchEdTop(); } }
@@ -1261,23 +1351,47 @@
       secs.splice(after >= 0 ? after + 1 : secs.length, 0, sec);
       pa.summaries[pa.page + ":" + nid] = ""; pa.sel = { where: "page", id: nid }; pa.panel = ""; pa.what = "Add section: " + kd.label; pgMark(pa); edPatch(); pushPreview();
     }
-    else if (a === "ed-hide") { var ph = pgOf(), hs = ph && pgSel(ph); if (hs) { hs.sec.visible = hs.sec.visible === false; ph.what = (hs.sec.visible ? "Show section: " : "Hide section: ") + (hs.kind ? hs.kind.label : hs.id); pgMark(ph); edPatch(); pushPreview(); } }
+    else if (a === "ed-hide") {
+      var ph = pgOf(), hs = ph && pgSel(ph); if (!hs) return;
+      if (hs.block != null) { if (Array.isArray(hs.item)) return; if (hs.item.hidden) delete hs.item.hidden; else hs.item.hidden = true; ph.what = (hs.item.hidden ? "Hide " : "Show ") + hs.bk.label.toLowerCase() + ": " + blockTitle(hs.item, hs.block); }
+      else { hs.sec.visible = hs.sec.visible === false; ph.what = (hs.sec.visible ? "Show section: " : "Hide section: ") + (hs.kind ? hs.kind.label : hs.id); }
+      pgMark(ph); edPatch(); pushPreview();
+    }
     else if (a === "ed-dup") {
-      var pd = pgOf(), ds = pd && pgSel(pd); if (!ds || ds.where !== "page") return;
-      var copy = JSON.parse(JSON.stringify(ds.sec)); copy.id = newSectionId(pd, ds.sec.type);
-      var dl = pgSections(pd), di = dl.findIndex(function (x) { return x.id === ds.id; }); dl.splice(di + 1, 0, copy);
-      pd.summaries[pd.page + ":" + copy.id] = pd.summaries[pd.page + ":" + ds.id] || ""; pd.sel = { where: "page", id: copy.id }; pd.what = "Add section: copy of " + (ds.kind ? ds.kind.label : ds.id); pgMark(pd); edPatch(); pushPreview();
+      var pd = pgOf(), ds = pd && pgSel(pd); if (!ds) return;
+      if (ds.block != null) { ds.list.splice(ds.block + 1, 0, JSON.parse(JSON.stringify(ds.item))); pd.sel.block = ds.block + 1; pd.what = "Add " + ds.bk.label.toLowerCase() + ": copy of " + blockTitle(ds.item, ds.block); }
+      else { if (ds.where !== "page") return; var copy = JSON.parse(JSON.stringify(ds.sec)); copy.id = newSectionId(pd, ds.sec.type);
+        var dl = pgSections(pd), di = dl.findIndex(function (x) { return x.id === ds.id; }); dl.splice(di + 1, 0, copy);
+        pd.summaries[pd.page + ":" + copy.id] = pd.summaries[pd.page + ":" + ds.id] || ""; pd.sel = { where: "page", id: copy.id, block: null }; pd.what = "Add section: copy of " + (ds.kind ? ds.kind.label : ds.id); }
+      pgMark(pd); edPatch(); pushPreview();
     }
     else if (a === "ed-move") {
-      var pv = pgOf(), ms = pv && pgSel(pv); if (!ms || ms.where !== "page") return;
-      var ml = pgSections(pv), mi = ml.findIndex(function (x) { return x.id === ms.id; }), mj = mi + Number(el.dataset.dir);
-      if (mj < 0 || mj >= ml.length) return;
-      var tmp = ml[mi]; ml[mi] = ml[mj]; ml[mj] = tmp; pv.what = "Move section: " + (ms.kind ? ms.kind.label : ms.id); pgMark(pv); edPatch(); pushPreview();
+      var pv = pgOf(), ms = pv && pgSel(pv); if (!ms) return;
+      var dir = Number(el.dataset.dir);
+      if (ms.block != null) { var bj = ms.block + dir; if (bj < 0 || bj >= ms.list.length) return; var bt = ms.list[ms.block]; ms.list[ms.block] = ms.list[bj]; ms.list[bj] = bt; pv.sel.block = bj; pv.what = "Move " + ms.bk.label.toLowerCase() + ": " + blockTitle(bt, bj); }
+      else { if (ms.where !== "page") return; var ml = pgSections(pv), mi = ml.findIndex(function (x) { return x.id === ms.id; }), mj = mi + dir;
+        if (mj < 0 || mj >= ml.length) return; var tmp = ml[mi]; ml[mi] = ml[mj]; ml[mj] = tmp; pv.what = "Move section: " + (ms.kind ? ms.kind.label : ms.id); }
+      pgMark(pv); edPatch(); pushPreview();
     }
     else if (a === "ed-remove") {
-      var pr = pgOf(), rs = pr && pgSel(pr); if (!rs || rs.where !== "page") return;
-      var rl = pgSections(pr); rl.splice(rl.findIndex(function (x) { return x.id === rs.id; }), 1);
-      pr.sel = null; state.confirm = null; pr.what = "Remove section: " + (rs.kind ? rs.kind.label : rs.id); pgMark(pr); edPatch(); pushPreview("");
+      var pr = pgOf(), rs = pr && pgSel(pr); if (!rs) return;
+      if (rs.block != null) { rs.list.splice(rs.block, 1); pr.what = "Remove " + rs.bk.label.toLowerCase() + ": " + blockTitle(rs.item, rs.block); pr.sel.block = null; }
+      else { if (rs.where !== "page") return; var rl = pgSections(pr); rl.splice(rl.findIndex(function (x) { return x.id === rs.id; }), 1); pr.sel = null; pr.what = "Remove section: " + (rs.kind ? rs.kind.label : rs.id); }
+      state.confirm = null; pgMark(pr); edPatch(); pushPreview(pr.sel ? undefined : "");
+    }
+    else if (a === "ed-add-block") {
+      var pk = pgOf(); if (!pk) return; pk.sel = { where: el.dataset.where, id: el.dataset.id, block: null };
+      var ks = pgSel(pk); if (!ks || !ks.kind || !ks.kind.blocks) return;
+      var bf = ks.kind.fields.find(function (f) { return f.name === ks.kind.blocks.field; }); if (!bf) return;
+      var arr = ks.sec.settings[ks.kind.blocks.field]; if (!Array.isArray(arr)) { arr = []; ks.sec.settings[ks.kind.blocks.field] = arr; }
+      arr.push(blankFrom(bf.fields)); pk.sel.block = arr.length - 1; pk.what = ks.kind.blocks.add + " in " + ks.kind.label;
+      pgMark(pk); pk.scrollNext = true; edPatch(); pushPreview();
+    }
+    else if (a === "ed-picker") { var pq2 = pgOf(); if (pq2) { pq2.picker = pq2.picker === el.dataset.path ? "" : el.dataset.path; edPatch(); } }
+    else if (a === "ed-pic-choose" || a === "ed-pic-none") {
+      var pc = pgOf(), cs = pc && pgSel(pc); if (!cs) return;
+      pgSet(cs.sec.settings, el.dataset.path, a === "ed-pic-none" ? "" : el.dataset.name); pc.picker = "";
+      pc.what = "Edit " + (cs.kind ? cs.kind.label : cs.id); pgMark(pc); edPatch(); pushPreview();
     }
     else if (a === "ed-row-add" || a === "ed-row-del" || a === "ed-row-move") {
       var px = pgOf(), xs = px && pgSel(px); if (!xs) return;
@@ -1288,7 +1402,7 @@
       px.what = "Edit " + (xs.kind ? xs.kind.label : xs.id); pgMark(px); edPatch(); pushPreview();
     }
     else if (a === "ed-save") savePages();
-    else if (a === "ed-discard") { var pz = pgOf(); if (pz) { pz.doc = JSON.parse(pz.base); pz.dirty = false; state.dirty = false; pz.sel = null; pz.panel = ""; edPatch(); pushPreview(""); } }
+    else if (a === "ed-discard") { var pz = pgOf(); if (pz) { pz.doc = JSON.parse(pz.base); pz.dirty = false; state.dirty = false; pz.sel = null; pz.panel = ""; pz.uploads = {}; pz.picker = ""; edPatch(); pushPreview(""); } }
     else if (a === "look") { var t = themeOf(), i = Number(el.dataset.i); if (t) { Object.assign(t.draft.colours, i < 0 ? t.values.colours : t.spec.looks[i].colours); themeUpdate(); } }
     else if (a === "theme-discard") { var t2 = themeOf(); if (t2) { t2.draft = JSON.parse(JSON.stringify(t2.values)); themeUpdate(); } }
     else if (a === "theme-publish") onLive(publishTheme, "This theme change");
@@ -1343,8 +1457,26 @@
   }
   function patchEdTop() { var top = app.querySelector && app.querySelector(".ed-top"), s = site(); if (top && s) top.innerHTML = edTop(s, pgOf()); }
 
+  async function uploadInto(t) {
+    var pgd = pgOf(), sel = pgd && pgSel(pgd), file = t.files && t.files[0]; if (!sel || !file) return;
+    var path = t.dataset.upload;
+    if (!/^image\/(jpeg|png)$/.test(file.type)) { state.notice = { text: "Please choose a JPG or PNG photo.", problem: true }; edPatch(); return; }
+    if (Object.keys(pgd.uploads || {}).length >= 12) { state.notice = { text: "Save the photos you have added first, then add more.", problem: true }; edPatch(); return; }
+    try {
+      var img = await prepareImage(file);
+      pgd.uploads = pgd.uploads || {}; pgd.upN = (pgd.upN || 0) + 1;
+      var keyName = "upload:" + pgd.upN;
+      pgd.uploads[keyName] = { name: file.name, ext: img.ext, content: img.content, dataUrl: "data:image/" + (img.ext === "png" ? "png" : "jpeg") + ";base64," + img.content };
+      pgSet(sel.sec.settings, path, keyName); pgd.picker = ""; state.notice = null;
+      pgd.what = "Add photo to " + (sel.kind ? sel.kind.label : sel.id); pgMark(pgd); edPatch(); pushPreview();
+      var altPath = path.replace(/[^.]+$/, "alt"), altBox = app.querySelector('[data-pf="' + altPath + '"]');
+      if (altBox && !altBox.value) altBox.focus();
+    } catch (e) { state.notice = { text: e.message, problem: true }; edPatch(); }
+  }
+
   app.addEventListener("change", function (ev) {
     var t = ev.target, kind = t.dataset.change;
+    if (t.dataset && t.dataset.upload) { uploadInto(t); return; }
     if (t.dataset && t.dataset.pf && (t.tagName === "SELECT" || t.type === "checkbox" || t.type === "color")) { pgInput(t); return; }
     if (t.dataset.field) state.dirty = true;
     if (kind === "copy") { var cw = t.value; if (state.open && state.dirty) t.value = curCopy().kind === "live" ? "" : curCopy().id; guard(function () { workOn(cw); }); }
@@ -1458,7 +1590,7 @@
   function demoStep(body, what) { var c = demoCopy(body); c.steps.unshift({ what: what, when: new Date().toISOString(), by: "sample" }); c.ahead = c.kind === "live" ? 0 : c.steps.length; c.redo = []; c.canRedo = false; }
   var DEMO_STEPS = { saveEntry: "Edit: sample entry", setHidden: "Hide or show: sample entry", deleteEntry: "Delete: sample entry", removePhoto: "Remove photo", uploadPhoto: "Add photo", saveTheme: "Theme: sample change", undo: "Undo: an earlier change" };
   // Sample pages for sample mode, generated from the server by tests/pages.mjs helpers.
-  var demoKinds = {"opening":{"label":"Opening screen","fields":[{"name":"name","label":"Site name","type":"text"},{"name":"tagline","label":"Tagline","type":"text"}],"library":"","starter":null},"header":{"label":"Menu bar","fields":[{"name":"name","label":"Site name","type":"text"},{"name":"links","label":"Links","type":"rows","fields":[{"name":0,"label":"Words","type":"text"},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists."}]}],"library":"","starter":null},"footer":{"label":"Newsletter and footer","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"button","label":"Button words","type":"text"},{"name":"blurb","label":"Short description of the site","type":"long"},{"name":"columns","label":"Link columns","type":"rows","fields":[{"name":"title","label":"Column title","type":"text"},{"name":"links","label":"Links in this column","type":"rows","fields":[{"name":0,"label":"Words","type":"text"},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists."}]}]},{"name":"copyright","label":"Copyright line","type":"text"},{"name":"elsewhere","label":"Links in the bottom bar","type":"rows","fields":[{"name":0,"label":"Words","type":"text"},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists."}]}],"library":"","starter":null},"hero":{"label":"Opening banner","fields":[{"name":"headline","label":"Headline","type":"rows","fields":[{"name":"t","label":"Words","type":"text"},{"name":"ital","label":"In italics","type":"yesno"}]},{"name":"tagline","label":"Tagline","type":"rows","fields":[{"name":"t","label":"Words","type":"text"},{"name":"ital","label":"In italics","type":"yesno"}]},{"name":"artist","label":"Whose work is shown","type":"artists","one":true,"hint":"Leave empty for the first published artist."},{"name":"rule_label","label":"Rule box, small line","type":"text"},{"name":"rule_text","label":"Rule box, text","type":"text"},{"name":"rule_link","label":"Rule box, link words","type":"text"},{"name":"latest","label":"Pieces in the Latest box","type":"lines","hint":"Article names as they appear in web addresses, for example zara-muse-profile."}],"library":"","starter":null},"featured":{"label":"Featured artists","fields":[{"name":"badge","label":"Badge words","type":"text"},{"name":"artists","label":"Which artists","type":"artists","hint":"Leave empty to show every published artist."}],"library":"","starter":null},"section-list":{"label":"Read by section","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"rows","label":"Rows","type":"rows","fields":[{"name":"n","label":"Number","type":"text"},{"name":"name","label":"Name","type":"text"},{"name":"desc","label":"Description","type":"text"},{"name":"href","label":"Address","type":"text"},{"name":"count","label":"Count shown","type":"choice","options":[["artists","Artists"],["reviews","Reviews"],["explained","Art explained pieces"],["library","Library guides"],["articles","All articles"],["sources","Sources"]]},{"name":"unit","label":"Count word","type":"text"}]}],"library":"","starter":null},"explained":{"label":"Art, explained","fields":[{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"text","label":"Text","type":"long","plain":true},{"name":"count","label":"How many articles","type":"number"}],"library":"","starter":null},"numbers":{"label":"Numbers band","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"labels","label":"The four labels","type":"lines"}],"library":"Figures from the site, in a band","starter":{"eyebrow":"The review so far","heading":["Research you","can check"],"labels":["Artists documented","Articles and reviews","Sources cited","Facts with a numbered source"]}},"method":{"label":"How we research","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"cards","label":"Cards","type":"rows","fields":[{"name":"n","label":"Number","type":"text"},{"name":"text","label":"Text","type":"long"},{"name":"title","label":"Title","type":"text"},{"name":"sub","label":"Small line","type":"text"}]}],"library":"Three cards in a row","starter":{"eyebrow":"How we research","heading":["The work first,","then the story"],"cards":[{"n":"1","text":"Write here.","title":"A title","sub":"A small line"}]}},"text":{"label":"Text","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"body","label":"Text","type":"long"},{"name":"align","label":"Placing","type":"choice","options":[["","Left"],["centre","Centred"]]},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]},{"name":"fg","label":"Text colour","type":"colour","theme":[["","Automatic"]]}],"library":"A heading and paragraphs","starter":{"eyebrow":"","heading":["A new heading"],"body":"<p>Write here.</p>","align":"","bg":"paper","fg":""}},"text-picture":{"label":"Text with picture","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"body","label":"Text","type":"long"},{"name":"image","label":"Picture","type":"image"},{"name":"alt","label":"Picture description","type":"text"},{"name":"caption","label":"Caption","type":"text"},{"name":"side","label":"Picture on the","type":"choice","options":[["right","Right"],["left","Left"]]},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]},{"name":"fg","label":"Text colour","type":"colour","theme":[["","Automatic"]]}],"library":"Words beside a photo","starter":{"eyebrow":"","heading":["A new heading"],"body":"<p>Write here.</p>","image":"","alt":"","caption":"","side":"right","bg":"paper","fg":""}},"picture":{"label":"Picture","fields":[{"name":"image","label":"Picture","type":"image"},{"name":"alt","label":"Picture description","type":"text"},{"name":"caption","label":"Caption","type":"text"},{"name":"size","label":"Width","type":"choice","options":[["","Full width"],["contained","Contained"]]},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]}],"library":"One large photo, with a caption","starter":{"image":"","alt":"","caption":"","size":"","bg":"paper"}},"quote":{"label":"Quote","fields":[{"name":"text","label":"The quote","type":"lines","hint":"One line per paragraph."},{"name":"who","label":"Who said it","type":"text"},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]},{"name":"fg","label":"Text colour","type":"colour","theme":[["","Automatic"]]}],"library":"A short line that stands out","starter":{"text":["A line worth remembering."],"who":"","bg":"green","fg":""}},"articles":{"label":"Latest articles","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"section","label":"Which articles","type":"choice","options":[["all","All"],["reviews","Reviews"],["explained","Art explained"],["library","Collector's library"],["features","Artist portfolios"]]},{"name":"count","label":"How many","type":"number"},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]},{"name":"fg","label":"Text colour","type":"colour","theme":[["","Automatic"]]}],"library":"Fills itself from Content","starter":{"eyebrow":"Latest","heading":["Recent pieces"],"section":"all","count":3,"bg":"paper","fg":""}},"faq":{"label":"Questions and answers","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"items","label":"Questions","type":"rows","fields":[{"name":"q","label":"Question","type":"text"},{"name":"a","label":"Answer","type":"long"}]},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]},{"name":"fg","label":"Text colour","type":"colour","theme":[["","Automatic"]]}],"library":"A list that opens and closes","starter":{"eyebrow":"","heading":["Questions"],"items":[{"q":"A question?","a":"<p>The answer.</p>"}],"bg":"paper","fg":""}},"button":{"label":"Button or link","fields":[{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"text","label":"Text","type":"text"},{"name":"label","label":"Button words","type":"text"},{"name":"href","label":"Where it goes","type":"text","hint":"A page on this site starts with #, or a full web address."},{"name":"style","label":"Style","type":"choice","options":[["green","Green"],["paper","Paper"],["outline","Outline"]]},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]},{"name":"fg","label":"Text colour","type":"colour","theme":[["","Automatic"]]}],"library":"Send visitors somewhere","starter":{"heading":["Find out more"],"text":"","label":"Read on","href":"#artists","style":"green","bg":"paper","fg":""}}};
+  var demoKinds = {"opening":{"label":"Opening screen","about":"The short screen shown while the site loads.","fields":[{"name":"name","label":"Site name","type":"text","hint":"Shown beside the logo."},{"name":"tagline","label":"Tagline","type":"text","hint":"Small words under the name."}],"library":"","starter":null},"header":{"label":"Menu bar","about":"The bar at the top of every page.","fields":[{"name":"name","label":"Site name","type":"text","hint":"Shown in the middle of the bar."},{"name":"links","label":"Links","type":"rows","fields":[{"name":0,"label":"Words","type":"text","hint":"What visitors see."},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists. Or paste a full web address."}]}],"library":"","starter":null,"blocks":{"field":"links","label":"Link","add":"Add a link"}},"footer":{"label":"Newsletter and footer","about":"The sign-up band and the links at the bottom of every page.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"button","label":"Button words","type":"text","hint":"The button opens the sign-up form."},{"name":"blurb","label":"Short description of the site","type":"long","hint":"Shown under the name, at the bottom left."},{"name":"columns","label":"Link columns","type":"rows","fields":[{"name":"title","label":"Column title","type":"text","hint":"A short word or two, such as Read."},{"name":"links","label":"Links in this column","type":"rows","fields":[{"name":0,"label":"Words","type":"text","hint":"What visitors see."},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists. Or paste a full web address."}]}]},{"name":"copyright","label":"Copyright line","type":"text"},{"name":"elsewhere","label":"Links in the bottom bar","type":"rows","fields":[{"name":0,"label":"Words","type":"text","hint":"What visitors see."},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists. Or paste a full web address."}]}],"library":"","starter":null,"blocks":{"field":"columns","label":"Column","add":"Add a column"}},"hero":{"label":"Opening banner","about":"The large green band at the top of the home page.","fields":[{"name":"headline","label":"Headline","type":"rows","hint":"Each line of the large headline. Italic lines are set in the slanted style.","fields":[{"name":"t","label":"Words","type":"text"},{"name":"ital","label":"In italics","type":"yesno"}]},{"name":"tagline","label":"Tagline","type":"rows","hint":"The smaller words at the bottom left of the banner.","fields":[{"name":"t","label":"Words","type":"text"},{"name":"ital","label":"In italics","type":"yesno"}]},{"name":"artist","label":"Whose work is shown","type":"artists","one":true,"hint":"Leave empty for the first published artist."},{"name":"rule_label","label":"Rule box, small line","type":"text","hint":"The box at the bottom right of the banner."},{"name":"rule_text","label":"Rule box, text","type":"text"},{"name":"rule_link","label":"Rule box, link words","type":"text","hint":"The link opens the page about sources."},{"name":"latest","label":"Pieces in the Latest box","type":"lines","hint":"Article names as they appear in web addresses, for example zara-muse-profile."}],"library":"","starter":null},"featured":{"label":"Featured artists","about":"The artist carousel under the banner.","fields":[{"name":"badge","label":"Badge words","type":"text","hint":"Under the number in the small square."},{"name":"artists","label":"Which artists","type":"artists","hint":"Tick the artists to show, in the order ticked. Leave all empty to show every published artist."}],"library":"","starter":null},"section-list":{"label":"Read by section","about":"A list of the parts of the site, each with a count.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"rows","label":"Rows","type":"rows","fields":[{"name":"n","label":"Number","type":"text","hint":"Shown small on the left, such as 01."},{"name":"name","label":"Name","type":"text"},{"name":"desc","label":"Description","type":"text","hint":"One short sentence."},{"name":"href","label":"Address","type":"text","hint":"Where the row leads. A page on this site starts with #."},{"name":"count","label":"Count shown","hint":"The number on the right is counted for you.","type":"choice","options":[["artists","Artists"],["reviews","Reviews"],["explained","Art explained pieces"],["library","Library guides"],["articles","All articles"],["sources","Sources"]]},{"name":"unit","label":"Count word","type":"text"}]}],"library":"","starter":null,"blocks":{"field":"rows","label":"Row","add":"Add a row"}},"explained":{"label":"Art, explained","about":"Two Art Explained articles beside a short introduction.","fields":[{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"text","label":"Text","type":"long","plain":true,"hint":"One or two sentences."},{"name":"count","label":"How many articles","type":"number","hint":"The newest Art Explained articles are shown."}],"library":"","starter":null},"numbers":{"label":"Numbers band","about":"Four figures counted from the site.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"labels","label":"The four labels","type":"lines","hint":"One label per line. The numbers are counted for you."}],"library":"Figures from the site, in a band","starter":{"eyebrow":"The review so far","heading":["Research you","can check"],"labels":["Artists documented","Articles and reviews","Sources cited","Facts with a numbered source"]}},"method":{"label":"How we research","about":"Three cards explaining the method.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"cards","label":"Cards","type":"rows","fields":[{"name":"n","label":"Number","type":"text","hint":"Shown large at the top of the card."},{"name":"title","label":"Title","type":"text","hint":"Shown in bold at the foot of the card."},{"name":"text","label":"Text","type":"long","hint":"Two or three short sentences read best."},{"name":"sub","label":"Small line","type":"text","hint":"Grey text under the title. Leave empty to hide."}]}],"library":"Three cards in a row","starter":{"eyebrow":"How we research","heading":["The work first,","then the story"],"cards":[{"n":"1","text":"Write here.","title":"A title","sub":"A small line"}]},"blocks":{"field":"cards","label":"Card","add":"Add a card"}},"text":{"label":"Text","about":"A heading and a few paragraphs.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"body","label":"Text","type":"long","hint":"Type as you would in a document."},{"name":"align","label":"Placing","type":"choice","group":"Look","options":[["","Left"],["centre","Centred"]]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"A heading and paragraphs","starter":{"eyebrow":"","heading":["A new heading"],"body":"<p>Write here.</p>","align":"","bg":"paper","fg":""}},"text-picture":{"label":"Text with picture","about":"Words on one side, a photo on the other.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"body","label":"Text","type":"long"},{"name":"image","label":"Picture","type":"image","alt":"alt"},{"name":"alt","label":"Describe the picture","type":"text","hint":"For people who cannot see it. Needed before you save."},{"name":"caption","label":"Caption","type":"text","hint":"Small text under the picture. Leave empty to hide."},{"name":"side","group":"Look","label":"Picture on the","type":"choice","options":[["right","Right"],["left","Left"]]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"Words beside a photo","starter":{"eyebrow":"","heading":["A new heading"],"body":"<p>Write here.</p>","image":"","alt":"","caption":"","side":"right","bg":"paper","fg":""}},"picture":{"label":"Picture","about":"One large photo with a caption.","fields":[{"name":"image","label":"Picture","type":"image","alt":"alt"},{"name":"alt","label":"Describe the picture","type":"text","hint":"For people who cannot see it. Needed before you save."},{"name":"caption","label":"Caption","type":"text","hint":"Small text under the picture. Leave empty to hide."},{"name":"size","group":"Look","label":"Width","type":"choice","options":[["","Full width"],["contained","Contained"]]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."}],"library":"One large photo, with a caption","starter":{"image":"","alt":"","caption":"","size":"","bg":"paper"}},"quote":{"label":"Quote","about":"One line, shown large.","fields":[{"name":"text","label":"The quote","type":"lines","hint":"Each line of the quote on its own line."},{"name":"who","label":"Who said it","type":"text","hint":"Leave empty to hide."},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"A short line that stands out","starter":{"text":["A line worth remembering."],"who":"","bg":"green","fg":""}},"articles":{"label":"Latest articles","about":"Article cards, filled in from Content.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"section","label":"Which articles","type":"choice","options":[["all","All"],["reviews","Reviews"],["explained","Art explained"],["library","Collector's library"],["features","Artist portfolios"]]},{"name":"count","label":"How many","type":"number"},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"Fills itself from Content","starter":{"eyebrow":"Latest","heading":["Recent pieces"],"section":"all","count":3,"bg":"paper","fg":""}},"faq":{"label":"Questions and answers","about":"Questions that open to show their answer.","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text","hint":"Shown in small italics. Leave empty to hide."},{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"items","label":"Questions","type":"rows","fields":[{"name":"q","label":"Question","type":"text","hint":"Keep it short. Visitors click it to open the answer."},{"name":"a","label":"Answer","type":"long"}]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"A list that opens and closes","starter":{"eyebrow":"","heading":["Questions"],"items":[{"q":"A question?","a":"<p>The answer.</p>"}],"bg":"paper","fg":""},"blocks":{"field":"items","label":"Question","add":"Add a question"}},"button":{"label":"Button or link","about":"A heading, a line and one button.","fields":[{"name":"heading","label":"Heading","type":"lines","hint":"Each line of the heading on its own line. Two short lines read best."},{"name":"text","label":"Text","type":"text"},{"name":"label","label":"Button words","type":"text"},{"name":"href","label":"Where it goes","type":"text","hint":"A page on this site starts with #, or a full web address."},{"name":"style","label":"Style","type":"choice","group":"Look","options":[["green","Green"],["paper","Paper"],["outline","Outline"]]},{"name":"bg","label":"Background","type":"colour","group":"Look","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]],"hint":"Theme colours keep the site consistent. Choose Any colour for something else."},{"name":"fg","label":"Text colour","type":"colour","group":"Look","theme":[["","Automatic"]],"hint":"Automatic picks dark or light text to suit the background."}],"library":"Send visitors somewhere","starter":{"heading":["Find out more"],"text":"","label":"Read on","href":"#artists","style":"green","bg":"paper","fg":""}}};
   var demoPages = {"_how_to_edit":"Each page is a list of sections shown top to bottom. 'visible' hides a section without deleting it. 'settings' holds the words and choices for that section. Edit this from Artiscope Digital Home.","shared":{"opening":{"type":"opening","visible":true,"settings":{"name":"World Art Review","tagline":"Discover Artists. Understand Art."}},"header":{"type":"header","visible":true,"settings":{"links":[["Artists A to Z","#artists"],["Reviews","#reviews"],["Art Explained","#explained"]],"name":"World Art Review"}},"footer":{"type":"footer","visible":true,"settings":{"eyebrow":"Get the review","heading":["New portfolios,","once a month."],"button":"Subscribe","blurb":"Researched artist portfolios, reviews and collecting guides. Discover Artists. Understand Art.","columns":[{"title":"Read","links":[["Artists A to Z","#artists"],["Reviews","#reviews"],["Art Explained","#explained"],["Exhibition Guides","#guides"]]},{"title":"Collect","links":[["Collector's Library","#library"],["Original or print?","#a-original-vs-print"],["Provenance","#a-provenance-certificates"],["Research an artist","#a-research-emerging-artist"]]},{"title":"About","links":[["How we research","#home","method"],["Sources","#standards"],["Suggest an artist","mailto:info@grovegallery.com?subject=Suggest%20an%20artist%20for%20World%20Art%20Review"],["Contact","mailto:info@grovegallery.com"]]}],"copyright":"© 2026 World Art Review. All rights reserved.","elsewhere":[["Instagram","#"],["X","#"],["LinkedIn","#"],["Privacy","#standards"],["Terms","#standards"]]}}},"pages":{"home":{"title":"Home","sections":[{"id":"hero","type":"hero","visible":true,"settings":{"headline":[{"t":"Discover"},{"t":"Artists.","ital":true}],"tagline":[{"t":"Understand"},{"t":"Art.","ital":true}],"artist":"","rule_label":"Our rule","rule_text":"Every fact carries a numbered source. Where only the gallery or the artist says so, we say so.","rule_link":"How we work","latest":["zara-muse-profile","konn-artiss-profile","review-anti-frieze"]}},{"id":"featured","type":"featured","visible":true,"settings":{"badge":"Artist in focus","artists":[]}},{"id":"sections","type":"section-list","visible":true,"settings":{"eyebrow":"What you will find here","heading":["Read by","section"],"rows":[{"n":"01","name":"Artists A to Z","href":"#artists","desc":"Researched portfolios: biography, style, career and selected works.","count":"artists","unit":"portfolio"},{"n":"02","name":"Reviews","href":"#reviews","desc":"Close readings of single works, shows and interventions.","count":"reviews","unit":"review"},{"n":"03","name":"Art Explained","href":"#explained","desc":"Techniques, materials and ideas, in plain language.","count":"explained","unit":"guide"},{"n":"04","name":"Collector's Library","href":"#library","desc":"How to research an artist, read a certificate and tell an original from a print.","count":"library","unit":"guide"}]}},{"id":"explainedHome","type":"explained","visible":true,"settings":{"heading":["How to","look at","a painting"],"text":"Short, sourced explainers on the techniques and materials behind the work, so you know what you are looking at before you look it up.","count":2}},{"id":"numbers","type":"numbers","visible":true,"settings":{"eyebrow":"The review so far","heading":["Research you","can check"],"labels":["Artists documented","Articles and reviews","Sources cited","Facts with a numbered source"]}},{"id":"method","type":"method","visible":true,"settings":{"eyebrow":"How we research","heading":["The work first,","then the story"],"cards":[{"n":"1","text":"We start with the work itself: what it is made of, how it was made and where it has been shown.","title":"Start with the work","sub":"Seen, measured, described"},{"n":"2","text":"Every fact in a portfolio carries a numbered source you can open and read for yourself.","title":"Every fact, sourced","sub":"Press, auction records, gallery files"},{"n":"3","text":"Claims that come only from publicity are labelled <span class=\"reported\">Reported</span> so you can weigh them.","title":"Publicity, flagged","sub":"Kept apart from checked fact"}]}}]}}};
   var demoSummaries = { "shared:opening": "World Art Review", "shared:header": "3 links", "shared:footer": "3 columns", "home:hero": "Discover Artists.", "home:featured": "All published", "home:sections": "4 rows", "home:explainedHome": "2 articles", "home:numbers": "Four figures", "home:method": "3 cards" };
   function demoApi(body) {
@@ -1473,7 +1605,7 @@
         }
         else if (a === "content") resolve({ collections: JSON.parse(JSON.stringify(demoContent)) });
         else if (a === "history") resolve({ changes: demoHistory });
-        else if (a === "pages") resolve({ pages: JSON.parse(JSON.stringify(demoPages)), kinds: demoKinds, summaries: demoSummaries, images: ["zara-muse-portrait.jpg"], artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }], preview: params.get("preview") || "https://worldartreview.com/" });
+        else if (a === "pages") resolve({ pages: JSON.parse(JSON.stringify(demoPages)), kinds: demoKinds, summaries: demoSummaries, images: ["zara-muse-portrait.jpg"], imageBase: (params.get("preview") || "https://worldartreview.com/") + "images/", artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }], preview: params.get("preview") || "https://worldartreview.com/" });
         else if (a === "savePages") { demoPages = JSON.parse(JSON.stringify(body.pages)); resolve({ ok: true }); }
         else if (a === "theme") { if (params.has("preview")) demoTheme.spec.url = params.get("preview"); resolve(JSON.parse(JSON.stringify(demoTheme))); }
         else if (a === "saveTheme") { demoTheme.values = JSON.parse(JSON.stringify(body.values)); resolve({ ok: true, values: body.values }); }
