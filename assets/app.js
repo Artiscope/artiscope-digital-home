@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "15";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "16";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -36,6 +36,8 @@
     egroup: 0,             // which part of the open entry is on screen
     csearch: "", csort: "site", cmore: false,   // content list: search, order, show all
     theme: {},             // site id -> { spec, values, draft, mode, live }
+    edPrefs: {},           // site id -> { mode, page, sel } kept while the editor reloads
+    pg: {},                // site id -> the page editor: { doc, base, kinds, summaries, images, artists, preview, page, sel, mode, panel, dirty }
     photoFiles: [], photoSent: {}, photoDone: [],
   };
 
@@ -110,6 +112,12 @@
         var t = await api("theme", { site: s.id });
         state.theme[s.id] = { spec: t.spec, values: t.values, draft: JSON.parse(JSON.stringify(t.values)), mode: "computer", live: null }; render();
       }
+      if (state.tab === "pages" && !state.pg[s.id]) {
+        var pgd = await api("pages", { site: s.id });
+        var pref = state.edPrefs[s.id] || {};
+        state.pg[s.id] = { doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false };
+        render();
+      }
       if (state.tab === "history" && (force || !state.history[s.id])) {
         var h = await api("history", { site: s.id }); state.history[s.id] = h.changes || []; render();
       }
@@ -128,7 +136,7 @@
 
   // On the live site, a save reaches visitors, so it asks once first.
   function onLive(fn, what) {
-    if (curCopy().kind === "live" && !state.sure) { state.ask = { kind: "livesave", what: what || "This change", go: fn }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
+    if (curCopy().kind === "live" && !state.sure) { state.ask = { kind: "livesave", what: what || "This change", go: fn }; if (state.tab === "pages" && pgOf()) edPatch(); else render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
     else fn();
   }
 
@@ -141,7 +149,7 @@
       state.status = "saved"; state.flash = say || (curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes");
       if (done) done(out);
       var s = site();
-      if (s) { delete state.history[s.id]; delete state.content[s.id]; delete state.theme[s.id]; }
+      if (s) { delete state.history[s.id]; delete state.content[s.id]; delete state.theme[s.id]; delete state.pg[s.id]; }
       try { await refreshCopies(); } catch (e2) { /* the next refresh will catch up */ }
       delete state.busy[k]; render();
       await ensure(true);
@@ -158,6 +166,7 @@
   var NAV = [
     ["home", "All sites", ICON_SITES[0], ICON_SITES[1]],
     ["overview", "Overview", ICON_HOME, ""],
+    ["pages", "Pages", "M4 5h16v4H4zM4 11h16v8H4z", "M7 14h6"],
     ["content", "Content", "M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z", ""],
     ["theme", "Theme", "M12 4a8 8 0 1 0 0 16c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a3 3 0 0 0 3-3c0-3.9-3.6-7-8-7z", "M8.5 11.5h.01M11 8.5h.01M14.5 9h.01"],
     ["photos", "Photos", "M4 6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z", "M7 16l3.5-3.5 2.5 2.5 2-2 2 3"],
@@ -500,7 +509,9 @@
   }
   if (typeof window.addEventListener === "function") {
     window.addEventListener("message", function (ev) {
-      var t = themeOf(); if (!t || !ev.data || ev.data.type !== "adh-ready") return;
+      if (!ev.data) return;
+      if (ev.data.type === "adh-click") { var pgd = pgOf(); if (!pgd) return; try { if (ev.origin !== new URL(pgd.preview).origin) return; } catch (e) { return; } pickSection(String(ev.data.id || "")); return; }
+      var t = themeOf(); if (!t || ev.data.type !== "adh-ready") return;
       try { if (ev.origin !== new URL(t.spec.url).origin) return; } catch (e) { return; }
       if (!t.live) showLive(t, true);
     });
@@ -544,6 +555,199 @@
     var s = site(), t = themeOf(); if (!s || !t) return;
     var sent = JSON.parse(JSON.stringify(t.draft));
     change(key("theme", s.id), function () { return api("saveTheme", { site: s.id, values: sent }); }, function () { t.values = sent; });
+  }
+
+
+  // ---------- the page editor: sections on the left, the real page in the middle, settings on the right ----------
+
+  function pgOf() { var s = site(); return (s && state.pg[s.id]) || null; }
+  function canon(v) {
+    if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
+    if (v && typeof v === "object") return "{" + Object.keys(v).sort().map(function (k) { return JSON.stringify(k) + ":" + canon(v[k]); }).join(",") + "}";
+    return JSON.stringify(v);
+  }
+  function pgPage(pgd) { return pgd.doc.pages[pgd.page] || { sections: [] }; }
+  function pgSections(pgd) { return pgPage(pgd).sections || []; }
+  function pgSel(pgd) {
+    var q = pgd.sel; if (!q) return null;
+    if (q.where === "shared") { var part = pgd.doc.shared[q.id]; return part ? { where: "shared", id: q.id, sec: part, kind: pgd.kinds[part.type] } : null; }
+    var sec = pgSections(pgd).find(function (x) { return x.id === q.id; });
+    return sec ? { where: "page", id: q.id, sec: sec, kind: pgd.kinds[sec.type] } : null;
+  }
+  function pgSummary(pgd, where, key, sec) {
+    var k = pgd.kinds[sec.type]; if (!k) return "";
+    var own = pgd.summaries[(where === "shared" ? "shared:" : pgd.page + ":") + key];
+    return own != null ? own : "";
+  }
+  function pgMark(pgd) { pgd.dirty = canon(pgd.doc) !== pgd.base; state.dirty = pgd.dirty; }
+
+  function viewLeave() {
+    return state.leave ? '<div class="sunk stack ask"><b>You have changes that are not saved yet.</b>' +
+      '<div class="row"><button type="button" class="btn" data-act="leave-save">Save</button><button type="button" class="soft" data-act="leave-go">Leave without saving</button><button type="button" class="linklike" data-act="leave-stay">Keep editing</button></div></div>' : "";
+  }
+  function viewPagesEditor(s) {
+    var pgd = pgOf();
+    if (!pgd) return '<div class="ed"><div class="ed-top">' + edTop(s, null) + '</div><p class="loading" style="grid-column:1/-1">Reading the pages of ' + esc(s.name) + '</p></div>';
+    var sel = pgSel(pgd), right = pgd.panel === "library" ? edLibrary(pgd) : sel ? edSettings(pgd, sel) : "";
+    return '<div class="ed' + (right ? " with-right" : "") + '">' +
+      '<div class="ed-top">' + edTop(s, pgd) + '</div>' +
+      '<div class="ed-left">' + edList(pgd) + '</div>' +
+      '<div class="ed-mid">' + viewLeave() + viewAsk() + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
+        '<div class="ed-frame ' + esc(pgd.mode) + '"><iframe id="ed-frame" title="The page being edited" src="' + esc(pgd.preview) + '"></iframe></div>' +
+        '<span class="small">The real page, redrawn as you edit. Click any part of it to open its settings. Nothing is kept until you press Save.</span></div>' +
+      (right ? '<div class="ed-right">' + right + '</div>' : "") + '</div>';
+  }
+  function edTop(s, pgd) {
+    var c = curCopy(), trial = c.kind === "trial";
+    return '<button type="button" class="linklike small" data-tab="overview">Overview</button><b class="island-name">' + esc(s.name) + '</b>' +
+      (copiesOf(s).length > 1 ? '<select class="copypick" data-change="copy" aria-label="Working on">' + copiesOf(s).map(function (x) { return '<option value="' + esc(x.kind === "live" ? "" : x.id) + '"' + (x.id === c.id ? " selected" : "") + '>' + esc(x.kind === "live" ? "Live site" : "Trial: " + x.name) + '</option>'; }).join("") + '</select>' : '<span class="chip quiet">' + (trial ? "Trial: " + esc(c.name) : "Live site") + '</span>') +
+      '<div class="mid"><div class="seg mini">' + (pgd ? Object.keys(pgd.doc.pages).map(function (k) { return '<button type="button" class="' + (k === pgd.page ? "on" : "") + '" data-act="ed-page" data-page="' + esc(k) + '">' + esc(pgd.doc.pages[k].title || k) + '</button>'; }).join("") : "") + '</div></div>' +
+      '<div class="seg mini"><button type="button" class="' + (!pgd || pgd.mode === "computer" ? "on" : "") + '" data-act="ed-mode" data-mode="computer">Computer</button><button type="button" class="' + (pgd && pgd.mode === "phone" ? "on" : "") + '" data-act="ed-mode" data-mode="phone">Phone</button></div>' +
+      '<button type="button" class="soft slim" data-act="undo-step"' + ((trial ? c.ahead > 0 : (c.steps || []).length > 0) && state.status !== "saving" ? "" : " disabled") + '>Undo</button>' +
+      '<button type="button" class="soft slim" data-act="redo-step"' + (c.canRedo && state.status !== "saving" ? "" : " disabled") + '>Redo</button>' +
+      '<span class="small" id="island-text">' + esc(state.status === "saving" ? "Saving" : pgd && pgd.dirty ? "Edited, not saved" : state.flash || (trial ? (c.ahead ? c.ahead + (c.ahead === 1 ? " change" : " changes") + " on this copy" : "Same as the live site") : "Live site")) + '</span>' +
+      (pgd && pgd.dirty ? '<button type="button" class="linklike small" data-act="ed-discard">Discard</button><button type="button" class="btn slim" data-act="ed-save"' + (state.status === "saving" ? " disabled" : "") + '>Save</button>'
+        : trial && c.ahead ? '<button type="button" class="btn slim" data-act="ask-makelive">Make live</button>' : "") +
+      '<span class="small" style="margin-left:6px">Version ' + VERSION + '</span>';
+  }
+  function edRow(pgd, where, id, sec, picked) {
+    var k = pgd.kinds[sec.type] || { label: sec.type }, hidden = sec.visible === false;
+    return '<div class="sec' + (picked ? " on" : "") + (hidden ? " off" : "") + '" data-act="ed-pick" data-where="' + where + '" data-id="' + esc(id) + '"' + (where === "page" ? ' draggable="true"' : "") + '>' +
+      (where === "page" ? '<span class="grip" aria-hidden="true"><i></i><i></i><i></i></span>' : '<span class="grip" aria-hidden="true"></span>') +
+      '<span class="nm">' + esc(k.label) + '<small id="sum-' + esc(where + "-" + id) + '">' + esc(pgSummary(pgd, where, id, sec)) + '</small></span>' + (hidden ? '<span class="eye">Hidden</span>' : "") + '</div>';
+  }
+  function edList(pgd) {
+    var sel = pgd.sel || {}, sh = pgd.doc.shared || {};
+    var top = ["opening", "header"].filter(function (k) { return sh[k]; }), bottom = ["footer"].filter(function (k) { return sh[k]; });
+    return '<div class="grp">Top of every page</div>' + top.map(function (k) { return edRow(pgd, "shared", k, sh[k], sel.where === "shared" && sel.id === k); }).join("") +
+      '<div class="grp">' + esc(pgPage(pgd).title || pgd.page) + '</div><div id="ed-sections">' + pgSections(pgd).map(function (x) { return edRow(pgd, "page", x.id, x, sel.where === "page" && sel.id === x.id); }).join("") + '</div>' +
+      '<button type="button" class="addl" data-act="ed-library">+ &nbsp;Add a section</button>' +
+      '<div class="grp">Bottom of every page</div>' + bottom.map(function (k) { return edRow(pgd, "shared", k, sh[k], sel.where === "shared" && sel.id === k); }).join("") +
+      '<div class="grp">Also on this site</div>' +
+      '<button type="button" class="sec plain" data-tab="theme"><span class="nm">Theme: colours and typefaces</span></button>' +
+      '<button type="button" class="sec plain" data-tab="content"><span class="nm">Content: articles, artists, sources</span></button>' +
+      '<button type="button" class="sec plain" data-tab="photos"><span class="nm">Photos</span></button>' +
+      '<button type="button" class="sec plain" data-tab="history"><span class="nm">History</span></button>';
+  }
+  function edLibrary(pgd) {
+    var kinds = Object.keys(pgd.kinds).filter(function (k) { return pgd.kinds[k].library; });
+    return '<div class="rhead"><button type="button" class="linklike small" data-act="ed-panel-close">Cancel</button><h2>Add a section</h2><span class="small">' + (pgd.sel && pgd.sel.where === "page" ? "It goes under the section you picked." : "It goes at the end of the page.") + ' You can move it afterwards.</span></div>' +
+      '<div class="kinds">' + kinds.map(function (k) { return '<button type="button" class="kind" data-act="ed-add" data-kind="' + esc(k) + '"><b>' + esc(pgd.kinds[k].label) + '</b><span class="small">' + esc(pgd.kinds[k].library) + '</span></button>'; }).join("") + '</div>';
+  }
+  function edSettings(pgd, sel) {
+    var kind = sel.kind || { label: sel.sec.type, fields: [] }, st = sel.sec.settings || {}, page = sel.where === "page";
+    var idx = page ? pgSections(pgd).findIndex(function (x) { return x.id === sel.id; }) : -1, n = pgSections(pgd).length;
+    var fields = kind.fields.map(function (f) { return edField(pgd, f, st[f.name], f.name); }).join("");
+    var removing = state.confirm === "ed-remove|" + sel.id;
+    return '<div class="rhead"><button type="button" class="linklike small" data-act="ed-panel-close">Done</button><h2>' + esc(kind.label) + '</h2>' + (sel.sec.visible === false ? '<span class="chip quiet" style="align-self:flex-start">Hidden from the page</span>' : "") + '</div>' +
+      '<form class="stack" data-form="section">' + (fields || '<span class="small" style="margin:0 6px">Nothing to set here.</span>') + '</form>' +
+      '<div class="row edacts">' +
+        '<button type="button" class="soft slim" data-act="ed-hide">' + (sel.sec.visible === false ? "Show" : "Hide") + '</button>' +
+        (page ? '<button type="button" class="soft slim" data-act="ed-dup">Duplicate</button>' +
+          '<button type="button" class="soft slim" data-act="ed-move" data-dir="-1"' + (idx > 0 ? "" : " disabled") + '>Move up</button>' +
+          '<button type="button" class="soft slim" data-act="ed-move" data-dir="1"' + (idx < n - 1 ? "" : " disabled") + '>Move down</button>' +
+          (removing ? '<span class="small">Remove it? </span><button type="button" class="btn slim" data-act="ed-remove">Yes, remove</button><button type="button" class="linklike small" data-act="cancel">Keep</button>'
+            : '<button type="button" class="linklike small" data-act="ask" data-k="ed-remove|' + esc(sel.id) + '">Remove</button>') : "") +
+      '</div>';
+  }
+  var FIELD_N = 0;
+  function edField(pgd, f, value, path) {
+    var id = "pf-" + (FIELD_N++), label = '<label for="' + id + '">' + esc(f.label) + '</label>', hint = f.hint ? '<span class="small">' + esc(f.hint) + '</span>' : "", input = "";
+    var t = f.type, v = value;
+    if (t === "text") input = '<input type="text" id="' + id + '" data-pf="' + esc(path) + '" value="' + esc(v == null ? "" : v) + '">';
+    else if (t === "long") {
+      if (f.plain) input = '<textarea id="' + id + '" data-pf="' + esc(path) + '">' + esc(v == null ? "" : v) + '</textarea>';
+      else { richSource[path] = { html: String(v || ""), dirty: false }; input = '<div class="rt">' + richTools(id, true) + '<div class="rt-page short" id="' + id + '" data-rich="' + esc(path) + '" data-pf-rich="1" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" lang="en-GB"></div></div>'; }
+    } else if (t === "lines") input = '<textarea id="' + id + '" data-pf="' + esc(path) + '" data-kind="lines" rows="3">' + esc((Array.isArray(v) ? v : [v || ""]).join("\n")) + '</textarea>' + (f.hint ? "" : '<span class="small">One line each.</span>');
+    else if (t === "number") input = '<input type="number" step="1" id="' + id + '" data-pf="' + esc(path) + '" data-kind="number" value="' + esc(v == null ? "" : v) + '" style="max-width:140px">';
+    else if (t === "yesno") input = '<select class="box" id="' + id + '" data-pf="' + esc(path) + '" data-kind="yesno"><option value="true"' + (v === true ? " selected" : "") + '>Yes</option><option value="false"' + (v === true ? "" : " selected") + '>No</option></select>';
+    else if (t === "choice") input = '<select class="box" id="' + id + '" data-pf="' + esc(path) + '">' + f.options.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(v == null ? "" : v) === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select>';
+    else if (t === "colour") {
+      var theme = f.theme || [], isTheme = theme.some(function (o) { return o[0] === String(v == null ? "" : v); }), custom = isTheme ? "#1D4A35" : (v || "#1D4A35");
+      input = '<div class="row"><select class="box" id="' + id + '" data-pf="' + esc(path) + '" data-kind="colour-pick" style="max-width:220px">' + theme.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (isTheme && o[0] === String(v == null ? "" : v) ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '<option value="custom"' + (isTheme ? "" : " selected") + '>Any colour</option></select>' +
+        '<label class="sw small" style="background:' + esc(custom) + '"' + (isTheme ? ' hidden' : "") + ' data-swatch="' + esc(path) + '"><input type="color" data-pf="' + esc(path) + '" data-kind="colour" value="' + esc(custom) + '" aria-label="' + esc(f.label) + ', any colour"></label></div>';
+    } else if (t === "image") input = '<select class="box" id="' + id + '" data-pf="' + esc(path) + '"><option value="">No picture yet</option>' + pgd.images.map(function (im) { return '<option value="' + esc(im) + '"' + (im === v ? " selected" : "") + '>' + esc(im) + '</option>'; }).join("") + '</select><span class="small">Photos sent from the Photos screen appear here.</span>';
+    else if (t === "artists") {
+      if (f.one) input = '<select class="box" id="' + id + '" data-pf="' + esc(path) + '"><option value="">First published artist</option>' + pgd.artists.map(function (a) { return '<option value="' + esc(a.slug) + '"' + (a.slug === v ? " selected" : "") + '>' + esc(a.name) + '</option>'; }).join("") + '</select>';
+      else input = '<div class="stack" style="gap:6px">' + pgd.artists.map(function (a) { return '<label class="chk"><input type="checkbox" data-pf="' + esc(path) + '" data-kind="artists" value="' + esc(a.slug) + '"' + ((v || []).indexOf(a.slug) >= 0 ? " checked" : "") + '> ' + esc(a.name) + '</label>'; }).join("") + '</div>';
+    } else if (t === "rows") {
+      var rows = Array.isArray(v) ? v : [];
+      input = '<div class="rows" data-rows="' + esc(path) + '">' + rows.map(function (row, i) {
+        return '<div class="rowcard"><div class="row between"><span class="small">' + (i + 1) + '</span><span><button type="button" class="linklike small" data-act="ed-row-move" data-path="' + esc(path) + '" data-i="' + i + '" data-dir="-1"' + (i ? "" : " disabled") + '>Up</button> <button type="button" class="linklike small" data-act="ed-row-move" data-path="' + esc(path) + '" data-i="' + i + '" data-dir="1"' + (i < rows.length - 1 ? "" : " disabled") + '>Down</button> <button type="button" class="linklike small" data-act="ed-row-del" data-path="' + esc(path) + '" data-i="' + i + '">Remove</button></span></div>' +
+          f.fields.map(function (g) { return edField(pgd, g, row ? row[g.name] : undefined, path + "." + i + "." + g.name); }).join("") + '</div>';
+      }).join("") + '<button type="button" class="soft slim" data-act="ed-row-add" data-path="' + esc(path) + '">Add one</button></div>';
+    }
+    return '<div class="field">' + label + input + hint + '</div>';
+  }
+
+  // Reading and writing one setting by its path, such as "items.0.q".
+  function pgGet(obj, path) { var cur = obj; path.split(".").forEach(function (k) { cur = cur == null ? undefined : cur[k]; }); return cur; }
+  function pgSet(obj, path, value) {
+    var parts = path.split("."), cur = obj;
+    for (var i = 0; i < parts.length - 1; i++) { var k = parts[i]; if (cur[k] == null || typeof cur[k] !== "object") cur[k] = /^\d+$/.test(parts[i + 1]) ? [] : {}; cur = cur[k]; }
+    cur[parts[parts.length - 1]] = value;
+  }
+  var pushTimer = null;
+  function pushPreview(pick) {
+    var pgd = pgOf(), frame = app.querySelector && app.querySelector("#ed-frame"); if (!pgd || !frame || !frame.contentWindow) return;
+    try { frame.contentWindow.postMessage({ type: "adh-pages", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages }, pick: pick || (pgd.sel ? (pgd.sel.where === "shared" ? pgd.sel.id : pgd.sel.id) : "") }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
+  }
+  function pushSoon() { clearTimeout(pushTimer); pushTimer = setTimeout(function () { pushPreview(); }, 150); }
+  function mountPages() {
+    var pgd = pgOf(), frame = app.querySelector && app.querySelector("#ed-frame"); if (!pgd || !frame) return;
+    frame.addEventListener("load", function () { pgd.sent = true; pushPreview(); });
+    if (pgd.sent) pushPreview();
+    mountDrag();
+  }
+  function mountDrag() {
+    var pgd = pgOf(); if (!pgd) return;
+    var list = app.querySelector("#ed-sections"); if (!list || !list.addEventListener) return;
+    var dragId = null;
+    list.addEventListener("dragstart", function (ev) { var row = ev.target.closest && ev.target.closest(".sec"); if (!row) return; dragId = row.dataset.id; try { ev.dataTransfer.setData("text/plain", dragId); ev.dataTransfer.effectAllowed = "move"; } catch (e) { /* fine */ } });
+    list.addEventListener("dragover", function (ev) { if (dragId) { ev.preventDefault(); var row = ev.target.closest && ev.target.closest(".sec"); Array.prototype.forEach.call(list.querySelectorAll(".sec"), function (x) { x.classList.toggle("over", x === row); }); } });
+    list.addEventListener("dragleave", function () { });
+    list.addEventListener("drop", function (ev) {
+      ev.preventDefault(); var row = ev.target.closest && ev.target.closest(".sec"); if (!row || !dragId || row.dataset.id === dragId) { dragId = null; return; }
+      var secs = pgSections(pgd), from = secs.findIndex(function (x) { return x.id === dragId; }), to = secs.findIndex(function (x) { return x.id === row.dataset.id; });
+      if (from < 0 || to < 0) return;
+      var moved = secs.splice(from, 1)[0]; secs.splice(to, 0, moved); dragId = null; pgMark(pgd); edPatch(); pushPreview();
+    });
+  }
+  // Redraws the editor's panels without touching the page in the middle, which would reload it.
+  function edPatch() {
+    var ed = app.querySelector && app.querySelector(".ed"), s = site(), pgd = pgOf();
+    if (!ed || !s || !pgd) { render(); return; }
+    var sel = pgSel(pgd), right = pgd.panel === "library" ? edLibrary(pgd) : sel ? edSettings(pgd, sel) : "";
+    ed.className = "ed" + (right ? " with-right" : "");
+    ed.querySelector(".ed-top").innerHTML = edTop(s, pgd);
+    ed.querySelector(".ed-left").innerHTML = edList(pgd);
+    var rp = ed.querySelector(".ed-right");
+    if (right) { if (!rp) { rp = document.createElement("div"); rp.className = "ed-right"; ed.appendChild(rp); } rp.innerHTML = right; }
+    else if (rp) rp.remove();
+    var mid = ed.querySelector(".ed-mid"), notes = mid.querySelectorAll(".ask, .notice"); Array.prototype.forEach.call(notes, function (x) { x.remove(); });
+    mid.insertAdjacentHTML("afterbegin", viewLeave() + viewAsk() + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : ""));
+    mountRich(); mountDrag();
+  }
+  function edRemember() { var s = site(), p = pgOf(); if (s && p) state.edPrefs[s.id] = { mode: p.mode, page: p.page, sel: p.sel }; }
+  function pickSection(id) {
+    var pgd = pgOf(); if (!pgd) return;
+    if (id === "header" || id === "footer" || id === "opening") pgd.sel = { where: "shared", id: id };
+    else if (pgSections(pgd).some(function (x) { return x.id === id; })) pgd.sel = { where: "page", id: id };
+    else return;
+    pgd.panel = ""; state.confirm = null; edRemember(); edPatch(); pushPreview();
+  }
+  function newSectionId(pgd, type) {
+    var n = 1, used = pgSections(pgd).map(function (x) { return x.id; });
+    while (used.indexOf(type + "-" + n) >= 0) n++;
+    return type + "-" + n;
+  }
+  function savePages() {
+    var s = site(), pgd = pgOf(); if (!s || !pgd || !pgd.dirty) return;
+    var doc = JSON.parse(JSON.stringify(pgd.doc)), what = pgd.what || (pgPage(pgd).title || pgd.page);
+    edRemember();
+    onLive(function () {
+      change(key("pages", s.id), function () { return api("savePages", { site: s.id, pages: doc, what: what }); }, function () { state.dirty = false; }, curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes");
+    }, "This page change");
   }
 
   // ---------- formatted text, edited as plain writing ----------
@@ -749,8 +953,7 @@
     var fields = (groups.length > 1 ? '<div class="seg wide" role="tablist" aria-label="Parts of this page">' + groups.map(function (g, gi) {
         return '<button type="button" role="tab" class="' + (gi === at ? "on" : "") + '" data-act="egroup" data-g="' + gi + '">' + esc(g) + '</button>'; }).join("") + '</div>' : "") +
       groups.map(function (g, gi) { return '<div class="egroup stack-wide" data-g="' + gi + '"' + (gi === at ? "" : " hidden") + '>' + parts[g] + '</div>'; }).join("");
-    var leaving = state.leave ? '<div class="sunk stack"><b>You have changes that are not saved yet.</b>' +
-      '<div class="row"><button type="button" class="btn" data-act="leave-save">Save</button><button type="button" class="soft" data-act="leave-go">Leave without saving</button><button type="button" class="linklike" data-act="leave-stay">Keep editing</button></div></div>' : "";
+    var leaving = viewLeave();
     var danger;
     if (state.confirm === k + "|delete") {
       danger = '<div class="sunk stack"><b>Delete this ' + esc(col.singular) + '?</b><span class="muted">It comes off the site. You can bring it back from History.</span>' +
@@ -913,6 +1116,7 @@
     }
     var views = { home: viewHome, overview: viewOverview, content: viewContent, theme: viewTheme, photos: viewPhotos, history: viewHistory };
     var s = site(), unbuilt = state.inSite && !s && state.site;
+    if (state.inSite && s && state.tab === "pages") { app.innerHTML = viewPagesEditor(s); mountRich(); mountPages(); return; }
     var inner = unbuilt ? viewUnbuilt(sites().find(function (x) { return x.id === state.site; }) || { name: "Site" }) : (views[state.inSite ? state.tab : "home"] || viewHome)();
     app.innerHTML = viewShell(inner);
     mountRich(); mountTheme(); filterList();
@@ -988,7 +1192,7 @@
   function openSite(id) {
     var x = sites().find(function (y) { return y.id === id; }); if (!x) return;
     state.flash = ""; state.ask = null; state.site = id; state.inSite = true; state.photoFiles = []; state.prevCtab = 0;
-    go(x.live ? (state.place[id] || "overview") : "overview");
+    go(x.live ? (state.place[id] || "pages") : "overview");
   }
   function go(tab) {
     if (tab === "home") { state.inSite = false; }
@@ -1021,7 +1225,8 @@
 
   // Asks before leaving an entry that has typing in it.
   function guard(next) {
-    if (state.open && state.dirty) { state.leave = next; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
+    var pgd = pgOf();
+    if ((state.open && state.dirty) || (state.tab === "pages" && pgd && pgd.dirty)) { state.leave = next; if (state.tab === "pages") edPatch(); else render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
     else next();
   }
   function closeEntry() { var s = site(); state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.prevCtab = s ? (state.ctab[s.id] || 0) : 0; render(); }
@@ -1035,22 +1240,62 @@
     else if (a === "signout") sb.auth.signOut();
     else if (a === "signin-mode") { state.signinMode = el.dataset.mode; state.signinSent = false; state.notice = null; var em = app.querySelector("#email"); if (em) state.email = em.value.trim(); render(); }
     else if (a === "open-site") { var sid = el.dataset.site; guard(function () { openSite(sid); }); }
-    else if (a === "leave-stay") { state.leave = null; render(); }
-    else if (a === "leave-go") { var next = state.leave; state.leave = null; state.dirty = false; if (next) next(); }
-    else if (a === "leave-save") { var fm = app.querySelector('form[data-form="entry"]'); state.leave = null; if (fm) saveEntry(fm); }
+    else if (a === "leave-stay") { state.leave = null; if (state.tab === "pages") edPatch(); else render(); }
+    else if (a === "leave-save") { var fm = app.querySelector('form[data-form="entry"]'); state.leave = null; if (state.tab === "pages") savePages(); else if (fm) saveEntry(fm); }
+    else if (a === "leave-go") { var next = state.leave; state.leave = null; state.dirty = false; if (pgOf()) { pgOf().doc = JSON.parse(pgOf().base); pgOf().dirty = false; } if (next) next(); }
     else if (a === "egroup") {
       state.egroup = Number(el.dataset.g);
       Array.prototype.forEach.call(app.querySelectorAll(".egroup"), function (x) { x.hidden = x.dataset.g !== el.dataset.g; });
       Array.prototype.forEach.call(app.querySelectorAll('[data-act="egroup"]'), function (x) { x.className = x.dataset.g === el.dataset.g ? "on" : ""; });
     }
     else if (a === "cmore") { state.cmore = true; filterList(); }
+    else if (a === "ed-pick") pickSection(el.dataset.id);
+    else if (a === "ed-panel-close") { var pq = pgOf(); if (pq) { pq.panel = ""; pq.sel = null; edPatch(); pushPreview(""); } }
+    else if (a === "ed-library") { var pl = pgOf(); if (pl) { pl.panel = "library"; edPatch(); } }
+    else if (a === "ed-page") { var pp = pgOf(); if (pp) { pp.page = el.dataset.page; pp.sel = null; pp.panel = ""; edRemember(); edPatch(); pushPreview(); } }
+    else if (a === "ed-mode") { var pm = pgOf(); if (pm) { pm.mode = el.dataset.mode; edRemember(); var fr = app.querySelector(".ed-frame"); if (fr) fr.className = "ed-frame " + pm.mode; patchEdTop(); } }
+    else if (a === "ed-add") {
+      var pa = pgOf(), kd = pa && pa.kinds[el.dataset.kind]; if (!pa || !kd) return;
+      var nid = newSectionId(pa, el.dataset.kind), sec = { id: nid, type: el.dataset.kind, visible: true, settings: JSON.parse(JSON.stringify(kd.starter || {})) };
+      var secs = pgSections(pa), after = pa.sel && pa.sel.where === "page" ? secs.findIndex(function (x) { return x.id === pa.sel.id; }) : -1;
+      secs.splice(after >= 0 ? after + 1 : secs.length, 0, sec);
+      pa.summaries[pa.page + ":" + nid] = ""; pa.sel = { where: "page", id: nid }; pa.panel = ""; pa.what = "Add section: " + kd.label; pgMark(pa); edPatch(); pushPreview();
+    }
+    else if (a === "ed-hide") { var ph = pgOf(), hs = ph && pgSel(ph); if (hs) { hs.sec.visible = hs.sec.visible === false; ph.what = (hs.sec.visible ? "Show section: " : "Hide section: ") + (hs.kind ? hs.kind.label : hs.id); pgMark(ph); edPatch(); pushPreview(); } }
+    else if (a === "ed-dup") {
+      var pd = pgOf(), ds = pd && pgSel(pd); if (!ds || ds.where !== "page") return;
+      var copy = JSON.parse(JSON.stringify(ds.sec)); copy.id = newSectionId(pd, ds.sec.type);
+      var dl = pgSections(pd), di = dl.findIndex(function (x) { return x.id === ds.id; }); dl.splice(di + 1, 0, copy);
+      pd.summaries[pd.page + ":" + copy.id] = pd.summaries[pd.page + ":" + ds.id] || ""; pd.sel = { where: "page", id: copy.id }; pd.what = "Add section: copy of " + (ds.kind ? ds.kind.label : ds.id); pgMark(pd); edPatch(); pushPreview();
+    }
+    else if (a === "ed-move") {
+      var pv = pgOf(), ms = pv && pgSel(pv); if (!ms || ms.where !== "page") return;
+      var ml = pgSections(pv), mi = ml.findIndex(function (x) { return x.id === ms.id; }), mj = mi + Number(el.dataset.dir);
+      if (mj < 0 || mj >= ml.length) return;
+      var tmp = ml[mi]; ml[mi] = ml[mj]; ml[mj] = tmp; pv.what = "Move section: " + (ms.kind ? ms.kind.label : ms.id); pgMark(pv); edPatch(); pushPreview();
+    }
+    else if (a === "ed-remove") {
+      var pr = pgOf(), rs = pr && pgSel(pr); if (!rs || rs.where !== "page") return;
+      var rl = pgSections(pr); rl.splice(rl.findIndex(function (x) { return x.id === rs.id; }), 1);
+      pr.sel = null; state.confirm = null; pr.what = "Remove section: " + (rs.kind ? rs.kind.label : rs.id); pgMark(pr); edPatch(); pushPreview("");
+    }
+    else if (a === "ed-row-add" || a === "ed-row-del" || a === "ed-row-move") {
+      var px = pgOf(), xs = px && pgSel(px); if (!xs) return;
+      var rows = pgGet(xs.sec.settings, el.dataset.path); if (!Array.isArray(rows)) { rows = []; pgSet(xs.sec.settings, el.dataset.path, rows); }
+      if (a === "ed-row-add") { var kf = (xs.kind.fields || []).concat([]).reduce(function (found, f) { return found || (f.name === el.dataset.path ? f : null) || ((f.fields || []).find(function (g) { return el.dataset.path.endsWith("." + g.name) && g.type === "rows"; }) || null); }, null); var blank = kf && kf.fields ? (kf.fields.some(function (g) { return typeof g.name === "number"; }) ? kf.fields.map(function () { return ""; }) : kf.fields.reduce(function (o, g) { o[g.name] = g.type === "rows" || g.type === "lines" ? [] : g.type === "yesno" ? false : ""; return o; }, {})) : {}; rows.push(blank); }
+      else if (a === "ed-row-del") rows.splice(Number(el.dataset.i), 1);
+      else { var ri = Number(el.dataset.i), rj = ri + Number(el.dataset.dir); if (rj >= 0 && rj < rows.length) { var rt = rows[ri]; rows[ri] = rows[rj]; rows[rj] = rt; } }
+      px.what = "Edit " + (xs.kind ? xs.kind.label : xs.id); pgMark(px); edPatch(); pushPreview();
+    }
+    else if (a === "ed-save") savePages();
+    else if (a === "ed-discard") { var pz = pgOf(); if (pz) { pz.doc = JSON.parse(pz.base); pz.dirty = false; state.dirty = false; pz.sel = null; pz.panel = ""; edPatch(); pushPreview(""); } }
     else if (a === "look") { var t = themeOf(), i = Number(el.dataset.i); if (t) { Object.assign(t.draft.colours, i < 0 ? t.values.colours : t.spec.looks[i].colours); themeUpdate(); } }
     else if (a === "theme-discard") { var t2 = themeOf(); if (t2) { t2.draft = JSON.parse(JSON.stringify(t2.values)); themeUpdate(); } }
     else if (a === "theme-publish") onLive(publishTheme, "This theme change");
     else if (a === "publish-replace") publish(el.dataset.copy, true);
     else if (a === "ask-makelive") { state.ask = { kind: "makelive", copy: curCopy().id }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
     else if (a === "ask-big") { state.ask = { kind: el.dataset.kind, copy: el.dataset.copy }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
-    else if (a === "ask-cancel") { state.ask = null; render(); }
+    else if (a === "ask-cancel") { state.ask = null; if (state.tab === "pages" && pgOf()) edPatch(); else render(); }
     else if (a === "livesave") { var run = state.ask && state.ask.go; state.ask = null; state.sure = true; try { if (run) run(); } finally { state.sure = false; } }
     else if (a === "makelive") publish(el.dataset.copy);
     else if (a === "discard") copyAction("discard", el.dataset.copy, "Changes thrown away. The live site is as it was");
@@ -1068,8 +1313,8 @@
     else if (a === "ctab") { state.prevCtab = state.ctab[s.id] || 0; state.ctab[s.id] = Number(el.dataset.i); state.csearch = ""; state.cmore = false; render(); }
     else if (a === "open") { state.draft = null; state.dirty = false; state.leave = null; state.egroup = 0; state.open = { ci: Number(el.dataset.ci), ei: Number(el.dataset.ei) }; state.confirm = null; state.notice = null; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
     else if (a === "close") guard(closeEntry);
-    else if (a === "ask") { state.confirm = el.dataset.k; render(); }
-    else if (a === "cancel") { state.confirm = null; render(); }
+    else if (a === "ask") { state.confirm = el.dataset.k; if (state.tab === "pages" && pgOf()) edPatch(); else render(); }
+    else if (a === "cancel") { state.confirm = null; if (state.tab === "pages" && pgOf()) edPatch(); else render(); }
     else if (a === "entry-hide") onLive(function () { entryChange("setHidden", function (o) { return { hidden: !o.e.hidden }; }); }, "Hiding or showing this");
     else if (a === "entry-delete") onLive(function () { entryChange("deleteEntry", function () { return {}; }); }, "Deleting this");
     else if (a === "photo-take") { var ps = el.dataset.slot; onLive(function () { takePhoto(ps); }, "Removing this photo"); }
@@ -1078,8 +1323,29 @@
     else if (a === "photo-remove") { state.photoFiles.splice(Number(el.dataset.i), 1); render(); }
   });
 
+  // One setting in the page editor changed: keep it, redraw the page in the middle, nothing else.
+  function pgInput(t) {
+    var pgd = pgOf(), sel = pgd && pgSel(pgd); if (!sel) return;
+    var path = t.dataset.pf, kind = t.dataset.kind, v;
+    if (kind === "lines") v = t.value.split("\n").map(function (x) { return x.trim(); }).filter(Boolean);
+    else if (kind === "number") v = t.value === "" ? 0 : Number(t.value);
+    else if (kind === "yesno") v = t.value === "true";
+    else if (kind === "artists") { v = []; Array.prototype.forEach.call(app.querySelectorAll('[data-pf="' + path + '"]'), function (c) { if (c.checked) v.push(c.value); }); }
+    else if (kind === "colour-pick") {
+      if (t.value === "custom") { var cin = app.querySelector('[data-pf="' + path + '"][data-kind="colour"]'); v = cin ? cin.value.toUpperCase() : "#1D4A35"; }
+      else v = t.value;
+      var sw = app.querySelector('[data-swatch="' + path + '"]'); if (sw) sw.hidden = t.value !== "custom";
+    }
+    else if (kind === "colour") { v = t.value.toUpperCase(); var sw2 = app.querySelector('[data-swatch="' + path + '"]'); if (sw2) sw2.style.background = v; }
+    else v = t.value;
+    pgSet(sel.sec.settings, path, v);
+    pgd.what = "Edit " + (sel.kind ? sel.kind.label : sel.id); pgMark(pgd); patchEdTop(); pushSoon();
+  }
+  function patchEdTop() { var top = app.querySelector && app.querySelector(".ed-top"), s = site(); if (top && s) top.innerHTML = edTop(s, pgOf()); }
+
   app.addEventListener("change", function (ev) {
     var t = ev.target, kind = t.dataset.change;
+    if (t.dataset && t.dataset.pf && (t.tagName === "SELECT" || t.type === "checkbox" || t.type === "color")) { pgInput(t); return; }
     if (t.dataset.field) state.dirty = true;
     if (kind === "copy") { var cw = t.value; if (state.open && state.dirty) t.value = curCopy().kind === "live" ? "" : curCopy().id; guard(function () { workOn(cw); }); }
     else if (kind === "csort") { state.csort = t.value; render(); }
@@ -1100,7 +1366,9 @@
   // Typing must not redraw the page, or the box loses focus.
   app.addEventListener("input", function (ev) {
     var ed = ev.target.closest && ev.target.closest("[data-rich]");
+    if (ed && ed.dataset.pfRich) { var pe = pgOf(), es = pe && pgSel(pe); if (es && rich[ed.dataset.rich]) { rich[ed.dataset.rich].dirty = true; pgSet(es.sec.settings, ed.dataset.rich, richOut(ed, rich[ed.dataset.rich].keep, false)); pe.what = "Edit " + (es.kind ? es.kind.label : es.id); pgMark(pe); patchEdTop(); pushSoon(); } return; }
     if (ed) { state.dirty = true; if (rich[ed.dataset.rich]) rich[ed.dataset.rich].dirty = true; return; }
+    if (ev.target.dataset && ev.target.dataset.pf) { pgInput(ev.target); return; }
     var t = ev.target, field;
     if (!t.dataset) return;
     if (t.dataset.field) { state.dirty = true; return; }
@@ -1189,6 +1457,10 @@
   function demoCopy(body) { var l = demoList(body.site); return l.find(function (c) { return c.id === body.copy; }) || l[0]; }
   function demoStep(body, what) { var c = demoCopy(body); c.steps.unshift({ what: what, when: new Date().toISOString(), by: "sample" }); c.ahead = c.kind === "live" ? 0 : c.steps.length; c.redo = []; c.canRedo = false; }
   var DEMO_STEPS = { saveEntry: "Edit: sample entry", setHidden: "Hide or show: sample entry", deleteEntry: "Delete: sample entry", removePhoto: "Remove photo", uploadPhoto: "Add photo", saveTheme: "Theme: sample change", undo: "Undo: an earlier change" };
+  // Sample pages for sample mode, generated from the server by tests/pages.mjs helpers.
+  var demoKinds = {"opening":{"label":"Opening screen","fields":[{"name":"name","label":"Site name","type":"text"},{"name":"tagline","label":"Tagline","type":"text"}],"library":"","starter":null},"header":{"label":"Menu bar","fields":[{"name":"name","label":"Site name","type":"text"},{"name":"links","label":"Links","type":"rows","fields":[{"name":0,"label":"Words","type":"text"},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists."}]}],"library":"","starter":null},"footer":{"label":"Newsletter and footer","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"button","label":"Button words","type":"text"},{"name":"blurb","label":"Short description of the site","type":"long"},{"name":"columns","label":"Link columns","type":"rows","fields":[{"name":"title","label":"Column title","type":"text"},{"name":"links","label":"Links in this column","type":"rows","fields":[{"name":0,"label":"Words","type":"text"},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists."}]}]},{"name":"copyright","label":"Copyright line","type":"text"},{"name":"elsewhere","label":"Links in the bottom bar","type":"rows","fields":[{"name":0,"label":"Words","type":"text"},{"name":1,"label":"Address","type":"text","hint":"A page on this site starts with #, for example #artists."}]}],"library":"","starter":null},"hero":{"label":"Opening banner","fields":[{"name":"headline","label":"Headline","type":"rows","fields":[{"name":"t","label":"Words","type":"text"},{"name":"ital","label":"In italics","type":"yesno"}]},{"name":"tagline","label":"Tagline","type":"rows","fields":[{"name":"t","label":"Words","type":"text"},{"name":"ital","label":"In italics","type":"yesno"}]},{"name":"artist","label":"Whose work is shown","type":"artists","one":true,"hint":"Leave empty for the first published artist."},{"name":"rule_label","label":"Rule box, small line","type":"text"},{"name":"rule_text","label":"Rule box, text","type":"text"},{"name":"rule_link","label":"Rule box, link words","type":"text"},{"name":"latest","label":"Pieces in the Latest box","type":"lines","hint":"Article names as they appear in web addresses, for example zara-muse-profile."}],"library":"","starter":null},"featured":{"label":"Featured artists","fields":[{"name":"badge","label":"Badge words","type":"text"},{"name":"artists","label":"Which artists","type":"artists","hint":"Leave empty to show every published artist."}],"library":"","starter":null},"section-list":{"label":"Read by section","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"rows","label":"Rows","type":"rows","fields":[{"name":"n","label":"Number","type":"text"},{"name":"name","label":"Name","type":"text"},{"name":"desc","label":"Description","type":"text"},{"name":"href","label":"Address","type":"text"},{"name":"count","label":"Count shown","type":"choice","options":[["artists","Artists"],["reviews","Reviews"],["explained","Art explained pieces"],["library","Library guides"],["articles","All articles"],["sources","Sources"]]},{"name":"unit","label":"Count word","type":"text"}]}],"library":"","starter":null},"explained":{"label":"Art, explained","fields":[{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"text","label":"Text","type":"long","plain":true},{"name":"count","label":"How many articles","type":"number"}],"library":"","starter":null},"numbers":{"label":"Numbers band","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"labels","label":"The four labels","type":"lines"}],"library":"Figures from the site, in a band","starter":{"eyebrow":"The review so far","heading":["Research you","can check"],"labels":["Artists documented","Articles and reviews","Sources cited","Facts with a numbered source"]}},"method":{"label":"How we research","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"cards","label":"Cards","type":"rows","fields":[{"name":"n","label":"Number","type":"text"},{"name":"text","label":"Text","type":"long"},{"name":"title","label":"Title","type":"text"},{"name":"sub","label":"Small line","type":"text"}]}],"library":"Three cards in a row","starter":{"eyebrow":"How we research","heading":["The work first,","then the story"],"cards":[{"n":"1","text":"Write here.","title":"A title","sub":"A small line"}]}},"text":{"label":"Text","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"body","label":"Text","type":"long"},{"name":"align","label":"Placing","type":"choice","options":[["","Left"],["centre","Centred"]]},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]},{"name":"fg","label":"Text colour","type":"colour","theme":[["","Automatic"]]}],"library":"A heading and paragraphs","starter":{"eyebrow":"","heading":["A new heading"],"body":"<p>Write here.</p>","align":"","bg":"paper","fg":""}},"text-picture":{"label":"Text with picture","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"body","label":"Text","type":"long"},{"name":"image","label":"Picture","type":"image"},{"name":"alt","label":"Picture description","type":"text"},{"name":"caption","label":"Caption","type":"text"},{"name":"side","label":"Picture on the","type":"choice","options":[["right","Right"],["left","Left"]]},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]},{"name":"fg","label":"Text colour","type":"colour","theme":[["","Automatic"]]}],"library":"Words beside a photo","starter":{"eyebrow":"","heading":["A new heading"],"body":"<p>Write here.</p>","image":"","alt":"","caption":"","side":"right","bg":"paper","fg":""}},"picture":{"label":"Picture","fields":[{"name":"image","label":"Picture","type":"image"},{"name":"alt","label":"Picture description","type":"text"},{"name":"caption","label":"Caption","type":"text"},{"name":"size","label":"Width","type":"choice","options":[["","Full width"],["contained","Contained"]]},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]}],"library":"One large photo, with a caption","starter":{"image":"","alt":"","caption":"","size":"","bg":"paper"}},"quote":{"label":"Quote","fields":[{"name":"text","label":"The quote","type":"lines","hint":"One line per paragraph."},{"name":"who","label":"Who said it","type":"text"},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]},{"name":"fg","label":"Text colour","type":"colour","theme":[["","Automatic"]]}],"library":"A short line that stands out","starter":{"text":["A line worth remembering."],"who":"","bg":"green","fg":""}},"articles":{"label":"Latest articles","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"section","label":"Which articles","type":"choice","options":[["all","All"],["reviews","Reviews"],["explained","Art explained"],["library","Collector's library"],["features","Artist portfolios"]]},{"name":"count","label":"How many","type":"number"},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]},{"name":"fg","label":"Text colour","type":"colour","theme":[["","Automatic"]]}],"library":"Fills itself from Content","starter":{"eyebrow":"Latest","heading":["Recent pieces"],"section":"all","count":3,"bg":"paper","fg":""}},"faq":{"label":"Questions and answers","fields":[{"name":"eyebrow","label":"Small line above the heading","type":"text"},{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"items","label":"Questions","type":"rows","fields":[{"name":"q","label":"Question","type":"text"},{"name":"a","label":"Answer","type":"long"}]},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]},{"name":"fg","label":"Text colour","type":"colour","theme":[["","Automatic"]]}],"library":"A list that opens and closes","starter":{"eyebrow":"","heading":["Questions"],"items":[{"q":"A question?","a":"<p>The answer.</p>"}],"bg":"paper","fg":""}},"button":{"label":"Button or link","fields":[{"name":"heading","label":"Heading","type":"lines","hint":"One line of the heading per paragraph."},{"name":"text","label":"Text","type":"text"},{"name":"label","label":"Button words","type":"text"},{"name":"href","label":"Where it goes","type":"text","hint":"A page on this site starts with #, or a full web address."},{"name":"style","label":"Style","type":"choice","options":[["green","Green"],["paper","Paper"],["outline","Outline"]]},{"name":"bg","label":"Background","type":"colour","theme":[["paper","Page background"],["deep","Deeper paper"],["green","Bands and buttons"]]},{"name":"fg","label":"Text colour","type":"colour","theme":[["","Automatic"]]}],"library":"Send visitors somewhere","starter":{"heading":["Find out more"],"text":"","label":"Read on","href":"#artists","style":"green","bg":"paper","fg":""}}};
+  var demoPages = {"_how_to_edit":"Each page is a list of sections shown top to bottom. 'visible' hides a section without deleting it. 'settings' holds the words and choices for that section. Edit this from Artiscope Digital Home.","shared":{"opening":{"type":"opening","visible":true,"settings":{"name":"World Art Review","tagline":"Discover Artists. Understand Art."}},"header":{"type":"header","visible":true,"settings":{"links":[["Artists A to Z","#artists"],["Reviews","#reviews"],["Art Explained","#explained"]],"name":"World Art Review"}},"footer":{"type":"footer","visible":true,"settings":{"eyebrow":"Get the review","heading":["New portfolios,","once a month."],"button":"Subscribe","blurb":"Researched artist portfolios, reviews and collecting guides. Discover Artists. Understand Art.","columns":[{"title":"Read","links":[["Artists A to Z","#artists"],["Reviews","#reviews"],["Art Explained","#explained"],["Exhibition Guides","#guides"]]},{"title":"Collect","links":[["Collector's Library","#library"],["Original or print?","#a-original-vs-print"],["Provenance","#a-provenance-certificates"],["Research an artist","#a-research-emerging-artist"]]},{"title":"About","links":[["How we research","#home","method"],["Sources","#standards"],["Suggest an artist","mailto:info@grovegallery.com?subject=Suggest%20an%20artist%20for%20World%20Art%20Review"],["Contact","mailto:info@grovegallery.com"]]}],"copyright":"© 2026 World Art Review. All rights reserved.","elsewhere":[["Instagram","#"],["X","#"],["LinkedIn","#"],["Privacy","#standards"],["Terms","#standards"]]}}},"pages":{"home":{"title":"Home","sections":[{"id":"hero","type":"hero","visible":true,"settings":{"headline":[{"t":"Discover"},{"t":"Artists.","ital":true}],"tagline":[{"t":"Understand"},{"t":"Art.","ital":true}],"artist":"","rule_label":"Our rule","rule_text":"Every fact carries a numbered source. Where only the gallery or the artist says so, we say so.","rule_link":"How we work","latest":["zara-muse-profile","konn-artiss-profile","review-anti-frieze"]}},{"id":"featured","type":"featured","visible":true,"settings":{"badge":"Artist in focus","artists":[]}},{"id":"sections","type":"section-list","visible":true,"settings":{"eyebrow":"What you will find here","heading":["Read by","section"],"rows":[{"n":"01","name":"Artists A to Z","href":"#artists","desc":"Researched portfolios: biography, style, career and selected works.","count":"artists","unit":"portfolio"},{"n":"02","name":"Reviews","href":"#reviews","desc":"Close readings of single works, shows and interventions.","count":"reviews","unit":"review"},{"n":"03","name":"Art Explained","href":"#explained","desc":"Techniques, materials and ideas, in plain language.","count":"explained","unit":"guide"},{"n":"04","name":"Collector's Library","href":"#library","desc":"How to research an artist, read a certificate and tell an original from a print.","count":"library","unit":"guide"}]}},{"id":"explainedHome","type":"explained","visible":true,"settings":{"heading":["How to","look at","a painting"],"text":"Short, sourced explainers on the techniques and materials behind the work, so you know what you are looking at before you look it up.","count":2}},{"id":"numbers","type":"numbers","visible":true,"settings":{"eyebrow":"The review so far","heading":["Research you","can check"],"labels":["Artists documented","Articles and reviews","Sources cited","Facts with a numbered source"]}},{"id":"method","type":"method","visible":true,"settings":{"eyebrow":"How we research","heading":["The work first,","then the story"],"cards":[{"n":"1","text":"We start with the work itself: what it is made of, how it was made and where it has been shown.","title":"Start with the work","sub":"Seen, measured, described"},{"n":"2","text":"Every fact in a portfolio carries a numbered source you can open and read for yourself.","title":"Every fact, sourced","sub":"Press, auction records, gallery files"},{"n":"3","text":"Claims that come only from publicity are labelled <span class=\"reported\">Reported</span> so you can weigh them.","title":"Publicity, flagged","sub":"Kept apart from checked fact"}]}}]}}};
+  var demoSummaries = { "shared:opening": "World Art Review", "shared:header": "3 links", "shared:footer": "3 columns", "home:hero": "Discover Artists.", "home:featured": "All published", "home:sections": "4 rows", "home:explainedHome": "2 articles", "home:numbers": "Four figures", "home:method": "3 cards" };
   function demoApi(body) {
     return new Promise(function (resolve, reject) {
       setTimeout(function () {
@@ -1201,6 +1473,8 @@
         }
         else if (a === "content") resolve({ collections: JSON.parse(JSON.stringify(demoContent)) });
         else if (a === "history") resolve({ changes: demoHistory });
+        else if (a === "pages") resolve({ pages: JSON.parse(JSON.stringify(demoPages)), kinds: demoKinds, summaries: demoSummaries, images: ["zara-muse-portrait.jpg"], artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }], preview: params.get("preview") || "https://worldartreview.com/" });
+        else if (a === "savePages") { demoPages = JSON.parse(JSON.stringify(body.pages)); resolve({ ok: true }); }
         else if (a === "theme") { if (params.has("preview")) demoTheme.spec.url = params.get("preview"); resolve(JSON.parse(JSON.stringify(demoTheme))); }
         else if (a === "saveTheme") { demoTheme.values = JSON.parse(JSON.stringify(body.values)); resolve({ ok: true, values: body.values }); }
         else if (a === "uploadPhoto") resolve({ ok: true, name: (body.slot ? "slot--" + body.slot : "note--" + String(body.description).toLowerCase().replace(/[^a-z0-9]+/g, "-")) + "." + body.ext });
@@ -1240,6 +1514,6 @@
   }
 
   // Exposed for the automated checks only.
-  window.__adh = { state: state, render: render, esc: esc, go: go, openSite: openSite, themeCss: themeCss, richIn: richIn, richOut: richOut, richInline: richInline };
+  window.__adh = { state: state, render: render, esc: esc, go: go, openSite: openSite, pgOf: pgOf, themeCss: themeCss, richIn: richIn, richOut: richOut, richInline: richInline };
   start();
 })();

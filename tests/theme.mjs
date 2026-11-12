@@ -8,7 +8,8 @@ const A = 8731, B = 8732, consoleAt = "http://localhost:" + B, siteAt = "http://
 fs.rmSync("/tmp/site-a", { recursive: true, force: true });
 execFileSync("python3", ["/home/claude/world-art-review/tools/build_site.py", "/tmp/site-a"]);
 let built = fs.readFileSync("/tmp/site-a/index.html", "utf8"); assert.ok(built.includes('var ok="https://artiscope.github.io"'));
-fs.writeFileSync("/tmp/site-a/index.html", built.replace('var ok="https://artiscope.github.io"', 'var ok="' + consoleAt + '"'));
+fs.writeFileSync("/tmp/site-a/index.html", built);
+fs.writeFileSync("/tmp/site-a/index.html", built.split('var ok="https://artiscope.github.io"').join('var ok="' + consoleAt + '"'));
 const servers = [spawn("python3", ["-m", "http.server", String(A), "-d", "/tmp/site-a"], { stdio: "ignore" }), spawn("python3", ["-m", "http.server", String(B), "-d", path.resolve(".")], { stdio: "ignore" })];
 await new Promise((r) => setTimeout(r, 900));
 const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });

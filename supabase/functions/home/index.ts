@@ -71,6 +71,144 @@ export function cleanTheme(spec, given) {
   return out;
 }
 
+
+// ---------- pages: what each kind of section offers to edit ----------
+//
+// A field: { name, label, type, ... }. Types: text, long (plain writing with
+// formatting), lines (one item per paragraph), number, yesno, choice (options),
+// colour (theme colours or any), image (a file in images/), artists (pick from
+// the site's artists), rows (a list of small records with their own fields),
+// links (label and address pairs).
+
+const BG = { name: "bg", label: "Background", type: "colour", theme: [["paper", "Page background"], ["deep", "Deeper paper"], ["green", "Bands and buttons"]] };
+const FG = { name: "fg", label: "Text colour", type: "colour", theme: [["", "Automatic"]] };
+const HEADING = { name: "heading", label: "Heading", type: "lines", hint: "One line of the heading per paragraph." };
+const EYEBROW = { name: "eyebrow", label: "Small line above the heading", type: "text" };
+const LINK_ROWS = { name: "links", label: "Links", type: "rows", fields: [{ name: 0, label: "Words", type: "text" }, { name: 1, label: "Address", type: "text", hint: "A page on this site starts with #, for example #artists." }] };
+
+const WAR_SECTIONS = {
+  opening: { label: "Opening screen", summary: (st) => st.name || "", fields: [{ name: "name", label: "Site name", type: "text" }, { name: "tagline", label: "Tagline", type: "text" }] },
+  header: { label: "Menu bar", summary: (st) => ((st.links || []).length + " links"), fields: [{ name: "name", label: "Site name", type: "text" }, LINK_ROWS] },
+  footer: { label: "Newsletter and footer", summary: (st) => ((st.columns || []).length + " columns"), fields: [
+    EYEBROW, HEADING, { name: "button", label: "Button words", type: "text" }, { name: "blurb", label: "Short description of the site", type: "long" },
+    { name: "columns", label: "Link columns", type: "rows", fields: [{ name: "title", label: "Column title", type: "text" }, { ...LINK_ROWS, label: "Links in this column" }] },
+    { name: "copyright", label: "Copyright line", type: "text" }, { name: "elsewhere", label: "Links in the bottom bar", type: "rows", fields: LINK_ROWS.fields },
+  ] },
+  hero: { label: "Opening banner", summary: (st) => (st.headline || []).map((x) => x.t).join(" "), fields: [
+    { name: "headline", label: "Headline", type: "rows", fields: [{ name: "t", label: "Words", type: "text" }, { name: "ital", label: "In italics", type: "yesno" }] },
+    { name: "tagline", label: "Tagline", type: "rows", fields: [{ name: "t", label: "Words", type: "text" }, { name: "ital", label: "In italics", type: "yesno" }] },
+    { name: "artist", label: "Whose work is shown", type: "artists", one: true, hint: "Leave empty for the first published artist." },
+    { name: "rule_label", label: "Rule box, small line", type: "text" }, { name: "rule_text", label: "Rule box, text", type: "text" }, { name: "rule_link", label: "Rule box, link words", type: "text" },
+    { name: "latest", label: "Pieces in the Latest box", type: "lines", hint: "Article names as they appear in web addresses, for example zara-muse-profile." },
+  ] },
+  featured: { label: "Featured artists", summary: (st) => ((st.artists || []).length ? (st.artists || []).length + " chosen" : "All published"), fields: [
+    { name: "badge", label: "Badge words", type: "text" }, { name: "artists", label: "Which artists", type: "artists", hint: "Leave empty to show every published artist." },
+  ] },
+  "section-list": { label: "Read by section", summary: (st) => ((st.rows || []).length + " rows"), fields: [
+    EYEBROW, HEADING,
+    { name: "rows", label: "Rows", type: "rows", fields: [{ name: "n", label: "Number", type: "text" }, { name: "name", label: "Name", type: "text" }, { name: "desc", label: "Description", type: "text" }, { name: "href", label: "Address", type: "text" }, { name: "count", label: "Count shown", type: "choice", options: [["artists", "Artists"], ["reviews", "Reviews"], ["explained", "Art explained pieces"], ["library", "Library guides"], ["articles", "All articles"], ["sources", "Sources"]] }, { name: "unit", label: "Count word", type: "text" }] },
+  ] },
+  explained: { label: "Art, explained", summary: (st) => ((Number(st.count) || 2) + " articles"), fields: [HEADING, { name: "text", label: "Text", type: "long", plain: true }, { name: "count", label: "How many articles", type: "number" }] },
+  numbers: { label: "Numbers band", summary: () => "Four figures", fields: [EYEBROW, HEADING, { name: "labels", label: "The four labels", type: "lines" }] },
+  method: { label: "How we research", summary: (st) => ((st.cards || []).length + " cards"), fields: [
+    EYEBROW, HEADING,
+    { name: "cards", label: "Cards", type: "rows", fields: [{ name: "n", label: "Number", type: "text" }, { name: "text", label: "Text", type: "long" }, { name: "title", label: "Title", type: "text" }, { name: "sub", label: "Small line", type: "text" }] },
+  ] },
+  text: { label: "Text", summary: (st) => ((st.heading || [])[0] || "Text"), library: "A heading and paragraphs", fields: [EYEBROW, HEADING, { name: "body", label: "Text", type: "long" }, { name: "align", label: "Placing", type: "choice", options: [["", "Left"], ["centre", "Centred"]] }, BG, FG],
+    starter: { eyebrow: "", heading: ["A new heading"], body: "<p>Write here.</p>", align: "", bg: "paper", fg: "" } },
+  "text-picture": { label: "Text with picture", summary: (st) => ((st.heading || [])[0] || "Text with picture"), library: "Words beside a photo", fields: [EYEBROW, HEADING, { name: "body", label: "Text", type: "long" }, { name: "image", label: "Picture", type: "image" }, { name: "alt", label: "Picture description", type: "text" }, { name: "caption", label: "Caption", type: "text" }, { name: "side", label: "Picture on the", type: "choice", options: [["right", "Right"], ["left", "Left"]] }, BG, FG],
+    starter: { eyebrow: "", heading: ["A new heading"], body: "<p>Write here.</p>", image: "", alt: "", caption: "", side: "right", bg: "paper", fg: "" } },
+  picture: { label: "Picture", summary: (st) => (st.caption || st.image || "Picture"), library: "One large photo, with a caption", fields: [{ name: "image", label: "Picture", type: "image" }, { name: "alt", label: "Picture description", type: "text" }, { name: "caption", label: "Caption", type: "text" }, { name: "size", label: "Width", type: "choice", options: [["", "Full width"], ["contained", "Contained"]] }, BG],
+    starter: { image: "", alt: "", caption: "", size: "", bg: "paper" } },
+  quote: { label: "Quote", summary: (st) => (Array.isArray(st.text) ? st.text[0] : String(st.text || "").split("\n")[0]) || "", library: "A short line that stands out", fields: [{ name: "text", label: "The quote", type: "lines", hint: "One line per paragraph." }, { name: "who", label: "Who said it", type: "text" }, BG, FG],
+    starter: { text: ["A line worth remembering."], who: "", bg: "green", fg: "" } },
+  articles: { label: "Latest articles", summary: (st) => ((Number(st.count) || 3) + " from " + (st.section && st.section !== "all" ? st.section : "all")), library: "Fills itself from Content", fields: [EYEBROW, HEADING, { name: "section", label: "Which articles", type: "choice", options: [["all", "All"], ["reviews", "Reviews"], ["explained", "Art explained"], ["library", "Collector's library"], ["features", "Artist portfolios"]] }, { name: "count", label: "How many", type: "number" }, BG, FG],
+    starter: { eyebrow: "Latest", heading: ["Recent pieces"], section: "all", count: 3, bg: "paper", fg: "" } },
+  faq: { label: "Questions and answers", summary: (st) => ((st.items || []).length + " questions"), library: "A list that opens and closes", fields: [EYEBROW, HEADING, { name: "items", label: "Questions", type: "rows", fields: [{ name: "q", label: "Question", type: "text" }, { name: "a", label: "Answer", type: "long" }] }, BG, FG],
+    starter: { eyebrow: "", heading: ["Questions"], items: [{ q: "A question?", a: "<p>The answer.</p>" }], bg: "paper", fg: "" } },
+  button: { label: "Button or link", summary: (st) => (st.label || "Button"), library: "Send visitors somewhere", fields: [HEADING, { name: "text", label: "Text", type: "text" }, { name: "label", label: "Button words", type: "text" }, { name: "href", label: "Where it goes", type: "text", hint: "A page on this site starts with #, or a full web address." }, { name: "style", label: "Style", type: "choice", options: [["green", "Green"], ["paper", "Paper"], ["outline", "Outline"]] }, BG, FG],
+    starter: { heading: ["Find out more"], text: "", label: "Read on", href: "#artists", style: "green", bg: "paper", fg: "" } },
+};
+// Sections of the original design can be added again from the library too.
+WAR_SECTIONS.numbers.library = "Figures from the site, in a band"; WAR_SECTIONS.numbers.starter = { eyebrow: "The review so far", heading: ["Research you", "can check"], labels: ["Artists documented", "Articles and reviews", "Sources cited", "Facts with a numbered source"] };
+WAR_SECTIONS.method.library = "Three cards in a row"; WAR_SECTIONS.method.starter = { eyebrow: "How we research", heading: ["The work first,", "then the story"], cards: [{ n: "1", text: "Write here.", title: "A title", sub: "A small line" }] };
+WAR_SECTIONS.articles.library = "Fills itself from Content";
+
+function cleanField(f, v, site) {
+  const t = f.type;
+  if (t === "text") return String(v == null ? "" : v).replace(/—/g, ",").slice(0, 400);
+  if (t === "long") return String(v == null ? "" : v).replace(/—/g, ",").slice(0, 20000);
+  if (t === "lines") return (Array.isArray(v) ? v : String(v == null ? "" : v).split(/\n\s*\n/)).map((x) => String(x).trim()).filter(Boolean).slice(0, 40);
+  if (t === "number") { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+  if (t === "yesno") return v === true || v === "true";
+  if (t === "choice") { const ok = f.options.map((o) => o[0]); return ok.includes(String(v == null ? "" : v)) ? String(v) : ok[0]; }
+  if (t === "colour") { const x = String(v == null ? "" : v).trim(); const themeOk = (f.theme || []).map((o) => o[0]); return themeOk.includes(x) ? x : (/^#[0-9a-fA-F]{6}$/.test(x) ? x.toUpperCase() : (themeOk[0] || "")); }
+  if (t === "image") { const x = String(v == null ? "" : v).trim(); return /^[A-Za-z0-9._-]{0,120}$/.test(x) ? x : ""; }
+  if (t === "artists") { const ok = (site.artists || []).map((a) => a.slug); if (f.one) return ok.includes(String(v)) ? String(v) : ""; return (Array.isArray(v) ? v : []).map(String).filter((x) => ok.includes(x)).slice(0, 20); }
+  if (t === "rows") {
+    const rows = (Array.isArray(v) ? v : []).slice(0, 40);
+    return rows.map((row) => {
+      const isList = f.fields.some((g) => typeof g.name === "number");
+      const out = isList ? [] : {};
+      for (const g of f.fields) out[g.name] = cleanField(g, row && row[g.name], site);
+      return out;
+    });
+  }
+  return "";
+}
+export function cleanSettings(schema, given, site) {
+  const out = {};
+  for (const f of schema.fields) out[f.name] = cleanField(f, given ? given[f.name] : undefined, site);
+  return out;
+}
+const SECTION_ID = /^[A-Za-z][A-Za-z0-9-]{0,40}$/;
+// The same thing written with its keys in the same order, so two copies can be compared.
+export function canon(v) {
+  if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
+  if (v && typeof v === "object") return "{" + Object.keys(v).sort().map((k) => JSON.stringify(k) + ":" + canon(v[k])).join(",") + "}";
+  return JSON.stringify(v);
+}
+
+// Checks a whole page document from the console and returns a clean copy, or throws.
+export function cleanPages(site, given, current) {
+  const spec = site.sectionKinds;
+  if (!given || typeof given !== "object") throw new Error("The page could not be read.");
+  const out = { _how_to_edit: current._how_to_edit, shared: {}, pages: {} };
+  for (const key of Object.keys(current.shared || {})) {
+    const cur = current.shared[key], g = (given.shared || {})[key] || cur;
+    if (!spec[cur.type]) { out.shared[key] = cur; continue; }
+    out.shared[key] = { type: cur.type, visible: g.visible !== false, settings: cleanSettings(spec[cur.type], g.settings, site) };
+  }
+  for (const key of Object.keys(current.pages || {})) {
+    const cur = current.pages[key], g = (given.pages || {})[key] || cur;
+    const list = Array.isArray(g.sections) ? g.sections : [];
+    if (list.length > 40) throw new Error("A page can hold up to 40 sections.");
+    const seen = new Set(), sections = [];
+    for (const sec of list) {
+      if (!sec || typeof sec !== "object" || !spec[sec.type]) throw new Error("One of the sections is of a kind this site cannot draw.");
+      const id = String(sec.id || "");
+      if (!SECTION_ID.test(id) || seen.has(id)) throw new Error("Every section needs its own short name.");
+      seen.add(id);
+      sections.push({ id, type: sec.type, visible: sec.visible !== false, settings: cleanSettings(spec[sec.type], sec.settings, site) });
+    }
+    out.pages[key] = { ...cur, sections };
+  }
+  return out;
+}
+// What the console needs to draw the editor: each kind's label, fields and starter.
+function kindsFor(site) {
+  const out = {};
+  for (const [k, v] of Object.entries(site.sectionKinds || {})) out[k] = { label: v.label, fields: v.fields, library: v.library || "", starter: v.starter || null };
+  return out;
+}
+function summariesFor(site, pages) {
+  const f = (sec) => { const k = site.sectionKinds[sec.type]; try { return k && k.summary ? String(k.summary(sec.settings || {})) : ""; } catch (_e) { return ""; } };
+  const out = {};
+  for (const [key, part] of Object.entries(pages.shared || {})) out["shared:" + key] = f(part);
+  for (const [key, pg] of Object.entries(pages.pages || {})) for (const sec of pg.sections || []) out[key + ":" + sec.id] = f(sec);
+  return out;
+}
+
 export const SITES = [
   {
     id: "world-art-review",
@@ -83,7 +221,8 @@ export const SITES = [
       { slug: "konn-artiss", name: "Konn Artiss" },
       { slug: "zen-xander", name: "Zen Xander" },
     ],
-    pages: { file: "content/pages.json" },
+    pages: { file: "content/pages.json", images: "images" },
+    sectionKinds: WAR_SECTIONS,
     theme: {
       file: "content/theme.json",
       colours: [
@@ -535,7 +674,7 @@ async function inboxOf(repo, ref = "") {
 
 
 const CONTENT_FILES = ["content/site.json", "data/content.json", "data/sales.json", "data/images.json", "image-slots.json", "content/theme.json", "data/theme.json", "content/pages.json", "data/pages.json"];
-const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Mark spot |Add photo|Photo description|Place photos|Theme: |Publish: |Make live: |Undo: |Redo: )/;
+const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Mark spot |Add photo|Photo description|Place photos|Theme: |Publish: |Make live: |Undo: |Redo: |Add section|Remove section|Move section)/;
 
 // ---------- copies of a site: the live one being worked on, and trial copies ----------
 //
@@ -755,7 +894,7 @@ export async function handle(req) {
   const who = " (" + email + ")";
 
   // Which copy of the site this request is about, and the branch that goes with it.
-  const WRITES = ["saveTheme", "saveEntry", "setHidden", "deleteEntry", "removePhoto", "undo", "uploadPhoto"];
+  const WRITES = ["saveTheme", "saveEntry", "setHidden", "deleteEntry", "removePhoto", "undo", "uploadPhoto", "savePages"];
   const COPY_ACTIONS = ["makeCopy", "deleteCopy", "refreshCopy", "publish", "discard", "undoStep", "redoStep"];
   const DRAFT_ACTIONS = ["answerTopic", "publishDraft", "returnDraft", "rejectDraft", "history"];
   let copies = [], copy = null, ref = "main";
@@ -801,6 +940,28 @@ export async function handle(req) {
       });
     }
     return json({ collections: out });
+  }
+
+  if (action === "pages" || action === "savePages") {
+    const ps = site.pages;
+    if (!ps || !site.sectionKinds) return json({ error: "This site cannot be edited by sections yet." }, 400);
+    const f = await loadJson(ps.file);
+    if (!f) return json({ error: "The page list could not be read." }, 502);
+    if (action === "pages") {
+      const imgs = await gh("/repos/" + site.repo + "/contents/" + ps.images + "?ref=" + encodeURIComponent(ref));
+      const images = Array.isArray(imgs.data) ? imgs.data.filter((x) => x.type === "file" && /\.(jpe?g|png|webp)$/i.test(x.name)).map((x) => x.name) : [];
+      const preview = copy.kind === "trial" ? copy.preview : "https://" + site.domain + "/";
+      return json({ pages: f.data, kinds: kindsFor(site), summaries: summariesFor(site, f.data), images, artists: site.artists, preview, sha: f.sha });
+    }
+    let next;
+    try { next = cleanPages(site, body.pages, f.data); } catch (e) { return json({ error: e.message }, 400); }
+    let was; try { was = cleanPages(site, f.data, f.data); } catch (_e) { was = f.data; }
+    if (canon(next) === canon(was)) return json({ ok: true, unchanged: true });
+    const what = cleanText(body.what, 80) || "Edit page";
+    const put = await saveJson(ps.file, next, f.sha, "Edit page: " + what);
+    if (put.status === 409) return json({ error: "Someone else changed this page at the same moment. Refresh and try again." }, 409);
+    if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save the page. Please try again.") }, 502);
+    return json({ ok: true, summaries: summariesFor(site, next) });
   }
 
   if (action === "theme" || action === "saveTheme") {

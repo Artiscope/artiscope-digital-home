@@ -36,7 +36,7 @@ assert.deepEqual(bio.body, ["First paragraph.", "Second paragraph."]);
 globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "me@x.com", SUPABASE_URL: "https://s" }[k] || "") }, serve() {} };
 const { makeGitHub } = await import("./fakegit.mjs");
 const WR = "Artiscope/World-art-review";
-const hub = makeGitHub({ [WR]: { "content/site.json": JSON.stringify(war), "image-slots.json": fs.readFileSync("/home/claude/world-art-review/image-slots.json", "utf8"), "images/zara-muse.jpg": "picture", "tools/build_site.py": "print(1)" } });
+const hub = makeGitHub({ [WR]: { "content/site.json": JSON.stringify(war), "content/pages.json": fs.readFileSync("/home/claude/world-art-review/content/pages.json", "utf8"), "image-slots.json": fs.readFileSync("/home/claude/world-art-review/image-slots.json", "utf8"), "images/zara-muse.jpg": "picture", "images/notes.txt": "x", "tools/build_site.py": "print(1)" } });
 globalThis.fetch = async (url, init = {}) => String(url).includes("/auth/v1/user") ? new Response(JSON.stringify({ email: "me@x.com" })) : hub.fetch(url, init);
 // what the copy being worked on holds, and what visitors see
 const work = () => Object.keys(hub.refs(WR)).find((n) => n.startsWith("adh/live-"));
@@ -177,5 +177,40 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   o = await over({ [site]: second }); assert.equal(o.copies.length, 2); assert.equal(o.copy, o.copies[0].id, "a deleted copy falls back to the live site");
   assert.ok(!Object.keys(hub.refs(WR)).some((n) => n.startsWith("adh-redo/")), "no leftovers");
 
+}
+
+// pages: the section list is read with its field descriptions, and saved clean
+{
+  const site = "world-art-review", call = async (b) => { const r = await handle(post({ site, ...b })); return { status: r.status, ...(await r.json()) }; };
+  const { cleanPages, cleanSettings } = await import("./home.mjs");
+  let pg = await call({ action: "pages" }); assert.equal(pg.status, 200);
+  assert.equal(pg.pages.pages.home.sections.length, 6); assert.ok(pg.kinds.hero && pg.kinds.text.starter && pg.kinds.text.library);
+  assert.deepEqual(pg.images, ["zara-muse.jpg"]); assert.equal(pg.preview, "https://worldartreview.com/");
+  assert.equal(pg.summaries["home:hero"], "Discover Artists."); assert.equal(pg.summaries["shared:header"], "3 links"); assert.equal(pg.summaries["home:featured"], "All published");
+  // an unchanged save does nothing
+  assert.equal((await call({ action: "savePages", pages: pg.pages, what: "nothing" })).unchanged, true);
+  // add a quote, hide the numbers band, move method above numbers, change a colour
+  const doc = JSON.parse(JSON.stringify(pg.pages)), secs = doc.pages.home.sections;
+  secs.splice(2, 0, { id: "quote-1", type: "quote", visible: true, settings: Object.assign({}, pg.kinds.quote.starter, { text: ["Knives,", "not brushes."], bg: "#2B2A33", fg: "bad", extra: "ignored" }) });
+  secs.find((x) => x.id === "numbers").visible = false;
+  const m = secs.findIndex((x) => x.id === "method"), n = secs.findIndex((x) => x.id === "numbers"); [secs[m], secs[n]] = [secs[n], secs[m]];
+  doc.shared.header.settings.links.push(["Guides", "#guides", "<script>"]);
+  doc.pages.home.sections[0].settings.artist = "nobody"; doc.pages.home.sections[0].settings.headline = [{ t: "See", ital: "true" }, { t: "Artists." }];
+  let r = await call({ action: "savePages", pages: doc, what: "Add section: Quote" }); assert.equal(r.status, 200); assert.equal(r.summaries["home:quote-1"], "Knives,");
+  const saved = JSON.parse(hub.read(WR, "main", "content/pages.json")), ss = saved.pages.home.sections;
+  assert.deepEqual(ss.map((x) => x.id), ["hero", "featured", "quote-1", "sections", "explainedHome", "method", "numbers"]);
+  const q = ss[2]; assert.deepEqual(q.settings.text, ["Knives,", "not brushes."]); assert.equal(q.settings.bg, "#2B2A33"); assert.equal(q.settings.fg, ""); assert.equal("extra" in q.settings, false);
+  assert.equal(ss.find((x) => x.id === "numbers").visible, false);
+  assert.deepEqual(saved.shared.header.settings.links[3], ["Guides", "#guides"]); assert.equal(saved.shared.header.settings.links.length, 4);
+  assert.equal(ss[0].settings.artist, ""); assert.deepEqual(ss[0].settings.headline[0], { t: "See", ital: true });
+  assert.equal(saved._how_to_edit, pg.pages._how_to_edit); assert.equal(saved.pages.home.title, "Home");
+  assert.equal(hub.lastMessage(WR, "main"), "Edit page: Add section: Quote (me@x.com)");
+  // refused: unknown kind, bad id, duplicate id, too long a page
+  doc.pages.home.sections.push({ id: "x", type: "carousel", settings: {} }); assert.equal((await call({ action: "savePages", pages: doc })).status, 400); doc.pages.home.sections.pop();
+  doc.pages.home.sections.push({ id: "Bad Id", type: "text", settings: {} }); assert.equal((await call({ action: "savePages", pages: doc })).status, 400); doc.pages.home.sections.pop();
+  doc.pages.home.sections.push({ id: "hero", type: "text", settings: {} }); assert.equal((await call({ action: "savePages", pages: doc })).status, 400); doc.pages.home.sections.pop();
+  // the built site accepts the saved file
+  fs.writeFileSync("/tmp/pages-saved.json", JSON.stringify(saved, null, 2));
+  assert.equal((await call({ action: "pages", site: "global-art-monitor" })).status, 400, "Global Art Monitor waits for part 2");
 }
 console.log("CONTENT CHECKS PASSED");
