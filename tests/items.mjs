@@ -47,7 +47,7 @@ const W = SITES[0];
   const withPage = JSON.parse(JSON.stringify(clean));
   withPage.pages.visit = { title: "Visit us", sections: [{ id: "text-1", type: "text", settings: { heading: ["Find us"], body: "<p>Hi</p>" } }] };
   assert.equal(cleanPages(W, withPage, cur).pages.visit.title, "Visit us");
-  withPage.pages.visit.sections.push({ id: "hero2", type: "hero", settings: {} }); assert.throws(() => cleanPages(W, withPage, cur), /only be on the home page/);
+  withPage.pages.visit.sections.push({ id: "hero2", type: "hero", settings: {} }); assert.throws(() => cleanPages(W, withPage, cur), /cannot go on a new page/);
   withPage.pages.visit.sections.pop(); withPage.pages.reviews = { title: "x", sections: [] }; assert.throws(() => cleanPages(W, withPage, cur), /web address/);
   delete withPage.pages.reviews; delete withPage.pages.home; assert.ok(cleanPages(W, withPage, cur).pages.home, "the home page cannot be removed");
 }

@@ -215,6 +215,219 @@ const WAR_LISTS = {
   guides: { label: "Exhibition Guides", start: { eyebrow: "Exhibition Guides", heading: ["What to see,", "and how to see it"], intro: "Short, practical guides to current exhibitions featuring the artists we cover." } },
 };
 
+// ----- Global Art Monitor: its sections, articles, artist market profiles and site details -----
+const G_ADDRESS = { name: 1, label: "Address", type: "text", hint: "A page on this site, such as about/ or auction-results/, or a full web address." };
+const G_LINKS = (name, label) => ({ name, label, type: "rows", fields: [{ name: 0, label: "Words", type: "text" }, G_ADDRESS] });
+const G_WORDS_HINT = "Words in curly brackets are filled in by the site: {tagline}, {headline}, {intro}, {disclosure}, {email}, {published}.";
+const G_WHICH = { name: "which", label: "Which articles", type: "which", options: [["all", "All articles"], ["tag:research", "Research"], ["tag:auction-results", "Auction results"], ["tag:market-intelligence", "Market intelligence"], ["tag:collecting-valuation", "Collecting and valuation"]], hint: "Or choose the articles one by one." };
+const GAM_SECTIONS = {
+  header: { label: "Menu bar", about: "The bar at the top of every page, and the full-screen menu.", summary: (st) => st.name || "", fields: [
+    { name: "name", label: "Site name", type: "text" }, { name: "subscribe", label: "Subscribe button words", type: "text" }, { name: "subscribe_href", label: "Subscribe button address", type: "text" },
+    { ...G_LINKS("menu_extra", "Extra links in the full-screen menu"), hint: "Shown after the main sections." }, { name: "menu_tagline", label: "Line at the foot of the menu", type: "text" },
+  ] },
+  footer: { label: "Footer", about: "The sign-up band and links at the bottom of every page.", summary: (st) => ((st.about_links || []).length + " links"), blocks: { field: "about_links", label: "Link", add: "Add a link", title: (b) => b[0] }, fields: [
+    { name: "heading", label: "Heading", type: "text" }, { name: "button", label: "Button words", type: "text" }, { name: "button_href", label: "Button address", type: "text" },
+    { name: "blurb", label: "Short description of the site", type: "long", plain: true }, G_LINKS("about_links", "Links under About"),
+    { name: "legal", label: "Small print", type: "long", plain: true, hint: "Keep {disclosure} in it: readers are told who publishes the site. " + G_WORDS_HINT },
+    { name: "legal_link", label: "Link after the small print", type: "pair", labels: ["Words", "Address"] },
+  ] },
+  hero: { label: "Opening banner", about: "The heading, introduction and latest documented result at the top of the home page.", summary: (st) => st.headline || "", blocks: { field: "buttons", label: "Button", add: "Add a button", title: (b) => b[0] }, fields: [
+    { name: "eyebrow", label: "Small line above the heading", type: "text", hint: G_WORDS_HINT }, { name: "headline", label: "Heading", type: "text", hint: G_WORDS_HINT }, { name: "lede", label: "Introduction", type: "long", plain: true, hint: G_WORDS_HINT },
+    { name: "buttons", label: "Buttons", type: "rows", fields: [{ name: 0, label: "Words", type: "text" }, G_ADDRESS, { name: 2, label: "Colour", type: "choice", options: [["mint", "Mint"], ["ink", "Charcoal"], ["blush", "Blush"]] }] },
+    { name: "result_card", label: "Show the latest result card", type: "yesno", hint: "The card shows the most recent sale with a confirmed price, counted from the sales." },
+    { name: "result_label", label: "Result card, small line", type: "text" }, { name: "result_link", label: "Result card, link words", type: "text" },
+    { name: "watermark", label: "Large background word", type: "text", group: "Look" },
+  ] },
+  status: { label: "Status line", about: "A thin line of facts with the London time.", summary: (st) => (st.items || []).join(", "), library: "A line of short facts", starter: { items: ["Independent market research"], clock: "Published in London" }, fields: [{ name: "items", label: "Facts", type: "lines" }, { name: "clock", label: "Words beside the clock", type: "text" }] },
+  timeline: { label: "Artist auction timeline", about: "One artist's sales table, drawn from the sales.", summary: (st) => st.heading || "", library: "One artist's sales, as a table", starter: { eyebrow: "Artist auction timeline", heading: "A documented market timeline", intro: "", artist: "", button: "See every documented result", button_href: "auction-results/" }, fields: [
+    { name: "eyebrow", label: "Small line above the heading", type: "text" }, { name: "heading", label: "Heading", type: "text" }, { name: "intro", label: "Introduction", type: "long", plain: true },
+    { name: "artist", label: "Whose sales", type: "artists", one: true, hint: "Leave empty for the first artist." }, { name: "button", label: "Button words", type: "text" }, { name: "button_href", label: "Button address", type: "text" },
+  ] },
+  words: { label: "Words explained", about: "Short words, each with a line and a link.", summary: (st) => ((st.words || []).length + " words"), library: "Words with a short line each", starter: { label: "Words explained", words: [{ word: "Hammer", text: "The winning bid in the room, before any fees.", href: "collecting-valuation/", style: "ink" }] }, blocks: { field: "words", label: "Word", add: "Add a word", title: (b) => b.word }, fields: [
+    { name: "label", label: "Description for screen readers", type: "text" },
+    { name: "words", label: "Words", type: "rows", fields: [{ name: "word", label: "Word", type: "text" }, { name: "text", label: "Line", type: "text" }, { name: "href", label: "Address", type: "text" }, { name: "style", label: "Colour", type: "choice", options: [["ink", "Charcoal"], ["light", "Light"], ["mint", "Mint"], ["ghost", "Outline"]] }] },
+  ] },
+  features: { label: "Article cards", about: "Cards for research articles.", summary: (st) => (Array.isArray(st.which) ? st.which.length + " chosen" : st.which === "all" ? "All articles" : String(st.which || "").replace("tag:", "").replace(/-/g, " ")), library: "Cards for research articles", starter: { eyebrow: "", heading: "Research", which: "all", numbered: false, big: 0, compact: false }, fields: [
+    { name: "eyebrow", label: "Small line above the heading", type: "text" }, { name: "heading", label: "Heading", type: "text" }, G_WHICH,
+    { name: "numbered", label: "Number the cards", type: "yesno", group: "Look" }, { name: "big", label: "How many large cards first", type: "number", group: "Look" }, { name: "compact", label: "Compact heading", type: "yesno", group: "Look" },
+  ] },
+  profiles: { label: "Artist profile cards", about: "A card for each artist with their highest documented price.", summary: (st) => ((st.artists || []).length ? (st.artists || []).length + " chosen" : "All artists"), library: "Cards for artist market profiles", starter: { heading: "Artist market profiles", artists: [], more_card: true }, fields: [
+    { name: "heading", label: "Heading", type: "text" }, { name: "artists", label: "Which artists", type: "artists", hint: "Leave all empty for every artist." }, { name: "more_card", label: "Add the More artists card", type: "yesno" },
+  ] },
+  "page-links": { label: "Where to start", about: "A row for each section of the site, from Site details.", summary: (st) => st.heading || "", library: "A row for each section of the site", starter: { heading: "Where to start" }, fields: [{ name: "heading", label: "Heading", type: "text" }] },
+  method: { label: "How we report a price", about: "The method panel. Its words are fixed, so every page says the same.", summary: () => "Method", library: "The method panel", starter: {}, fields: [] },
+  "page-head": { label: "Page heading", about: "The heading at the top of the page.", summary: (st) => st.headline || "", library: "A heading and introduction", starter: { eyebrow: "", headline: "A new page", lede: "", wide: true }, fields: [
+    { name: "eyebrow", label: "Small line above the heading", type: "text" }, { name: "headline", label: "Heading", type: "text", hint: G_WORDS_HINT },
+    { name: "lede", label: "Introduction", type: "long", plain: true, hint: "Counts can be filled in too: {lots}, {artists}, {houses}, {priced}. " + G_WORDS_HINT }, { name: "wide", label: "Wide", type: "yesno", group: "Look" },
+  ] },
+  "results-table": { label: "All auction results", about: "Every documented sale, with filters. The figures come from each artist's sales.", summary: () => "All sales", fields: [{ name: "all_artists", label: "Filter words, all artists", type: "text" }, { name: "all_houses", label: "Filter words, all houses", type: "text" }, { name: "empty", label: "When no sale matches", type: "text" }] },
+  "latest-result": { label: "Latest result", about: "The most recent sale with a confirmed price.", summary: () => "Latest result", library: "The latest documented result", starter: { eyebrow: "Latest documented result", text: "", button: "Open the full timeline" }, fields: [{ name: "eyebrow", label: "Small line", type: "text" }, { name: "text", label: "Text", type: "long", plain: true }, { name: "button", label: "Button words", type: "text" }] },
+  glossary: { label: "Glossary", about: "The auction terms. Change the terms themselves in Site details.", summary: (st) => st.heading || "", library: "The glossary of auction terms", starter: { heading: "Auction terms, in plain words" }, fields: [{ name: "heading", label: "Heading", type: "text" }] },
+  panel: { label: "Panel", about: "A dark panel with a heading and a few words.", summary: (st) => st.heading || "", library: "A heading and a few words, in a dark panel", starter: { heading: "A heading", text: "A few words." }, fields: [{ name: "heading", label: "Heading", type: "text" }, { name: "text", label: "Text", type: "long", plain: true }] },
+  prose: { label: "Text", about: "Longer text with a side column.", summary: () => "Text", library: "Longer text with a side column", starter: { html: "<h2>A heading</h2>\n<p>Write here.</p>", aside: "" }, fields: [{ name: "html", label: "Text", type: "long", hint: G_WORDS_HINT }, { name: "aside", label: "Side column", type: "long" }] },
+  "contact-form": { label: "Contact form", about: "The form that opens an email to the research desk.", summary: () => "Form", fields: [
+    { name: "html", label: "The form, as it is written for the page", type: "long", plain: true, hint: "Change the words carefully and keep the form's parts as they are. {email} is the contact address." },
+    { name: "aside", label: "Side column, as it is written for the page", type: "long", plain: true },
+  ] },
+};
+const G_SALE_FIELDS = [
+  { name: "title", label: "Title of the work", type: "text" }, { name: "year", label: "Year made", type: "text" },
+  { name: "date", label: "Sale date, as year-month-day", type: "text", nullable: true, hint: "Such as 2025-03-18. Leave empty if not known yet." }, { name: "date_text", label: "Sale date in words", type: "text", hint: "Such as 18 March 2025." },
+  { name: "house", label: "Auction house", type: "text" }, { name: "sale", label: "Sale title and city", type: "text" }, { name: "lot", label: "Lot number", type: "text" },
+  { name: "medium", label: "Medium, edition and size", type: "text" },
+  { name: "currency", label: "Currency of the sale", type: "choice", options: [["GBP", "GBP, pounds"], ["USD", "USD, US dollars"], ["EUR", "EUR, euros"], ["HKD", "HKD, Hong Kong dollars"], ["CHF", "CHF, Swiss francs"]], hint: "Figures stay in the currency of the sale. Never convert them." },
+  { name: "est_low", label: "Low estimate", type: "number", nullable: true, hint: "Leave empty if not known. The site says To confirm." },
+  { name: "est_high", label: "High estimate", type: "number", nullable: true },
+  { name: "hammer", label: "Hammer price", type: "number", nullable: true, hint: "The winning bid, before fees. Leave empty if not known." },
+  { name: "hammer_basis", label: "Hammer price comes from", type: "choice", options: [["published", "The house or a database states it"], ["calculated", "Worked back from the total"]] },
+  { name: "premium", label: "Price with buyer's premium", type: "number", nullable: true },
+  { name: "source_label", label: "Source name", type: "text", hint: "The lot page or a named database. Every sale needs one." }, { name: "source_url", label: "Source link", type: "text" },
+  { name: "source2_label", label: "Second source name", type: "text" }, { name: "source2_url", label: "Second source link", type: "text" },
+];
+const GAM_ITEMS = {
+  article: { label: "Article", parts: [
+    { id: "words", label: "Title and summary", about: "The heading of the article and how it is listed.", fields: [
+      { name: "title", label: "Title", type: "text" }, { name: "kicker", label: "Label above the title", type: "text", hint: "Such as Auction results or Analysis." },
+      { name: "standfirst", label: "Summary line", type: "long", plain: true, hint: "Shown on the article's card." },
+      { name: "description", label: "Description for search engines", type: "long", plain: true, hint: "One or two sentences. Not shown on the page." },
+      { name: "tags", label: "Shown in", type: "checks", options: [["research", "Research"], ["auction-results", "Auction results"], ["market-intelligence", "Market intelligence"], ["collecting-valuation", "Collecting and valuation"]] },
+      { name: "mins", label: "Reading time, minutes", type: "number" },
+    ] },
+    { id: "body", label: "Body", about: "The text of the article. An artist's sales table can sit inside it.", fields: [{ name: "body", label: "Text", type: "long", hint: "Type as you would in a document. The grey boxes are an artist's sales table, drawn from the sales." }] },
+    { id: "settings", label: "Settings", about: "Whether visitors can see the article.", fields: [{ name: "hidden", label: "Hidden from the site", type: "yesno", hint: "A hidden article is kept but not shown or listed. New articles start hidden." }] },
+  ] },
+  artist: { label: "Artist market profile", parts: [
+    { id: "words", label: "Words", about: "The name and the lines about the artist.", fields: [
+      { name: "name", label: "Name", type: "text" }, { name: "line", label: "Short line", type: "text", hint: "Such as British, born 1971. Painter." },
+      { name: "summary", label: "Opening paragraph", type: "long", plain: true }, { name: "houses", label: "Auction houses", type: "lines", hint: "One per line, shown as chips." },
+    ] },
+    { id: "picture", label: "Picture", about: "The picture beside About the artist.", fields: [
+      { name: "image", label: "Picture", type: "image", alt: "alt" }, { name: "alt", label: "Describe the picture", type: "text", hint: "Read aloud to people who cannot see it." }, { name: "caption", label: "Caption", type: "text" },
+    ] },
+    { id: "sales", label: "Sales", about: "Every public sale, with each figure in its own field. An empty figure shows as To confirm.", fields: [{ name: "sales", label: "Sales", type: "rows", fields: G_SALE_FIELDS }], blocks: { field: "sales", label: "Sale", add: "Add a sale" } },
+    { id: "about", label: "About the artist", about: "The paragraphs and the background sources.", fields: [
+      { name: "body", label: "Paragraphs", type: "lines", hint: "One paragraph per line." },
+      { name: "sources", label: "Background sources", type: "rows", fields: [{ name: 0, label: "Name", type: "text" }, { name: 1, label: "Link", type: "text" }] },
+    ] },
+  ] },
+  site: { label: "Site details", parts: [
+    { id: "details", label: "Details", about: "The site's name and the words used across it.", fields: [
+      { name: "site.name", label: "Site name", type: "text" }, { name: "site.tagline", label: "Tagline", type: "text" }, { name: "site.headline", label: "Headline", type: "text" },
+      { name: "site.intro", label: "Introduction", type: "long", plain: true }, { name: "site.email", label: "Contact email", type: "text" },
+      { name: "site.disclosure", label: "Who publishes the site", type: "long", plain: true, hint: "Readers are told that Artiscope sells work by the artists covered. This must stay." },
+    ] },
+    { id: "sections", label: "Sections", about: "The main sections in the menu bar. Their pages stay where they are.", fields: [{ name: "sections", label: "Sections", type: "rows", fixed: true, fields: [{ name: 1, label: "Name", type: "text" }, { name: 2, label: "Description", type: "text" }] }] },
+    { id: "glossary", label: "Glossary", about: "The auction terms on Collecting and Valuation.", fields: [{ name: "glossary", label: "Terms", type: "rows", fields: [{ name: 0, label: "Term", type: "text" }, { name: 1, label: "Meaning", type: "long", plain: true }] }], blocks: { field: "glossary", label: "Term", add: "Add a term" } },
+  ] },
+};
+const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp"];
+// The site's data as one object for the editor, matching assets/render.js on the site.
+export function gamForEditor(content, sales, images, imageFiles) {
+  images = images || {}; imageFiles = imageFiles || [];
+  const artists = Object.keys(sales.artists || {}).map((slug) => {
+    const a = sales.artists[slug], bio = (content.bios || {})[slug] || {}, note = images[slug] || {};
+    let image = "";
+    if ("file" in note) image = note.file && imageFiles.includes(note.file) ? note.file : "";
+    else image = (IMAGE_EXTS.map((e) => slug + "." + e).find((n) => imageFiles.includes(n))) || "";
+    return { slug, name: a.name, line: a.line || "", houses: [...(a.houses || [])], summary: bio.summary || "", body: [...(bio.body || [])], sources: (bio.sources || []).map((x) => [...x]),
+      image, alt: note.alt || "", caption: note.caption || "", sales: (sales.sales || []).filter((x) => x.artist === slug).map((x, i) => ({ ...x, _i: i })) };
+  });
+  return { published: content.published, published_text: content.published_text, site: { ...(content.site || {}) }, sections: (content.sections || []).map((x) => [...x]),
+    glossary: (content.glossary || []).map((x) => [...x]), articles: (content.features || []).map((f) => ({ ...f })), artists };
+}
+// Only the fields that really changed are written; everything else keeps its exact form.
+function keepOrClean(f, cur, given, ctx) { const a = cleanField(f, cur, ctx), b = cleanField(f, given, ctx); return canon(a) === canon(b) ? { same: true, v: cur } : { same: false, v: b }; }
+function cleanSale(g, cur, slug, ctx) {
+  const out = cur ? JSON.parse(JSON.stringify(cur)) : { artist: slug };
+  let changed = !cur;
+  for (const f of G_SALE_FIELDS) { const r = keepOrClean(f, cur ? cur[f.name] : undefined, g ? g[f.name] : undefined, ctx); if (!r.same || !cur) { out[f.name] = r.same && cur ? cur[f.name] : cleanField(f, g ? g[f.name] : undefined, ctx); changed = changed || !r.same; } }
+  out.artist = slug;
+  const name = out.title || "a sale";
+  if (out.date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(out.date))) throw new Error("The sale date of " + name + " must be written as year-month-day, such as 2025-03-18, or left empty.");
+  for (const k of ["est_low", "est_high", "hammer", "premium"]) if (out[k] !== null && !(out[k] >= 0)) throw new Error("The figures of " + name + " must be numbers of 0 or more, or left empty.");
+  if (out.est_low !== null && out.est_high !== null && out.est_low > out.est_high) throw new Error("The low estimate of " + name + " is higher than its high estimate.");
+  if (!String(out.source_label || "").trim() || !/^https?:\/\//i.test(String(out.source_url || ""))) throw new Error("Every sale needs a source: the lot page or a named database, with its link starting https://. " + name + " has none yet.");
+  if (out.source2_url && !/^https?:\/\//i.test(String(out.source2_url))) throw new Error("The second source link of " + name + " must start https://");
+  return { sale: out, changed };
+}
+// Turns the edited object back into the three data files. Throws with a plain reason.
+export function gamFromEditor(kinds, given, content, sales, images, imageFiles) {
+  if (!given || typeof given !== "object") throw new Error("The content could not be read.");
+  const c = JSON.parse(JSON.stringify(content)), s = JSON.parse(JSON.stringify(sales)), im = JSON.parse(JSON.stringify(images || {})), changed = [];
+  const ga = Array.isArray(given.articles) ? given.articles : content.features || [], gr = Array.isArray(given.artists) ? given.artists : [];
+  const ctx = { artists: gr.map((a) => ({ slug: String((a && a.slug) || "") })), articleSlugs: ga.map((a) => String((a && a.slug) || "")) };
+  // site details, sections and glossary
+  const siteKind = kinds.site.parts;
+  let siteChanged = false;
+  for (const f of siteKind[0].fields) {
+    const k = f.name.slice(5), r = keepOrClean(f, (content.site || {})[k], (given.site || {})[k], ctx);
+    if (!r.same) { c.site[k] = r.v; siteChanged = true; }
+  }
+  if (!String(c.site.disclosure || "").trim()) throw new Error("The words saying who publishes the site must stay. Readers are told that Artiscope sells work by the artists covered.");
+  if (c.site.email && !/^[^\s@<>]+@[^\s@<>]+\.[a-z]{2,}$/i.test(c.site.email)) throw new Error("The contact email does not look right.");
+  const gs = Array.isArray(given.sections) ? given.sections : content.sections || [];
+  if (gs.length !== (content.sections || []).length) throw new Error("The list of sections is fixed, because each has its own page. Change their names and descriptions only.");
+  const secs = (content.sections || []).map((row, i) => [row[0], cleanText((gs[i] || [])[1], 80) || row[1], cleanText((gs[i] || [])[2], 200)]);
+  if (canon(secs) !== canon(content.sections || [])) { c.sections = secs; siteChanged = true; }
+  const gloss = kinds.site.parts[2].fields[0], gr2 = keepOrClean(gloss, content.glossary || [], given.glossary, ctx);
+  if (!gr2.same) { c.glossary = gr2.v.filter((x) => String(x[0]).trim()); siteChanged = true; }
+  if (siteChanged) changed.push("Edit site details");
+  // articles
+  const curA = content.features || [], seen = new Set(), feats = [];
+  for (const g of ga) {
+    const slug = String((g && g.slug) || ""), cur = curA.find((x) => x.slug === slug);
+    if (seen.has(slug)) throw new Error("Two articles have the same web address.");
+    seen.add(slug);
+    if (!cur && !SLUG.test(slug)) throw new Error("A new article needs a web address of letters, digits and hyphens.");
+    const base = cur || { slug, title: String((g && g.title) || "New article"), kicker: "Research", tags: ["research"], mins: 5, standfirst: "", body: "<p>Write here.</p>", description: "", hidden: true };
+    const next = cleanItem(kinds.article, cur ? g : { ...base, ...g }, base, ctx);
+    if (!String(next.title || "").trim()) throw new Error("Every article needs a title.");
+    if (next.hidden === false && !(cur && "hidden" in cur)) delete next.hidden;
+    if (!cur) changed.push("Add article: " + next.title); else if (canon(next) !== canon(cur)) changed.push((cur.hidden === true && next.hidden !== true ? "Show article: " : next.hidden === true && cur.hidden !== true ? "Hide article: " : "Edit article: ") + next.title);
+    feats.push(next);
+  }
+  for (const cur of curA) if (!seen.has(cur.slug)) changed.push("Delete article: " + cur.title);
+  c.features = feats;
+  // artists, with their sales
+  const curSlugs = Object.keys(sales.artists || {}), seenR = new Set(), allSales = [], artistsOut = {}, wasAll = gamForEditor(content, sales, images, imageFiles || []);
+  const wordFields = kinds.artist.parts[0].fields, picFields = kinds.artist.parts[1].fields, aboutFields = kinds.artist.parts[3].fields;
+  for (const g of gr) {
+    const slug = String((g && g.slug) || ""), isNew = !curSlugs.includes(slug);
+    if (seenR.has(slug)) throw new Error("Two artists have the same web address.");
+    seenR.add(slug);
+    if (isNew && !SLUG.test(slug)) throw new Error("A new artist needs a web address of letters, digits and hyphens.");
+    const was = isNew ? { slug, name: "", line: "", houses: [], summary: "", body: [], sources: [], image: "", alt: "", caption: "", sales: [] } : wasAll.artists.find((a) => a.slug === slug);
+    let touched = isNew;
+    const a = { ...((sales.artists || {})[slug] || {}) }, bio = { ...((content.bios || {})[slug] || {}) };
+    for (const f of wordFields) { const r = keepOrClean(f, was[f.name], g[f.name], ctx); if (!r.same || isNew) { touched = touched || !r.same; const v = r.same ? was[f.name] : r.v; if (f.name === "summary") bio.summary = v; else a[f.name] = v; } }
+    if (!String(a.name || "").trim()) throw new Error("Every artist needs a name.");
+    for (const f of aboutFields) { const r = keepOrClean(f, was[f.name], g[f.name], ctx); if (!r.same || isNew) { touched = touched || !r.same; bio[f.name] = r.same ? was[f.name] : r.v; } }
+    for (const row of bio.sources || []) if (row[1] && !/^https?:\/\//i.test(row[1])) throw new Error("Background source links must start https://");
+    artistsOut[slug] = a; if (!c.bios) c.bios = {}; c.bios[slug] = bio;
+    // the picture: a file in assets/images, its description and caption
+    const note = { ...(im[slug] || {}) }, pic = {};
+    for (const f of picFields) pic[f.name] = cleanField(f, g[f.name], ctx);
+    if (canon(pic.alt) !== canon(was.alt) || canon(pic.caption) !== canon(was.caption) || pic.image !== was.image) {
+      note.alt = pic.alt; note.caption = pic.caption;
+      if (pic.image !== was.image) note.file = pic.image;
+      im[slug] = note; touched = true;
+    }
+    // sales: unchanged rows keep their exact form
+    const curSales = (sales.sales || []).filter((x) => x.artist === slug), gsales = Array.isArray(g.sales) ? g.sales : [];
+    if (gsales.length > 200) throw new Error("An artist can have up to 200 sales here.");
+    const rows = gsales.map((x) => cleanSale(x, x && x._i != null && curSales[Number(x._i)] ? curSales[Number(x._i)] : null, slug, ctx));
+    if (rows.some((r) => r.changed) || rows.length !== curSales.length || rows.some((r, i) => r.sale !== curSales[i] && canon(r.sale) !== canon(curSales[i]))) touched = true;
+    rows.forEach((r) => { delete r.sale._i; allSales.push(r.sale); });
+    if (isNew) changed.push("Add artist: " + a.name); else if (touched) changed.push("Edit profile: " + a.name);
+  }
+  for (const slug of curSlugs) if (!seenR.has(slug)) throw new Error("Artists cannot be removed here.");
+  s.artists = artistsOut; s.sales = allSales;
+  return { content: c, sales: s, images: im, changed };
+}
+export function gamSpots(content, sales, images, imageFiles) {
+  return gamForEditor(content, sales, images, imageFiles).artists.map((a) => ({ key: "artist:" + a.slug, kind: "artist", label: a.name, group: "Artists", also: a.name + "'s market profile", image: a.image, alt: a.alt, credit: a.caption, slot: "artist-" + a.slug, hasCredit: true }));
+}
+
 function cleanField(f, v, site) {
   const t = f.type;
   if (t === "text") {
@@ -226,7 +439,13 @@ function cleanField(f, v, site) {
   if (t === "sources") { const ok = site.sourceIds || []; return [...new Set((Array.isArray(v) ? v : []).map(String))].filter((x) => ok.includes(x)).slice(0, 40); }
   if (t === "articles") { const ok = site.articleSlugs || []; return [...new Set((Array.isArray(v) ? v : []).map(String))].filter((x) => ok.includes(x.replace(/^a-/, ""))).map((x) => "a-" + x.replace(/^a-/, "")).slice(0, 12); }
   if (t === "lines") return (Array.isArray(v) ? v : String(v == null ? "" : v).split(/\n\s*\n/)).map((x) => String(x).trim()).filter(Boolean).slice(0, 40);
-  if (t === "number") { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+  if (t === "number") { if (f.nullable && (v === "" || v === null || v === undefined)) return null; const n = Number(v); return Number.isFinite(n) ? n : f.nullable ? null : 0; }
+  if (t === "pair") { const x = Array.isArray(v) ? v : []; return [cleanText(x[0], 200), String(x[1] == null ? "" : x[1]).replace(/[<>"\s]/g, "").slice(0, 300)]; }
+  if (t === "checks") { const ok = f.options.map((o) => o[0]); return (Array.isArray(v) ? v : []).map(String).filter((x, i, a) => ok.includes(x) && a.indexOf(x) === i); }
+  if (t === "which") {
+    if (Array.isArray(v)) { const ok = site.articleSlugs || []; return v.map(String).filter((x, i, a) => ok.includes(x) && a.indexOf(x) === i).slice(0, 24); }
+    const ok = f.options.map((o) => o[0]); return ok.includes(String(v)) ? String(v) : ok[0];
+  }
   if (t === "yesno") return v === true || v === "true";
   if (t === "choice") { const ok = f.options.map((o) => o[0]); return ok.includes(String(v == null ? "" : v)) ? String(v) : ok[0]; }
   if (t === "colour") { const x = String(v == null ? "" : v).trim(); const themeOk = (f.theme || []).map((o) => o[0]); return themeOk.includes(x) ? x : (/^#[0-9a-fA-F]{6}$/.test(x) ? x.toUpperCase() : (themeOk[0] || "")); }
@@ -460,15 +679,18 @@ export function cleanPages(site, given, current) {
     const seen = new Set(), sections = [];
     for (const sec of list) {
       if (!sec || typeof sec !== "object" || !spec[sec.type]) throw new Error("One of the sections is of a kind this site cannot draw.");
-      if (key !== "home" && !spec[sec.type].library) throw new Error("The " + spec[sec.type].label + " section can only be on the home page.");
+      if (!cur && !spec[sec.type].library) throw new Error("The " + spec[sec.type].label + " section cannot go on a new page.");
       const id = String(sec.id || "");
       if (!SECTION_ID.test(id) || seen.has(id)) throw new Error("Every section needs its own short name.");
       seen.add(id);
       sections.push({ id, type: sec.type, visible: sec.visible !== false, settings: cleanSettings(spec[sec.type], sec.settings, site) });
     }
-    const title = cleanText(g && g.title, 60) || (cur && cur.title) || "";
+    const title = cleanText(g && g.title, site.gam ? 120 : 60) || (cur && cur.title) || "";
     if (!title) throw new Error("Every page needs a title.");
-    out.pages[key] = { ...(cur || {}), title, sections };
+    if (site.gam) {
+      const base = cur || { path: key + "/index.html", title, description: "", current: "", intro: false };
+      out.pages[key] = { ...base, title, description: cleanText(g && g.description != null ? g.description : base.description, 300), sections };
+    } else out.pages[key] = { ...(cur || {}), title, sections };
   }
   // the heading and introduction of each list page
   if (site.lists) {
@@ -481,7 +703,7 @@ export function cleanPages(site, given, current) {
   return out;
 }
 const PAGE_KEY = /^[a-z][a-z0-9-]{0,40}$/;
-const RESERVED = ["home", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search"];
+const RESERVED = ["home", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search", "assets", "data", "tools", "inbox", "preview", "auction-results", "market-intelligence", "collecting-valuation", "about", "contact"];
 // What the console needs to draw the editor: each kind's label, fields and starter.
 function kindsFor(site) {
   const out = {};
@@ -555,7 +777,10 @@ export const SITES = [
       { slug: "zara-muse", name: "Zara Muse" },
       { slug: "konn-artiss", name: "Konn Artiss" },
     ],
-    pages: { file: "data/pages.json" },
+    pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
+    sectionKinds: GAM_SECTIONS,
+    items: GAM_ITEMS,
+    gam: true,
     theme: {
       file: "data/theme.json",
       colours: [
@@ -1263,6 +1488,19 @@ export async function handle(req) {
     return null;
   }
   const failed = (e) => json({ error: e.message || "GitHub did not save the change. Please try again." }, e.status || 502);
+  // Global Art Monitor keeps its words, sales and picture notes in three files.
+  async function loadGam() {
+    const [content, sales, images, listing] = await Promise.all([loadJson("data/content.json"), loadJson("data/sales.json"), loadJson("data/images.json"),
+      gh(repoPath + "/contents/assets/images?ref=" + encodeURIComponent(ref))]);
+    if (!content || !sales) return null;
+    const imageFiles = Array.isArray(listing.data) ? listing.data.filter((x) => x.type === "file").map((x) => x.name) : [];
+    return { content: content.data, sales: sales.data, images: images ? images.data : {}, imageFiles };
+  }
+  // What the page fields may refer to: the artists and articles as they are now.
+  function pageCtx(editorData) {
+    if (!editorData) return site;
+    return { ...site, artists: (editorData.artists || []).map((a) => ({ slug: a.slug, name: a.name })), articleSlugs: (editorData.articles || []).map((a) => a.slug) };
+  }
 
   if (action === "pages" || action === "savePages") {
     const ps = site.pages;
@@ -1270,6 +1508,10 @@ export async function handle(req) {
     const f = await loadJson(ps.file);
     if (!f) return json({ error: "The page list could not be read." }, 502);
     const c = ps.content ? await loadJson(ps.content) : null;
+    const gamNow = site.gam ? await loadGam() : null;
+    if (site.gam && !gamNow) return json({ error: "The site's words and sales could not be read." }, 502);
+    const editorNow = site.gam ? gamForEditor(gamNow.content, gamNow.sales, gamNow.images, gamNow.imageFiles) : c && site.items ? siteForEditor(c.data) : null;
+    const pctx = pageCtx(editorNow);
     if (action === "pages") {
       const [imgs, meta] = await Promise.all([
         gh("/repos/" + site.repo + "/contents/" + ps.images + "?ref=" + encodeURIComponent(ref)),
@@ -1279,13 +1521,16 @@ export async function handle(req) {
       const preview = copy.kind === "trial" ? copy.preview : "https://" + site.domain + "/";
       const pictures = c ? pictureSpots(c.data).filter((x) => x.kind !== "work").map(publicSpot) : [];
       const imageMeta = meta && meta.data && meta.data.files && typeof meta.data.files === "object" ? meta.data.files : {};
-      let doc = f.data; try { doc = cleanPages(site, f.data, f.data); } catch (_e) { /* shown as it is */ }
-      const extra = site.items && c ? { site: siteForEditor(c.data), itemKinds: site.items, lists: Object.fromEntries(Object.entries(site.lists || {}).map(([k, l]) => [k, { label: l.label, section: l.section || "" }])), listFields: LIST_FIELDS } : {};
-      return json({ pages: doc, kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: c && site.items ? (c.data.artists || []).map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, ...extra });
+      let doc = f.data; try { doc = cleanPages(pctx, f.data, f.data); } catch (_e) { /* shown as it is */ }
+      const extra = editorNow ? { site: editorNow, itemKinds: site.items, lists: Object.fromEntries(Object.entries(site.lists || {}).map(([k, l]) => [k, { label: l.label, section: l.section || "" }])), listFields: LIST_FIELDS, gam: !!site.gam,
+        pageFields: site.gam ? [{ name: "title", label: "Title in the browser tab and search results", type: "text" }, { name: "description", label: "Description for search engines", type: "long", plain: true, hint: "One or two sentences. Not shown on the page." }] : null } : {};
+      return json({ pages: doc, kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, ...extra });
     }
+    // the page fields may refer to artists and articles added in this same save
+    const sctx = body.content && typeof body.content === "object" ? pageCtx(body.content) : pctx;
     let next;
-    try { next = cleanPages(site, body.pages, f.data); } catch (e) { return json({ error: e.message }, 400); }
-    let was; try { was = cleanPages(site, f.data, f.data); } catch (_e) { was = f.data; }
+    try { next = cleanPages(sctx, body.pages, f.data); } catch (e) { return json({ error: e.message }, 400); }
+    let was; try { was = cleanPages(sctx, f.data, f.data); } catch (_e) { was = f.data; }
     const what = cleanText(body.what, 80) || "Edit page";
     const uploads = Array.isArray(body.uploads) ? body.uploads.slice(0, 12) : [];
     const pics = body.pictures && typeof body.pictures === "object" && !Array.isArray(body.pictures) ? body.pictures : {};
@@ -1298,7 +1543,7 @@ export async function handle(req) {
       if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save the page. Please try again.") }, 502);
       return json({ ok: true, summaries: summariesFor(site, next) });
     }
-    if (hasPics && !c) return json({ error: "The pictures of this site could not be read." }, 502);
+    if (hasPics && !c && !site.gam) return json({ error: "The pictures of this site could not be read." }, 502);
     // New photos, shared pictures and the page go in together, as one step that one Undo takes back.
     const tree = [], renamed = {};
     try {
@@ -1313,20 +1558,26 @@ export async function handle(req) {
     // point everything at the photos' final names
     const fix = (v) => { if (Array.isArray(v)) return v.map(fix); if (v && typeof v === "object") { const o = {}; for (const k of Object.keys(v)) o[k] = fix(v[k]); return o; } return typeof v === "string" && renamed[v] ? renamed[v] : v; };
     let withPhotos, picsFixed = fix(pics), res = { done: [], slotsChanged: false };
-    try { withPhotos = cleanPages(site, fix(body.pages), f.data); } catch (e) { return json({ error: e.message }, 400); }
+    try { withPhotos = cleanPages(sctx, fix(body.pages), f.data); } catch (e) { return json({ error: e.message }, 400); }
     const slots = hasPics ? await loadJson("image-slots.json") : null;
-    let items = { changed: [] };
-    if (hasSite) {
+    let items = { changed: [] }; const gamFiles = [];
+    if (hasSite && site.gam) {
+      let r; try { r = gamFromEditor(site.items, fix(body.content), gamNow.content, gamNow.sales, gamNow.images, gamNow.imageFiles.concat(Object.values(renamed))); } catch (e) { return json({ error: e.message }, 400); }
+      items = { changed: r.changed };
+      for (const [path, data, cur] of [["data/content.json", r.content, gamNow.content], ["data/sales.json", r.sales, gamNow.sales], ["data/images.json", r.images, gamNow.images]]) if (canon(data) !== canon(cur)) gamFiles.push([path, data]);
+      if (!gamFiles.length) items.changed = [];
+    } else if (hasSite) {
       try { items = cleanSite(site.items, fix(body.content), c.data); } catch (e) { return json({ error: e.message }, 400); }
       if (items.changed.length) { c.data = items.data; if (slots) keepSlots(slots.data, c.data); }
     }
-    if (hasPics) { try { res = applyPictures(c.data, picsFixed, slots ? slots.data : null); } catch (e) { return json({ error: e.message }, 400); } }
+    if (hasPics && c && Object.keys(pics).length) { try { res = applyPictures(c.data, picsFixed, slots ? slots.data : null); } catch (e) { return json({ error: e.message }, 400); } }
     if (items.changed.length) res.done = res.done.concat(items.changed);
     if (!uploads.length && !res.done.length && canon(withPhotos) === canon(was)) return json({ ok: true, unchanged: true });
     try {
       if (canon(withPhotos) !== canon(was)) await textBlob(tree, ps.file, withPhotos);
-      if (res.done.length) await textBlob(tree, ps.content, c.data);
-      if ((res.slotsChanged || items.changed.length) && slots) await textBlob(tree, "image-slots.json", slots.data);
+      if (res.done.length && c && !site.gam) await textBlob(tree, ps.content, c.data);
+      for (const [path, data] of gamFiles) await textBlob(tree, path, data);
+      if ((res.slotsChanged || items.changed.length) && slots && !site.gam) await textBlob(tree, "image-slots.json", slots.data);
       // a new photo keeps the description it was given, for next time it is chosen
       if (uploads.length && ps.meta) {
         const m = await loadJson(ps.meta);
@@ -1336,7 +1587,7 @@ export async function handle(req) {
         for (const name of Object.values(renamed)) {
           let alt = "", caption = "";
           const find = (x) => { if (Array.isArray(x)) return x.forEach(find); if (!x || typeof x !== "object") return; if (!alt && Object.keys(x).some((k) => k !== "alt" && x[k] === name) && x.alt) { alt = cleanText(x.alt, 240); caption = cleanText(x.caption, 160); } Object.values(x).forEach(find); };
-          find(withPhotos); find(picsFixed);
+          find(withPhotos); find(picsFixed); if (hasSite) find(fix(body.content));
           if (alt) { doc.files[name] = { alt, caption }; wrote = true; }
         }
         if (wrote) await textBlob(tree, ps.meta, doc);
@@ -1363,7 +1614,8 @@ export async function handle(req) {
     if (!metaDoc.files || typeof metaDoc.files !== "object") metaDoc.files = {};
     const meta = metaDoc.files, kinds = site.sectionKinds || {};
     const pagesDoc = pf ? pf.data : { shared: {}, pages: {} };
-    const spots = cf ? pictureSpots(cf.data) : [];
+    const gamNow = site.gam ? await loadGam() : null;
+    const spots = gamNow ? gamSpots(gamNow.content, gamNow.sales, gamNow.images, gamNow.imageFiles) : cf ? pictureSpots(cf.data) : [];
     if (action === "files") {
       const preview = copy.kind === "trial" ? copy.preview : "https://" + site.domain + "/";
       return json({
@@ -1407,6 +1659,15 @@ export async function handle(req) {
           tree.push({ path: ps.images + "/" + name, mode: "100644", type: "blob", sha: null });
           if (meta[name]) { delete meta[name]; await textBlob(tree, ps.meta, metaDoc); }
           message = "Remove photo: " + name;
+        } else if (op === "assign" && gamNow) {
+          const sp = spots.find((x) => x.key === String(body.spot || ""));
+          if (!sp) return json({ error: "That place is no longer on the site. Refresh and try again." }, 409);
+          const alt = cleanText(body.alt, 240) || (meta[name] || {}).alt || "";
+          if (!alt) return json({ error: "Please describe the picture first. It is read out to people who cannot see it." }, 400);
+          const im = JSON.parse(JSON.stringify(gamNow.images || {})), slug = sp.key.slice(7);
+          im[slug] = { ...(im[slug] || {}), alt, file: name };
+          await textBlob(tree, "data/images.json", im);
+          message = "Edit picture: " + sp.label;
         } else if (op === "assign") {
           if (!cf) return json({ error: "The pictures of this site could not be read." }, 502);
           const sp = spots.find((x) => x.key === String(body.spot || ""));

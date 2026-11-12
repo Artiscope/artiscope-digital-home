@@ -211,7 +211,6 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   doc.pages.home.sections.push({ id: "hero", type: "text", settings: {} }); assert.equal((await call({ action: "savePages", pages: doc })).status, 400); doc.pages.home.sections.pop();
   // the built site accepts the saved file
   fs.writeFileSync("/tmp/pages-saved.json", JSON.stringify(saved, null, 2));
-  assert.equal((await call({ action: "pages", site: "global-art-monitor" })).status, 400, "Global Art Monitor waits for part 2");
 }
 
 // photos sent with a page are saved with it, as one step

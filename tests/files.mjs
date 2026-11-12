@@ -114,9 +114,7 @@ const site = () => JSON.parse(hub.read(WR, "main", "content/site.json"));
   // undo brings it back, description and all
   assert.equal((await call({ action: "undoStep" })).ok, true);
   assert.equal(hub.read(WR, "main", "images/unused.jpg"), "unused"); assert.equal(JSON.parse(hub.read(WR, "main", "content/files.json")).files["unused.jpg"].alt, "Not used");
-  // Global Art Monitor keeps Photos for now
-  assert.equal((await handle(post({ site: "global-art-monitor", action: "files" }))).status, 400);
   const o = await (await handle(post({ action: "overview" }))).json();
-  assert.equal(o.sites[0].files, true); assert.equal(o.sites[1].files, false);
+  assert.equal(o.sites[0].files, true); assert.equal(o.sites[1].files, true); assert.equal(o.sites[1].edits, true);
 }
 console.log("FILES CHECKS PASSED");

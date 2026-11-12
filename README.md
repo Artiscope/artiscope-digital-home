@@ -23,16 +23,16 @@ without opening GitHub or touching code.
 | Screen | What you can do |
 |---|---|
 | Home | Choose the site to work on and see it at a glance |
-| Content | Edit, hide or delete articles, artworks, sales and more (Global Art Monitor; on World Art Review everything is edited in Pages) |
+| Content | Retired on both live sites: everything it did is in Pages. Kept for sites not yet in the page editor |
 | Pages | Edit every section of the page beside the real page, with its pictures |
 | Theme | Colours and typefaces |
 | Files | Every photo on the site: upload, describe, see where each is used, replace everywhere, delete when unused, fill places with no picture (World Art Review) |
-| Photos | Add photos to exact spots (Global Art Monitor, until it moves to Files) |
+| Photos | Add photos to exact spots. Kept for sites not yet using Files |
 | History | See every change and undo the ones made here |
 | Sites | See all five sites and their status |
 
-Still to come: Global Art Monitor in the page editor, the code screen,
-payments, and creating new sites from a template.
+Still to come: the code screen, payments, and creating new sites from a
+template.
 
 ## Sample mode
 
@@ -81,6 +81,8 @@ Opening a site goes to the page editor: the sections of the page on the left, th
 Pictures that belong to an artist or an article (kept in `content/site.json`) are listed under the section that shows them, marked Shared. A change there is saved to `content/site.json` in the same step as the page, so one Undo takes both back. The opening banner can also have a picture of its own. Descriptions given to photos are kept in `content/files.json` and offered whenever that photo is chosen again. Server checks: `node tests/files.mjs`. Browser test: `node tests/files-ui.mjs`.
 
 Every page of World Art Review opens in the editor. Links in the preview go to the page they point at (hold Alt to pick a link instead), and the picker at the top lists every page, list, article and portfolio. Articles, portfolios and sources are described part by part on the server (`WAR_ITEMS`) and saved to `content/site.json` with the page in one step; only fields that really changed are rewritten. List headings live in `content/pages.json` under `lists`, and pages made in the console under `pages`. New articles start hidden and new portfolios unpublished. Server checks: `node tests/items.mjs`. Browser test: `node tests/edit-pages.mjs`.
+
+Global Art Monitor is a site of separate pages. They are drawn by `assets/render.js` on that site, which both its build (`tools/build.mjs`, run by `python3 tools/build.py`) and the editor's preview use, so the preview is the published page. In the editor its articles, artist market profiles (with every sale, each figure in its own field, an empty figure shown as To confirm) and site details are described on the server (`GAM_ITEMS`) and turned back into `data/content.json`, `data/sales.json` and `data/images.json` on Save. Server checks: `node tests/gam.mjs`. Browser test: `node tests/gam-ui.mjs`.
 
 ## Deploying the server function
 
