@@ -10,6 +10,67 @@
 // request itself, so its "Verify JWT" setting is switched off.
 
 // One entry per website. To add a site, add an entry and redeploy.
+// ---------- theme: colours and typefaces ----------
+
+// The typefaces the console offers, each with the exact request Google
+// Fonts needs for it. A short list on purpose.
+export const FONTS = {
+  "Castoro": "Castoro:ital@0;1",
+  "Libre Caslon Display": "Libre+Caslon+Display",
+  "Cormorant Garamond": "Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400",
+  "EB Garamond": "EB+Garamond:ital,wght@0,400;0,500;0,600;1,400",
+  "Libre Baskerville": "Libre+Baskerville:ital,wght@0,400;0,700;1,400",
+  "Newsreader": "Newsreader:ital,wght@0,400;0,500;0,600;1,400",
+  "Literata": "Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;1,7..72,400",
+  "Source Serif 4": "Source+Serif+4:ital,wght@0,400;0,500;0,600;1,400",
+  "Libre Franklin": "Libre+Franklin:wght@400;500;600",
+  "Work Sans": "Work+Sans:wght@400;500;600",
+  "Public Sans": "Public+Sans:wght@400;500;600",
+  "IBM Plex Sans": "IBM+Plex+Sans:wght@400;500;600",
+  "Karla": "Karla:wght@400;500;600",
+};
+const HEADLINE_FONTS = ["Castoro", "Libre Caslon Display", "Cormorant Garamond", "EB Garamond", "Libre Baskerville", "Newsreader"];
+const READING_FONTS = ["Literata", "Source Serif 4", "EB Garamond", "Libre Baskerville", "Newsreader", "Libre Franklin"];
+const SMALL_FONTS = ["Libre Franklin", "Work Sans", "Public Sans", "IBM Plex Sans", "Karla"];
+
+// Turns the chosen colours and typefaces into the small block of styling a
+// site adds on top of its own. Nothing is produced for a setting left as it
+// was, so an untouched theme leaves the site exactly as designed.
+// The console holds the same function, and a test keeps the two in step.
+export function themeCss(spec, values) {
+  const decl = [], links = [];
+  for (const c of spec.colours) {
+    const v = String((values.colours || {})[c.id] || c.default).toUpperCase();
+    if (v === c.default.toUpperCase()) continue;
+    decl.push(c.var + ":" + v);
+    for (const d of c.derived || []) decl.push(d[0] + ":color-mix(in srgb, " + v + " " + d[1] + "%, " + d[2] + ")");
+  }
+  for (const f of spec.fonts) {
+    const name = (values.fonts || {})[f.id] || f.default;
+    if (name === f.default || !FONTS[name]) continue;
+    decl.push(f.var + ":'" + name + "', " + f.fallback);
+    const link = "https://fonts.googleapis.com/css2?family=" + FONTS[name] + "&display=swap";
+    if (!links.includes(link)) links.push(link);
+  }
+  return { css: decl.length ? ":root{" + decl.join(";") + "}" : "", font_links: links };
+}
+
+// Keeps only what the theme allows: six-figure colour codes and listed typefaces.
+export function cleanTheme(spec, given) {
+  const out = { colours: {}, fonts: {} };
+  for (const c of spec.colours) {
+    const v = String(((given || {}).colours || {})[c.id] || "").trim();
+    if (v && !/^#[0-9a-fA-F]{6}$/.test(v)) throw new Error(c.label + " needs a colour code such as #1D4A35.");
+    out.colours[c.id] = (v || c.default).toUpperCase();
+  }
+  for (const f of spec.fonts) {
+    const v = String(((given || {}).fonts || {})[f.id] || f.default);
+    if (!f.options.includes(v)) throw new Error(f.label + " must be one of the listed typefaces.");
+    out.fonts[f.id] = v;
+  }
+  return out;
+}
+
 export const SITES = [
   {
     id: "world-art-review",
@@ -22,6 +83,29 @@ export const SITES = [
       { slug: "konn-artiss", name: "Konn Artiss" },
       { slug: "zen-xander", name: "Zen Xander" },
     ],
+    theme: {
+      file: "content/theme.json",
+      colours: [
+        { id: "paper", role: "bg", label: "Page background", use: "Pages and cards", var: "--paper", default: "#EEE5D4",
+          derived: [["--paper-deep", 94, "black"], ["--line", 89, "black"], ["--ghost", 86, "black"], ["--page", 55, "white"], ["--card", 70, "white"], ["--p85", 85, "transparent"], ["--p65", 65, "transparent"], ["--p50", 50, "transparent"]] },
+        { id: "green", role: "band", label: "Bands and buttons", use: "Top band, buttons and labels", var: "--green", default: "#1D4A35", on: "paper", min: 3,
+          derived: [["--green-dark", 78, "black"], ["--green-hover", 88, "white"]] },
+        { id: "brick", role: "accent", label: "Links and highlights", use: "Links and small accents", var: "--brick", default: "#B5392B", on: "paper", min: 3,
+          derived: [["--brick-soft", 45, "white"]] },
+        { id: "ink", role: "text", label: "Text", use: "All reading text", var: "--ink", default: "#1D1D1B", on: "paper", min: 4.5,
+          derived: [["--tile", 100, "black"], ["--mk-tile", 100, "black"]] },
+      ],
+      fonts: [
+        { id: "display", role: "display", label: "Headlines", use: "Site name and titles", var: "--display", default: "Castoro", fallback: "Georgia, serif", options: HEADLINE_FONTS },
+        { id: "text", role: "body", label: "Reading text", use: "Articles and portfolios", var: "--text", default: "Literata", fallback: "Georgia, serif", options: READING_FONTS },
+        { id: "sans", role: "small", label: "Small text", use: "Buttons, labels and menus", var: "--sans", default: "Libre Franklin", fallback: "Arial, sans-serif", options: SMALL_FONTS },
+      ],
+      looks: [
+        { name: "Ink and clay", colours: { paper: "#F1EEE8", green: "#22304A", brick: "#A4572F", ink: "#1B1D22" } },
+        { name: "Bark and moss", colours: { paper: "#EFEAE4", green: "#3B2F2A", brick: "#5F7A3C", ink: "#1F1B19" } },
+        { name: "Stone and plum", colours: { paper: "#ECEAE6", green: "#4A2A3F", brick: "#9A4B2E", ink: "#1E1B1D" } },
+      ],
+    },
     collections: [
       { id: "articles", label: "Articles", singular: "article", file: "content/site.json", path: ["articles"], shape: "list", key: "slug", title: "title", sub: ["kicker", "section"], canHide: true, canDelete: true },
       { id: "artists", label: "Artists", singular: "artist", file: "content/site.json", path: ["artists"], shape: "list", key: "slug", title: "name", sub: ["tag", "place"], canHide: false, canDelete: false, inside: { works: false, glance: { labelFrom: 0, cols: { 1: "" } } } },
@@ -39,6 +123,25 @@ export const SITES = [
       { slug: "zara-muse", name: "Zara Muse" },
       { slug: "konn-artiss", name: "Konn Artiss" },
     ],
+    theme: {
+      file: "data/theme.json",
+      colours: [
+        { id: "blush", role: "bg", label: "Page background", use: "Pages and cards", var: "--blush", default: "#F3C3C8",
+          derived: [["--blush-light", 40, "white"], ["--blush-deep", 94, "black"], ["--paper", 30, "white"]] },
+        { id: "ink", role: "band", label: "Dark bands and text", use: "Dark panels, headings and text", var: "--ink", default: "#2A2A2F", on: "blush", min: 4.5,
+          derived: [["--ink-2", 94, "white"], ["--ink-3", 90, "white"], ["--on-blush-body", 88, "white"], ["--on-blush-quiet", 76, "white"]] },
+        { id: "mint", role: "accent", label: "Highlights", use: "Buttons, markers and small accents", var: "--mint", default: "#22E3A2", on: "ink", min: 3, derived: [] },
+      ],
+      fonts: [
+        { id: "serif", role: "display", label: "Headlines", use: "Site name and titles", var: "--serif", default: "Libre Caslon Display", fallback: "Georgia, 'Times New Roman', serif", options: HEADLINE_FONTS },
+        { id: "sans", role: "body", label: "Text", use: "Reading text, tables and buttons", var: "--sans", default: "Libre Franklin", fallback: "Arial, Helvetica, sans-serif", options: SMALL_FONTS },
+      ],
+      looks: [
+        { name: "Sand and navy", colours: { blush: "#EADFCB", ink: "#1F2A44", mint: "#E0A33B" } },
+        { name: "Mist and forest", colours: { blush: "#DCE5DF", ink: "#1E3329", mint: "#F0B45A" } },
+        { name: "Paper and ink", colours: { blush: "#EDEAE4", ink: "#232326", mint: "#D9532F" } },
+      ],
+    },
     collections: [
       { id: "articles", label: "Articles", singular: "article", file: "data/content.json", path: ["features"], shape: "list", key: "slug", title: "title", sub: ["kicker"], canHide: true, canDelete: true },
       { id: "sales", label: "Auction sales", singular: "sale", file: "data/sales.json", path: ["sales"], shape: "list", key: null, title: "title", sub: ["house", "date_text"], canHide: false, canDelete: true, numbers: ["est_low", "est_high", "hammer", "premium"] },
@@ -563,6 +666,27 @@ export async function handle(req) {
     return json({ collections: out });
   }
 
+  if (action === "theme" || action === "saveTheme") {
+    const spec = site.theme;
+    if (!spec) return json({ error: "This site has no theme settings yet." }, 400);
+    const f = await loadJson(spec.file);
+    let current;
+    try { current = cleanTheme(spec, f ? f.data : {}); } catch (_e) { current = cleanTheme(spec, {}); }
+    if (action === "theme") {
+      return json({ spec: { colours: spec.colours, fonts: spec.fonts, looks: spec.looks || [], fontRequests: FONTS, url: "https://" + site.domain + "/" }, values: current });
+    }
+    let next;
+    try { next = cleanTheme(spec, body.values); } catch (e) { return json({ error: e.message }, 400); }
+    if (JSON.stringify(next) === JSON.stringify(current)) return json({ ok: true, unchanged: true });
+    const changed = [];
+    for (const c of spec.colours) if (next.colours[c.id] !== current.colours[c.id]) changed.push(c.label.toLowerCase());
+    for (const x of spec.fonts) if (next.fonts[x.id] !== current.fonts[x.id]) changed.push(x.label.toLowerCase() + " typeface");
+    const put = await saveJson(spec.file, Object.assign({}, next, themeCss(spec, next)), f ? f.sha : undefined, "Theme: " + changed.join(", ").slice(0, 120));
+    if (put.status === 409) return json({ error: "Someone else changed the theme at the same moment. Refresh and try again." }, 409);
+    if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save the theme. Please try again.") }, 502);
+    return json({ ok: true, values: next });
+  }
+
   if (action === "saveEntry" || action === "setHidden" || action === "deleteEntry") {
     if (!col) return json({ error: "That kind of content is not available on this site." }, 400);
     const f = await loadJson(col.file);
@@ -634,8 +758,8 @@ export async function handle(req) {
   }
 
   // ----- history and undo -----
-  const CONTENT_FILES = ["content/site.json", "data/content.json", "data/sales.json", "data/images.json", "image-slots.json"];
-  const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Undo: )/;
+  const CONTENT_FILES = ["content/site.json", "data/content.json", "data/sales.json", "data/images.json", "image-slots.json", "content/theme.json", "data/theme.json"];
+  const UNDOABLE = /^(Edit |Hide |Show |Delete |Remove photo|Theme: |Undo: )/;
 
   if (action === "history") {
     const r = await gh("/repos/" + site.repo + "/commits?per_page=30");

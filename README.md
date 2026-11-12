@@ -60,3 +60,9 @@ its `collections` (which content files it has and what they hold). Set
   `draft/`, which are the ones the agent prepares.
 - Never put a secret key, a service_role key or a GitHub token in this
   repository. It is public.
+
+## Theme
+
+The Theme screen changes a site's colours and typefaces. Choices are kept in `content/theme.json` (World Art Review) or `data/theme.json` (Global Art Monitor) and added to the pages when the site is built. Nothing is published until Publish is pressed, and a published theme can be undone from History. The preview shows the real homepage when the site answers, and a simple picture otherwise.
+
+Browser tests: `PLAYWRIGHT=<path to playwright> node tests/rich.mjs` and `node tests/theme.mjs`.

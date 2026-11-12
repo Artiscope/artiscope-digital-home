@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "11";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "12";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -25,6 +25,11 @@
     confirm: null,         // key of the thing waiting for a second press
     history: {},           // site id -> list of changes
     draft: null,           // what has been typed into the open entry, kept across redraws
+    dirty: false,          // the open entry has typing that is not saved
+    leave: null,           // where the user was going when asked about unsaved typing
+    egroup: 0,             // which part of the open entry is on screen
+    csearch: "", csort: "site", cmore: false,   // content list: search, order, show all
+    theme: {},             // site id -> { spec, values, draft, mode, live }
     photoFiles: [], photoSent: {}, photoDone: [],
   };
 
@@ -92,6 +97,10 @@
       if ((state.tab === "content" || state.tab === "home") && (force || !state.content[s.id])) {
         var c = await api("content", { site: s.id }); state.content[s.id] = c.collections || []; render();
       }
+      if (state.tab === "theme" && !state.theme[s.id]) {
+        var t = await api("theme", { site: s.id });
+        state.theme[s.id] = { spec: t.spec, values: t.values, draft: JSON.parse(JSON.stringify(t.values)), mode: "computer", live: null }; render();
+      }
       if (state.tab === "history" && (force || !state.history[s.id])) {
         var h = await api("history", { site: s.id }); state.history[s.id] = h.changes || []; render();
       }
@@ -120,12 +129,37 @@
   var NAV = [
     ["home", "Home", "M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z", ""],
     ["content", "Content", "M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z", ""],
+    ["theme", "Theme", "M12 4a8 8 0 1 0 0 16c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a3 3 0 0 0 3-3c0-3.9-3.6-7-8-7z", "M8.5 11.5h.01M11 8.5h.01M14.5 9h.01"],
     ["photos", "Photos", "M4 6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z", "M7 16l3.5-3.5 2.5 2.5 2-2 2 3"],
     ["history", "History", "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M12 8v4.5l3 2"],
     ["sites", "Sites", "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M4.5 12h15M12 4.5c2.6 2.4 2.6 12.6 0 15M12 4.5c-2.6 2.4-2.6 12.6 0 15"],
   ];
   function navIndex(tab) { var i = NAV.findIndex(function (n) { return n[0] === tab; }); return i < 0 ? 0 : i; }
   function mark() { return '<svg width="24" height="24" viewBox="0 0 26 26"><path d="M2 24V10l11-9 11 9v14z" fill="#A9BCE0"></path><rect x="10" y="14" width="6" height="10" fill="#141927"></rect></svg>'; }
+
+  // The floating bar: which site, and what state its changes are in.
+  function islandBusy() { var t = themeOf(); return state.status !== "live" || (state.tab === "theme" && t && themeChanges(t) > 0); }
+  function islandInner() {
+    var s = site(), t = themeOf(), n = state.tab === "theme" && t ? themeChanges(t) : 0;
+    var options = liveSites().map(function (x) { return '<option value="' + esc(x.id) + '"' + (s && x.id === s.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("");
+    var statusText = state.status === "saving" ? "Saving your change" : state.status === "saved" ? "Saved. Live in about two minutes" : "Everything is live";
+    var right;
+    if (n && state.status !== "saving") {
+      right = '<span class="small">' + n + (n === 1 ? " change" : " changes") + ' not yet published</span>' +
+        '<button type="button" class="btn slim" data-act="theme-publish">Publish</button><button type="button" class="linklike small" data-act="theme-discard" style="margin-right:12px">Discard</button>';
+    } else {
+      right = '<span class="small">' + statusText + '</span>' +
+        (state.status === "saved" && state.tab !== "history" ? '<button type="button" class="linklike small" data-tab="history">See it in History</button>' : "") +
+        '<span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#A9BCE0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>';
+    }
+    return '<span class="dot" aria-hidden="true" style="background:' + (s ? colours(s.id)[0] : "#55678C") + '"></span>' +
+      '<label class="small" for="site-pick" style="position:absolute;left:-9999px">Site</label>' +
+      '<select id="site-pick" data-change="site">' + options + '</select>' + right;
+  }
+  function patchIsland() {
+    var el = app.querySelector && app.querySelector(".island"); if (!el) return;
+    el.className = "island" + (islandBusy() ? " busy" : ""); el.innerHTML = islandInner();
+  }
 
   function viewShell(inner) {
     var s = site();
@@ -136,8 +170,6 @@
         '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="' + n[2] + '"></path><path class="o" d="' + n[2] + '"></path><path class="d" d="' + n[3] + '"></path></svg>' +
         '<span>' + n[1] + '</span></button>';
     }).join("");
-    var options = liveSites().map(function (x) { return '<option value="' + esc(x.id) + '"' + (s && x.id === s.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("");
-    var statusText = state.status === "saving" ? "Saving your change" : state.status === "saved" ? "Saved. Live in about two minutes" : "Everything is live";
     return '<div class="shell">' +
       '<nav class="rail" aria-label="Sections">' +
         '<div class="brand"><span class="brand-mark" aria-hidden="true">' + mark() + '</span><span class="brand-name">Artiscope<br>Digital Home</span></div>' +
@@ -151,13 +183,7 @@
         '</div>' +
       '</nav>' +
       '<main class="main">' +
-        '<div class="island-row"><div class="island' + (state.status === "live" ? "" : " busy") + '" role="status">' +
-          '<span class="dot" aria-hidden="true" style="background:' + (s ? colours(s.id)[0] : "#55678C") + '"></span>' +
-          '<label class="small" for="site-pick" style="position:absolute;left:-9999px">Site</label>' +
-          '<select id="site-pick" data-change="site">' + options + '</select>' +
-          '<span class="small">' + statusText + '</span>' +
-          '<span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#A9BCE0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>' +
-        '</div></div>' +
+        '<div class="island-row"><div class="island' + (islandBusy() ? " busy" : "") + '" role="status">' + islandInner() + '</div></div>' +
         '<div class="column fade">' +
           (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
           inner +
@@ -202,6 +228,19 @@
         '</div></div>' : "");
   }
 
+  // Long lists open short. Searching looks through all of them without redrawing.
+  var LIST_FIRST = 8;
+  function filterList() {
+    var box = app.querySelector && app.querySelector("#clist"); if (!box) return;
+    var q = state.csearch.trim().toLowerCase(), shown = 0, more = app.querySelector("#cmore"), none = app.querySelector("#cnone");
+    Array.prototype.forEach.call(box.querySelectorAll(".entry"), function (el, i) {
+      var ok = q ? el.dataset.text.indexOf(q) >= 0 : (state.cmore || i < LIST_FIRST);
+      el.hidden = !ok; if (ok) shown++;
+    });
+    if (more) more.hidden = !!q || state.cmore;
+    if (none) none.hidden = shown > 0 || !q;
+  }
+
   function viewContent() {
     var s = site(); if (!s) return "";
     var cols = state.content[s.id];
@@ -215,16 +254,183 @@
     var tabs = '<div class="tabs" role="tablist" style="grid-template-columns:repeat(' + n + ',minmax(0,1fr))">' +
       '<span class="blob" aria-hidden="true" data-left="' + pos(ci)[0] + '" data-right="' + pos(ci)[1] + '" style="left:' + pos(prev)[0] + ";right:" + pos(prev)[1] + ";transition:left " + (right ? trail : lead) + ",right " + (right ? lead : trail) + '"></span>' +
       cols.map(function (c, i) { return '<button type="button" role="tab" class="tabb' + (i === ci ? " on" : "") + '" aria-selected="' + (i === ci) + '" data-act="ctab" data-i="' + i + '">' + esc(c.label) + '</button>'; }).join("") + '</div>';
-    var list = col.entries.map(function (e, ei) {
-      return '<div class="card lift entry' + (e.hidden ? " off" : "") + '"><div class="body"><b>' + esc(e.title) + '</b><span class="small">' + esc(e.sub) + '</span></div>' +
+    var order = col.entries.map(function (e, ei) { return ei; });
+    if (state.csort === "az") order.sort(function (a, b) { return String(col.entries[a].title).localeCompare(String(col.entries[b].title)); });
+    var many = col.entries.length > 6;
+    var tools = many ? '<div class="row listtools"><input type="text" id="csearch" data-input="csearch" value="' + esc(state.csearch) + '" placeholder="Search ' + esc(col.label.toLowerCase()) + '" aria-label="Search ' + esc(col.label.toLowerCase()) + '">' +
+      '<select class="box" data-change="csort" aria-label="Order"><option value="site"' + (state.csort === "site" ? " selected" : "") + '>In site order</option><option value="az"' + (state.csort === "az" ? " selected" : "") + '>A to Z</option></select></div>' : "";
+    var list = order.map(function (ei) {
+      var e = col.entries[ei];
+      return '<div class="card lift entry' + (e.hidden ? " off" : "") + '" data-text="' + esc((e.title + " " + e.sub).toLowerCase()) + '"><div class="body"><b>' + esc(e.title) + '</b><span class="small">' + esc(e.sub) + '</span></div>' +
         (e.hidden ? '<span class="chip quiet">Hidden from the site</span>' : "") +
         '<button type="button" class="soft" data-act="open" data-ci="' + ci + '" data-ei="' + ei + '">Edit</button></div>';
     }).join("");
     return head("Content", "The words your pages are made from. Open anything to edit it, hide it from visitors, or delete it.") + tabs +
-      (col.problem ? '<p class="notice problem">' + esc(col.problem) + '</p>' : "") +
-      '<div class="stack">' + (list || '<p class="notice">Nothing here yet.</p>') + '</div>';
+      (col.problem ? '<p class="notice problem">' + esc(col.problem) + '</p>' : "") + tools +
+      '<div class="stack" id="clist">' + (list || '<p class="notice">Nothing here yet.</p>') + '</div>' +
+      '<p class="notice" id="cnone" hidden>Nothing matches that search.</p>' +
+      (col.entries.length > LIST_FIRST ? '<button type="button" class="soft" id="cmore" data-act="cmore" style="align-self:flex-start">Show all ' + col.entries.length + '</button>' : "");
   }
 
+
+  // ---------- theme: colours and typefaces ----------
+
+  function themeOf() { var s = site(); return (s && state.theme[s.id]) || null; }
+  function themeChanges(t) {
+    var n = 0;
+    ["colours", "fonts"].forEach(function (g) { Object.keys(t.values[g]).forEach(function (k) { if (String(t.draft[g][k]).toUpperCase() !== String(t.values[g][k]).toUpperCase()) n++; }); });
+    return n;
+  }
+  function anyThemeChanges() { return Object.keys(state.theme).some(function (k) { return themeChanges(state.theme[k]) > 0; }); }
+  // The same sums as the server, so the preview matches what will be published.
+  function themeCss(spec, values) {
+    var decl = [], links = [];
+    spec.colours.forEach(function (c) {
+      var v = String((values.colours || {})[c.id] || c.default).toUpperCase();
+      if (v === c.default.toUpperCase()) return;
+      decl.push(c.var + ":" + v);
+      (c.derived || []).forEach(function (d) { decl.push(d[0] + ":color-mix(in srgb, " + v + " " + d[1] + "%, " + d[2] + ")"); });
+    });
+    spec.fonts.forEach(function (f) {
+      var name = (values.fonts || {})[f.id] || f.default;
+      if (name === f.default || !spec.fontRequests[name]) return;
+      decl.push(f.var + ":'" + name + "', " + f.fallback);
+      var link = fontLink(spec, name);
+      if (links.indexOf(link) < 0) links.push(link);
+    });
+    return { css: decl.length ? ":root{" + decl.join(";") + "}" : "", font_links: links };
+  }
+  function fontLink(spec, name) { return "https://fonts.googleapis.com/css2?family=" + spec.fontRequests[name] + "&display=swap"; }
+  function validHex(v) { return /^#[0-9a-fA-F]{6}$/.test(String(v)); }
+  function luminance(hex) {
+    var c = [1, 3, 5].map(function (i) { var x = parseInt(hex.substr(i, 2), 16) / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function contrast(a, b) { var x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  function themeWarning(t, c) {
+    if (!c.on) return "";
+    var other = t.spec.colours.find(function (x) { return x.id === c.on; }); if (!other) return "";
+    return contrast(t.draft.colours[c.id], t.draft.colours[other.id]) < c.min ? "Hard to read against the " + other.label.toLowerCase() : "";
+  }
+  function byRole(list, role) { return list.find(function (x) { return x.role === role; }); }
+
+  function themeSettings(t) {
+    var spec = t.spec, d = t.draft;
+    function sameColours(set) { return spec.colours.every(function (c) { return String(d.colours[c.id]).toUpperCase() === String(set[c.id] || "").toUpperCase(); }); }
+    function look(name, set, i) {
+      return '<button type="button" class="look' + (sameColours(set) ? " on" : "") + '" data-act="look" data-i="' + i + '"><i>' +
+        spec.colours.slice(0, 3).map(function (c) { return '<span style="background:' + esc(set[c.id]) + '"></span>'; }).join("") + '</i>' + esc(name) + '</button>';
+    }
+    var looks = look("Live now", t.values.colours, -1) + (spec.looks || []).map(function (l, i) { return look(l.name, l.colours, i); }).join("");
+    var cols = spec.colours.map(function (c) {
+      var v = d.colours[c.id], warn = themeWarning(t, c);
+      return '<div class="swrow"><label class="sw" style="background:' + esc(v) + '" title="Choose a colour"><input type="color" data-theme-colour="' + esc(c.id) + '" value="' + esc(v) + '" aria-label="' + esc(c.label) + '"></label>' +
+        '<div class="body"><b>' + esc(c.label) + '</b><span class="small">' + esc(c.use) + '</span>' + (warn ? '<span class="warn">' + esc(warn) + '</span>' : "") + '</div>' +
+        '<input type="text" class="hex" data-theme-hex="' + esc(c.id) + '" value="' + esc(v) + '" maxlength="7" spellcheck="false" aria-label="' + esc(c.label) + ', colour code"></div>';
+    }).join("");
+    var fonts = spec.fonts.map(function (f) {
+      var v = d.fonts[f.id];
+      return '<div class="swrow"><span class="sw aa" style="font-family:\'' + esc(v) + '\', ' + esc(f.fallback) + '" aria-hidden="true">Aa</span>' +
+        '<div class="body"><b>' + esc(f.label) + '</b><span class="small">' + esc(f.use) + '</span></div>' +
+        '<select class="box fontpick" data-theme-font="' + esc(f.id) + '" aria-label="' + esc(f.label) + '">' +
+        f.options.map(function (o) { return '<option' + (o === v ? " selected" : "") + '>' + esc(o) + '</option>'; }).join("") + '</select></div>';
+    }).join("");
+    return '<div class="card stack"><h2 class="cardh">Ready-made looks</h2><span class="small">A quick starting point. You can still change every colour below.</span><div class="looks">' + looks + '</div></div>' +
+      '<div class="card stack"><h2 class="cardh">Colours</h2>' + cols + '<span class="small">Press a colour square to choose a colour, or type its code.</span></div>' +
+      '<div class="card stack"><h2 class="cardh">Typefaces</h2>' + fonts + '<span class="small">A short list chosen to suit a gallery site, so nothing looks out of place.</span></div>';
+  }
+  function drawPreview(s) {
+    return '<div class="pvd"><div class="pvd-band"><b>' + esc(s.name) + '</b><span>Artists &nbsp; Reviews &nbsp; Guides</span></div>' +
+      '<div class="pvd-hero"><span class="pvd-eye">Artist portfolio</span><h3>A headline in your chosen typeface</h3><p>Reading text looks like this, with <u>a link in the highlight colour</u>.</p><span class="pvd-btn">A button</span></div>' +
+      '<div class="pvd-cards"><div><i></i><b>First article</b><span>A line of reading text.</span></div><div><i class="alt"></i><b>Second article</b><span>A line of reading text.</span></div><div><i></i><b>Third article</b><span>A line of reading text.</span></div></div></div>';
+  }
+  function viewTheme() {
+    var s = site(); if (!s) return "";
+    var t = themeOf();
+    if (!t) return head("Theme", "Reading the theme of " + s.name + ".");
+    return head("Theme", "Colours and typefaces for " + s.name + ". Nothing changes on the live site until you press Publish.") +
+      '<div class="theme"><div class="stack-wide" id="theme-settings">' + themeSettings(t) + '</div>' +
+      '<div class="card stack pv-card"><div class="row between"><h2 class="cardh">Preview</h2>' +
+        '<div class="seg" id="pv-seg"><button type="button" class="' + (t.mode === "computer" ? "on" : "") + '" data-act="pv-mode" data-mode="computer">Computer</button><button type="button" class="' + (t.mode === "phone" ? "on" : "") + '" data-act="pv-mode" data-mode="phone">Phone</button></div></div>' +
+        '<div class="pv-stage ' + esc(t.mode) + '" id="pv-stage">' +
+          ((demo && !params.has("preview")) || t.live === false ? "" : '<iframe id="pv-live" title="Preview of ' + esc(s.name) + '" src="' + esc(t.spec.url) + '" hidden></iframe>') +
+          '<div id="pv-draw">' + drawPreview(s) + '</div></div>' +
+        '<span class="small" id="pv-note">' + previewNote(t) + '</span></div></div>';
+  }
+  function previewNote(t) {
+    return t.live ? "This is your real homepage with your changes applied. Only you can see them until you publish."
+      : "A simple picture of your colours and typefaces. Only you can see it until you publish.";
+  }
+  function loadFont(spec, name) {
+    if (!document.head || !spec.fontRequests[name]) return;
+    var href = fontLink(spec, name), had = false;
+    Array.prototype.forEach.call(document.querySelectorAll("link[data-font]"), function (l) { if (l.getAttribute("data-font") === href) had = true; });
+    if (had) return;
+    var l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; l.setAttribute("data-font", href); document.head.appendChild(l);
+  }
+  function applyPreview() {
+    var t = themeOf(), stage = app.querySelector && app.querySelector("#pv-stage"); if (!t || !stage) return;
+    var spec = t.spec, d = t.draft, bg = byRole(spec.colours, "bg"), band = byRole(spec.colours, "band"), acc = byRole(spec.colours, "accent"), text = byRole(spec.colours, "text") || band;
+    stage.style.setProperty("--pv-bg", d.colours[bg.id]); stage.style.setProperty("--pv-band", d.colours[band.id]);
+    stage.style.setProperty("--pv-accent", d.colours[acc.id]); stage.style.setProperty("--pv-text", d.colours[text.id]);
+    var disp = byRole(spec.fonts, "display"), body = byRole(spec.fonts, "body"), small = byRole(spec.fonts, "small") || body;
+    [["--pv-display", disp], ["--pv-body", body], ["--pv-small", small]].forEach(function (x) {
+      stage.style.setProperty(x[0], "'" + d.fonts[x[1].id] + "', " + x[1].fallback); loadFont(spec, d.fonts[x[1].id]);
+    });
+    var frame = app.querySelector("#pv-live");
+    if (frame && t.live && frame.contentWindow) {
+      var out = themeCss(spec, d);
+      try { frame.contentWindow.postMessage({ type: "adh-theme", css: out.css, fonts: out.font_links }, new URL(spec.url).origin); } catch (e) { /* preview only */ }
+    }
+  }
+  function sizePreview() {
+    var t = themeOf(), stage = app.querySelector && app.querySelector("#pv-stage"); if (!t || !stage) return;
+    var w = stage.clientWidth || 600, k = t.mode === "phone" ? 1 : w / 1280;
+    stage.style.setProperty("--k", k);
+    stage.style.height = t.live ? (t.mode === "phone" ? 720 : Math.round(800 * k)) + "px" : "";
+  }
+  function showLive(t, yes) {
+    t.live = yes;
+    var frame = app.querySelector("#pv-live"), draw = app.querySelector("#pv-draw"), note = app.querySelector("#pv-note");
+    if (frame) { if (yes) frame.hidden = false; else frame.remove(); }
+    if (draw) draw.hidden = !!yes;
+    if (note) note.textContent = previewNote(t);
+    sizePreview(); applyPreview();
+  }
+  // Once the Theme screen is drawn: ask the real site whether it can show a preview.
+  function mountTheme() {
+    var t = themeOf(); if (state.tab !== "theme" || !t || !app.querySelector) return;
+    var frame = app.querySelector("#pv-live");
+    if (frame) t.live = null;   // a fresh frame has to answer again
+    sizePreview(); applyPreview();
+    if (!frame) return;
+    var origin = new URL(t.spec.url).origin, tries = 0;
+    var asking = setInterval(function () {
+      tries++;
+      if (!frame.isConnected || t.live) { clearInterval(asking); return; }
+      if (tries > 12) { clearInterval(asking); if (themeOf() === t) showLive(t, false); return; }
+      try { frame.contentWindow.postMessage({ type: "adh-hello" }, origin); } catch (e) { /* not ready yet */ }
+    }, 500);
+  }
+  if (typeof window.addEventListener === "function") {
+    window.addEventListener("message", function (ev) {
+      var t = themeOf(); if (!t || !ev.data || ev.data.type !== "adh-ready") return;
+      try { if (ev.origin !== new URL(t.spec.url).origin) return; } catch (e) { return; }
+      if (!t.live) showLive(t, true);
+    });
+    window.addEventListener("resize", sizePreview);
+    window.addEventListener("beforeunload", function (ev) { if (state.dirty || anyThemeChanges()) { ev.preventDefault(); ev.returnValue = ""; } });
+  }
+  // Redraws only the settings, so the preview does not reload.
+  function themeUpdate() {
+    var t = themeOf(), box = app.querySelector("#theme-settings"); if (!t || !box) { render(); return; }
+    box.innerHTML = themeSettings(t); patchIsland(); applyPreview();
+  }
+  function publishTheme() {
+    var s = site(), t = themeOf(); if (!s || !t) return;
+    var sent = JSON.parse(JSON.stringify(t.draft));
+    change(key("theme", s.id), function () { return api("saveTheme", { site: s.id, values: sent }); }, function () { t.values = sent; });
+  }
 
   // ---------- formatted text, edited as plain writing ----------
   // Article bodies are stored with formatting marks. The editor shows them
@@ -399,10 +605,8 @@
     var k = key("entry", s.id, col.id, e.id), busy = state.busy[k];
     var draft = state.draft && state.draft.k === k ? state.draft.values : {};
     richSource = {};
-    var group = "";
-    var fields = e.fields.map(function (f0, i) {
-      var heading = "";
-      if ((f0.group || "") !== group) { group = f0.group || ""; if (group) heading = '<h2 class="group">' + esc(group) + '</h2>'; }
+    var groups = [], parts = {};
+    e.fields.forEach(function (f0, i) {
       var typed = Object.prototype.hasOwnProperty.call(draft, f0.name);
       var f = typed ? Object.assign({}, f0, { value: f0.type === "yesno" ? String(draft[f0.name]) === "true" : draft[f0.name] }) : f0;
       var id = "f-" + i, label = '<label for="' + id + '" id="l-' + i + '">' + esc(f.label) + '</label>', input;
@@ -423,8 +627,16 @@
       } else {
         input = '<input type="text" id="' + id + '" data-field="' + esc(f.name) + '" value="' + esc(f.value == null ? "" : f.value) + '">';
       }
-      return heading + '<div class="field">' + label + input + '</div>';
-    }).join("");
+      var g = f0.group || (f0.type === "long" && isRich(f0.value) && String(f0.value).length >= 400 ? f0.label : "Details");
+      if (!parts[g]) { parts[g] = ""; if (g === "Details") groups.unshift(g); else groups.push(g); }
+      parts[g] += '<div class="field">' + label + input + '</div>';
+    });
+    var at = Math.min(state.egroup, Math.max(groups.length - 1, 0));
+    var fields = (groups.length > 1 ? '<div class="seg wide" role="tablist" aria-label="Parts of this page">' + groups.map(function (g, gi) {
+        return '<button type="button" role="tab" class="' + (gi === at ? "on" : "") + '" data-act="egroup" data-g="' + gi + '">' + esc(g) + '</button>'; }).join("") + '</div>' : "") +
+      groups.map(function (g, gi) { return '<div class="egroup stack-wide" data-g="' + gi + '"' + (gi === at ? "" : " hidden") + '>' + parts[g] + '</div>'; }).join("");
+    var leaving = state.leave ? '<div class="sunk stack"><b>You have changes that are not saved yet.</b>' +
+      '<div class="row"><button type="button" class="btn" data-act="leave-save">Save and publish</button><button type="button" class="soft" data-act="leave-go">Leave without saving</button><button type="button" class="linklike" data-act="leave-stay">Keep editing</button></div></div>' : "";
     var danger;
     if (state.confirm === k + "|delete") {
       danger = '<div class="sunk stack"><b>Delete this ' + esc(col.singular) + '?</b><span class="muted">It comes off the site. You can bring it back from History.</span>' +
@@ -436,9 +648,11 @@
     }
     return '<div class="page-head"><button type="button" class="linklike" data-act="close" style="align-self:flex-start">Back to ' + esc(col.label.toLowerCase()) + '</button>' +
       '<h1>' + esc(e.title) + '</h1><p>' + esc(s.name) + (e.hidden ? ". Hidden from the site at the moment." : "") + '</p></div>' +
+      leaving +
       '<form class="card stack-wide" data-form="entry">' + (fields || '<p class="muted">Nothing on this entry can be edited here yet.</p>') +
-        '<div class="row"><button type="submit" class="btn"' + (busy ? " disabled" : "") + '>' + (busy ? "Saving" : "Save and publish") + '</button>' +
-        '<button type="button" class="soft" data-act="close">Cancel</button></div></form>' + danger;
+        '<div class="savebar"><button type="submit" class="btn"' + (busy ? " disabled" : "") + '>' + (busy ? "Saving" : "Save and publish") + '</button>' +
+        '<button type="button" class="soft" data-act="close">Cancel</button>' +
+        (groups.length > 1 ? '<span class="small">Saves every part of this page, not only the one on screen.</span>' : "") + '</div></form>' + danger;
   }
 
   // ----- photos -----
@@ -559,9 +773,9 @@
         : '<p class="loading">Reading your sites</p>';
       return;
     }
-    var views = { home: viewHome, content: viewContent, photos: viewPhotos, history: viewHistory, sites: viewSites };
+    var views = { home: viewHome, content: viewContent, theme: viewTheme, photos: viewPhotos, history: viewHistory, sites: viewSites };
     app.innerHTML = viewShell((views[state.tab] || viewHome)());
-    mountRich();
+    mountRich(); mountTheme(); filterList();
     settle();
   }
 
@@ -571,7 +785,7 @@
   function entryChange(action, extra) {
     var o = openEntry(); if (!o || !o.e) return;
     var k = key("entry", o.s.id, o.col.id, o.e.id);
-    change(k, function () { return api(action, Object.assign({ site: o.s.id, collection: o.col.id, id: o.e.id }, extra(o))); }, function () { state.open = null; state.draft = null; delete state.content[o.s.id]; });
+    change(k, function () { return api(action, Object.assign({ site: o.s.id, collection: o.col.id, id: o.e.id }, extra(o))); }, function () { state.open = null; state.draft = null; state.dirty = false; state.leave = null; delete state.content[o.s.id]; });
   }
   function saveEntry(form) {
     var values = collect(form);
@@ -631,7 +845,8 @@
   }
 
   function go(tab) {
-    state.prevTab = state.tab; state.tab = tab; state.open = null; state.draft = null; state.confirm = null; state.notice = null;
+    state.prevTab = state.tab; state.tab = tab; state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.notice = null;
+    state.csearch = ""; state.cmore = false;
     if (state.status === "saved") state.status = "live";
     render(); ensure();
     if (typeof window.scrollTo === "function") window.scrollTo(0, 0);
@@ -651,22 +866,49 @@
     ev.preventDefault();
     var text = (ev.clipboardData || window.clipboardData).getData("text/plain");
     document.execCommand("insertText", false, text);
+    state.dirty = true;
     if (rich[ed.dataset.rich]) rich[ed.dataset.rich].dirty = true;
   });
 
+  // Asks before leaving an entry that has typing in it.
+  function guard(next) {
+    if (state.open && state.dirty) { state.leave = next; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
+    else next();
+  }
+  function closeEntry() { var s = site(); state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.prevCtab = s ? (state.ctab[s.id] || 0) : 0; render(); }
+  function pickSite(id) { state.site = id; state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.photoFiles = []; state.prevCtab = 0; state.csearch = ""; state.cmore = false; render(); ensure(); }
+
   app.addEventListener("click", function (ev) {
-    var rt = ev.target.closest("[data-rt]"); if (rt && rt.dataset && rt.dataset.rt) { richCmd(rt); return; }
+    var rt = ev.target.closest("[data-rt]"); if (rt && rt.dataset && rt.dataset.rt) { state.dirty = true; richCmd(rt); return; }
     var el = ev.target.closest("[data-tab],[data-act]"); if (!el) return;
-    if (el.dataset.tab) { go(el.dataset.tab); return; }
+    if (el.dataset.tab) { var to = el.dataset.tab; guard(function () { go(to); }); return; }
     var a = el.dataset.act, s = site();
     if (a === "refresh") { state.content = {}; state.history = {}; load(); }
     else if (a === "signout") sb.auth.signOut();
     else if (a === "signin-mode") { state.signinMode = el.dataset.mode; state.signinSent = false; state.notice = null; var em = app.querySelector("#email"); if (em) state.email = em.value.trim(); render(); }
     else if (a === "pick-site") { state.site = el.dataset.site; go("content"); }
+    else if (a === "leave-stay") { state.leave = null; render(); }
+    else if (a === "leave-go") { var next = state.leave; state.leave = null; state.dirty = false; if (next) next(); }
+    else if (a === "leave-save") { var fm = app.querySelector('form[data-form="entry"]'); state.leave = null; if (fm) saveEntry(fm); }
+    else if (a === "egroup") {
+      state.egroup = Number(el.dataset.g);
+      Array.prototype.forEach.call(app.querySelectorAll(".egroup"), function (x) { x.hidden = x.dataset.g !== el.dataset.g; });
+      Array.prototype.forEach.call(app.querySelectorAll('[data-act="egroup"]'), function (x) { x.className = x.dataset.g === el.dataset.g ? "on" : ""; });
+    }
+    else if (a === "cmore") { state.cmore = true; filterList(); }
+    else if (a === "look") { var t = themeOf(), i = Number(el.dataset.i); if (t) { Object.assign(t.draft.colours, i < 0 ? t.values.colours : t.spec.looks[i].colours); themeUpdate(); } }
+    else if (a === "theme-discard") { var t2 = themeOf(); if (t2) { t2.draft = JSON.parse(JSON.stringify(t2.values)); themeUpdate(); } }
+    else if (a === "theme-publish") publishTheme();
+    else if (a === "pv-mode") {
+      var t3 = themeOf(); if (!t3) return; t3.mode = el.dataset.mode;
+      app.querySelector("#pv-stage").className = "pv-stage " + t3.mode;
+      Array.prototype.forEach.call(app.querySelectorAll('[data-act="pv-mode"]'), function (x) { x.className = x.dataset.mode === t3.mode ? "on" : ""; });
+      sizePreview();
+    }
     else if (a === "go-sites") go("sites");
-    else if (a === "ctab") { state.prevCtab = state.ctab[s.id] || 0; state.ctab[s.id] = Number(el.dataset.i); render(); }
-    else if (a === "open") { state.draft = null; state.open = { ci: Number(el.dataset.ci), ei: Number(el.dataset.ei) }; state.confirm = null; state.notice = null; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
-    else if (a === "close") { state.open = null; state.draft = null; state.confirm = null; state.prevCtab = s ? (state.ctab[s.id] || 0) : 0; render(); }
+    else if (a === "ctab") { state.prevCtab = state.ctab[s.id] || 0; state.ctab[s.id] = Number(el.dataset.i); state.csearch = ""; state.cmore = false; render(); }
+    else if (a === "open") { state.draft = null; state.dirty = false; state.leave = null; state.egroup = 0; state.open = { ci: Number(el.dataset.ci), ei: Number(el.dataset.ei) }; state.confirm = null; state.notice = null; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
+    else if (a === "close") guard(closeEntry);
     else if (a === "ask") { state.confirm = el.dataset.k; render(); }
     else if (a === "cancel") { state.confirm = null; render(); }
     else if (a === "entry-hide") entryChange("setHidden", function (o) { return { hidden: !o.e.hidden }; });
@@ -679,7 +921,11 @@
 
   app.addEventListener("change", function (ev) {
     var t = ev.target, kind = t.dataset.change;
-    if (kind === "site") { state.site = t.value; state.open = null; state.draft = null; state.confirm = null; state.photoFiles = []; state.prevCtab = 0; render(); ensure(); }
+    if (t.dataset.field) state.dirty = true;
+    if (kind === "site") { var want = t.value; if (state.open && state.dirty) t.value = state.site; guard(function () { pickSite(want); }); }
+    else if (kind === "csort") { state.csort = t.value; render(); }
+    else if (t.dataset.themeFont) { var tf = themeOf(); if (tf) { tf.draft.fonts[t.dataset.themeFont] = t.value; themeUpdate(); } }
+    else if (t.dataset.themeColour || t.dataset.themeHex) { themeUpdate(); }
     else if (kind === "photo-files") {
       Array.prototype.forEach.call(t.files, function (f) { if (state.photoFiles.length < 12) state.photoFiles.push({ file: f, slot: "", note: "", alt: "", caption: "" }); });
       state.notice = null; render();
@@ -695,8 +941,21 @@
   // Typing must not redraw the page, or the box loses focus.
   app.addEventListener("input", function (ev) {
     var ed = ev.target.closest && ev.target.closest("[data-rich]");
-    if (ed) { if (rich[ed.dataset.rich]) rich[ed.dataset.rich].dirty = true; return; }
-    var t = ev.target, field = { "photo-note": "note", "photo-alt": "alt", "photo-caption": "caption" }[t.dataset.input];
+    if (ed) { state.dirty = true; if (rich[ed.dataset.rich]) rich[ed.dataset.rich].dirty = true; return; }
+    var t = ev.target, field;
+    if (!t.dataset) return;
+    if (t.dataset.field) { state.dirty = true; return; }
+    if (t.dataset.input === "csearch") { state.csearch = t.value; filterList(); return; }
+    if (t.dataset.themeColour || t.dataset.themeHex) {
+      var th = themeOf(), id = t.dataset.themeColour || t.dataset.themeHex, v = t.value.trim();
+      if (!th || !validHex(v)) return;
+      th.draft.colours[id] = v.toUpperCase();
+      var row = t.closest(".swrow"), other = row && row.querySelector(t.dataset.themeColour ? "[data-theme-hex]" : "[data-theme-colour]"), sw = row && row.querySelector(".sw");
+      if (other) other.value = t.dataset.themeColour ? v.toUpperCase() : v.toLowerCase();
+      if (sw) sw.style.background = v;
+      patchIsland(); applyPreview(); return;
+    }
+    field = { "photo-note": "note", "photo-alt": "alt", "photo-caption": "caption" }[t.dataset.input];
     if (!field) return;
     var p = state.photoFiles[Number(t.dataset.i)]; if (!p) return;
     p[field] = t.value;
@@ -744,12 +1003,33 @@
     { sha: "a".repeat(40), what: "Edit article: [Sample] How to look at a painting", when: new Date().toISOString(), by: "you", canUndo: true },
     { sha: "b".repeat(40), what: "[Sample] An earlier change made outside the console", when: new Date(Date.now() - 86400000).toISOString(), by: "", canUndo: false },
   ];
+  var demoTheme = {
+    spec: {
+      url: "https://worldartreview.com/",
+      colours: [
+        { id: "paper", role: "bg", label: "Page background", use: "Pages and cards", var: "--paper", default: "#EEE5D4", derived: [["--paper-deep", 94, "black"]] },
+        { id: "green", role: "band", label: "Bands and buttons", use: "Top band, buttons and labels", var: "--green", default: "#1D4A35", on: "paper", min: 3, derived: [["--green-dark", 78, "black"]] },
+        { id: "brick", role: "accent", label: "Links and highlights", use: "Links and small accents", var: "--brick", default: "#B5392B", on: "paper", min: 3, derived: [] },
+        { id: "ink", role: "text", label: "Text", use: "All reading text", var: "--ink", default: "#1D1D1B", on: "paper", min: 4.5, derived: [] },
+      ],
+      fonts: [
+        { id: "display", role: "display", label: "Headlines", use: "Site name and titles", var: "--display", default: "Castoro", fallback: "Georgia, serif", options: ["Castoro", "Libre Caslon Display", "Cormorant Garamond", "EB Garamond"] },
+        { id: "text", role: "body", label: "Reading text", use: "Articles and portfolios", var: "--text", default: "Literata", fallback: "Georgia, serif", options: ["Literata", "Source Serif 4", "EB Garamond"] },
+        { id: "sans", role: "small", label: "Small text", use: "Buttons, labels and menus", var: "--sans", default: "Libre Franklin", fallback: "Arial, sans-serif", options: ["Libre Franklin", "Work Sans", "Karla"] },
+      ],
+      looks: [{ name: "Ink and clay", colours: { paper: "#F1EEE8", green: "#22304A", brick: "#A4572F", ink: "#1B1D22" } }, { name: "Bark and moss", colours: { paper: "#EFEAE4", green: "#3B2F2A", brick: "#5F7A3C", ink: "#1F1B19" } }],
+      fontRequests: { "Castoro": "Castoro:ital@0;1", "Libre Caslon Display": "Libre+Caslon+Display", "Cormorant Garamond": "Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400", "EB Garamond": "EB+Garamond:ital,wght@0,400;0,500;0,600;1,400", "Literata": "Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;1,7..72,400", "Source Serif 4": "Source+Serif+4:ital,wght@0,400;0,500;0,600;1,400", "Libre Franklin": "Libre+Franklin:wght@400;500;600", "Work Sans": "Work+Sans:wght@400;500;600", "Karla": "Karla:wght@400;500;600" },
+    },
+    values: { colours: { paper: "#EEE5D4", green: "#1D4A35", brick: "#B5392B", ink: "#1D1D1B" }, fonts: { display: "Castoro", text: "Literata", sans: "Libre Franklin" } },
+  };
   function demoApi(body) {
     return new Promise(function (resolve) {
       setTimeout(function () {
         if (body.action === "overview") resolve(JSON.parse(JSON.stringify(demoData)));
         else if (body.action === "content") resolve({ collections: JSON.parse(JSON.stringify(demoContent)) });
         else if (body.action === "history") resolve({ changes: demoHistory });
+        else if (body.action === "theme") { if (params.has("preview")) demoTheme.spec.url = params.get("preview"); resolve(JSON.parse(JSON.stringify(demoTheme))); }
+        else if (body.action === "saveTheme") { demoTheme.values = JSON.parse(JSON.stringify(body.values)); resolve({ ok: true, values: body.values }); }
         else if (body.action === "uploadPhoto") resolve({ ok: true, name: (body.slot ? "slot--" + body.slot : "note--" + String(body.description).toLowerCase().replace(/[^a-z0-9]+/g, "-")) + "." + body.ext });
         else resolve({ ok: true });
       }, 100);
@@ -774,6 +1054,6 @@
   }
 
   // Exposed for the automated checks only.
-  window.__adh = { state: state, render: render, esc: esc, go: go, richIn: richIn, richOut: richOut, richInline: richInline };
+  window.__adh = { state: state, render: render, esc: esc, go: go, themeCss: themeCss, richIn: richIn, richOut: richOut, richInline: richInline };
   start();
 })();

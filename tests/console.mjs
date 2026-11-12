@@ -8,11 +8,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const click = (d) => el.listeners.click({ target: { closest: () => ({ dataset: d }) } });
 await wait(500);
 const adh = win.__adh, html = () => el.innerHTML;
-assert.ok(html().includes("Artiscope<br>Digital Home") && html().includes("Sample mode") && html().includes("Version 11"));
+assert.ok(html().includes("Artiscope<br>Digital Home") && html().includes("Sample mode") && html().includes("Version 12"));
 assert.ok(html().includes("Everything is live") && html().includes('class="bulge'));
 
 // every screen draws, with no stray "undefined" and no long dashes
-for (const tab of ["home", "content", "photos", "history", "sites"]) {
+for (const tab of ["home", "content", "theme", "photos", "history", "sites"]) {
   adh.go(tab); await wait(300);
   assert.ok(html().length > 800, tab + " draws");
   assert.ok(!html().includes("undefined") && !html().includes("[object"), tab + " is clean");
@@ -44,7 +44,7 @@ const col = adh.state.content["world-art-review"][0];
 col.label = bad; col.entries[0] = { id: bad, title: bad, sub: bad, hidden: false, fields: [{ name: bad, label: bad, type: "long", value: bad }, { name: "x", label: bad, type: "lines", value: [bad] }] };
 adh.state.data.sites[0].name = bad; adh.state.data.sites[0].slots[0].label = bad; adh.state.data.sites[0].slots[0].group = bad;
 adh.state.history["world-art-review"] = [{ sha: bad, what: bad, when: "2026-11-11T10:00:00Z", by: bad, canUndo: true }];
-for (const tab of ["home", "content", "photos", "history", "sites"]) {
+for (const tab of ["home", "content", "theme", "photos", "history", "sites"]) {
   adh.go(tab); await wait(50);
   if (tab === "content") click({ act: "open", ci: "0", ei: "0" });
   assert.ok(!html().includes("<img src=x") && !html().includes("<script>alert"), tab + " escapes hostile text");

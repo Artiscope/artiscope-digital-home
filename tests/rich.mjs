@@ -39,6 +39,7 @@ assert.equal(await page.evaluate(() => window.bad), undefined);
 
 // 2. the editor on screen
 await page.click('[data-tab="content"]'); await page.click('[data-act="open"]');
+await page.click('.seg.wide button:has-text("Body")');
 await page.waitForSelector(".rt-page");
 const shown = await page.innerHTML(".rt-page");
 assert.ok(!(await page.innerText(".rt-page")).includes("<p>") && shown.includes("rt-chip") && shown.includes("The auction table for zara muse appears here"));
@@ -68,11 +69,11 @@ assert.ok((await page.innerText(".rt-page")).includes("A new heading"));
 await page.click('button[type="submit"]'); await page.waitForSelector("text=Saved. Live in about two minutes");
 assert.deepEqual(errors, []);
 // phone width
-await page.setViewportSize({ width: 390, height: 800 }); await page.click('[data-act="open"]'); await page.waitForSelector(".rt-page");
+await page.setViewportSize({ width: 390, height: 800 }); await page.click('[data-act="open"]'); await page.click('.seg.wide button:has-text("Body")'); await page.waitForSelector(".rt-page");
 assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= 392), "fits a phone");
 await page.screenshot({ path: "/tmp/rich-phone.png" });
 await page.setViewportSize({ width: 1280, height: 900 }); await page.click('[data-act="close"]'); await page.click('[data-act="ctab"][data-i="1"]'); await page.click('[data-act="open"]');
-await page.waitForSelector(".rt-page.short"); assert.equal(await page.locator(".rt-page").count(), 2); assert.equal(await page.locator("h2.group").count(), 3);
+await page.waitForSelector(".rt-page.short", { state: "attached" }); assert.equal(await page.locator(".rt-page").count(), 2); assert.equal(await page.locator(".seg.wide button").count(), 4);
 assert.ok(!(await page.inputValue("#f-3")).includes("<"));
 await page.screenshot({ path: "/tmp/rich-artist.png", fullPage: true });
 await browser.close(); console.log("rich editor: all good");

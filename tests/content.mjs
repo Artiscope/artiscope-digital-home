@@ -85,4 +85,25 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   const bio2 = fieldsOf(entriesOf(gamC, by(G, "artists"))[0].ref, [], by(G, "artists").inside);
   assert.ok(bio2.some((f) => f.name === "sources.0.1" && f.group === "Sources" && f.label === "1: link"));
 }
+
+// theme: read, check and save
+{
+  const { themeCss, cleanTheme } = await import("./home.mjs");
+  const spec = SITES[0].theme;
+  assert.deepEqual(themeCss(spec, cleanTheme(spec, {})), { css: "", font_links: [] }, "an untouched theme adds nothing to the site");
+  assert.throws(() => cleanTheme(spec, { colours: { paper: "red" } })); assert.throws(() => cleanTheme(spec, { colours: { paper: "#fff;}body{display:none" } }));
+  assert.throws(() => cleanTheme(spec, { fonts: { display: "Comic Sans MS" } }));
+  let r2 = await handle(post({ action: "theme", site: "world-art-review" })), d2 = await r2.json();
+  assert.equal(d2.values.colours.green, "#1D4A35"); assert.equal(d2.spec.colours.length, 4); assert.equal(d2.spec.url, "https://worldartreview.com/");
+  r2 = await handle(post({ action: "saveTheme", site: "world-art-review", values: d2.values })); assert.equal((await r2.json()).unchanged, true);
+  r2 = await handle(post({ action: "saveTheme", site: "world-art-review", values: { colours: { green: "#22304a" }, fonts: { display: "EB Garamond" } } })); assert.equal(r2.status, 200);
+  const saved = JSON.parse(store["content/theme.json"]);
+  assert.equal(saved.colours.green, "#22304A"); assert.equal(saved.colours.paper, "#EEE5D4"); assert.equal(saved.fonts.display, "EB Garamond");
+  assert.ok(/^:root\{[^<>{}]*\}$/.test(saved.css) && saved.css.includes("--green:#22304A") && saved.css.includes("--green-dark:color-mix(in srgb, #22304A 78%, black)") && saved.css.includes("--display:'EB Garamond', Georgia, serif") && !saved.css.includes("--paper"));
+  assert.deepEqual(saved.font_links, ["https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap"]);
+  assert.equal(writes.at(-1), "Theme: bands and buttons, headlines typeface (me@x.com)");
+  r2 = await handle(post({ action: "saveTheme", site: "world-art-review", values: { colours: { green: "url(x)" } } })); assert.equal(r2.status, 400);
+  fs.writeFileSync("/tmp/theme-saved.json", JSON.stringify(saved, null, 2));
+  for (const st of SITES.filter((x) => x.theme)) for (const l of st.theme.looks) cleanTheme(st.theme, { colours: l.colours });
+}
 console.log("CONTENT CHECKS PASSED");
