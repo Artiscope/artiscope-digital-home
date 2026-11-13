@@ -571,6 +571,27 @@ await check("Removing someone asks once, and they are turned away from their nex
   finally { signedIn = "tester@artiscope.co.uk"; await goHome(); }
 });
 
+await check("An editor gets their own copy, saves, then saves and publishes, and the live site changes", async () => {
+  await page.click('[data-tab="people"]'); await page.waitForSelector(".prow"); await page.click('[data-act="people-invite"]');
+  await page.fill("#pi-email", "writer@example.org"); await page.check('form[data-form="invite"] input[value="world-art-review"]');
+  await page.click('form[data-form="invite"] button[type=submit]'); await settle(900);
+  const tag = (ppl.table.find((p) => p.email === "writer@example.org") || {}).id; must(!!tag, "not invited");
+  signedIn = "writer@example.org";
+  try {
+    await goHome(); await page.click('[data-act="open-site"][data-site="world-art-review"]'); await page.waitForSelector("#ed-sections .sec", { timeout: 15000 }); await settle(1500);
+    must(Object.keys(hub.refs(WR)).includes("adh/trial-own-" + tag), "no copy was made for the editor");
+    must(!(await page.$("select.copypick")), "an editor should not be able to switch to the live site");
+    const before = read(WR, "content/pages.json").pages.home.sections.length;
+    await addSec("space"); await page.click('[data-act="ed-save"]'); await settle(1800);
+    must(read(WR, "content/pages.json").pages.home.sections.length === before, "Save alone changed the live site");
+    must((await text(".ed-top")).includes("Publish"), "no Publish after saving");
+    await addSec("space"); await page.click('[data-act="ed-save-publish"]'); await settle(2500);
+    must(read(WR, "content/pages.json").pages.home.sections.length === before + 2, "Save and publish did not reach the live site");
+    must(hub.lastMessage(WR, "main").endsWith("(by " + tag + ")"), "the live change is not recorded by the editor's private tag: " + hub.lastMessage(WR, "main"));
+    must(!hub.lastMessage(WR, "main").includes("@"), "an email address went into GitHub"); await shot("26-editor-published");
+  } finally { signedIn = "tester@artiscope.co.uk"; await goHome(); }
+});
+
 // =============== 7. Global Art Monitor ===============
 area = "Global Art Monitor";
 await check("The editor opens with the real page", async () => { await openSite("global-art-monitor"); must(!!frame("globalartmonitor.com"), "no preview"); });

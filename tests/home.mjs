@@ -2211,12 +2211,19 @@ export async function handle(req) {
     }
     if (action === "refreshCopy") {
       if (copy.kind !== "trial") return json({ ok: true, unchanged: true });
+      // Start again: the copy becomes exactly the live site. Its unpublished work is let go (the console asks first).
+      if (body.fresh) {
+        await dropRedo(site, copy);
+        const moved = await moveBranch(site, copy.branch, await mainSha(site), true);
+        if (!moved.ok) return json({ error: writeProblem(moved, "GitHub did not start the copy again.") }, 502);
+        return json({ ok: true });
+      }
       if (copy.behind === 0) return json({ ok: true, unchanged: true });
       await dropRedo(site, copy);
       const m = copy.ahead === 0
         ? await moveBranch(site, copy.branch, await mainSha(site), false)
         : await gh(repo + "/merges", { method: "POST", body: JSON.stringify({ base: copy.branch, head: "main", commit_message: "Bring in the latest live changes" + who }) });
-      if (m.status === 409) return json({ error: "Live and this copy have both changed the same thing, so they cannot be joined automatically. Make the same edit on the copy by hand, or start a fresh copy." }, 409);
+      if (m.status === 409) return json({ clash: true, error: "Your copy and the live site have both changed the same part, so they cannot be joined. You can publish yours over it, or start again from the live site." }, 409);
       if (!m.ok && m.status !== 204) return json({ error: writeProblem(m, "GitHub did not refresh the copy.") }, 502);
       return json({ ok: true });
     }

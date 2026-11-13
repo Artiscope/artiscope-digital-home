@@ -90,16 +90,41 @@ assert.equal(JSON.parse(hub.read(WR, "main", "content/site.json")).articles[0].t
 assert.equal(hub.lastMessage(WR, "main"), "Make live: An editor's copy (by " + tag + ")");
 d = await as(SAM, { action: "overview", copies: { [site]: mine } }); assert.equal(d.sites[0].copies.find((x) => x.id === mine).ahead, 0);
 
+// a second editor on the same site: their copy falls behind when Sam publishes, and can be brought up to date, keeping their own work
+assert.equal((await as(ADMIN, { action: "invitePerson", email: "jo@example.org", name: "Jo Lee", sites: [site] })).ok, true);
+const JO = "jo@example.org", joCopy = ownCopyId(ppl.table.find((p) => p.email === JO).id);
+assert.equal((await as(JO, { action: "makeCopy", site })).copy, joCopy);
+const second = (await as(JO, { action: "content", site, copy: joCopy })).collections[0].entries[1];
+// Jo works on a different part from Sam (the stand-in for GitHub joins whole files, where GitHub joins lines)
+hub.commitOn(WR, "adh/" + joCopy, "content/theme.json", '{"colours":{"brick":"#A1332A"}}', "Theme: links (by " + joCopy.slice(-10) + ")");
+assert.equal((await as(SAM, { action: "saveEntry", site, copy: mine, collection: "articles", id: first.id, values: { title: "Sam again" } })).ok, true);
+assert.equal((await as(SAM, { action: "publish", site, copy: mine })).ok, true);
+d = await as(JO, { action: "overview", copies: { [site]: joCopy } }); c = d.sites[0].copies.find((x) => x.id === joCopy);
+assert.ok(c.behind > 0 && c.ahead > 0, "Jo's copy should be behind the live site, with Jo's work still on it");
+assert.ok(!d.sites[0].copies.some((x) => x.id === mine), "Jo cannot see Sam's copy");
+{ const rr = await as(JO, { action: "refreshCopy", site, copy: joCopy }); assert.equal(rr.ok, true, JSON.stringify(rr)); }
+const joNow = JSON.parse(hub.read(WR, "adh/" + joCopy, "content/site.json")).articles;
+assert.equal(joNow[0].title, "Sam again", "Sam's published work came in"); assert.ok(hub.read(WR, "adh/" + joCopy, "content/theme.json").includes("#A1332A"), "Jo's own work is kept");
+// when both changed the very same part, Jo is told plainly, and can start again from the live site
+assert.equal((await as(JO, { action: "saveEntry", site, copy: joCopy, collection: "articles", id: second.id, values: { title: "Jo's edit" } })).ok, true);
+assert.equal((await as(SAM, { action: "saveEntry", site, copy: mine, collection: "articles", id: first.id, values: { title: "Sam a third time" } })).ok, true);
+assert.equal((await as(SAM, { action: "publish", site, copy: mine })).ok, true);
+d = await as(JO, { action: "refreshCopy", site, copy: joCopy }); assert.equal(d.status, 409); assert.equal(d.clash, true);
+assert.equal((await as(JO, { action: "refreshCopy", site, copy: joCopy, fresh: true })).ok, true);
+d = await as(JO, { action: "overview", copies: { [site]: joCopy } }); c = d.sites[0].copies.find((x) => x.id === joCopy);
+assert.equal(c.ahead + c.behind, 0, "Jo's copy is now exactly the live site");
+assert.equal((await as(JO, { action: "publish", site, copy: mine })).status, 409, "Jo cannot even find Sam's copy, let alone publish it");
+
 // the admin changes their sites, and it works from their next click
 assert.equal((await as(ADMIN, { action: "updatePerson", email: SAM, name: "Sam Taylor", sites: ["global-art-monitor"] })).ok, true);
 assert.equal((await as(SAM, { action: "content", site })).status, 403);
 d = await as(SAM, { action: "overview" }); assert.deepEqual(d.sites.map((s) => s.id), ["global-art-monitor"]);
-assert.equal((await as(ADMIN, { action: "resendInvite", email: SAM })).emailed, true); assert.equal(mails.length, 2);
+assert.equal((await as(ADMIN, { action: "resendInvite", email: SAM })).emailed, true); assert.equal(mails.length, 3);
 
 // removing someone: they are turned away at once, and what they saved stays
 assert.equal((await as(ADMIN, { action: "removePerson", email: SAM })).ok, true);
 assert.equal((await as(SAM, { action: "overview" })).status, 403);
-assert.equal(JSON.parse(hub.read(WR, "main", "content/site.json")).articles[0].title, "Sam's edit");
+assert.equal(JSON.parse(hub.read(WR, "main", "content/site.json")).articles[0].title, "Sam a third time", "what they published stays");
 
 // with no database key, the admin still works and editors are simply not there
 key = ""; d = await as(ADMIN, { action: "overview" }); assert.equal(d.status, 200); assert.equal(d.sites.length, 5);
