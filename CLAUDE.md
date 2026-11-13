@@ -2,7 +2,7 @@
 
 Read all of this before doing anything. It is the standing brief for
 building the console, carried over from the Claude conversation where it
-was built (Versions 1 to 30, up to 13 November 2026).
+was built (Versions 1 to 31, up to 13 November 2026).
 
 ## Who you work for
 
@@ -159,7 +159,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
 - On Shopify, the owner signs in themselves. Look only; change or save
   nothing in the store unless they ask.
 
-## Where things stand (13 November 2026, Version 30)
+## Where things stand (13 November 2026, Version 31)
 
 Done:
 
@@ -174,20 +174,33 @@ Done:
   Picture, Text with picture (Global Art Monitor).
 - Batch 3, art and reading: Artworks, Exhibitions, Career timeline,
   Press quotes (both); Artist cards (World Art Review).
+- Batch 4, the last of the set: Email sign-up and Visit us (both sites);
+  Contact form (World Art Review), with its topics as blocks. Sample:
+  https://claude.ai/artifact/CHjJnQp1MMq4hQtQmkayYP
+  The forms send nothing themselves. They open the visitor's own email
+  app with the message ready to send to info@grovegallery.com, and a line
+  under the button always says so. No outside service.
+- World Art Review's existing Subscribe panel (`subForm` in
+  `src/index.html`) now works the same honest way: "Ask to join" opens
+  the visitor's email app. It no longer says the first letter is on its
+  way.
 
 Waiting for the owner:
 
-- Batch 4, the last of the set: Email sign-up and Visit us (both sites),
-  Contact form (World Art Review). The sample is drawn:
-  https://claude.ai/artifact/CHjJnQp1MMq4hQtQmkayYP
-  Forms open the visitor's own email app with the message ready to send
-  to info@grovegallery.com, as Global Art Monitor's contact form already
-  does. No outside service.
-- Also asked, not yet answered: World Art Review's existing sign-up box
-  (`subForm` in `src/index.html`) says "The first letter is on its way"
-  but sends and stores nothing. The proposal is to switch it to the same
-  email-app approach. A real mailing list would need a service such as
-  Mailchimp or Buttondown, which is the owner's decision.
+- Real address, opening hours and travel details for Visit us. The
+  section starts with them empty, shown as "[To add]". Never guess them.
+- A real mailing list would need a service such as Mailchimp or
+  Buttondown. That is the owner's decision; until then the email-app
+  approach stays.
+
+Notes for checking:
+
+- In the editor a click on the page picks a section, so the form buttons
+  do nothing there. `tests/uat.mjs` sends the forms directly. Each form
+  keeps the email it prepared in `data-mailto`, so a check can read it.
+- In a cloud session the project may not see the installed browser
+  tools. Link them rather than installing a second copy:
+  `ln -s "$(npm root -g)/playwright" node_modules/playwright`.
 
 Later, in this order unless the owner says otherwise: user access, a Code
 screen, payments (Stripe), building the three new sites, extras. A
@@ -197,7 +210,8 @@ code.
 Earlier samples and reports, for reference:
 
 - Batch samples: https://claude.ai/artifact/N4KALiybRsBpVnFhxi9iXw (1),
-  https://claude.ai/artifact/U3TsSwtRR6oUV7Wvd3cyQs (2)
+  https://claude.ai/artifact/U3TsSwtRR6oUV7Wvd3cyQs (2),
+  https://claude.ai/artifact/CHjJnQp1MMq4hQtQmkayYP (4)
 - Blocks and pickers sample: https://claude.ai/artifact/7aTnkPvmNnGHv5MDGkPk7i
 - Theme samples: https://claude.ai/artifact/3RE2FguoELV3rJxFjogSPH
 - Acceptance test report: https://claude.ai/artifact/GCTYoKHrNNgnRdmj2A16cE
