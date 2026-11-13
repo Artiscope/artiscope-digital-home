@@ -180,6 +180,37 @@ WAR_SECTIONS.columns = { label: "Columns", about: "Two to four columns side by s
   starter: { ...COL_STARTER(["A heading"]), bg: "paper", fg: "" }, fields: [EYEBROW, HEADING, COL_ROWS, PER_ROW, NUMBERED, BG, FG] };
 WAR_SECTIONS.space = SPACE;
 
+// ----- new sections for any page: batch 2, pictures -----
+const PIC = { name: "image", label: "Picture", type: "image", alt: "alt" };
+const PIC_ALT = { name: "alt", label: "Describe the picture", type: "text", hint: "For people who cannot see it. Needed before you save." };
+const PB_PLACE = { name: "place", label: "Box of words at the", type: "choice", group: "Look", seg: true, dflt: "L", options: [["L", "Left"], ["C", "Centre"], ["R", "Right"]] };
+const PB_FIT = { name: "fit", label: "Picture", type: "choice", group: "Look", seg: true, dflt: "fill", options: [["fill", "Fill the banner"], ["whole", "Show it whole"]], hint: "Fill the banner trims the edges to fit. Choose Show it whole for an artwork, so none of it is cut off." };
+const SLIDE_ROWS = { name: "slides", label: "Slides", type: "rows", fields: [PIC, PIC_ALT, { name: "caption", label: "Caption", type: "text", hint: "Such as the title, year and medium, and who took the photo. Leave empty for none." }] };
+const SLIDE_BLOCK = { field: "slides", label: "Slide", add: "Add a slide", about: "One picture in the slideshow, with its caption." };
+const SLIDE_LOOK = [{ name: "auto", label: "Move on by itself", type: "yesno", group: "Look", hint: "Every few seconds, until a visitor uses Previous or Next. Pictures stay still for people who ask their device for less motion." }, { name: "seconds", label: "Seconds on each slide", type: "number", group: "Look", hint: "Between 3 and 30." }];
+const SLIDE_SUMMARY = (st) => { const n = (st.slides || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " slide" : " slides"); };
+const SLIDE_STARTER = { slides: [{ image: "", alt: "", caption: "" }, { image: "", alt: "", caption: "" }, { image: "", alt: "", caption: "" }], auto: true, seconds: 6 };
+const PHOTO_ROWS = { name: "photos", label: "Photos", type: "rows", fields: [PIC, PIC_ALT, { name: "caption", label: "Title under the photo", type: "text", hint: "Leave empty for none." }, { name: "sub", label: "Small line", type: "text", hint: "Such as the year and medium. Leave empty for none." }] };
+const PHOTO_BLOCK = { field: "photos", label: "Photo", add: "Add a photo", about: "One photo in the gallery. Visitors click it to see it larger." };
+const PHOTO_PER_ROW = { name: "per_row", label: "Photos in a row", type: "choice", group: "Look", seg: true, dflt: "3", options: [["2", "Two"], ["3", "Three"], ["4", "Four"]], hint: "Two in a row on a phone." };
+const PHOTO_SUMMARY = (st) => { const n = (st.photos || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " photo" : " photos"); };
+const PHOTO_STARTER = { photos: [1, 2, 3].map(() => ({ image: "", alt: "", caption: "", sub: "" })), per_row: "3" };
+const LOGO_ITEM_ROWS = (hint) => ({ name: "logos", label: "Logos", type: "rows", fields: [{ ...PIC, label: "Logo", button: "Upload a logo", hint: "A PNG with a clear background works best." }, { name: "alt", label: "Name, read aloud to people who cannot see it", type: "text", hint: "Shown as words until a logo is uploaded." }, { name: "href", label: "Opens when clicked", type: "text", addr: true, hint }] });
+const LOGO_ITEM_BLOCK = { field: "logos", label: "Logo", add: "Add a logo", about: "One logo in the row, with an optional link." };
+const LOGO_COLOUR = { name: "colour", label: "Logo colours", type: "choice", group: "Look", seg: true, dflt: "one", options: [["one", "One colour"], ["own", "Their own colours"]], hint: "One colour keeps a row of different logos calm." };
+const LOGO_SUMMARY = (st) => { const n = (st.logos || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " logo" : " logos"); };
+const LOGO_STARTER = { logos: [1, 2, 3].map(() => ({ image: "", alt: "Partner", href: "" })), colour: "one" };
+const PB_ABOUT = "A large picture with a box of words and one button over it.";
+WAR_SECTIONS["picture-banner"] = { label: "Picture banner", about: PB_ABOUT, summary: (st) => (st.heading || []).join(" ") || "Picture banner", library: "A large picture with words over it",
+  starter: { image: "", alt: "", eyebrow: "", heading: ["A heading"], text: "", label: "Read on", href: "#artists", place: "L", box: "green", fit: "fill" },
+  fields: [PIC, PIC_ALT, EYEBROW, HEADING, { name: "text", label: "Text", type: "text", hint: "One short sentence. Leave empty to hide." }, { name: "label", label: "Button words", type: "text", hint: "Leave empty for no button." }, ADDR, PB_PLACE, { name: "box", label: "Box colour", type: "choice", group: "Look", seg: true, dflt: "green", options: [["green", "Green"], ["paper", "Paper"]] }, PB_FIT] };
+WAR_SECTIONS.slideshow = { label: "Slideshow", about: "Large pictures that take turns, each with a caption. Visitors move it on with Previous and Next.", summary: SLIDE_SUMMARY, library: "Pictures that take turns", blocks: [SLIDE_BLOCK],
+  starter: { eyebrow: "", heading: [], ...SLIDE_STARTER, bg: "paper", fg: "" }, fields: [EYEBROW, HEADING, SLIDE_ROWS, ...SLIDE_LOOK, BG, FG] };
+WAR_SECTIONS.gallery = { label: "Gallery", about: "A grid of photos with captions. Visitors click one to see it larger.", summary: PHOTO_SUMMARY, library: "A grid of photos that open larger", blocks: [PHOTO_BLOCK],
+  starter: { eyebrow: "", heading: ["Gallery"], ...PHOTO_STARTER, bg: "paper", fg: "" }, fields: [EYEBROW, HEADING, PHOTO_ROWS, PHOTO_PER_ROW, BG, FG] };
+WAR_SECTIONS["logo-row"] = { label: "Logo row", about: "A row of logos, such as partners or fairs, each with an optional link.", summary: LOGO_SUMMARY, library: "A row of partner logos", blocks: [LOGO_ITEM_BLOCK],
+  starter: { eyebrow: "", ...LOGO_STARTER, bg: "paper", fg: "" }, fields: [{ ...EYEBROW, label: "Small line above the logos" }, LOGO_ITEM_ROWS("A page on this site starts with #, or a full web address starting https://. Leave empty for no link."), LOGO_COLOUR, BG, FG] };
+
 // ----- articles, artist portfolios and sources, edited in place on their own pages -----
 // Each is a set of parts shown in the list on the left. A part with picture: true is the
 // item's shared picture. Fields not listed here (tone, letter, compare and so on) are kept as they are.
@@ -334,6 +365,24 @@ GAM_SECTIONS.button = { label: "Button or link", about: "A heading, a line and o
     { name: "href", label: "Where it goes", type: "text", addr: true, hint: "A page on this site such as auction-results/, or a full web address starting https://." },
     { name: "colour", label: "Button colour", type: "choice", group: "Look", seg: true, options: [["mint", "Mint"], ["ink", "Charcoal"], ["blush", "Pink"]], hint: "On the dark panel, Charcoal shows light." },
     { name: "panel", label: "In a dark panel", type: "yesno", group: "Look" }] };
+// ----- new sections for any page: batch 2, pictures -----
+const G_ADDR_HINT = "A page on this site such as auction-results/, or a full web address starting https://.";
+GAM_SECTIONS["picture-banner"] = { label: "Picture banner", about: PB_ABOUT, summary: (st) => st.heading || "Picture banner", library: "A large picture with words over it",
+  starter: { image: "", alt: "", eyebrow: "", heading: "A heading", text: "", label: "Read on", href: "auction-results/", place: "L", box: "ink", fit: "fill", colour: "mint" },
+  fields: [PIC, PIC_ALT, ...G_HEAD, { name: "text", label: "Text", type: "text", hint: "One short sentence. Leave empty to hide." }, { name: "label", label: "Button words", type: "text", hint: "Leave empty for no button." }, { ...ADDR, hint: G_ADDR_HINT }, PB_PLACE,
+    { name: "box", label: "Box colour", type: "choice", group: "Look", seg: true, dflt: "ink", options: [["ink", "Charcoal"], ["blush", "Pink"]] }, { name: "colour", label: "Button colour", type: "choice", group: "Look", seg: true, dflt: "mint", options: [["mint", "Mint"], ["ink", "Charcoal"], ["blush", "Pink"]] }, PB_FIT] };
+GAM_SECTIONS.slideshow = { label: "Slideshow", about: "Large pictures that take turns, each with a caption. Visitors move it on with Previous and Next.", summary: SLIDE_SUMMARY, library: "Pictures that take turns", blocks: [SLIDE_BLOCK],
+  starter: { eyebrow: "", heading: "", ...SLIDE_STARTER }, fields: [...G_HEAD, SLIDE_ROWS, ...SLIDE_LOOK] };
+GAM_SECTIONS.gallery = { label: "Gallery", about: "A grid of photos with captions. Visitors click one to see it larger.", summary: PHOTO_SUMMARY, library: "A grid of photos that open larger", blocks: [PHOTO_BLOCK],
+  starter: { eyebrow: "", heading: "Gallery", ...PHOTO_STARTER }, fields: [...G_HEAD, PHOTO_ROWS, PHOTO_PER_ROW] };
+GAM_SECTIONS["logo-row"] = { label: "Logo row", about: "A row of logos, such as data sources or partners, each with an optional link.", summary: LOGO_SUMMARY, library: "A row of partner logos", blocks: [LOGO_ITEM_BLOCK],
+  starter: { eyebrow: "", ...LOGO_STARTER }, fields: [{ name: "eyebrow", label: "Small line beside the logos", type: "text", hint: "Leave empty to hide." }, LOGO_ITEM_ROWS(G_ADDR_HINT + " Leave empty for no link."), LOGO_COLOUR] };
+GAM_SECTIONS.picture = { label: "Picture", about: "One large photo with a caption.", summary: (st) => st.caption || st.image || "Picture", library: "One large photo, with a caption", starter: { image: "", alt: "", caption: "", size: "" },
+  fields: [PIC, PIC_ALT, { name: "caption", label: "Caption", type: "text", hint: "Small text under the picture. Leave empty to hide." }, { name: "size", label: "Width", type: "choice", group: "Look", seg: true, options: [["", "Full width"], ["contained", "Contained"]] }] };
+GAM_SECTIONS["text-picture"] = { label: "Text with picture", about: "Words on one side, a photo on the other.", summary: (st) => st.heading || "Text with picture", library: "Words beside a photo",
+  starter: { eyebrow: "", heading: "A heading", body: "Write here.", link: "", href: "", image: "", alt: "", caption: "", side: "right" },
+  fields: [...G_HEAD, { name: "body", label: "Text", type: "long", plain: true, hint: "Leave an empty line between paragraphs." }, { name: "link", label: "Link words", type: "text", hint: "Leave empty for no link." }, { ...ADDR, hint: G_ADDR_HINT },
+    PIC, PIC_ALT, { name: "caption", label: "Caption", type: "text", hint: "Small text under the picture. Leave empty to hide." }, { name: "side", label: "Picture on the", type: "choice", group: "Look", seg: true, options: [["right", "Right"], ["left", "Left"]] }] };
 const G_SALE_FIELDS = [
   { name: "title", label: "Title of the work", type: "text" }, { name: "year", label: "Year made", type: "text" },
   { name: "date", label: "Sale date, as year-month-day", type: "text", nullable: true, hint: "Such as 2025-03-18. Leave empty if not known yet." }, { name: "date_text", label: "Sale date in words", type: "text", hint: "Such as 18 March 2025." },

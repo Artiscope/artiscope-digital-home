@@ -91,7 +91,7 @@ async function openSite(id) { await page.click('[data-tab="home"]', { timeout: 1
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all five sites", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 5, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 28"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 29"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-3"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await page.click('[data-tab="home"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -294,7 +294,7 @@ await check("Add a section at the + line between two sections, found by searchin
   await page.click("#ed-sections > .ins >> nth=2"); await page.waitForSelector(".pk-item");
   await page.fill("[data-pick-q]", "photo"); await settle(200);
   const hits = await page.$$eval(".pk-item:not([hidden])", (xs) => xs.map((x) => x.dataset.key).join(","));
-  must(hits === "text-picture,picture", "search found " + hits);
+  must(hits === "text-picture,picture,gallery", "search found " + hits);
   await page.fill("[data-pick-q]", "quote"); await settle(200); await page.click('.pk-item[data-key="quote"]'); await settle(800);
   const ids = await page.$$eval("#ed-sections .sec:not(.blk)", (xs) => xs.map((x) => x.dataset.id));
   must(ids[2] && ids[2].indexOf("quote") === 0, "placed at " + ids.indexOf(ids.find((x) => x.indexOf("quote") === 0)) + ": " + ids.join(","));
@@ -432,6 +432,47 @@ await check("A button with an unsafe address is not drawn, and the address is no
   await liveSave(); const b = read(GR, "data/pages.json").pages["desk-two"].sections.find((x) => x.id === id).settings;
   must(b.href === "", "saved " + b.href); must(!(await frame("globalartmonitor.com").$(".cta-panel .pill")), "button still drawn");
   const types = read(GR, "data/pages.json").pages["desk-two"].sections.map((x) => x.type).join(","); must(types === "page-head,columns,quote,faq,button", types);
+});
+
+// =============== 6d. New sections, batch 2 ===============
+area = "New sections: batch 2";
+const secIdOf = async (t) => (await page.$$eval("#ed-sections .sec:not(.blk)", (x) => x.map((e) => e.dataset.id))).find((x) => x.indexOf(t) === 0);
+for (const [f, t] of [["tall.jpg", "gal-tall.jpg"], ["wide.jpg", "gal-wide.jpg"], ["logo.png", "row-logo.png"]]) if (fs.existsSync("/tmp/b2img/" + f)) fs.copyFileSync("/tmp/b2img/" + f, "/tmp/uat/" + t); else fs.copyFileSync("/tmp/s2/studio.jpg", "/tmp/uat/" + t.replace(/\.png$/, ".jpg"));
+await check("A gallery photo without a description stops the save, and opens that photo to describe", async () => {
+  await openSite("world-art-review"); await newPage("Pictures"); await addSec("gallery"); const gl = await secIdOf("gallery");
+  await page.click('.sec.blk[data-id="' + gl + '"][data-block="1"]'); await page.setInputFiles('[data-upload="photos.1.image"]', "/tmp/uat/gal-tall.jpg"); await page.waitForSelector(".picthumb[src^='data:image']");
+  await page.click('.sec.blk[data-id="' + gl + '"][data-block="0"]'); await settle(200);
+  await page.click('[data-act="ed-save"]'); await settle(500); const n = await notice(); must(/describe the picture in Gallery/i.test(n), "notice: " + n);
+  must((await text(".ed-right h2")).trim() === "Photo 2", "picked: " + (await text(".ed-right h2")));
+});
+await check("With its description the photo saves into the site's pictures, and shows in the gallery", async () => {
+  await page.fill('[data-pf="photos.1.alt"]', "A tall test picture"); await page.fill('[data-pf="photos.1.caption"]', "Tall work"); await settle(500);
+  must((await frame("worldartreview.com").$$eval(".gl-item img", (x) => x.length)) === 1, "not drawn in the gallery"); await shot("18-gallery");
+  await liveSave(); must(hub.read(WR, "main", "images/gal-tall.jpg") != null, "photo not saved");
+  const ph = read(WR, "content/pages.json").pages.pictures.sections.find((x) => x.type === "gallery").settings.photos[1]; must(ph.image === "gal-tall.jpg" && ph.alt === "A tall test picture", "saved " + JSON.stringify(ph));
+});
+await check("Slideshow: hiding a slide with its eye leaves two, and it saves hidden", async () => {
+  await addSec("slideshow"); const ss = await secIdOf("slideshow"); const f = frame("worldartreview.com");
+  must((await f.$$eval("#" + ss + " .ss-slide", (x) => x.length)) === 3, "three slides not drawn");
+  await page.hover('.sec.blk[data-id="' + ss + '"][data-block="2"]'); await page.click('.sec.blk[data-id="' + ss + '"][data-block="2"] [data-act="ed-row-hide"]'); await settle(600);
+  must((await f.$$eval("#" + ss + " .ss-slide", (x) => x.length)) === 2 && (await f.textContent("#" + ss + " .ss-at")) === "1 of 2", "hidden slide still counted");
+  await liveSave(); must(read(WR, "content/pages.json").pages.pictures.sections.find((x) => x.id === ss).settings.slides[2].hidden === true, "not saved hidden");
+});
+await check("Picking a later slide in the list brings it into view on the page", async () => {
+  const ss = await secIdOf("slideshow"); await page.click('.sec.blk[data-id="' + ss + '"][data-block="1"]'); await settle(700);
+  must(await frame("worldartreview.com").$eval("#" + ss, (e) => e.querySelectorAll(".ss-slide")[1].classList.contains("on")), "second slide not shown");
+});
+await check("Global Art Monitor: a picture banner with an uploaded picture, and a logo row with a link, save together", async () => {
+  await openSite("global-art-monitor"); await newPage("Partners"); await addSec("picture-banner"); await addSec("logo-row");
+  const pb = await secIdOf("picture-banner"), lr = await secIdOf("logo-row");
+  await page.click('#ed-sections .sec[data-id="' + pb + '"]:not(.blk)'); await page.setInputFiles('[data-upload="image"]', "/tmp/uat/gal-wide.jpg"); await page.waitForSelector(".picthumb[src^='data:image']");
+  await page.fill('[data-pf="alt"]', "A wide test picture"); await page.fill('[data-pf="heading"]', "Every documented sale.");
+  await page.click('#ed-sections .sec[data-id="' + lr + '"]:not(.blk)'); await page.click('.sec.blk[data-id="' + lr + '"][data-block="0"]');
+  await page.fill('[data-pf="logos.0.alt"]', "Test partner"); await page.fill('[data-pf="logos.0.href"]', "https://example.org"); await settle(800);
+  const f = frame("globalartmonitor.com"); must(!!(await f.$(".pbanner .pb-pic img")) && !!(await f.$('a.lg[href="https://example.org"]')), "not drawn"); await shot("19-gam-banner");
+  await liveSave(); const secs = read(GR, "data/pages.json").pages.partners.sections;
+  must(secs.find((x) => x.id === pb).settings.image === "gal-wide.jpg" && hub.read(GR, "main", "assets/images/gal-wide.jpg") != null, "banner picture not saved");
+  must(secs.find((x) => x.id === lr).settings.logos[0].href === "https://example.org", "logo link not saved");
 });
 
 // =============== 7. Global Art Monitor ===============
