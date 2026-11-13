@@ -106,6 +106,7 @@ export function makeGitHub(seed) {   // seed: { "Owner/repo": { "path": "text" }
     if (path === "git/commits" && method === "POST") { if (!r.trees[body.tree]) return res(422); return res(201, { sha: commit(r, body.tree, body.parents, body.message) }); }
     if ((x = path.match(/^git\/trees\/(.+)$/))) { const s = resolve(r, x[1]); return s ? res(200, { tree: subtrees(r, filesAt(r, s)) }) : res(404); }
     if (path === "git/blobs" && method === "POST") return res(201, { sha: blob(r, body.content) });
+    if ((x = path.match(/^git\/blobs\/([0-9a-f]{40})$/))) return r.blobs[x[1]] != null ? res(200, { content: r.blobs[x[1]], encoding: "base64" }) : res(404);
     if (path === "git/trees" && method === "POST") {
       const files = { ...r.trees[body.base_tree] };
       for (const e of body.tree) {

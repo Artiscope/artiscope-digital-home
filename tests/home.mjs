@@ -1022,6 +1022,10 @@ export const SITES = [
   { id: "site-4", name: "Site 4", domain: "", repo: "", live: false, artists: [], collections: [] },
   { id: "site-5", name: "Site 5", domain: "", repo: "", live: false, artists: [], collections: [] },
 ];
+// The Practice site: a copy of World Art Review for trying things out, at an unlisted address that
+// search engines are told to ignore. The website agents never work on it. The admin can start it
+// again from World Art Review at any time.
+SITES.push({ ...SITES[0], id: "practice-site", name: "Practice site", domain: "artiscope.github.io/practice-site", repo: "Artiscope/practice-site", practice: true, from: "world-art-review" });
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -1518,7 +1522,7 @@ async function branchForWriting(site, copy, _who) {
 }
 
 async function siteOverview(site, wanted = "", me = null, names = {}) {
-  const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta), edits: !!site.items };
+  const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta), edits: !!site.items, practice: !!site.practice };
   if (!site.live) return base;
   try {
     const copies = (await copiesOf(site)).filter((c) => !me || me.admin || c.kind === "live" || ownerOfCopy(c.id) === me.tag);
@@ -2253,6 +2257,36 @@ export async function handle(req) {
   }
 
   // ----- copies: trial copies, undo and redo, publish -----
+  // The admin starts the Practice site again: its words, pages, theme and photos become World Art Review's.
+  if (action === "resetPractice") {
+    if (!me.admin) return json({ error: "Only the admin can start the Practice site again." }, 403);
+    if (!site.practice) return json({ error: "Only the Practice site can be started again." }, 400);
+    const from = SITES.find((x) => x.id === site.from);
+    const keep = (t) => t.type === "blob" && (CONTENT_FILES.includes(t.path) || /^images\/[^/]+$/.test(t.path));
+    const [src, headSha] = await Promise.all([gh("/repos/" + from.repo + "/git/trees/main?recursive=1"), mainSha(site)]);
+    const head = headSha ? await gh("/repos/" + site.repo + "/git/commits/" + headSha) : null;
+    const have = headSha ? await gh("/repos/" + site.repo + "/git/trees/" + headSha + "?recursive=1") : null;
+    if (!src.ok || !head || !head.ok || !have || !have.ok) return json({ error: "The sites could not be read from GitHub just now." }, 502);
+    const wanted = src.data.tree.filter(keep), names = new Set(wanted.map((t) => t.path)), had = {};
+    for (const t of have.data.tree) if (keep(t)) had[t.path] = t.sha;
+    const tree = Object.keys(had).filter((p) => !names.has(p)).map((path) => ({ path, mode: "100644", type: "blob", sha: null }));
+    for (const t of wanted) {
+      if (had[t.path] === t.sha) continue;   // already the same
+      const b = await gh("/repos/" + from.repo + "/git/blobs/" + t.sha);
+      const made = b.ok ? await gh("/repos/" + site.repo + "/git/blobs", { method: "POST", body: JSON.stringify({ content: String(b.data.content || "").replace(/\n/g, ""), encoding: "base64" }) }) : b;
+      if (!made.ok) return json({ error: writeProblem(made, "GitHub did not copy " + t.path + ".") }, 502);
+      tree.push({ path: t.path, mode: "100644", type: "blob", sha: made.data.sha });
+    }
+    if (!tree.length) return json({ ok: true, unchanged: true });
+    const madeTree = await gh("/repos/" + site.repo + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: head.data.tree.sha, tree }) });
+    if (!madeTree.ok) return json({ error: writeProblem(madeTree, "GitHub did not start the Practice site again.") }, 502);
+    const commit = await gh("/repos/" + site.repo + "/git/commits", { method: "POST", body: JSON.stringify({ message: "Start again from " + from.name + who, tree: madeTree.data.sha, parents: [headSha] }) });
+    if (!commit.ok) return json({ error: writeProblem(commit, "GitHub did not start the Practice site again.") }, 502);
+    const moved = await moveBranch(site, "main", commit.data.sha, false);
+    if (!moved.ok) return json({ error: writeProblem(moved, "GitHub did not start the Practice site again.") }, 502);
+    return json({ ok: true });
+  }
+
   if (action === "versions") {
     const [list, names] = await Promise.all([versionsOf(site), namesFor(me)]);
     return json({

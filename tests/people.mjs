@@ -35,7 +35,7 @@ assert.deepEqual(cleanPerson({ name: "Sam — Taylor<b>", sites: ["world-art-rev
 let d = await as("stranger@x.com", { action: "overview" }); assert.equal(d.status, 403);
 
 // the admin invites an editor: a row is added and the normal sign-in email is sent
-d = await as(ADMIN, { action: "people" }); assert.deepEqual(d.people, []); assert.equal(d.sites.length, 5);
+d = await as(ADMIN, { action: "people" }); assert.deepEqual(d.people, []); assert.equal(d.sites.length, 6);
 d = await as(ADMIN, { action: "invitePerson", email: " Sam@Example.org ", name: "Sam Taylor", sites: [site], back: "https://artiscope.github.io/artiscope-digital-home/" });
 assert.equal(d.ok, true); assert.equal(d.emailed, true);
 assert.deepEqual(mails.at(-1), { to: "sam@example.org", back: "https://artiscope.github.io/artiscope-digital-home/" });
@@ -127,6 +127,6 @@ assert.equal((await as(SAM, { action: "overview" })).status, 403);
 assert.equal(JSON.parse(hub.read(WR, "main", "content/site.json")).articles[0].title, "Sam a third time", "what they published stays");
 
 // with no database key, the admin still works and editors are simply not there
-key = ""; d = await as(ADMIN, { action: "overview" }); assert.equal(d.status, 200); assert.equal(d.sites.length, 5);
+key = ""; d = await as(ADMIN, { action: "overview" }); assert.equal(d.status, 200); assert.equal(d.sites.length, 6);
 assert.equal((await as(ADMIN, { action: "people" })).status, 500);
 console.log("PEOPLE CHECKS PASSED");

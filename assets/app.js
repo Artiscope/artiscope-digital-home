@@ -65,7 +65,7 @@
   function liveSites() { return sites().filter(function (s) { return s.live; }); }
   function site() { return liveSites().find(function (s) { return s.id === state.site; }) || null; }
   function initials(name) { return String(name).split(/\s+/).map(function (w) { return w.charAt(0); }).join("").slice(0, 3).toUpperCase(); }
-  var COLOURS = { "world-art-review": ["#1D4A35", "#EEE5D4"], "global-art-monitor": ["#F3C3C8", "#2A2A2F"] };
+  var COLOURS = { "world-art-review": ["#1D4A35", "#EEE5D4"], "global-art-monitor": ["#F3C3C8", "#2A2A2F"], "practice-site": ["#F1E6FC", "#52057B"] };
   function colours(id) { return COLOURS[id] || ["#EDE8F3", "#5D5866"]; }
 
   // ---------- talking to the server ----------
@@ -334,6 +334,10 @@
       title = "Delete the trial copy \u201C" + c.name + "\u201D?";
       text = "Its changes are lost. The live site is not affected. This cannot be undone.";
       yes = "Delete the copy"; act = "deletecopy";
+    } else if (q.kind === "resetpractice") {
+      title = "Start the Practice site again from World Art Review?";
+      text = "Everything practised on its live copy is replaced by World Art Review as it is now. World Art Review itself is not touched. This cannot be undone, though earlier versions stay in the list.";
+      yes = "Start again"; act = "resetpractice";
     } else if (q.kind === "goback") {
       title = "Go back to version " + q.version + "?";
       text = "The live site goes back to how it was in " + q.version + ", as a new version, so this can be undone the same way. Editors are asked to bring their copies up to date.";
@@ -410,13 +414,13 @@
     var cards = sites().map(function (x) {
       var c = colours(x.live ? x.id : "");
       return '<button type="button" class="card lift sitecard" data-act="open-site" data-site="' + esc(x.id) + '">' +
-        '<span class="banner" aria-hidden="true" style="background:' + c[0] + ";color:" + c[1] + '">' + esc(x.live ? initials(x.name) : x.name.replace(/\D/g, "")) + '</span>' +
-        '<span class="info"><b>' + esc(x.name) + '</b><span class="small">' + esc(x.live ? x.domain : "Domain owned") + '</span>' +
+        '<span class="banner" aria-hidden="true" style="background:' + c[0] + ";color:" + c[1] + '">' + esc(x.practice ? "Practice" : x.live ? initials(x.name) : x.name.replace(/\D/g, "")) + '</span>' +
+        '<span class="info"><b>' + esc(x.name) + '</b><span class="small">' + esc(x.practice ? "Not public. A copy of World Art Review to try things on" : x.live ? x.domain : "Domain owned") + '</span>' +
         '<span class="small" style="margin-top:8px">' + esc(statusLine(x)) + '</span>' +
         '<span class="small" style="color:var(--accent);margin-top:8px">' + (x.live ? "Open" : "Not built yet") + '</span></span></button>';
     }).join("");
     return '<div class="page-head"><span class="small">' + esc(today()) + '</span><h1>' + greeting() + '</h1>' +
-      (isAdmin() ? '<p>Your five sites. Open one to work on its words, colours and photos. On the live site, Save goes straight to visitors. On a trial copy, nothing is seen until you make it live. Every step can be undone.</p></div>'
+      (isAdmin() ? '<p>Your sites. Open one to work on its words, colours and photos. On the live site, Save goes straight to visitors. On a trial copy, nothing is seen until you make it live. Every step can be undone.</p></div>'
         : '<p>' + (sites().length === 1 ? "Your site." : "Your sites.") + ' Open one to work on your own copy of it. Nothing you save is seen until you publish it, and every step can be undone.</p></div>') +
       viewNewVersions() + '<div class="sites">' + cards + '</div>';
   }
@@ -443,7 +447,8 @@
           : tile("theme", "", "Theme", "Colours and typefaces", "Change the look")) +
         (s.files ? tile("files", state.files[s.id] ? state.files[s.id].files.length : "", "Files", "Every photo on the site, what it shows and where it is used", "Upload and describe")
           : tile("photos", empty, "Photos", empty + " empty " + (empty === 1 ? "spot" : "spots") + ", " + waiting + " on the way", "Add photos")) +
-      '</div>' + (isAdmin() ? viewCopies() : viewMyCopy());
+      '</div>' + (s.practice && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start the Practice site again</h2><span class="small">Its words, pages, theme and photos become World Art Review\'s as they are now. Its versions stay in the list. Anyone practising is asked to bring their copy up to date.</span><div class="row"><button type="button" class="soft" data-act="ask-resetpractice">Start again from World Art Review</button></div></div>' : "") +
+      (isAdmin() ? viewCopies() : viewMyCopy());
   }
   // An editor's own copy, and what is waiting on it.
   function viewMyCopy() {
@@ -2348,6 +2353,8 @@
     else if (a === "v-archive") { var va = state.versions[state.site]; if (va) { va.archive = !va.archive; render(); } }
     else if (a === "v-seen") { markSeen(el.dataset.site, el.dataset.v); render(); }
     else if (a === "v-open") { var vo = el.dataset.site; guard(function () { openSite(vo); go("versions"); }); }
+    else if (a === "ask-resetpractice") { state.ask = { kind: "resetpractice" }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
+    else if (a === "resetpractice") { var rp = site(); if (rp) change(key("reset", rp.id), function () { return api("resetPractice", { site: rp.id }); }, null, "The Practice site starts again from World Art Review. Live in about two minutes"); }
     else if (a === "ask-goback") { state.ask = { kind: "goback", version: el.dataset.v }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
     else if (a === "goback") {
       var gs = site(), gv = state.ask && state.ask.version; if (gs && gv) change(key("goback", gs.id), function () { return api("restoreVersion", { site: gs.id, version: gv }); },
@@ -2745,6 +2752,7 @@
     { id: "global-art-monitor", name: "Global Art Monitor", domain: "globalartmonitor.com", live: true, files: true, edits: true, artists: [], inbox: ["slot--artist-zara-muse.jpg"],
       slots: [{ id: "artist-zara-muse", group: "Artist profile images", label: "Zara Muse", filled: false, waiting: true }, { id: "artist-konn-artiss", group: "Artist profile images", label: "Konn Artiss", filled: true, waiting: false }] },
     { id: "site-3", name: "Site 3", domain: "", live: false }, { id: "site-4", name: "Site 4", domain: "", live: false }, { id: "site-5", name: "Site 5", domain: "", live: false },
+    { id: "practice-site", name: "Practice site", domain: "artiscope.github.io/practice-site", live: true, files: true, edits: true, practice: true, artists: [], inbox: [], slots: [] },
   ] };
   var demoHistory = [
     { sha: "a".repeat(40), what: "Edit article: [Sample] How to look at a painting", when: new Date().toISOString(), by: "you", canUndo: true },
@@ -2819,6 +2827,7 @@
         else if (a === "updatePerson") { var up = demoPeople.find(function (x) { return x.email === body.email; }); if (up) { up.name = String(body.name || ""); up.sites = body.sites || []; } resolve({ ok: true }); }
         else if (a === "removePerson") { demoPeople = demoPeople.filter(function (x) { return x.email !== body.email; }); resolve({ ok: true }); }
         else if (a === "resendInvite") resolve({ ok: true, emailed: true });
+        else if (a === "resetPractice") resolve({ ok: true });
         else if (a === "history") resolve({ changes: demoHistory });
         else if (a === "pages") resolve({ site: demoSite.site ? JSON.parse(JSON.stringify(demoSite.site)) : null, itemKinds: demoSite.itemKinds, lists: demoSite.lists, listFields: demoSite.listFields, pictures: JSON.parse(JSON.stringify(demoSpots.filter(function (x) { return x.kind !== "work"; }))), imageMeta: JSON.parse(JSON.stringify(demoMeta)), pages: JSON.parse(JSON.stringify(demoPages)), kinds: demoKinds, summaries: demoSummaries, images: demoFiles.slice(), imageBase: (params.get("preview") || "https://worldartreview.com/") + "images/", artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }], preview: params.get("preview") || "https://worldartreview.com/" });
         else if (a === "savePages") {
