@@ -1524,12 +1524,13 @@ async function siteOverview(site, wanted = "", me = null, names = {}) {
     const copies = (await copiesOf(site)).filter((c) => !me || me.admin || c.kind === "live" || ownerOfCopy(c.id) === me.tag);
     const copy = pickCopy(copies, wanted) || copies[0];
     const ref = readRefOf(copy);
-    const [cal, log, drafts, inbox, slotFile] = await Promise.all([
+    const [cal, log, drafts, inbox, slotFile, versions] = await Promise.all([
       getText(site.repo, "CONTENT-CALENDAR.md"),
       getText(site.repo, "AGENT-LOG.md"),
       draftsOf(site.repo),
       inboxOf(site.repo, ref),
       getText(site.repo, "image-slots.json", ref),
+      versionsOf(site).catch(() => []),
     ]);
     const waitingSlots = inbox
       .map((n) => (n.match(/^slot--([a-z0-9-]+)\.(jpg|png)$/) || [])[1])
@@ -1547,6 +1548,8 @@ async function siteOverview(site, wanted = "", me = null, names = {}) {
       slots,
       copies: copies.map((c) => publicCopy(c, me, names)),
       copy: copy.id,
+      // the latest versions, so the admin hears about new releases at the top of All sites
+      versions: versions.slice(0, 3).map((v, i) => ({ number: v.number, when: v.when, live: i === 0, by: nameOf(v.by, me, names), notes: v.notes.replace(/\n*<!-- by: [^>]* -->\s*$/, "") })),
       // the weekday agent's topics, log and drafts are the admin's to answer
       ...(me && !me.admin ? { topics: { waiting: [], approved: [] }, log: [], drafts: [] } : {}),
     };
@@ -1577,6 +1580,66 @@ function publishableKey() {
     if (first) return String(first);
   } catch (_e) { /* fall through to the older variable */ }
   return env("SUPABASE_ANON_KEY");
+}
+
+// ---------- versions: every publish is a numbered version, kept as a GitHub release ----------
+// 1.0 marks the site as it was when versions began. Each publish adds one to the second number;
+// a big change, which only the admin can mark, starts a new first number. GitHub emails the
+// release to anyone watching the repository's releases. The repositories are public, so the
+// notes carry a first name only, never an address.
+export function versionOf(tag) { const m = /^v(\d{1,4})\.(\d{1,5})$/.exec(String(tag || "")); return m ? [Number(m[1]), Number(m[2])] : null; }
+const vNewer = (a, b) => a[0] - b[0] || a[1] - b[1];
+export function nextVersion(list, big) {
+  if (!list.length) return [1, 0];
+  const top = list.slice().sort(vNewer).pop();
+  return big ? [top[0] + 1, 0] : [top[0], top[1] + 1];
+}
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+function ukDate(d) { return d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear(); }
+function firstName(me) { return me.admin ? "the admin" : (String(me.name || "").trim().split(/\s+/)[0] || "an editor"); }
+export function releaseNotes(o) {
+  const lines = ["Published by " + o.who + " on " + ukDate(o.at || new Date()) + "."];
+  const line = (x) => "- " + String(x).replace(/^Edit page: /, "");
+  const who = o.who.charAt(0).toUpperCase() + o.who.slice(1);
+  if (o.steps && o.steps.length) lines.push("", "What changed:", ...o.steps.map(line));
+  if (o.earlier && o.earlier.length) lines.push("", "Also on the live site since the last version:", ...o.earlier.map(line));
+  if (o.note) lines.push("", who + "'s note: " + o.note);
+  lines.push("", "<!-- by: " + o.tag + " -->");
+  return lines.join("\n").replace(/ *\u2014 */g, ", ");
+}
+// The site's versions, newest first.
+export async function versionsOf(site) {
+  const r = await gh("/repos/" + site.repo + "/releases?per_page=100");
+  return (r.ok && Array.isArray(r.data) ? r.data : []).map((x) => ({ n: versionOf(x.tag_name), x })).filter((y) => y.n)
+    .sort((a, b) => vNewer(b.n, a.n))
+    .map((y) => ({ number: y.n.join("."), n: y.n, name: String(y.x.name || ""), notes: String(y.x.body || ""), when: y.x.published_at || y.x.created_at || "", sha: String(y.x.target_commitish || ""),
+      by: (String(y.x.body || "").match(/<!-- by: ([a-z0-9-]{1,40}) -->/) || [])[1] || "" }));
+}
+async function addRelease(site, n, sha, title, body) {
+  const r = await gh("/repos/" + site.repo + "/releases", { method: "POST", body: JSON.stringify({ tag_name: "v" + n.join("."), target_commitish: sha, name: site.name + " " + n.join(".") + (title ? ": " + title : ""), body }) });
+  return r.ok;
+}
+// Records a publish as the next version. "before" is the live site just before it, so the
+// first time, 1.0 can mark where versions began. A version that cannot be recorded never
+// undoes the publish: it is said plainly instead.
+async function makeVersion(site, me, o) {
+  try {
+    let list = await versionsOf(site);
+    const at = new Date();
+    if (!list.length && o.before) {
+      if (!(await addRelease(site, [1, 0], o.before, "where versions began", releaseNotes({ who: "the admin", tag: "admin", at, steps: ["The site as it was when versions began."] })))) return { version: "", versionProblem: true };
+      list = [{ n: [1, 0], sha: o.before }];
+    }
+    let earlier = [];
+    if (list.length && list[0].sha && o.before && list[0].sha !== o.before) {
+      const cmp = await gh("/repos/" + site.repo + "/compare/" + list[0].sha + "..." + o.before);
+      earlier = cmp.ok && cmp.data && Array.isArray(cmp.data.commits) ? cmp.data.commits.map((c) => whatOf(String(c.commit.message || "").split("\n")[0])).filter((w) => !/^(Merge|Bring in the latest)/.test(w)).slice(-20).reverse() : [];
+    }
+    const n = nextVersion(list.map((v) => v.n), !!o.big && me.admin);
+    const body = releaseNotes({ who: firstName(me), tag: me.tag, at, steps: o.steps || [], earlier, note: o.note ? cleanText(o.note, 300) : "" });
+    if (!(await addRelease(site, n, o.sha, o.title || "", body))) return { version: "", versionProblem: true };
+    return { version: n.join(".") };
+  } catch (_e) { return { version: "", versionProblem: true }; }
 }
 
 // ---------- people: one admin, and editors ----------
@@ -1750,7 +1813,7 @@ export async function handle(req) {
 
   // Which copy of the site this request is about, and the branch that goes with it.
   const WRITES = ["saveTheme", "saveEntry", "setHidden", "deleteEntry", "removePhoto", "undo", "uploadPhoto", "savePages", "saveFiles"];
-  const COPY_ACTIONS = ["makeCopy", "deleteCopy", "refreshCopy", "publish", "discard", "undoStep", "redoStep"];
+  const COPY_ACTIONS = ["makeCopy", "deleteCopy", "refreshCopy", "publish", "discard", "undoStep", "redoStep", "restoreVersion"];
   const DRAFT_ACTIONS = ["answerTopic", "publishDraft", "returnDraft", "rejectDraft", "history"];
   if (!me.admin && DRAFT_ACTIONS.includes(action)) return json({ error: "Only the admin can do that." }, 403);
   let copies = [], copy = null, ref = "main";
@@ -2190,6 +2253,16 @@ export async function handle(req) {
   }
 
   // ----- copies: trial copies, undo and redo, publish -----
+  if (action === "versions") {
+    const [list, names] = await Promise.all([versionsOf(site), namesFor(me)]);
+    return json({
+      canGoBack: me.admin,
+      versions: list.map((v, i) => ({ number: v.number, when: v.when, live: i === 0, by: nameOf(v.by, me, names), big: v.n[1] === 0,
+        title: v.name.replace(new RegExp("^" + site.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " [0-9.]+(: )?"), ""),
+        notes: v.notes.replace(/\n*<!-- by: [^>]* -->\s*$/, "") })),
+    });
+  }
+
   if (COPY_ACTIONS.includes(action)) {
     const repo = "/repos/" + site.repo;
     if (action === "makeCopy") {
@@ -2231,6 +2304,7 @@ export async function handle(req) {
     if (action === "publish") {
       if (copy.kind !== "trial") return json({ ok: true, unchanged: true });
       if (copy.ahead === 0) return json({ ok: true, unchanged: true });
+      const before = await mainSha(site);
       const message = (copy.kind === "live" ? "Publish: " + copy.ahead + (copy.ahead === 1 ? " change" : " changes") : "Make live: " + copy.name) + who;
       let newSha = "";
       const m = await gh(repo + "/merges", { method: "POST", body: JSON.stringify({ base: "main", head: copy.branch, commit_message: message }) });
@@ -2258,7 +2332,8 @@ export async function handle(req) {
       } else return json({ error: writeProblem(m, "GitHub did not publish. Please try again.") }, 502);
       await dropRedo(site, copy);
       await moveBranch(site, copy.branch, newSha, true);   // the copy now matches live exactly
-      return json({ ok: true });
+      const steps = copy.steps.map((x) => x.what).filter((w) => !/^(Merge|Bring in the latest)/.test(w)).slice(0, 20);
+      return json({ ok: true, ...(await makeVersion(site, me, { before, sha: newSha, steps, note: body.note, big: body.big, title: "" })) });
     }
 
     if (action === "discard") return json({ error: "Nothing waits on the live site. Undo a step instead." }, 400);
@@ -2283,6 +2358,17 @@ export async function handle(req) {
       const moved = await moveBranch(site, "main", commit.data.sha, false);
       if (!moved.ok) return json({ error: writeProblem(moved, "GitHub did not save the change. Please try again.") }, 502);
       return json({ ok: true });
+    }
+    if (action === "restoreVersion") {
+      if (!me.admin) return json({ error: "Only the admin can go back to an earlier version." }, 403);
+      const list = await versionsOf(site), v = list.find((x) => x.number === String(body.version || ""));
+      if (!v || !v.sha) return json({ error: "That version could not be found." }, 404);
+      if (v === list[0]) return json({ error: "That version is already live." }, 409);
+      const before = await mainSha(site);
+      const r = await restoreTo(v.sha, "Back to version " + v.number + who);
+      if (r.status !== 200) return r;
+      const out = await r.json(); if (out.unchanged) return json({ ok: true, unchanged: true });
+      return json({ ok: true, ...(await makeVersion(site, me, { before, sha: await mainSha(site), steps: ["Back to version " + v.number + "."], note: body.note, title: "back to " + v.number })) });
     }
     if (action === "undoStep" && copy.kind === "live") {
       const n = Math.max(1, Math.min(20, Number(body.steps) || 1));
@@ -2368,6 +2454,7 @@ export async function handle(req) {
     const base = "/repos/" + site.repo;
 
     if (action === "publishDraft") {
+      const before = await mainSha(site);
       const m = await gh(base + "/pulls/" + pull.number + "/merge", {
         method: "PUT",
         body: JSON.stringify({ merge_method: "squash" }),
@@ -2380,7 +2467,8 @@ export async function handle(req) {
           error: "This draft could not be published as it stands. The agent will refresh it on its next run.",
         }, 409);
       }
-      return json({ ok: true });
+      const steps = ["Website agent's draft: " + cleanText(pull.title, 120)];
+      return json({ ok: true, ...(await makeVersion(site, me, { before, sha: (m.data && m.data.sha) || (await mainSha(site)), steps, title: "" })) });
     }
 
     const note = String(body.note || "").trim().slice(0, 2000);

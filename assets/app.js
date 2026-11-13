@@ -44,6 +44,7 @@
     fileAdd: [],           // photos chosen in Files, waiting for their descriptions
     fileBust: {}, fileFilter: "all",   // photos replaced in this visit, so the new one shows; the last filter used
     people: null,          // People screen: { list, sites, sel, mode, ask, note, busy }
+    versions: {},          // site id -> { list, canGoBack, archive, open }
   };
 
   // ---------- small helpers ----------
@@ -112,6 +113,10 @@
     if (!state.inSite && state.tab === "people" && isAdmin() && (force || !state.people || !state.people.list)) { await loadPeople(); return; }
     var s = site(); if (!s) return;
     try {
+      if (state.tab === "versions" && (force || !state.versions[s.id])) {
+        var vd = await api("versions", { site: s.id }); var old = state.versions[s.id] || {};
+        state.versions[s.id] = { list: vd.versions || [], canGoBack: !!vd.canGoBack, archive: !!old.archive, open: old.open || "" }; render();
+      }
       if ((state.tab === "content" || state.tab === "overview") && (force || !state.content[s.id])) {
         var c = await api("content", { site: s.id }); state.content[s.id] = c.collections || []; render();
       }
@@ -238,6 +243,7 @@
     ["content", "Content", "M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z", ""],
     ["theme", "Theme", "M12 4a8 8 0 1 0 0 16c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a3 3 0 0 0 3-3c0-3.9-3.6-7-8-7z", "M8.5 11.5h.01M11 8.5h.01M14.5 9h.01"],
     ["photos", "Photos", "M4 6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z", "M7 16l3.5-3.5 2.5 2.5 2-2 2 3"],
+    ["versions", "Versions", "M6 4h12v16H6z", "M9 8h6M9 12h6M9 16h3"],
     ["history", "History", "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M12 8v4.5l3 2"],
   ];
   // Outside a site only "All sites" shows. Inside, the site's own screens.
@@ -295,11 +301,11 @@
     var c = copiesOf(site()).find(function (x) { return x.id === q.copy; }) || curCopy(), title, text, yes, act;
     if (q.kind === "makelive" && !isAdmin()) {
       title = "Publish your copy?";
-      text = "It goes live straight away, and visitors see it in about two minutes. The admin is told what changed. Your copy then starts again from the new live site." + (c.behind ? " The live site has changed since your copy was made. Those changes are kept, unless they are in the same place as yours." : "");
+      text = "It goes live straight away as a new version, and visitors see it in about two minutes. The admin gets the release notes. Your copy then starts again from the new live site." + (c.behind ? " The live site has changed since your copy was made. Those changes are kept, unless they are in the same place as yours." : "");
       yes = "Publish"; act = "makelive";
     } else if (q.kind === "makelive") {
       title = "Make \u201C" + c.name + "\u201D the live site?";
-      text = "Visitors will see it in about two minutes. You can put the old version back from History." + (c.behind ? " The live site has changed since this copy was made. Those changes are kept, unless they are in the same place as yours." : "");
+      text = "It goes live as a new version, and visitors see it in about two minutes. You can go back to the old one from Versions." + (c.behind ? " The live site has changed since this copy was made. Those changes are kept, unless they are in the same place as yours." : "");
       yes = "Make it live"; act = "makelive";
     } else if (q.kind === "replace") {
       title = "The live site has changed in the same places";
@@ -328,8 +334,16 @@
       title = "Delete the trial copy \u201C" + c.name + "\u201D?";
       text = "Its changes are lost. The live site is not affected. This cannot be undone.";
       yes = "Delete the copy"; act = "deletecopy";
+    } else if (q.kind === "goback") {
+      title = "Go back to version " + q.version + "?";
+      text = "The live site goes back to how it was in " + q.version + ", as a new version, so this can be undone the same way. Editors are asked to bring their copies up to date.";
+      yes = "Go back"; act = "goback";
     } else return "";
-    return '<div class="sunk stack ask" role="alertdialog" aria-label="' + esc(title) + '"><b>' + esc(title) + '</b><span class="muted">' + esc(text) + '</span>' +
+    var notes = q.kind === "makelive" ? '<div class="stack" style="gap:6px"><b style="font-size:13.5px">What changed</b>' +
+        ((c.steps || []).length ? c.steps.slice(0, 20).map(function (st) { return '<span class="pstep">' + esc(st.what) + '</span>'; }).join("") : '<span class="small">The changes on this copy.</span>') + '</div>' +
+        '<div class="field"><label class="label" for="pub-note">A line for the release notes</label><textarea id="pub-note" maxlength="300" style="min-height:64px" placeholder="Optional. Why it changed, or anything to check."></textarea></div>' +
+        (isAdmin() ? '<label class="chk"><input type="checkbox" id="pub-big"> A big change, such as a new look. It starts a new first number.</label>' : "") : "";
+    return '<div class="sunk stack ask" role="alertdialog" aria-label="' + esc(title) + '"><b>' + esc(title) + '</b><span class="muted">' + esc(text) + '</span>' + notes +
       '<div class="row"><button type="button" class="btn" data-act="' + act + '" data-copy="' + esc(c.id) + '">' + yes + '</button><button type="button" class="soft" data-act="ask-cancel">Cancel</button></div></div>';
   }
 
@@ -404,7 +418,7 @@
     return '<div class="page-head"><span class="small">' + esc(today()) + '</span><h1>' + greeting() + '</h1>' +
       (isAdmin() ? '<p>Your five sites. Open one to work on its words, colours and photos. On the live site, Save goes straight to visitors. On a trial copy, nothing is seen until you make it live. Every step can be undone.</p></div>'
         : '<p>' + (sites().length === 1 ? "Your site." : "Your sites.") + ' Open one to work on your own copy of it. Nothing you save is seen until you publish it, and every step can be undone.</p></div>') +
-      '<div class="sites">' + cards + '</div>';
+      viewNewVersions() + '<div class="sites">' + cards + '</div>';
   }
   function viewUnbuilt(x) {
     return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><h1>' + esc(x.name) + '</h1>' +
@@ -655,11 +669,20 @@
   }
   // ---------- publish, undo, redo and trial copies ----------
   function copyArg(id) { var s = site(), c = copiesOf(s).find(function (x) { return x.id === id; }) || curCopy(); return { c: c, arg: c.kind === "live" ? "" : c.id }; }
-  function publish(id, replace) {
-    var s = site(); if (!s) return; var x = copyArg(id);
-    change(key("publish", s.id), function () { return api("publish", { site: s.id, copy: x.arg, replace: !!replace }); },
-      function (out) { if (out && out.conflict) { state.ask = { kind: "replace", copy: x.c.id, live: out.live || [] }; state.flash = "Not published yet"; } },
+  function publish(id, replace, extra) {
+    var s = site(); if (!s) return; var x = copyArg(id), ex = extra || {};
+    change(key("publish", s.id), function () { return api("publish", { site: s.id, copy: x.arg, replace: !!replace, note: ex.note || "", big: !!ex.big }); },
+      function (out) {
+        if (out && out.conflict) { state.ask = { kind: "replace", copy: x.c.id, live: out.live || [], note: ex.note, big: ex.big }; state.flash = "Not published yet"; return; }
+        if (out && out.version) { state.flash = "Published as " + out.version + ". Live in about two minutes"; delete state.versions[s.id]; }
+        else if (out && out.versionProblem) state.notice = { text: "Published. The version number and release notes could not be saved on GitHub just now, so the next publish will list these changes too.", problem: true };
+      },
       "Published. Live in about two minutes");
+  }
+  // What the publish question holds: the line for the notes and, for the admin, a big change.
+  function publishExtra() {
+    var n = app.querySelector("#pub-note"), b = app.querySelector("#pub-big");
+    return { note: n ? n.value.trim() : "", big: !!(b && b.checked) };
   }
   function stepBack(n) { var s = site(); if (s) change(key("step", s.id), function () { return api("undoStep", { site: s.id, steps: n || 1 }); }, null, n > 1 ? "Undone, " + n + " steps" : "Undone"); }
   function stepForward() { var s = site(); if (s) change(key("step", s.id), function () { return api("redoStep", { site: s.id }); }, null, "Redone"); }
@@ -1933,6 +1956,59 @@
 
   // ----- sign in -----
 
+  // ---------- Versions: every publish is a numbered version with release notes ----------
+  var VERSIONS_SHOWN = 10;
+  // A version is called by its title, or else its first change, so the list reads at a glance.
+  function versionTitle(x) {
+    if (x.title) return x.title;
+    if (x.number === "1.0") return "Where versions began";
+    var steps = String(x.notes || "").split("\n").filter(function (l) { return /^- /.test(l); }).map(function (l) { return l.slice(2); });
+    return steps.length ? steps[0] + (steps.length > 1 ? ", and " + (steps.length - 1) + " more" : "") : "Published";
+  }
+  function viewVersions() {
+    var s = site(), v = s && state.versions[s.id];
+    var head = '<div class="page-head"><h1>Versions</h1><p>Every publish is a version, with notes on what changed. Each one adds to the second number, and a big change starts a new first number. The latest ' + VERSIONS_SHOWN + ' are shown; older ones are archived, never deleted.</p></div>';
+    if (!v) return head + '<p class="loading">Reading the versions</p>';
+    if (!v.list.length) return head + '<div class="card stack"><b>No versions yet</b><span class="small">The first publish makes version 1.0, the site as it was, and 1.1, the publish itself.</span></div>';
+    var row = function (x, archived) {
+      var open = v.open === x.number;
+      return '<div class="card vrow' + (archived ? " old" : "") + '"><div class="vtop"><span class="vnum">' + esc(x.number) + '</span>' +
+        '<span class="vbody"><b>' + esc(versionTitle(x)) + '</b><span class="small">' + esc((x.by ? "By " + x.by + ", " : "") + (when(x.when) || "")) + '</span></span>' +
+        '<span class="row vacts">' + (x.live ? '<span class="chip live">Live now</span>' : "") + (x.big && x.number !== "1.0" ? '<span class="chip">Big change</span>' : "") +
+          '<button type="button" class="linklike small" data-act="v-notes" data-v="' + esc(x.number) + '" aria-expanded="' + (open ? "true" : "false") + '">' + (open ? "Hide the notes" : "Release notes") + '</button>' +
+          (v.canGoBack && !x.live ? '<button type="button" class="soft slim" data-act="ask-goback" data-v="' + esc(x.number) + '">Go back to this version</button>' : "") + '</span></div>' +
+        (open ? '<pre class="vnotes">' + esc(x.notes) + '</pre>' : "") + '</div>';
+    };
+    var shown = v.list.slice(0, VERSIONS_SHOWN), old = v.list.slice(VERSIONS_SHOWN);
+    return head + '<div class="stack versions">' + shown.map(function (x) { return row(x, false); }).join("") +
+      (old.length ? '<button type="button" class="linklike" data-act="v-archive" aria-expanded="' + (v.archive ? "true" : "false") + '">' + (v.archive ? "Hide archived versions" : "Show archived versions (" + old.length + ")") + '</button>' +
+        (v.archive ? old.map(function (x) { return row(x, true); }).join("") : "") : "") + '</div>' +
+      (v.canGoBack ? '<p class="small" style="margin-top:14px">Going back makes a new version, so it can be undone the same way. Editors see this list without the Go back buttons.</p>' : "");
+  }
+  // New versions published by someone else, shown to the admin at the top of All sites until marked as seen.
+  function seenOf() { try { return JSON.parse(localStorage.getItem("adh-seen") || "{}"); } catch (e) { return {}; } }
+  function markSeen(id, number) { var m = seenOf(); m[id] = number; try { localStorage.setItem("adh-seen", JSON.stringify(m)); } catch (e) { /* only a convenience */ } }
+  function newVersions() {
+    if (!isAdmin()) return [];
+    var seen = seenOf(), out = [];
+    liveSites().forEach(function (x) {
+      var top = (x.versions || [])[0];
+      if (top && top.by && top.by !== "You" && seen[x.id] !== top.number && top.number !== "1.0") out.push({ site: x, v: top });
+    });
+    return out;
+  }
+  function viewNewVersions() {
+    var list = newVersions(); if (!list.length) return "";
+    return '<div class="stack" style="margin-bottom:22px">' + list.map(function (n) {
+      return '<div class="card stack newv"><div class="row between"><b class="cardh">' + esc(n.site.name + " " + n.v.number) + '</b><span class="chip live">Live</span></div>' +
+        '<span class="small">Published by ' + esc(n.v.by) + (when(n.v.when) ? ", " + esc(when(n.v.when)) : "") + '. GitHub also emails these notes to anyone watching the site\'s releases.</span>' +
+        '<pre class="vnotes">' + esc(n.v.notes) + '</pre>' +
+        '<div class="row"><button type="button" class="btn slim" data-act="v-seen" data-site="' + esc(n.site.id) + '" data-v="' + esc(n.v.number) + '">Seen</button>' +
+        '<a class="linklike small" href="https://' + esc(n.site.domain) + '/" target="_blank" rel="noopener">Look at the live site</a>' +
+        '<button type="button" class="linklike small" data-act="v-open" data-site="' + esc(n.site.id) + '">All versions</button></div></div>';
+    }).join("") + '</div>';
+  }
+
   // ---------- People: you are the admin, everyone else is an editor ----------
   function peopleOf() { return state.people || (state.people = { list: null, sites: [], sel: "", mode: "", ask: "", note: "", busy: false }); }
   async function loadPeople() {
@@ -2059,7 +2135,7 @@
         : '<p class="loading">Reading your sites</p>';
       return;
     }
-    var views = { home: viewHome, overview: viewOverview, content: viewContent, theme: viewTheme, photos: viewPhotos, files: viewFiles, history: viewHistory, people: viewPeople };
+    var views = { home: viewHome, overview: viewOverview, content: viewContent, theme: viewTheme, photos: viewPhotos, files: viewFiles, history: viewHistory, people: viewPeople, versions: viewVersions };
     var s = site(), unbuilt = state.inSite && !s && state.site;
     if (state.inSite && s && state.tab === "pages") { app.innerHTML = viewPagesEditor(s); mountRich(); mountPages(); return; }
     var inner = unbuilt ? viewUnbuilt(sites().find(function (x) { return x.id === state.site; }) || { name: "Site" }) : (views[state.inSite ? state.tab : (state.tab === "people" && isAdmin() ? "people" : "home")] || viewHome)();
@@ -2268,6 +2344,15 @@
     if (el.dataset.tab) { var to = el.dataset.tab; guard(function () { go(to); }); return; }
     var a = el.dataset.act, s = site();
     if (a === "refresh") { state.content = {}; state.history = {}; if (state.people) state.people.list = null; load(); }
+    else if (a === "v-notes") { var vs = state.versions[state.site]; if (vs) { vs.open = vs.open === el.dataset.v ? "" : el.dataset.v; render(); } }
+    else if (a === "v-archive") { var va = state.versions[state.site]; if (va) { va.archive = !va.archive; render(); } }
+    else if (a === "v-seen") { markSeen(el.dataset.site, el.dataset.v); render(); }
+    else if (a === "v-open") { var vo = el.dataset.site; guard(function () { openSite(vo); go("versions"); }); }
+    else if (a === "ask-goback") { state.ask = { kind: "goback", version: el.dataset.v }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
+    else if (a === "goback") {
+      var gs = site(), gv = state.ask && state.ask.version; if (gs && gv) change(key("goback", gs.id), function () { return api("restoreVersion", { site: gs.id, version: gv }); },
+        function (out) { delete state.versions[gs.id]; if (out && out.version) state.flash = "Back to " + gv + ", as version " + out.version + ". Live in about two minutes"; }, "Back to " + gv + ". Live in about two minutes");
+    }
     else if (a === "people-pick") { var pk0 = peopleOf(); pk0.sel = el.dataset.email; pk0.mode = ""; pk0.ask = ""; pk0.note = ""; render(); peopleShowPanel(); }
     else if (a === "people-invite") { var pk1 = peopleOf(); pk1.mode = "invite"; pk1.draft = null; pk1.ask = ""; pk1.note = ""; render(); peopleShowPanel(); var pe = app.querySelector("#pi-email"); if (pe) pe.focus({ preventScroll: true }); }
     else if (a === "people-close") { peopleOf().mode = ""; render(); }
@@ -2414,19 +2499,19 @@
       px.what = "Edit " + (xs.kind ? xs.kind.label : xs.id); pgMark(px); edPatch(); pushPreview();
     }
     else if (a === "ed-save") savePages();
-    else if (a === "ed-save-publish") { var cp = curCopy().id; savePages(function () { publish(cp); }); }
+    else if (a === "ed-save-publish") { var cp = curCopy().id; savePages(function () { state.ask = { kind: "makelive", copy: cp }; if (pgOf()) edPatch(); else render(); var q = app.querySelector(".ask"); if (q && q.scrollIntoView) q.scrollIntoView({ block: "start" }); var nb = app.querySelector("#pub-note"); if (nb) nb.focus({ preventScroll: true }); }); }
     else if (a === "ed-discard") { var pz = pgOf(); if (pz) { pgReset(pz); pz.sel = null; pz.panel = ""; pz.uploads = {}; pz.picker = ""; edPatch(); pushPreview(""); } }
     else if (a === "look") { var t = themeOf(), i = Number(el.dataset.i); if (t) { Object.assign(t.draft.colours, i < 0 ? t.values.colours : t.spec.looks[i].colours); themeUpdate(); } }
     else if (a === "theme-discard") { var t2 = themeOf(); if (t2) { t2.draft = JSON.parse(JSON.stringify(t2.values)); themeUpdate(); } }
     else if (a === "theme-publish") onLive(publishTheme, "This theme change");
-    else if (a === "publish-replace") publish(el.dataset.copy, true);
-    else if (a === "ask-makelive") { state.ask = { kind: "makelive", copy: curCopy().id }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
+    else if (a === "publish-replace") publish(el.dataset.copy, true, { note: state.ask && state.ask.note, big: state.ask && state.ask.big });
+    else if (a === "ask-makelive") { state.ask = { kind: "makelive", copy: curCopy().id }; if (state.tab === "pages" && pgOf()) edPatch(); else render(); var qa = app.querySelector(".ask"); if (qa && qa.scrollIntoView) qa.scrollIntoView({ block: "start" }); else if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
     else if (a === "ask-big") { state.ask = { kind: el.dataset.kind, copy: el.dataset.copy }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
     else if (a === "stale-replace") { var px = pgOf(); state.ask = null; state.notice = null; if (px) { px.replaceNext = true; state.sure = true; try { savePages(); } finally { state.sure = false; } } }
     else if (a === "stale-reload") { var sx = site(); state.ask = null; state.notice = null; state.dirty = false; if (sx) { delete state.pg[sx.id]; render(); ensure(); } }
     else if (a === "ask-cancel") { state.ask = null; if (state.tab === "pages" && pgOf()) edPatch(); else render(); }
     else if (a === "livesave") { var run = state.ask && state.ask.go; state.ask = null; state.sure = true; try { if (run) run(); } finally { state.sure = false; } }
-    else if (a === "makelive") publish(el.dataset.copy);
+    else if (a === "makelive") publish(el.dataset.copy, false, publishExtra());
     else if (a === "discard") copyAction("discard", el.dataset.copy, "Changes thrown away. The live site is as it was");
     else if (a === "deletecopy") copyAction("deleteCopy", el.dataset.copy, "Trial copy deleted", function () { state.copy[s.id] = ""; });
     else if (a === "refresh-copy") refreshMine(el.dataset.copy);
@@ -2640,6 +2725,15 @@
       { id: "zara-muse", title: "Zara Muse", sub: "Portraiture, London", hidden: false, fields: [{ name: "name", label: "Name", type: "text", value: "Zara Muse" }, { name: "published", label: "Shown on the site", type: "yesno", value: true }, { name: "ghostWords", label: "Large background words", type: "lines", value: ["Knives,", "not", "brushes."] }, { name: "glance.0.1", label: "Based in", type: "text", value: "London", group: "At a glance" }, { name: "glance.1.1", label: "Gallery", type: "long", value: '<span class="placeholder">[Gallery relationship to confirm]</span>', group: "At a glance" }, { name: "sections.0.title", label: "Biography: title", type: "text", value: "Biography", group: "Portfolio sections" }, { name: "sections.0.html", label: "Biography: text", type: "long", value: '<p>A sample biography paragraph, with a source at the end.<sup class="cite"><a data-src="sample-1">[sample-1]</a></sup></p>\n<p>A second paragraph, with a <strong>bold</strong> word in it.</p>', group: "Portfolio sections" }, { name: "timeline.0.when", label: "1: when", type: "text", value: "2019", group: "Timeline" }, { name: "timeline.0.what", label: "1: what happened", type: "text", value: "A sample event in the timeline.", group: "Timeline" }] }] },
     { id: "sources", label: "Sources", singular: "source", canHide: false, canDelete: false, entries: [] },
   ];
+  // Example versions for sample mode: 1.0 when versions began, then a few publishes.
+  var demoVersions = {};
+  function demoVersionsOf(id) {
+    if (demoVersions[id]) return demoVersions[id];
+    var day = function (n) { return new Date(Date.now() - n * 86400000).toISOString(); };
+    var list = [["1.3", "Sam Taylor", 1, "Add section: Visit us\n- Edit: Opening hours"], ["1.2", "You", 4, "Edit article: Zara Muse profile"], ["1.1", "Sam Taylor", 6, "Add photo: gallery-front.jpg"], ["1.0", "You", 9, "The site as it was when versions began."]];
+    return (demoVersions[id] = list.map(function (x, i) { return { number: x[0], title: x[0] === "1.0" ? "where versions began" : "", by: x[1], when: day(x[2]), live: i === 0, big: x[0] === "1.0", notes: "Published by " + (x[1] === "You" ? "the admin" : "Sam") + ".\n\nWhat changed:\n- " + x[3] }; }));
+  }
+  function demoNext(list, big) { var t = (list[0] ? list[0].number : "0.0").split(".").map(Number); return big ? (t[0] + 1) + ".0" : t[0] + "." + (t[1] + 1); }
   // Example people for sample mode. The addresses are made up.
   var demoPeople = [
     { email: "sam@example.org", name: "Sam Taylor", sites: ["world-art-review", "global-art-monitor"], invited: "2026-11-02T10:00:00Z", lastSeen: "2026-11-10T14:20:00Z" },
@@ -2709,10 +2803,13 @@
         if (a === "overview") {
           var d = JSON.parse(JSON.stringify(demoData));
           if (demoEditor) { d.user = { email: "sample", admin: false, name: "Sample editor" }; d.sites = d.sites.filter(function (x) { return x.live; }); }
+          d.sites.forEach(function (x) { if (x.live) x.versions = JSON.parse(JSON.stringify(demoVersionsOf(x.id).slice(0, 3))); });
           d.sites.forEach(function (x) { if (!x.live) return; var list = demoList(x.id), want = (body.copies || {})[x.id]; x.copies = JSON.parse(JSON.stringify(list)); x.copy = (list.find(function (y) { return y.id === want; }) || list[0]).id; });
           resolve(d);
         }
         else if (a === "content") resolve({ collections: JSON.parse(JSON.stringify(demoContent)) });
+        else if (a === "versions") resolve({ canGoBack: !demoEditor, versions: JSON.parse(JSON.stringify(demoVersionsOf(body.site))) });
+        else if (a === "restoreVersion") { var dv = demoVersionsOf(body.site), nx = demoNext(dv, false); dv.forEach(function (x) { x.live = false; }); dv.unshift({ number: nx, title: "back to " + body.version, by: "You", when: new Date().toISOString(), live: true, big: false, notes: "Published by the admin.\n\nWhat changed:\n- Back to version " + body.version + "." }); resolve({ ok: true, version: nx }); }
         else if (a === "people") resolve({ people: JSON.parse(JSON.stringify(demoPeople)), sites: demoData.sites.map(function (x) { return { id: x.id, name: x.name, live: x.live }; }) });
         else if (a === "invitePerson") {
           var ne = String(body.email || "").trim().toLowerCase();
@@ -2756,7 +2853,8 @@
         else if (a === "uploadPhoto") resolve({ ok: true, name: (body.slot ? "slot--" + body.slot : "note--" + String(body.description).toLowerCase().replace(/[^a-z0-9]+/g, "-")) + "." + body.ext });
         else if (a === "undoStep") { var n = Math.min(Number(body.steps) || 1, c.steps.length); if (!n) return reject(new Error("There is nothing more to undo.")); while (n--) c.redo.push(c.steps.shift()); c.ahead = c.kind === "live" ? 0 : c.steps.length; c.canRedo = true; resolve({ ok: true }); }
         else if (a === "redoStep") { if (!c.redo.length) return reject(new Error("There is nothing to redo.")); c.steps.unshift(c.redo.pop()); c.ahead = c.kind === "live" ? 0 : c.steps.length; c.canRedo = c.redo.length > 0; resolve({ ok: true }); }
-        else if (a === "publish") { c.steps = []; c.redo = []; c.ahead = 0; c.behind = 0; c.canRedo = false; l[0].steps.unshift({ what: "Make live: " + c.name, when: new Date().toISOString(), by: "sample" }); resolve({ ok: true }); }
+        else if (a === "publish") { var pv = demoVersionsOf(body.site), pn = demoNext(pv, body.big && !demoEditor); pv.forEach(function (x) { x.live = false; }); pv.unshift({ number: pn, title: "", by: "You", when: new Date().toISOString(), live: true, big: /\.0$/.test(pn), notes: "Published by " + (demoEditor ? "Sample" : "the admin") + ".\n\nWhat changed:\n" + c.steps.map(function (x) { return "- " + x.what; }).join("\n") + (body.note ? "\n\nNote: " + body.note : "") });
+          c.steps = []; c.redo = []; c.ahead = 0; c.behind = 0; c.canRedo = false; l[0].steps.unshift({ what: "Make live: " + c.name, when: new Date().toISOString(), by: "sample" }); resolve({ ok: true, version: pn }); }
         else if (a === "refreshCopy") { c.behind = 0; resolve({ ok: true }); }
         else if (a === "makeCopy" && demoEditor) {
           var own = l.find(function (x) { return x.mine; });

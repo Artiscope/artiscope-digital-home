@@ -81,6 +81,13 @@ export function makeGitHub(seed) {   // seed: { "Owner/repo": { "path": "text" }
       const base = [...A].filter((s) => B.has(s)).sort((p, c) => r.commits[c].date.localeCompare(r.commits[p].date))[0];
       return res(200, { ahead_by: ahead.length, behind_by: [...A].filter((s) => !B.has(s)).length, commits: ahead.map((s) => view(r, s)), merge_base_commit: view(r, base) });
     }
+    if (path === "releases" && method === "POST") {
+      r.releases = r.releases || [];
+      if (r.releases.some((x) => x.tag_name === body.tag_name) || !r.commits[body.target_commitish]) return res(422, { message: "Validation Failed" });
+      const rel = { id: r.releases.length + 1, tag_name: body.tag_name, name: body.name, body: body.body, target_commitish: body.target_commitish, created_at: new Date(clock).toISOString(), published_at: new Date(clock).toISOString() };
+      r.releases.unshift(rel); return res(201, rel);
+    }
+    if (path === "releases" && method === "GET") return res(200, (r.releases || []).slice(0, Number(q.get("per_page") || 30)));
     if (path === "merges" && method === "POST") {
       const ours = resolve(r, body.base), theirs = resolve(r, body.head);
       if (ancestors(r, ours).has(theirs)) return res(204);
@@ -107,13 +114,21 @@ export function makeGitHub(seed) {   // seed: { "Owner/repo": { "path": "text" }
       }
       return res(201, { sha: tree(r, files) });
     }
-    if (path.startsWith("pulls")) return res(200, []);
+    if ((x = path.match(/^pulls\/(\d+)$/))) { const pr = (r.pulls || {})[x[1]]; return pr ? res(200, pr) : res(404); }
+    if ((x = path.match(/^pulls\/(\d+)\/merge$/)) && method === "PUT") {
+      const pr = (r.pulls || {})[x[1]]; if (!pr || pr.state !== "open") return res(405);
+      const head = r.refs[pr.head.ref], files = filesAt(r, head);
+      r.refs.main = commit(r, tree(r, files), [r.refs.main], pr.title + " (#" + pr.number + ")"); pr.state = "closed"; return res(200, { sha: r.refs.main, merged: true });
+    }
+    if (path.startsWith("pulls")) return res(200, Object.values(r.pulls || {}).filter((p) => p.state === "open"));
     throw new Error("unexpected " + method + " " + url);
   }
   return {
     fetch, log,
     read(repo, ref, file) { const r = repoOf(repo), s = resolve(r, ref), f = s && filesAt(r, s)[file]; return f ? Buffer.from(r.blobs[f], "base64").toString("utf8") : null; },
     refs(repo) { return { ...repoOf(repo).refs }; },
+    releases(repo) { return [...(repoOf(repo).releases || [])]; },
+    addPull(repo, number, branch, title) { const r = repoOf(repo); (r.pulls = r.pulls || {})[number] = { number, title, state: "open", head: { ref: branch }, user: { login: "agent" }, html_url: "https://github.com/" + repo + "/pull/" + number, body: "", created_at: new Date(clock).toISOString() }; },
     lastMessage(repo, ref) { const r = repoOf(repo); return r.commits[resolve(r, ref)].message; },
     commitOn(repo, ref, file, text, message) { const r = repoOf(repo), head = resolve(r, ref); r.refs[ref] = commit(r, tree(r, { ...filesAt(r, head), [file]: blob(r, b64(text)) }), [head], message); return r.refs[ref]; },
   };

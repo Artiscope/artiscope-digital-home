@@ -571,6 +571,7 @@ await check("Removing someone asks once, and they are turned away from their nex
   finally { signedIn = "tester@artiscope.co.uk"; await goHome(); }
 });
 
+let edVersion = "", edBefore = "";
 await check("An editor gets their own copy, saves, then saves and publishes, and the live site changes", async () => {
   await page.click('[data-tab="people"]'); await page.waitForSelector(".prow"); await page.click('[data-act="people-invite"]');
   await page.fill("#pi-email", "writer@example.org"); await page.check('form[data-form="invite"] input[value="world-art-review"]');
@@ -585,11 +586,30 @@ await check("An editor gets their own copy, saves, then saves and publishes, and
     await addSec("space"); await page.click('[data-act="ed-save"]'); await settle(1800);
     must(read(WR, "content/pages.json").pages.home.sections.length === before, "Save alone changed the live site");
     must((await text(".ed-top")).includes("Publish"), "no Publish after saving");
-    await addSec("space"); await page.click('[data-act="ed-save-publish"]'); await settle(2500);
+    await addSec("space"); await page.click('[data-act="ed-save-publish"]'); await page.waitForSelector(".ask #pub-note", { timeout: 9000 });
+    must(read(WR, "content/pages.json").pages.home.sections.length === before, "published before the question was answered");
+    must(!(await page.$("#pub-big")), "an editor is offered a big change");
+    const had = hub.releases(WR).map((x) => x.tag_name); edBefore = had[0] || "";
+    await page.fill("#pub-note", "Two spaces for breathing room."); await page.click('.ask [data-act="makelive"]'); await settle(2500);
     must(read(WR, "content/pages.json").pages.home.sections.length === before + 2, "Save and publish did not reach the live site");
+    const rel = hub.releases(WR); must(rel.length === had.length + (had.length ? 1 : 2), "versions before " + had + ", after " + rel.map((x) => x.tag_name));
+    edVersion = rel[0].tag_name.slice(1); if (!edBefore) edBefore = "v1.0";
+    must(rel[0].body.includes("Two spaces for breathing room.") && rel[0].body.includes("Add section: Space") && !rel[0].body.includes("@"), "notes: " + rel[0].body.replace(/\n/g, " / "));
+    must((await text("body")).includes("Published as " + edVersion), "the editor is not told the version");
     must(hub.lastMessage(WR, "main").endsWith("(by " + tag + ")"), "the live change is not recorded by the editor's private tag: " + hub.lastMessage(WR, "main"));
     must(!hub.lastMessage(WR, "main").includes("@"), "an email address went into GitHub"); await shot("26-editor-published");
   } finally { signedIn = "tester@artiscope.co.uk"; await goHome(); }
+});
+await check("The admin sees the editor's new version on All sites, with its notes, and can go back to an earlier one", async () => {
+  const nv = await text(".newv").catch(() => "");
+  must(nv.includes("World Art Review " + edVersion) && nv.includes("Two spaces for breathing room."), "no notice of the new version " + edVersion + ": " + nv.slice(0, 120)); await shot("27-new-version");
+  await page.click('.newv [data-act="v-seen"]'); await settle(300); must(!(await page.$(".newv")), "Seen did not put it away");
+  await openSite("world-art-review"); await page.click('[data-tab="versions"]'); await page.waitForSelector(".vrow");
+  const nums = await page.$$eval(".vnum", (x) => x.map((e) => e.textContent)); must(nums[0] === edVersion && nums.includes(edBefore.slice(1)), "versions shown: " + nums);
+  const before = read(WR, "content/pages.json").pages.home.sections.length;
+  await page.click('[data-act="ask-goback"][data-v="' + edBefore.slice(1) + '"]'); await page.click('.ask [data-act="goback"]'); await settle(2500);
+  must(read(WR, "content/pages.json").pages.home.sections.length === before - 2, "going back did not put the page back");
+  const [a, b] = edVersion.split(".").map(Number); must(hub.releases(WR)[0].tag_name === "v" + a + "." + (b + 1), "going back did not make the next version: " + hub.releases(WR)[0].tag_name); await shot("28-versions");
 });
 
 // =============== 7. Global Art Monitor ===============
