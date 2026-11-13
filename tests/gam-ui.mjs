@@ -61,8 +61,8 @@ try {
   assert.equal(await page.inputValue(".pagepick"), "page-press");
   assert.equal(await frame().evaluate(() => document.querySelector(".page-head .h1").textContent), "Press");
   assert.ok(await frame().evaluate(() => [...document.querySelectorAll(".menu-list a")].some((a) => a.textContent.includes("Press"))));
-  await page.click('[data-act="ed-library"]'); assert.equal(await page.locator('[data-act="ed-add"][data-kind="hero"]').count(), 0);
-  await page.click('[data-act="ed-add"][data-kind="panel"]'); await settle();
+  await page.click('.addl[data-act="ed-secpicker"]'); assert.equal(await page.locator('.pk-item[data-key="hero"]:not([disabled])').count(), 0);
+  await page.click('.pk-item[data-key="panel"]'); await settle();
   // one Save keeps it all
   await page.click('[data-act="ed-save"]'); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved. Live in about two minutes"); await page.waitForSelector(".pagepick"); await settle();
   const after = await page.evaluate(() => { const p = window.__adh.pgOf(); return { press: !!p.doc.pages.press, sales: p.site.artists[0].sales.length, gloss: p.site.glossary.some((g) => g[0] === "Reserve") }; });

@@ -87,9 +87,9 @@ try {
   await page.click('form[data-form="ednew"] button[type=submit]'); await settle();
   assert.equal(await hash(), "#page-visit-us"); assert.ok((await frame().innerText("header.hdr")).includes("Visit us"), "the new page is in the menu bar");
   assert.ok((await frame().innerText("#main")).includes("Visit us"));
-  await page.click('[data-act="ed-library"]'); await page.waitForSelector('[data-act="ed-add"][data-kind="quote"]');
-  assert.equal(await page.locator('[data-act="ed-add"][data-kind="hero"]').count(), 0, "home-only sections are not offered");
-  await page.click('[data-act="ed-add"][data-kind="quote"]'); await settle();
+  await page.click('.addl[data-act="ed-secpicker"]'); await page.waitForSelector('.pk-item[data-key="quote"]');
+  assert.equal(await page.locator('.pk-item[data-key="hero"]:not([disabled])').count(), 0, "home-only sections are not offered");
+  await page.click('.pk-item[data-key="quote"]'); await settle();
   assert.ok(await frame().evaluate(() => !!document.querySelector("#quote-1")));
 
   // one Save keeps all of it

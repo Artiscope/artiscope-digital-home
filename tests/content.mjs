@@ -218,7 +218,7 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   const site = "world-art-review", call = async (b) => { const r = await handle(post({ site, ...b })); return { status: r.status, ...(await r.json()) }; };
   const { photoFileName } = await import("./home.mjs");
   assert.equal(photoFileName("My Photo!.JPG", "jpg", []), "my-photo.jpg"); assert.equal(photoFileName("a.png", "png", ["a.png", "a-2.png"]), "a-3.png"); assert.equal(photoFileName("", "gif", []), "photo.jpg");
-  const pg = await call({ action: "pages" }); assert.equal(pg.imageBase, "https://worldartreview.com/images/"); assert.ok(pg.kinds.method.blocks && pg.kinds.method.blocks.field === "cards" && pg.kinds.method.about);
+  const pg = await call({ action: "pages" }); assert.equal(pg.imageBase, "https://worldartreview.com/images/"); assert.ok(pg.kinds.method.blocks && pg.kinds.method.blocks[0].field === "cards" && pg.kinds.method.about);
   const doc = JSON.parse(JSON.stringify(pg.pages));
   doc.pages.home.sections.push({ id: "picture-1", type: "picture", visible: true, settings: { image: "upload:1", alt: "A studio", caption: "", size: "", bg: "paper" } });
   doc.pages.home.sections.find((x) => x.id === "method").settings.cards[1].hidden = true;

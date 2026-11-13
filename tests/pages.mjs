@@ -30,7 +30,7 @@ try {
   await page.click('#ed-float [data-act="ed-hide"]'); await page.waitForTimeout(300); assert.ok(!(await ids()).includes("numbers"));
   await page.click('#ed-float [data-act="ed-hide"]'); await page.click('#ed-float [data-act="ed-move"][data-dir="-1"]'); await page.waitForTimeout(300);
   assert.deepEqual(await ids(), ["hero", "featured", "sections", "numbers", "explainedHome", "method"]);
-  await page.click('[data-act="ed-library"]'); await page.click('[data-act="ed-add"][data-kind="quote"]'); await page.waitForTimeout(400);
+  await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="quote"]'); await page.waitForTimeout(400);
   assert.deepEqual(await ids(), ["hero", "featured", "sections", "numbers", "quote-1", "explainedHome", "method"]);
   await page.fill('[data-pf="text"]', "Knives,\nnot brushes."); await page.fill('[data-pf="who"]', "House rule"); await page.waitForTimeout(400);
   assert.ok((await frame().evaluate(() => document.querySelector("#quote-1").textContent)).includes("not brushes."));
@@ -38,7 +38,7 @@ try {
   assert.ok((await frame().evaluate(() => document.querySelector("#quote-1").getAttribute("style") || "")).includes("background:#1D4A35"));
   await page.screenshot({ path: "/tmp/editor-live.png" });
   // a text section with the plain-writing editor
-  await page.click('[data-act="ed-library"]'); await page.click('[data-act="ed-add"][data-kind="text"]'); await page.waitForSelector(".ed-right .rt-page");
+  await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="text"]'); await page.waitForSelector(".ed-right .rt-page");
   await page.click(".ed-right .rt-page"); await page.keyboard.press("Control+End"); await page.keyboard.type(" More words."); await page.waitForTimeout(400);
   assert.ok((await frame().evaluate(() => document.querySelector("#text-1 .prose").textContent)).includes("More words."));
   // remove it, with the question first
@@ -75,7 +75,7 @@ try {
   // click a card on the page itself
   await frame().click("#method .mcard >> nth=2"); await page.waitForSelector(".ed-right h2:has-text('Publicity, flagged')");
   // a picture: upload, see it on the page at once, describe it, save both together
-  await page.click('[data-act="ed-library"]'); await page.click('[data-act="ed-add"][data-kind="picture"]'); await page.waitForSelector('[data-upload="image"]', { state: "attached" });
+  await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="picture"]'); await page.waitForSelector('[data-upload="image"]', { state: "attached" });
   await page.setInputFiles('[data-upload="image"]', "/tmp/s2/studio.jpg"); await page.waitForSelector(".picthumb[src^='data:image']");
   await page.waitForTimeout(400);
   assert.ok(await frame().evaluate(() => (document.querySelector("#picture-1 img") || {}).src.startsWith("data:image/jpeg")), "the new photo shows on the page before saving");

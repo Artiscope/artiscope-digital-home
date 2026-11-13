@@ -91,7 +91,7 @@ async function openSite(id) { await page.click('[data-tab="home"]', { timeout: 1
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all five sites", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 5, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 25"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 26"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-3"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await page.click('[data-tab="home"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -125,7 +125,7 @@ await check("A long dash typed in is saved as a comma", async () => {
 await check("Hiding, moving and adding sections shows on the page at once", async () => {
   await page.click('#ed-sections .sec[data-id="method"]:not(.blk)'); await page.click('#ed-float [data-act="ed-hide"]'); await settle(400);
   const ids = await frame("worldartreview.com").evaluate(() => [...document.querySelectorAll("#main > section")].map((s) => s.id)); must(!ids.includes("method"), "still shown");
-  await page.click('#ed-float [data-act="ed-hide"]'); await page.click('[data-act="ed-library"]'); await page.click('[data-act="ed-add"][data-kind="quote"]'); await settle(500);
+  await page.click('#ed-float [data-act="ed-hide"]'); await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="quote"]'); await settle(500);
   must(await frame("worldartreview.com").evaluate(() => !!document.querySelector('[id^="quote-"]')), "quote not added"); await page.click('[data-act="ed-discard"]');
 });
 await check("A page with more than 40 sections is refused with a plain reason", async () => {
@@ -136,7 +136,7 @@ await check("A page with more than 40 sections is refused with a plain reason", 
 });
 await check("Uploading something that is not a photo is refused", async () => {
   fs.writeFileSync("/tmp/uat/not-a-photo.txt", "hello");
-  await page.click('[data-act="ed-library"]'); await page.click('[data-act="ed-add"][data-kind="picture"]'); await page.waitForSelector('[data-upload="image"]', { state: "attached" });
+  await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="picture"]'); await page.waitForSelector('[data-upload="image"]', { state: "attached" });
   await page.setInputFiles('[data-upload="image"]', "/tmp/uat/not-a-photo.txt"); await settle(500); const n = await notice(); must(/JPG or PNG/i.test(n), "notice: " + n);
 });
 await check("A photo without a description cannot be saved", async () => {
@@ -150,7 +150,7 @@ await check("With a description, the photo and the page save together as one ste
 await check("A very large photo is made smaller before it is sent", async () => {
   const big = await page.evaluate(async () => { const c = document.createElement("canvas"); c.width = 5200; c.height = 3400; const x = c.getContext("2d"); x.fillStyle = "#884422"; x.fillRect(0, 0, 5200, 3400); return c.toDataURL("image/jpeg", .9).split(",")[1]; });
   fs.writeFileSync("/tmp/uat/big.jpg", Buffer.from(big, "base64"));
-  await page.click('[data-act="ed-library"]'); await page.click('[data-act="ed-add"][data-kind="picture"]'); await page.waitForSelector('[data-upload="image"]', { state: "attached" });
+  await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="picture"]'); await page.waitForSelector('[data-upload="image"]', { state: "attached" });
   await page.setInputFiles('[data-upload="image"]', "/tmp/uat/big.jpg"); await page.waitForSelector(".picthumb[src^='data:image']");
   const dims = await page.evaluate(() => new Promise((r) => { const p = window.__adh.pgOf(), k = Object.keys(p.uploads).pop(), i = new Image(); i.onload = () => r([i.width, i.height]); i.src = p.uploads[k].dataUrl; }));
   await page.click('[data-act="ed-discard"]'); must(Math.max(...dims) <= 2000, "sent at " + dims.join("x")); return "Sent at " + dims.join(" by ") + " pixels";
@@ -254,6 +254,79 @@ await check("A colour that is hard to read is flagged", async () => {
   must(/hard to read/i.test(await text("body")), "no warning"); await shot("06-theme");
 });
 await check("A colour code that is not real is ignored", async () => { const hex = page.locator("[data-theme-hex]").nth(0); await hex.fill("#ZZZ"); await settle(300); await page.click('[data-act="theme-discard"]').catch(() => {}); });
+
+// =============== 6b. Sections, blocks and the pickers ===============
+area = "Blocks and pickers";
+const heroOf = () => read(WR, "content/pages.json").pages.home.sections.find((x) => x.type === "hero").settings;
+await check("The opening banner opens to show its blocks, by kind", async () => {
+  await page.evaluate(() => { const a = window.__adh; a.state.dirty = false; a.state.leave = null; a.state.place["world-art-review"] = "pages"; a.go("home"); }); await settle(600);
+  await openSite("world-art-review"); await page.click('#ed-sections .sec[data-id="hero"]:not(.blk)'); await settle(500);
+  const kinds = await page.$$eval('.sec.blk[data-id="hero"][data-bf]', (xs) => [...new Set(xs.map((x) => x.dataset.bf))].join(","));
+  must(kinds === "headline,picture,tagline,latest,rule", "kinds: " + kinds); await shot("10-banner-blocks");
+});
+await check("The block picker offers only the banner's own blocks, one-only ones shown as already added", async () => {
+  await page.click('.ed-right [data-act="ed-blockpicker"]'); await page.waitForSelector(".pk-item");
+  const got = await page.$$eval(".pk-item", (xs) => xs.map((x) => x.dataset.key + (x.disabled ? "(added)" : "")).join(","));
+  must(got === "headline,picture(added),tagline,latest,rule(added)", got); await shot("11-block-picker");
+});
+await check("A new headline line shows on the page as it is typed, and saves", async () => {
+  await page.click('.pk-item[data-key="headline"]'); await settle(500);
+  const n = heroOf().headline.length; await page.fill(`[data-pf="headline.${n}.t"]`, "Together."); await settle(700);
+  must((await frame("worldartreview.com").textContent("#heroTitle")).includes("Together."), "not on the page");
+  await liveSave(); must(heroOf().headline.some((x) => x.t === "Together."), "not saved");
+});
+await check("Clicking a line on the page picks that exact block", async () => {
+  await frame("worldartreview.com").$eval('#heroTag [data-adh-b="tagline.1"] span', (el) => el.click()); await settle(600);
+  must((await text(".ed-right h2")).trim() === "Art.", "picked: " + (await text(".ed-right h2")));
+});
+await check("Hiding the rule box and one Latest piece saves them hidden, and the page drops them", async () => {
+  await page.click('.sec.blk[data-id="hero"][data-bf="rule"]'); await page.click('#ed-float [data-act="ed-hide"]'); await settle(300);
+  await page.click('.sec.blk[data-id="hero"][data-bf="latest"][data-block="1"]'); await page.click('#ed-float [data-act="ed-hide"]'); await settle(700);
+  const f = frame("worldartreview.com"); must((await f.$$(".glass.srcs")).length === 0, "rule box still shown"); must(!(await f.$$eval("#latest .slide", (x) => x.map((e) => e.dataset.adhB).join(","))).includes("latest.1"), "piece still shown");
+  await liveSave(); const h = heroOf(); must(h.hide_rule === true, "rule not saved hidden"); must(h.latest[1] && h.latest[1].hidden === true && typeof h.latest[1].v === "string", "piece saved as " + JSON.stringify(h.latest[1]));
+});
+await check("Showing them again puts them back as they were", async () => {
+  await page.click('.sec.blk[data-id="hero"][data-bf="rule"]'); await page.click('#ed-float [data-act="ed-hide"]'); await settle(300);
+  await page.click('.sec.blk[data-id="hero"][data-bf="latest"][data-block="1"]'); await page.click('#ed-float [data-act="ed-hide"]'); await settle(300);
+  await liveSave(); const h = heroOf(); must(!h.hide_rule && typeof h.latest[1] === "string", "still hidden: " + JSON.stringify(h.latest[1]));
+});
+await check("Add a section at the + line between two sections, found by searching", async () => {
+  await page.click("#ed-sections > .ins >> nth=2"); await page.waitForSelector(".pk-item");
+  await page.fill("[data-pick-q]", "photo"); await settle(200);
+  const hits = await page.$$eval(".pk-item:not([hidden])", (xs) => xs.map((x) => x.dataset.key).join(","));
+  must(hits === "text-picture,picture", "search found " + hits);
+  await page.fill("[data-pick-q]", "quote"); await settle(200); await page.click('.pk-item[data-key="quote"]'); await settle(800);
+  const ids = await page.$$eval("#ed-sections .sec:not(.blk)", (xs) => xs.map((x) => x.dataset.id));
+  must(ids[2] && ids[2].indexOf("quote") === 0, "placed at " + ids.indexOf(ids.find((x) => x.indexOf("quote") === 0)) + ": " + ids.join(","));
+  await page.click('#ed-float [data-act="ask"]'); await page.click('#ed-float [data-act="ed-remove"]'); await settle(300); await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(500);
+});
+await check("A search with no match says so", async () => {
+  await page.click('.addl[data-act="ed-secpicker"]'); await page.fill("[data-pick-q]", "zzzz"); await settle(200);
+  must(await page.isVisible(".pk-none"), "no message"); await page.click('.pk [data-act="ed-pick-close"]'); await settle(200); must(!(await page.isVisible(".pk")), "picker still open");
+});
+await check("A logo goes into the menu bar, on the right, and saves with its picture and name", async () => {
+  await page.click('.sec[data-where="shared"][data-id="header"]:not(.blk)'); await page.click('.ed-right [data-act="ed-blockpicker"]'); await page.waitForSelector('.pk-item[data-key="logos"]');
+  await page.click('.pk-item[data-key="logos"]'); await settle(400);
+  if (!fs.existsSync("/tmp/uat/small.png")) { const png = await page.evaluate(() => { const c = document.createElement("canvas"); c.width = 40; c.height = 40; return c.toDataURL("image/png").split(",")[1]; }); fs.writeFileSync("/tmp/uat/small.png", Buffer.from(png, "base64")); }
+  await page.setInputFiles('[data-upload="logos.0.image"]', "/tmp/uat/small.png"); await settle(600);
+  await page.fill('[data-pf="logos.0.alt"]', "Grove Gallery"); await page.click('.segr:has-text("Right")'); await settle(700);
+  must((await frame("worldartreview.com").$$('header.hdr .right [data-adh-b="logos.0"] img')).length === 1, "not on the right of the bar"); await shot("12-logo");
+  await liveSave(); const g = read(WR, "content/pages.json").shared.header.settings.logos[0];
+  must(g && g.alt === "Grove Gallery" && g.place === "R" && g.size === "M" && /\.png$/.test(g.image), "saved " + JSON.stringify(g));
+});
+await check("A logo with no name is stopped before saving", async () => {
+  await page.click('.sec[data-where="shared"][data-id="header"]:not(.blk)'); await page.click('.ed-right [data-act="ed-blockpicker"]'); await page.click('.pk-item[data-key="logos"]'); await settle(300);
+  await page.click('[data-act="ed-picker"][data-path="logos.1.image"]'); await page.click('[data-act="ed-pic-choose"] >> nth=0'); await settle(300);
+  await page.click('[data-act="ed-save"]'); await settle(500); const n = await notice(); must(/give the logo in the menu bar a name/i.test(n), "notice: " + n);
+  await page.click('#ed-float [data-act="ask"]'); await page.click('#ed-float [data-act="ed-remove"]'); await settle(300); await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(400);
+});
+await check("Global Art Monitor's menu bar takes logos too", async () => {
+  await openSite("global-art-monitor"); await page.click('.sec[data-where="shared"][data-id="header"]:not(.blk)'); await page.click('.ed-right [data-act="ed-blockpicker"]'); await page.click('.pk-item[data-key="logos"]'); await settle(300);
+  await page.fill('[data-pf="logos.0.alt"]', "Grove Gallery"); await page.click('.segr:has-text("Centre")'); await settle(900);
+  must((await frame("globalartmonitor.com").$$('header.site-head .head-mid [data-adh-b="logos.0"]')).length === 1, "not in the middle of the bar");
+  await liveSave(); const g = read(GR, "data/pages.json").shared.header.settings.logos[0]; must(g && g.place === "C" && g.alt === "Grove Gallery", "saved " + JSON.stringify(g));
+  await page.click('.sec.blk[data-id="header"][data-bf="logos"]'); await page.click('#ed-float [data-act="ask"]'); await page.click('#ed-float [data-act="ed-remove"]'); await settle(300); await liveSave();
+});
 
 // =============== 7. Global Art Monitor ===============
 area = "Global Art Monitor";

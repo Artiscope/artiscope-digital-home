@@ -86,16 +86,31 @@ const HEADING = { name: "heading", label: "Heading", type: "lines", hint: "Each 
 const EYEBROW = { name: "eyebrow", label: "Small line above the heading", type: "text", hint: "Shown in small italics. Leave empty to hide." };
 const ADDRESS = { name: 1, label: "Address", type: "text", hint: "A page on this site starts with #, for example #artists. Or paste a full web address." };
 const LINK_ROWS = { name: "links", label: "Links", type: "rows", fields: [{ name: 0, label: "Words", type: "text", hint: "What visitors see." }, ADDRESS] };
+// Logos in the menu bar: as many as wanted, each with its own size, place and link.
+const LOGO_ROWS = { name: "logos", label: "Logos", type: "rows", fields: [
+  { name: "image", label: "Logo", type: "image", alt: "alt", button: "Upload a logo", hint: "A PNG with a clear background works best." },
+  { name: "alt", label: "Name, read aloud to people who cannot see it", type: "text", hint: "For example Grove Gallery." },
+  { name: "size", label: "Size", type: "choice", seg: true, dflt: "M", options: [["S", "Small"], ["M", "Medium"], ["L", "Large"]] },
+  { name: "place", label: "Place in the menu bar", type: "choice", seg: true, options: [["L", "Left"], ["C", "Centre"], ["R", "Right"]] },
+  { name: "href", label: "Opens when clicked", type: "text", addr: true, hint: "A page on this site such as #home, or a full web address starting https://. Leave empty for no link." },
+] };
+const LOGO_BLOCK = { field: "logos", label: "Logo", add: "Add a logo", about: "A logo in the menu bar. Add more than one, for example the gallery's beside the site's." };
 
 const WAR_SECTIONS = {
   opening: { label: "Opening screen", about: "The short screen shown while the site loads.", summary: (st) => st.name || "", fields: [{ name: "name", label: "Site name", type: "text", hint: "Shown beside the logo." }, { name: "tagline", label: "Tagline", type: "text", hint: "Small words under the name." }] },
-  header: { label: "Menu bar", about: "The bar at the top of every page.", summary: (st) => ((st.links || []).length + " links"), blocks: { field: "links", label: "Link", add: "Add a link", title: (b) => b[0] }, fields: [{ name: "name", label: "Site name", type: "text", hint: "Shown in the middle of the bar." }, LINK_ROWS] },
+  header: { label: "Menu bar", about: "The bar at the top of every page.", summary: (st) => ((st.links || []).length + " links" + ((st.logos || []).length ? ", " + st.logos.length + ((st.logos || []).length === 1 ? " logo" : " logos") : "")), blocks: [{ field: "links", label: "Link", add: "Add a link", about: "A link on the left of the menu bar." }, LOGO_BLOCK], fields: [{ name: "name", label: "Site name", type: "text", hint: "Shown in the middle of the bar." }, LINK_ROWS, LOGO_ROWS] },
   footer: { label: "Newsletter and footer", about: "The sign-up band and the links at the bottom of every page.", summary: (st) => ((st.columns || []).length + " columns"), blocks: { field: "columns", label: "Column", add: "Add a column", title: (b) => b.title }, fields: [
     EYEBROW, HEADING, { name: "button", label: "Button words", type: "text", hint: "The button opens the sign-up form." }, { name: "blurb", label: "Short description of the site", type: "long", hint: "Shown under the name, at the bottom left." },
     { name: "columns", label: "Link columns", type: "rows", fields: [{ name: "title", label: "Column title", type: "text", hint: "A short word or two, such as Read." }, { ...LINK_ROWS, label: "Links in this column" }] },
     { name: "copyright", label: "Copyright line", type: "text" }, { name: "elsewhere", label: "Links in the bottom bar", type: "rows", fields: LINK_ROWS.fields },
   ] },
-  hero: { label: "Opening banner", about: "The large green band at the top of the home page.", summary: (st) => (st.headline || []).map((x) => x.t).join(" "), fields: [
+  hero: { label: "Opening banner", about: "The large green band at the top of the home page.", summary: (st) => (st.headline || []).filter((x) => x && !x.hidden).map((x) => x.t).join(" "), blocks: [
+    { field: "headline", label: "Headline line", add: "Add a headline line", about: "One line of the large headline." },
+    { field: "picture", label: "Picture", one: true, hide: "hide_picture", fields: ["image", "alt", "credit", "artist"], about: "The picture on the right of the banner, with the artist's details beside it." },
+    { field: "tagline", label: "Tagline line", add: "Add a tagline line", about: "One line of the smaller words at the bottom left." },
+    { field: "latest", label: "Latest box piece", add: "Add a piece", about: "One piece shown in turn in the Latest box.", item: { name: null, label: "Piece", type: "piece" } },
+    { field: "rule", label: "Rule box", one: true, hide: "hide_rule", fields: ["rule_label", "rule_text", "rule_link"], about: "The box at the bottom right of the banner." },
+  ], fields: [
     { name: "headline", label: "Headline", type: "rows", hint: "Each line of the large headline. Italic lines are set in the slanted style.", fields: [{ name: "t", label: "Words", type: "text" }, { name: "ital", label: "In italics", type: "yesno" }] },
     { name: "tagline", label: "Tagline", type: "rows", hint: "The smaller words at the bottom left of the banner.", fields: [{ name: "t", label: "Words", type: "text" }, { name: "ital", label: "In italics", type: "yesno" }] },
     { name: "image", label: "Main picture", type: "image", alt: "alt", hint: "Leave empty to show the picture of the artist chosen below. A picture here is used in this banner only." },
@@ -104,8 +119,9 @@ const WAR_SECTIONS = {
     { name: "artist", label: "Whose work is shown", type: "artists", one: true, hint: "Leave empty for the first published artist. Their name and details sit beside the picture." },
     { name: "rule_label", label: "Rule box, small line", type: "text", hint: "The box at the bottom right of the banner." }, { name: "rule_text", label: "Rule box, text", type: "text" }, { name: "rule_link", label: "Rule box, link words", type: "text", hint: "The link opens the page about sources." },
     { name: "latest", label: "Pieces in the Latest box", type: "lines", hint: "Article names as they appear in web addresses, for example zara-muse-profile." },
+    { name: "hide_picture", label: "Hide the picture", type: "yesno", internal: true }, { name: "hide_rule", label: "Hide the rule box", type: "yesno", internal: true },
   ] },
-  featured: { label: "Featured artists", about: "The artist carousel under the banner.", summary: (st) => ((st.artists || []).length ? (st.artists || []).length + " chosen" : "All published"), fields: [
+  featured: { label: "Featured artists", about: "The artist carousel under the banner. With no artists added, every published artist is shown.", summary: (st) => ((st.artists || []).length ? (st.artists || []).length + " chosen" : "All published"), blocks: [{ field: "artists", label: "Artist", add: "Add an artist", about: "One artist in the carousel, in this order.", item: { name: null, label: "Which artist", type: "artists", one: true } }], fields: [
     { name: "badge", label: "Badge words", type: "text", hint: "Under the number in the small square." }, { name: "artists", label: "Which artists", type: "artists", hint: "Tick the artists to show, in the order ticked. Leave all empty to show every published artist." },
   ] },
   "section-list": { label: "Read by section", about: "A list of the parts of the site, each with a count.", summary: (st) => ((st.rows || []).length + " rows"), blocks: { field: "rows", label: "Row", add: "Add a row", title: (b) => b.name }, fields: [
@@ -228,9 +244,10 @@ const G_LINKS = (name, label) => ({ name, label, type: "rows", fields: [{ name: 
 const G_WORDS_HINT = "Words in curly brackets are filled in by the site: {tagline}, {headline}, {intro}, {disclosure}, {email}, {published}.";
 const G_WHICH = { name: "which", label: "Which articles", type: "which", options: [["all", "All articles"], ["tag:research", "Research"], ["tag:auction-results", "Auction results"], ["tag:market-intelligence", "Market intelligence"], ["tag:collecting-valuation", "Collecting and valuation"]], hint: "Or choose the articles one by one." };
 const GAM_SECTIONS = {
-  header: { label: "Menu bar", about: "The bar at the top of every page, and the full-screen menu.", summary: (st) => st.name || "", fields: [
+  header: { label: "Menu bar", about: "The bar at the top of every page, and the full-screen menu.", summary: (st) => (st.name || "") + ((st.logos || []).length ? ", " + st.logos.length + (st.logos.length === 1 ? " logo" : " logos") : ""), blocks: [{ field: "menu_extra", label: "Menu link", add: "Add a menu link", about: "An extra link in the full-screen menu." }, LOGO_BLOCK], fields: [
     { name: "name", label: "Site name", type: "text" }, { name: "subscribe", label: "Subscribe button words", type: "text" }, { name: "subscribe_href", label: "Subscribe button address", type: "text" },
     { ...G_LINKS("menu_extra", "Extra links in the full-screen menu"), hint: "Shown after the main sections." }, { name: "menu_tagline", label: "Line at the foot of the menu", type: "text" },
+    { ...LOGO_ROWS, fields: LOGO_ROWS.fields.map((g) => g.name === "href" ? { ...g, hint: "A page on this site such as about/, or a full web address starting https://. Leave empty for no link." } : g) },
   ] },
   footer: { label: "Footer", about: "The sign-up band and links at the bottom of every page.", summary: (st) => ((st.about_links || []).length + " links"), blocks: { field: "about_links", label: "Link", add: "Add a link", title: (b) => b[0] }, fields: [
     { name: "heading", label: "Heading", type: "text" }, { name: "button", label: "Button words", type: "text" }, { name: "button_href", label: "Button address", type: "text" },
@@ -445,12 +462,13 @@ function cleanField(f, v, site) {
   if (t === "text") {
     if (f.none && (v === false || /^\s*none\s*$/i.test(String(v == null ? "" : v)))) return false;
     const x = String(v == null ? "" : v).replace(/ *— */g, ", ").replace(/, ,/g, ",").slice(0, 400);
+    if (f.addr) { const a = x.trim().replace(/[<>"\s]/g, ""); return /^(#|\/|[a-z0-9-]+\/|https?:\/\/|mailto:)/i.test(a) ? a.slice(0, 300) : ""; }
     return f.nullable && !x.trim() ? null : x;
   }
   if (t === "long") { const x = String(v == null ? "" : v).replace(/ *— */g, ", ").replace(/, ,/g, ",").slice(0, 60000); return f.nullable && !x.trim() ? null : x; }
   if (t === "sources") { const ok = site.sourceIds || []; return [...new Set((Array.isArray(v) ? v : []).map(String))].filter((x) => ok.includes(x)).slice(0, 40); }
   if (t === "articles") { const ok = site.articleSlugs || []; return [...new Set((Array.isArray(v) ? v : []).map(String))].filter((x) => ok.includes(x.replace(/^a-/, ""))).map((x) => "a-" + x.replace(/^a-/, "")).slice(0, 12); }
-  if (t === "lines") return (Array.isArray(v) ? v : String(v == null ? "" : v).split(/\n\s*\n/)).map((x) => String(x).trim()).filter(Boolean).slice(0, 40);
+  if (t === "lines") return (Array.isArray(v) ? v : String(v == null ? "" : v).split(/\n\s*\n/)).map((x) => x && typeof x === "object" ? (String(x.v == null ? "" : x.v).trim() ? { v: String(x.v).trim(), hidden: true } : "") : String(x).trim()).filter(Boolean).slice(0, 40);
   if (t === "number") { if (f.nullable && (v === "" || v === null || v === undefined)) return null; const n = Number(v); return Number.isFinite(n) ? n : f.nullable ? null : 0; }
   if (t === "pair") { const x = Array.isArray(v) ? v : []; return [cleanText(x[0], 200), String(x[1] == null ? "" : x[1]).replace(/[<>"\s]/g, "").slice(0, 300)]; }
   if (t === "checks") { const ok = f.options.map((o) => o[0]); return (Array.isArray(v) ? v : []).map(String).filter((x, i, a) => ok.includes(x) && a.indexOf(x) === i); }
@@ -459,14 +477,14 @@ function cleanField(f, v, site) {
     const ok = f.options.map((o) => o[0]); return ok.includes(String(v)) ? String(v) : ok[0];
   }
   if (t === "yesno") return v === true || v === "true";
-  if (t === "choice") { const ok = f.options.map((o) => o[0]); return ok.includes(String(v == null ? "" : v)) ? String(v) : ok[0]; }
+  if (t === "choice") { const ok = f.options.map((o) => o[0]); return ok.includes(String(v == null ? "" : v)) ? String(v) : (f.dflt && ok.includes(f.dflt) ? f.dflt : ok[0]); }
   if (t === "colour") { const x = String(v == null ? "" : v).trim(); const themeOk = (f.theme || []).map((o) => o[0]); return themeOk.includes(x) ? x : (/^#[0-9a-fA-F]{6}$/.test(x) ? x.toUpperCase() : (themeOk[0] || "")); }
   if (t === "image") {
     let x = String(v == null ? "" : v).trim();
     if (f.path) { x = x.startsWith(f.path) ? x.slice(f.path.length) : x; return /^[A-Za-z0-9._-]{1,120}$/.test(x) ? f.path + x : null; }
     return /^[A-Za-z0-9._-]{0,120}$/.test(x) ? x : "";
   }
-  if (t === "artists") { const ok = (site.artists || []).map((a) => a.slug); if (f.one) return ok.includes(String(v)) ? String(v) : ""; return (Array.isArray(v) ? v : []).map(String).filter((x) => ok.includes(x)).slice(0, 20); }
+  if (t === "artists") { const ok = (site.artists || []).map((a) => a.slug); if (f.one) return ok.includes(String(v)) ? String(v) : ""; return (Array.isArray(v) ? v : []).map((x) => x && typeof x === "object" ? (ok.includes(String(x.v)) ? { v: String(x.v), hidden: true } : "") : (ok.includes(String(x)) ? String(x) : "")).filter(Boolean).slice(0, 20); }
   if (t === "rows") {
     const rows = (Array.isArray(v) ? v : []).slice(0, 40);
     return rows.map((row) => {
@@ -730,12 +748,21 @@ export function cleanPages(site, given, current) {
 }
 const PAGE_KEY = /^[a-z][a-z0-9-]{0,40}$/;
 const RESERVED = ["home", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search", "assets", "data", "tools", "inbox", "preview", "auction-results", "market-intelligence", "collecting-valuation", "about", "contact"];
+// A section's kinds of block, as a list. A kind is a list of rows, a list of names, or one block made of some of the section's own fields.
+export function blockKinds(b) {
+  return (Array.isArray(b) ? b : b ? [b] : []).map((x) => {
+    const o = { field: x.field, label: x.label, add: x.add || "", about: x.about || "" };
+    if (x.one) { o.one = true; o.hide = x.hide || ""; o.fields = x.fields || []; }
+    if (x.item) o.item = x.item;
+    return o;
+  });
+}
 // What the console needs to draw the editor: each kind's label, fields and starter.
 function kindsFor(site) {
   const out = {};
   for (const [k, v] of Object.entries(site.sectionKinds || {})) {
     out[k] = { label: v.label, about: v.about || "", fields: v.fields, library: v.library || "", starter: v.starter || null };
-    if (v.blocks) out[k].blocks = { field: v.blocks.field, label: v.blocks.label, add: v.blocks.add };
+    if (v.blocks) out[k].blocks = blockKinds(v.blocks);
   }
   return out;
 }

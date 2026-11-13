@@ -23,7 +23,8 @@ try {
   await page.click('#ed-sections .sec[data-id="hero"]:not(.blk)'); await page.waitForSelector(".sec.pic");
   const rows = await page.locator(".sec.pic .nm").allInnerTexts();
   assert.deepEqual(rows, ["Banner: Zara Muse", "Latest box: Zara Muse: biography, artistic style and career", "Latest box: Konn Artiss: artist profile and selected works", "Latest box: ANTI-FRIEZE: what melts when the art market is put on ice", "Small box: Konn Artiss"]);
-  assert.ok((await page.innerText(".ed-right")).includes("Main picture"), "the banner has its own picture setting");
+  await page.click('#ed-sections .sec.blk[data-bf="picture"]'); await page.waitForSelector(".ed-right h2:has-text('Picture')");
+  assert.ok((await page.innerText(".ed-right")).includes("Main picture"), "the banner's Picture block has its own picture setting");
   await page.screenshot({ path: "/tmp/s2/step2-banner.png" });
 
   // Konn Artiss has no picture yet: upload one from the panel, see it on the page at once
@@ -37,7 +38,7 @@ try {
   await page.screenshot({ path: "/tmp/s2/step2-shared.png" });
 
   // the banner's own picture, chosen from the site: its saved description comes with it
-  await page.click('[data-act="ed-pick"][data-id="hero"]'); await page.waitForSelector('[data-act="ed-picker"][data-path="image"]');
+  await page.click('.sec.blk[data-id="hero"][data-bf="picture"]'); await page.waitForSelector('[data-act="ed-picker"][data-path="image"]');
   await page.click('[data-act="ed-picker"][data-path="image"]'); await page.click('[data-act="ed-pic-choose"][data-name="zara-muse-portrait.jpg"]'); await page.waitForTimeout(400);
   assert.equal(await page.inputValue('[data-pf="alt"]'), "Zara Muse's portrait, painted with a palette knife in warm reds and gold");
   assert.ok(!(await page.locator(".sec.pic .nm").allInnerTexts()).some((t) => t.startsWith("Banner:")), "the artist's picture is no longer in the banner");
