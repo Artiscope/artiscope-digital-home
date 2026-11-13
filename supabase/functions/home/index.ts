@@ -1658,24 +1658,37 @@ export const PEOPLE_SQL = `create table if not exists public.people (
   last_seen timestamptz
 );
 alter table public.people enable row level security;`;
-function secretKey() {
-  try {
-    const keys = JSON.parse(env("SUPABASE_SECRET_KEYS") || "{}");
-    const first = keys.default || Object.values(keys)[0];
-    if (first) return String(first);
-  } catch (_e) { /* fall through to the older variable */ }
-  return env("SUPABASE_SERVICE_ROLE_KEY");
+// Supabase gives the function two kinds of key. The newer kind ("sb_secret_...") goes in the apikey
+// header only; the older kind is a token that also goes in Authorization. If one is refused, the other
+// is tried, so the people list works on old and new projects alike.
+function dbKeys() {
+  const out = [];
+  try { const keys = JSON.parse(env("SUPABASE_SECRET_KEYS") || "{}"); const k = keys.default || Object.values(keys)[0]; if (k) out.push(String(k)); } catch (_e) { /* none */ }
+  if (env("SUPABASE_SERVICE_ROLE_KEY")) out.push(env("SUPABASE_SERVICE_ROLE_KEY"));
+  return [...new Set(out)];
 }
 async function db(path, init = {}) {
-  const key = secretKey();
-  if (!key) return { ok: false, status: 0, data: null };
-  const res = await fetch(env("SUPABASE_URL") + "/rest/v1/" + path, {
-    ...init,
-    headers: { apikey: key, Authorization: "Bearer " + key, "Content-Type": "application/json", Prefer: "return=representation", ...(init.headers || {}) },
-  });
-  let data = null;
-  try { data = await res.json(); } catch (_e) { data = null; }
-  return { ok: res.ok, status: res.status, data };
+  const keys = dbKeys();
+  if (!keys.length) return { ok: false, status: 0, data: null };
+  let last = { ok: false, status: 0, data: null };
+  for (const key of keys) {
+    const auth = /^eyJ/.test(key) ? { Authorization: "Bearer " + key } : {};
+    const res = await fetch(env("SUPABASE_URL") + "/rest/v1/" + path, {
+      ...init,
+      headers: { apikey: key, ...auth, "Content-Type": "application/json", Prefer: "return=representation", ...(init.headers || {}) },
+    });
+    let data = null;
+    try { data = await res.json(); } catch (_e) { data = null; }
+    last = { ok: res.ok, status: res.status, data };
+    if (res.status !== 401 && res.status !== 403) return last;
+  }
+  return last;
+}
+// Supabase's own words about a refusal. They never include a key.
+function dbSaid(r) {
+  const d = r && r.data && typeof r.data === "object" ? r.data : {};
+  const words = String(d.message || d.msg || d.error || d.hint || "").replace(/[<>]/g, "").slice(0, 200);
+  return (words ? " Supabase said: " + words + "." : "") + " (code " + (r ? r.status : 0) + (d.code ? ", " + String(d.code).slice(0, 20) : "") + ")";
 }
 const EDITOR_TAG = /^[a-f0-9]{10}$/;
 function newTag() { const b = new Uint8Array(5); crypto.getRandomValues(b); return Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join(""); }
@@ -1773,11 +1786,11 @@ export async function handle(req) {
   // ----- people: only the admin adds, changes and removes them -----
   if (["people", "invitePerson", "updatePerson", "removePerson", "resendInvite"].includes(action)) {
     if (!me.admin) return json({ error: "Only the admin can manage people." }, 403);
-    if (!secretKey()) return json({ error: "People are not set up yet. The database key is missing." }, 500);
+    if (!dbKeys().length) return json({ error: "People are not set up yet. The database key is missing." }, 500);
     const sites = SITES.map((s) => ({ id: s.id, name: s.name, live: s.live }));
     if (action === "people") {
       const r = await db("people?select=email,name,sites,invited_at,last_seen&order=invited_at.asc");
-      if (!r.ok) return json({ error: r.status === 404 ? "People are not set up yet. Run the setup line in Supabase first." : "The list of people could not be read." }, 502);
+      if (!r.ok) return json({ error: r.status === 404 ? "People are not set up yet. Run the setup line in Supabase first." : "The list of people could not be read." + dbSaid(r) }, 502);
       return json({ people: r.data.map((p) => ({ email: p.email, name: p.name, sites: p.sites, invited: p.invited_at, lastSeen: p.last_seen })), sites });
     }
     const who = String(body.email || "").trim().toLowerCase();
@@ -1787,7 +1800,7 @@ export async function handle(req) {
       const p = cleanPerson(body);
       const r = await db("people", { method: "POST", body: JSON.stringify({ email: who, id: newTag(), name: p.name, sites: p.sites }) });
       if (r.status === 409) return json({ error: "That person is already in People." }, 409);
-      if (!r.ok) return json({ error: "The person could not be added. Please try again." }, 502);
+      if (!r.ok) return json({ error: "The person could not be added." + dbSaid(r) }, 502);
       return json({ ok: true, emailed: await sendSignIn(who, body.back) });
     }
     if (action === "updatePerson") {

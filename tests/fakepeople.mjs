@@ -6,7 +6,11 @@ export function makePeople() {
     url = String(url);
     if (url.includes("/auth/v1/otp")) { t.mails.push({ to: JSON.parse(init.body).email, back: new URL(url).searchParams.get("redirect_to") }); return new Response("{}"); }
     const u = new URL(url), method = init.method || "GET", body = init.body ? JSON.parse(init.body) : null;
-    t.keys.push((init.headers || {}).Authorization);
+    const h = init.headers || {};
+    t.keys.push(h.apikey + (h.Authorization ? " + Authorization" : ""));
+    // like Supabase: a new-style key in the Authorization header is refused, and a key can be set to be refused
+    if (/^sb_secret_/.test(String(h.Authorization || "").replace(/^Bearer /, ""))) return new Response(JSON.stringify({ message: "Invalid JWT" }), { status: 401 });
+    if (t.refuse && t.refuse.includes(h.apikey)) return new Response(JSON.stringify({ message: "permission denied for table people", code: "42501" }), { status: 403 });
     const eq = u.searchParams.get("email"), match = (p) => !eq || p.email === eq.replace(/^eq\./, "");
     const pick = (p) => { const cols = (u.searchParams.get("select") || "*").split(","); return cols[0] === "*" ? { ...p } : Object.fromEntries(cols.map((c) => [c, p[c]])); };
     const out = (status, data) => new Response(JSON.stringify(data), { status });

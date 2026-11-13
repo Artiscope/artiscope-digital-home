@@ -5,8 +5,8 @@ import fs from "node:fs"; import assert from "node:assert/strict";
 import { handle, ownCopyId, ownerOfCopy, whatOf, byOf, cleanPerson, PEOPLE_SQL } from "./home.mjs";
 
 const ADMIN = "boss@x.com";
-let key = "service-key";
-globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: ADMIN, SUPABASE_URL: "https://s", SUPABASE_SERVICE_ROLE_KEY: key, SUPABASE_ANON_KEY: "anon" }[k] || "") }, serve() {} };
+const envKeys = { GITHUB_TOKEN: "t", ALLOWED_EMAILS: ADMIN, SUPABASE_URL: "https://s", SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon" };
+globalThis.Deno = { env: { get: (k) => envKeys[k] || "" }, serve() {} };
 const { makeGitHub } = await import("./fakegit.mjs");
 const WR = "Artiscope/World-art-review", GR = "Artiscope/global-art-monitor";
 const hub = makeGitHub({ [WR]: { "content/site.json": fs.readFileSync(W_DIR + "/content/site.json", "utf8"), "content/pages.json": fs.readFileSync(W_DIR + "/content/pages.json", "utf8") }, [GR]: {} });
@@ -39,7 +39,7 @@ d = await as(ADMIN, { action: "people" }); assert.deepEqual(d.people, []); asser
 d = await as(ADMIN, { action: "invitePerson", email: " Sam@Example.org ", name: "Sam Taylor", sites: [site], back: "https://artiscope.github.io/artiscope-digital-home/" });
 assert.equal(d.ok, true); assert.equal(d.emailed, true);
 assert.deepEqual(mails.at(-1), { to: "sam@example.org", back: "https://artiscope.github.io/artiscope-digital-home/" });
-assert.equal(table.length, 1); assert.match(table[0].id, /^[a-f0-9]{10}$/); assert.ok(dbKeys.every((k) => k === "Bearer service-key"), "the table is only reached with the server's own key");
+assert.equal(table.length, 1); assert.match(table[0].id, /^[a-f0-9]{10}$/); assert.ok(dbKeys.every((k) => k === "service-key"), "the table is only reached with the server's own key, and a new-style key never goes in Authorization: " + dbKeys.slice(-1));
 assert.equal((await as(ADMIN, { action: "invitePerson", email: "sam@example.org", sites: [] })).status, 409, "no one is added twice");
 assert.equal((await as(ADMIN, { action: "invitePerson", email: "not an address", sites: [] })).status, 400);
 assert.equal((await as(ADMIN, { action: "invitePerson", email: ADMIN, sites: [] })).status, 400, "the admin cannot be added as an editor");
@@ -126,7 +126,17 @@ assert.equal((await as(ADMIN, { action: "removePerson", email: SAM })).ok, true)
 assert.equal((await as(SAM, { action: "overview" })).status, 403);
 assert.equal(JSON.parse(hub.read(WR, "main", "content/site.json")).articles[0].title, "Sam a third time", "what they published stays");
 
+// a new-style key alone works; if it is refused the older key is tried; if both are refused, Supabase's own words are shown
+envKeys.SUPABASE_SECRET_KEYS = '{"default":"sb_secret_abc"}'; envKeys.SUPABASE_SERVICE_ROLE_KEY = "";
+d = await as(ADMIN, { action: "people" }); assert.equal(d.status, 200, JSON.stringify(d)); assert.equal(dbKeys.at(-1), "sb_secret_abc", "the new key goes in apikey only");
+envKeys.SUPABASE_SERVICE_ROLE_KEY = "eyJold"; ppl.refuse = ["sb_secret_abc"];
+d = await as(ADMIN, { action: "people" }); assert.equal(d.status, 200); assert.equal(dbKeys.at(-1), "eyJold + Authorization", "the older key is tried, as a token");
+ppl.refuse = ["sb_secret_abc", "eyJold"];
+d = await as(ADMIN, { action: "people" }); assert.equal(d.status, 502);
+assert.equal(d.error, "The list of people could not be read. Supabase said: permission denied for table people. (code 403, 42501)");
+ppl.refuse = []; delete envKeys.SUPABASE_SECRET_KEYS;
+
 // with no database key, the admin still works and editors are simply not there
-key = ""; d = await as(ADMIN, { action: "overview" }); assert.equal(d.status, 200); assert.equal(d.sites.length, 6);
+envKeys.SUPABASE_SERVICE_ROLE_KEY = ""; d = await as(ADMIN, { action: "overview" }); assert.equal(d.status, 200); assert.equal(d.sites.length, 6);
 assert.equal((await as(ADMIN, { action: "people" })).status, 500);
 console.log("PEOPLE CHECKS PASSED");
