@@ -92,7 +92,7 @@ async function openSite(id) { await page.click('[data-tab="home"]', { timeout: 1
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all five sites", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 5, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 30"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 31"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-3"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await page.click('[data-tab="home"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -504,6 +504,32 @@ await check("Global Art Monitor: a press quote with its source, and a career mom
   must((await f.textContent('[data-adh="' + ca + '"] .exh-when')).includes("To confirm"), "an empty date is not shown as To confirm"); await shot("21-gam-press");
   await liveSave(); const q = read(GR, "data/pages.json").pages.record.sections.find((y) => y.id === pr).settings.quotes[0];
   must(q.href === "https://example.org/review" && q.publication === "A test paper", "saved " + JSON.stringify(q));
+});
+
+// =============== 6f. New sections, batch 4 ===============
+area = "New sections: batch 4";
+await check("Contact form: a hidden topic is left out, and the button readies an email to the gallery without sending anything", async () => {
+  await openSite("world-art-review"); await newPage("Write"); await addSec("contact-form"); const cf = await secIdOf("contact-form");
+  await page.click('.sec.blk[data-id="' + cf + '"][data-block="1"]'); await page.click('.ptools [data-act="ed-hide"]'); await settle(700);
+  const f = frame("worldartreview.com"); const opts = await f.$$eval("#" + cf + " option", (o) => o.map((x) => x.textContent));
+  must(!opts.includes("A correction") && opts.includes("A question"), "topics shown: " + opts.join());
+  must((await f.textContent("#" + cf + " .mf-note")).includes("opens your own email app"), "no plain line under the button");
+  await f.fill("#" + cf + " [name=name]", "Sam"); await f.fill("#" + cf + " [name=email]", "sam@example.org"); await f.fill("#" + cf + " [name=message]", "Hello");
+  await f.$eval("#" + cf + " form", (x) => x.requestSubmit()); await settle(300); // in the editor a click picks the section, so the form is sent directly
+  const m = decodeURIComponent(await f.getAttribute("#" + cf + " form", "data-mailto") || "");
+  must(m.startsWith("mailto:info@grovegallery.com?subject=A question from Sam") && m.includes("Reply to: sam@example.org"), "email: " + m); await shot("22-contact-form");
+});
+await check("Visit us: a map link that is not a web address is not kept or drawn", async () => {
+  await addSec("visit"); const vi = await secIdOf("visit");
+  await page.click('#ed-sections .sec[data-id="' + vi + '"]:not(.blk)'); await page.fill('[data-pf="map"]', "javascript:alert(1)"); await settle(700);
+  must(!(await frame("worldartreview.com").$("#" + vi + " a.vmap")), "an unsafe map link is drawn");
+  await liveSave(); const x = read(WR, "content/pages.json").pages.write.sections.find((y) => y.id === vi).settings;
+  must(x.map === "" && x.details.length === 3 && x.details[0].title === "Address", "saved " + JSON.stringify(x));
+});
+await check("Global Art Monitor: the sign-up says it opens the visitor's email app, and saves", async () => {
+  await openSite("global-art-monitor"); await newPage("Join"); await addSec("signup"); const su = await secIdOf("signup"); const f = frame("globalartmonitor.com");
+  must((await f.textContent('[data-adh="' + su + '"] .su-note')).includes("info@grovegallery.com"), "no plain line under the button"); await shot("23-gam-signup");
+  await liveSave(); const s = read(GR, "data/pages.json").pages.join.sections.find((y) => y.id === su).settings; must(s.button === "Ask to join", "saved " + JSON.stringify(s));
 });
 
 // =============== 7. Global Art Monitor ===============

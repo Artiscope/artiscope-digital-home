@@ -243,6 +243,28 @@ WAR_SECTIONS["artist-cards"] = { label: "Artist cards", about: "A card for each 
   blocks: [{ field: "artists", label: "Artist", add: "Add an artist", about: "One artist's card, in this order.", item: { name: null, label: "Which artist", type: "artists", one: true } }],
   starter: { eyebrow: "", heading: ["Artists"], artists: [], bg: "paper", fg: "" }, fields: [EYEBROW, HEADING, { name: "artists", label: "Which artists", type: "artists", hint: "Leave empty to show every published artist." }, BG, FG] };
 
+// ----- new sections for any page: batch 4, sign-up, visiting and contact -----
+// The forms send nothing themselves: they open the visitor's own email app with a message
+// ready to send to the site's address, and say so under the button. No outside service.
+const FORM_HONEST = " It opens the visitor's own email app with the message ready to send to info@grovegallery.com. Nothing is sent or kept by the site.";
+const FORM_TEXT = { name: "text", label: "Text", type: "long", plain: true, hint: "One or two short sentences. Leave empty to hide." };
+const FORM_BUTTON = (eg) => ({ name: "button", label: "Button words", type: "text", hint: "Such as " + eg + ". The line under the button, saying it opens the visitor's email app, is always shown." });
+const SIGNUP_ABOUT = "A heading, a line, first name and email, and one button." + FORM_HONEST;
+const VISIT_ROWS = { name: "details", label: "Lines", type: "rows", fields: [{ name: "title", label: "Label", type: "text", hint: "Such as Address, Opening hours or Getting there." }, { name: "text", label: "Words", type: "long", plain: true, hint: "Put each part on its own line, such as the street and the postcode." }] };
+const VISIT_BLOCK = { field: "details", label: "Line", add: "Add a line", about: "One line of visiting details: a label and its words." };
+const VISIT_SUMMARY = (st) => { const n = (st.details || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " line" : " lines"); };
+const VISIT_STARTER = { details: ["Address", "Opening hours", "Getting there"].map((t) => ({ title: t, text: "" })), map_words: "Open in a map", map: "" };
+const VISIT_MAP = [{ name: "map_words", label: "Map link words", type: "text", hint: "Leave empty for no map link." }, { name: "map", label: "Map link", type: "text", addr: true, hint: "The gallery's page on a map site, starting https://. It opens in a new tab. No map is built into the page." }];
+WAR_SECTIONS.signup = { label: "Email sign-up", about: SIGNUP_ABOUT, summary: (st) => (st.button || "Sign-up"), library: "Visitors ask to join the letter",
+  starter: { eyebrow: "Get the review", heading: ["New portfolios,", "once a month."], text: "One short letter when there is something new to read. No spare emails.", button: "Ask to join", bg: "green", fg: "" },
+  fields: [EYEBROW, HEADING, FORM_TEXT, FORM_BUTTON("Ask to join"), BG, FG] };
+WAR_SECTIONS.visit = { label: "Visit us", about: "The address, opening hours and how to get there, with an optional link to a map.", summary: VISIT_SUMMARY, library: "Address, hours and directions", blocks: [VISIT_BLOCK],
+  starter: { eyebrow: "See the work", heading: ["Visit Grove Gallery"], ...VISIT_STARTER, bg: "paper", fg: "" }, fields: [EYEBROW, HEADING, VISIT_ROWS, ...VISIT_MAP, BG, FG] };
+WAR_SECTIONS["contact-form"] = { label: "Contact form", about: "Name, email, a topic and a message." + FORM_HONEST, summary: (st) => { const n = (st.topics || []).filter((x) => typeof x === "string").length; return n ? n + (n === 1 ? " topic" : " topics") : "No topics"; }, library: "Visitors write to the gallery",
+  blocks: [{ field: "topics", label: "Topic", add: "Add a topic", about: "One choice in the list of what a message is about. With none, the list is left out.", item: { name: null, label: "Topic", type: "text" } }],
+  starter: { eyebrow: "Contact", heading: ["Write to us"], text: "Questions, corrections and press enquiries all reach the same desk.", topics: ["A question", "A correction", "Press", "Something else"], button: "Write the email", bg: "deep", fg: "" },
+  fields: [EYEBROW, HEADING, FORM_TEXT, { name: "topics", label: "Topics", type: "lines", hint: "The choices for what a message is about, each on its own. Leave empty to leave the choice out." }, FORM_BUTTON("Write the email"), BG, FG] };
+
 // ----- articles, artist portfolios and sources, edited in place on their own pages -----
 // Each is a set of parts shown in the list on the left. A part with picture: true is the
 // item's shared picture. Fields not listed here (tone, letter, compare and so on) are kept as they are.
@@ -421,6 +443,11 @@ GAM_SECTIONS.artworks = { ...WAR_SECTIONS.artworks, starter: { eyebrow: "", head
 GAM_SECTIONS.exhibitions = { ...WAR_SECTIONS.exhibitions, starter: { eyebrow: "", heading: "Exhibitions", ...SHOW_STARTER }, fields: [...G_HEAD, SHOW_ROWS] };
 GAM_SECTIONS.career = { ...WAR_SECTIONS.career, about: "Dated moments in an artist's career, each with its source.", starter: { eyebrow: "", heading: "Career timeline", ...EVENT_STARTER }, fields: [...G_HEAD, EVENT_ROWS] };
 GAM_SECTIONS.press = { ...WAR_SECTIONS.press, starter: { eyebrow: "", heading: "In the press", ...QUOTE_STARTER }, fields: [...G_HEAD, QUOTE_ROWS] };
+// ----- new sections for any page: batch 4, sign-up and visiting (the contact form is already here) -----
+GAM_SECTIONS.signup = { ...WAR_SECTIONS.signup, about: SIGNUP_ABOUT + " Shown in a dark panel.", starter: { eyebrow: "The market note", heading: "Sent when there is something to report.", text: "New documented results and new research, and nothing else.", button: "Ask to join" },
+  fields: [...G_HEAD, FORM_TEXT, FORM_BUTTON("Ask to join")] };
+GAM_SECTIONS.visit = { ...WAR_SECTIONS.visit, about: "The address, opening hours and how to get there, each in a rounded card, with an optional link to a map.", starter: { eyebrow: "Visit", heading: "See the work at Grove Gallery", ...VISIT_STARTER },
+  fields: [...G_HEAD, VISIT_ROWS, ...VISIT_MAP] };
 const G_SALE_FIELDS = [
   { name: "title", label: "Title of the work", type: "text" }, { name: "year", label: "Year made", type: "text" },
   { name: "date", label: "Sale date, as year-month-day", type: "text", nullable: true, hint: "Such as 2025-03-18. Leave empty if not known yet." }, { name: "date_text", label: "Sale date in words", type: "text", hint: "Such as 18 March 2025." },
