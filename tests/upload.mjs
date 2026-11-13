@@ -14,7 +14,7 @@ assert.deepEqual(writes, ["PUT inbox/slot--artist-konn-artiss.json", "PUT inbox/
 // the photo goes to the live site's inbox, to be placed within minutes
 const work = "main"; assert.ok(!Object.keys(hub.refs(WR)).some((n) => n.startsWith("adh/live-")));
 const note = JSON.parse(hub.read(WR, work, "inbox/slot--artist-konn-artiss.json"));
-assert.equal(note.alt, "Ice blocks on a pavement"); assert.equal(note.caption, "ANTI-FRIEZE, 2025"); assert.equal(note.sent_by, "me@x.com");
+assert.equal(note.alt, "Ice blocks on a pavement"); assert.equal(note.caption, "ANTI-FRIEZE, 2025"); assert.equal(note.sent_by, "admin");
 assert.equal(hub.read(WR, work, "inbox/slot--artist-konn-artiss.jpg"), "ABC");
 const over = (await (await handle(post({ action: "overview" }))).json()).sites[0];
 assert.deepEqual(over.inbox, ["slot--artist-konn-artiss.jpg"]); assert.equal(over.slots[0].waiting, true); assert.equal(over.copies[0].steps.length, 2);

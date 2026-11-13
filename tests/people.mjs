@@ -1,0 +1,118 @@
+// People and permissions: one admin, and editors who work only on their own copy of their own sites.
+// Supabase (sign-in and the people table) and GitHub are stood in for, in memory.
+import { W_DIR } from "./where.mjs";
+import fs from "node:fs"; import assert from "node:assert/strict";
+import { handle, ownCopyId, ownerOfCopy, whatOf, byOf, cleanPerson, PEOPLE_SQL } from "./home.mjs";
+
+const ADMIN = "boss@x.com";
+let key = "service-key";
+globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: ADMIN, SUPABASE_URL: "https://s", SUPABASE_SERVICE_ROLE_KEY: key, SUPABASE_ANON_KEY: "anon" }[k] || "") }, serve() {} };
+const { makeGitHub } = await import("./fakegit.mjs");
+const WR = "Artiscope/World-art-review", GR = "Artiscope/global-art-monitor";
+const hub = makeGitHub({ [WR]: { "content/site.json": fs.readFileSync(W_DIR + "/content/site.json", "utf8"), "content/pages.json": fs.readFileSync(W_DIR + "/content/pages.json", "utf8") }, [GR]: {} });
+
+// the people table, as Supabase's REST service would keep it
+let table = [], signedIn = ADMIN; const mails = [], dbKeys = [];
+function rest(url, init) {
+  const u = new URL(url), method = init.method || "GET", body = init.body ? JSON.parse(init.body) : null;
+  dbKeys.push(init.headers.Authorization);
+  const eq = u.searchParams.get("email"), match = (p) => !eq || p.email === eq.replace(/^eq\./, "");
+  const pick = (p) => { const cols = (u.searchParams.get("select") || "*").split(","); return cols[0] === "*" ? { ...p } : Object.fromEntries(cols.map((c) => [c, p[c]])); };
+  const out = (status, data) => new Response(JSON.stringify(data), { status });
+  if (method === "GET") return out(200, table.filter(match).map(pick));
+  if (method === "POST") { if (table.some((p) => p.email === body.email || p.id === body.id)) return out(409, { message: "duplicate" }); table.push({ invited_at: new Date().toISOString(), last_seen: null, ...body }); return out(201, [body]); }
+  if (method === "PATCH") { const hit = table.filter(match); hit.forEach((p) => Object.assign(p, body)); return out(200, hit); }
+  if (method === "DELETE") { const hit = table.filter(match); table = table.filter((p) => !match(p)); return out(200, hit); }
+}
+globalThis.fetch = async (url, init = {}) => {
+  url = String(url);
+  if (url.includes("/auth/v1/user")) return new Response(JSON.stringify({ email: signedIn }));
+  if (url.includes("/auth/v1/otp")) { mails.push({ to: JSON.parse(init.body).email, back: new URL(url).searchParams.get("redirect_to") }); return new Response("{}"); }
+  if (url.includes("/rest/v1/")) return rest(url, init);
+  return hub.fetch(url, init);
+};
+const post = (b) => new Request("https://x", { method: "POST", headers: { Authorization: "Bearer t", apikey: "k" }, body: JSON.stringify(b) });
+const as = async (who, b) => { signedIn = who; const r = await handle(post(b)); const d = await r.json(); d.status = r.status; return d; };
+const site = "world-art-review";
+
+// small parts
+assert.ok(PEOPLE_SQL.includes("enable row level security"), "the table is closed to everyone but the server");
+assert.equal(ownerOfCopy(ownCopyId("0123456789")), "0123456789"); assert.equal(ownerOfCopy("trial-winter-look-a1b2c3"), "");
+assert.equal(whatOf("Edit page: Quote (by admin)"), "Edit page: Quote"); assert.equal(byOf("Edit page: Quote (by admin)"), "admin");
+assert.equal(whatOf("Edit page: Quote (old@x.com)"), "Edit page: Quote"); assert.equal(byOf("Edit page: Quote (old@x.com)"), "old@x.com");
+assert.deepEqual(cleanPerson({ name: "Sam — Taylor<b>", sites: ["world-art-review", "nowhere", "world-art-review"] }).sites, ["world-art-review"]);
+
+// someone not invited is turned away, even with a working sign-in
+let d = await as("stranger@x.com", { action: "overview" }); assert.equal(d.status, 403);
+
+// the admin invites an editor: a row is added and the normal sign-in email is sent
+d = await as(ADMIN, { action: "people" }); assert.deepEqual(d.people, []); assert.equal(d.sites.length, 5);
+d = await as(ADMIN, { action: "invitePerson", email: " Sam@Example.org ", name: "Sam Taylor", sites: [site], back: "https://artiscope.github.io/artiscope-digital-home/" });
+assert.equal(d.ok, true); assert.equal(d.emailed, true);
+assert.deepEqual(mails.at(-1), { to: "sam@example.org", back: "https://artiscope.github.io/artiscope-digital-home/" });
+assert.equal(table.length, 1); assert.match(table[0].id, /^[a-f0-9]{10}$/); assert.ok(dbKeys.every((k) => k === "Bearer service-key"), "the table is only reached with the server's own key");
+assert.equal((await as(ADMIN, { action: "invitePerson", email: "sam@example.org", sites: [] })).status, 409, "no one is added twice");
+assert.equal((await as(ADMIN, { action: "invitePerson", email: "not an address", sites: [] })).status, 400);
+assert.equal((await as(ADMIN, { action: "invitePerson", email: ADMIN, sites: [] })).status, 400, "the admin cannot be added as an editor");
+const SAM = "sam@example.org", tag = table[0].id, mine = ownCopyId(tag);
+
+// an editor cannot manage people
+assert.equal((await as(SAM, { action: "people" })).status, 403);
+assert.equal((await as(SAM, { action: "invitePerson", email: "friend@x.com", sites: [site] })).status, 403);
+
+// an editor sees only their own sites, and none of the weekday agent's drafts or topics
+d = await as(SAM, { action: "overview" });
+assert.equal(d.status, 200); assert.equal(d.user.admin, false); assert.deepEqual(d.sites.map((s) => s.id), [site]);
+assert.deepEqual(d.sites[0].drafts, []); assert.ok(table[0].last_seen, "last signed in is noted");
+assert.equal((await as(SAM, { action: "pages", site: "global-art-monitor" })).status, 403, "a site that is not theirs is refused");
+assert.equal((await as(SAM, { action: "history", site })).status, 403, "the agent's drafts and history are the admin's");
+assert.equal((await as(SAM, { action: "answerTopic", site, title: "x", answer: "yes" })).status, 403);
+
+// an editor can read the live site, but never change it
+d = await as(SAM, { action: "content", site }); assert.equal(d.status, 200);
+const first = d.collections[0].entries[0];
+d = await as(SAM, { action: "saveEntry", site, collection: "articles", id: first.id, values: { title: "Sneaky live edit" } });
+assert.equal(d.status, 403); assert.notEqual(JSON.parse(hub.read(WR, "main", "content/site.json")).articles[0].title, "Sneaky live edit");
+for (const action of ["undoStep", "redoStep", "publish", "savePages", "saveTheme", "uploadPhoto", "removePhoto", "deleteCopy", "refreshCopy"]) {
+  assert.equal((await as(SAM, { action, site })).status, 403, action + " on the live site is refused");
+}
+
+// their own copy: made once, named by a private tag, never by their address
+d = await as(SAM, { action: "makeCopy", site, name: "anything" }); assert.equal(d.copy, mine);
+assert.equal((await as(SAM, { action: "makeCopy", site })).copy, mine, "asking again gives the same copy");
+assert.ok(!mine.includes("sam") && !mine.includes("@"));
+d = await as(SAM, { action: "saveEntry", site, copy: mine, collection: "articles", id: first.id, values: { title: "Sam's edit" } });
+assert.equal(d.status, 200); assert.equal(JSON.parse(hub.read(WR, "adh/" + mine, "content/site.json")).articles[0].title, "Sam's edit");
+assert.equal(hub.lastMessage(WR, "adh/" + mine), "Edit article: " + first.title + " (by " + tag + ")", "who made it is the tag, not the address");
+d = await as(SAM, { action: "overview", copies: { [site]: mine } });
+let c = d.sites[0].copies.find((x) => x.id === mine); assert.equal(c.name, "Your copy"); assert.equal(c.mine, true); assert.equal(c.steps[0].by, "You");
+assert.equal((await as(SAM, { action: "deleteCopy", site, copy: mine })).status, 403, "only the admin deletes an editor's copy");
+
+// the admin sees the editor's copy by their name, and the editor cannot see the admin's own trial copies
+d = await as(ADMIN, { action: "makeCopy", site, name: "Winter look" }); const winter = d.copy;
+d = await as(ADMIN, { action: "overview", copies: { [site]: mine } });
+c = d.sites[0].copies.find((x) => x.id === mine); assert.equal(c.name, "Sam Taylor"); assert.equal(c.steps[0].by, "Sam Taylor");
+d = await as(SAM, { action: "overview" }); assert.ok(!d.sites[0].copies.some((x) => x.id === winter));
+assert.equal((await as(SAM, { action: "saveEntry", site, copy: winter, collection: "articles", id: first.id, values: { title: "x" } })).status, 409, "another copy cannot even be found");
+
+// an editor publishes their own copy; it goes live and their copy then matches live
+d = await as(SAM, { action: "publish", site, copy: mine }); assert.equal(d.ok, true);
+assert.equal(JSON.parse(hub.read(WR, "main", "content/site.json")).articles[0].title, "Sam's edit");
+assert.equal(hub.lastMessage(WR, "main"), "Make live: An editor's copy (by " + tag + ")");
+d = await as(SAM, { action: "overview", copies: { [site]: mine } }); assert.equal(d.sites[0].copies.find((x) => x.id === mine).ahead, 0);
+
+// the admin changes their sites, and it works from their next click
+assert.equal((await as(ADMIN, { action: "updatePerson", email: SAM, name: "Sam Taylor", sites: ["global-art-monitor"] })).ok, true);
+assert.equal((await as(SAM, { action: "content", site })).status, 403);
+d = await as(SAM, { action: "overview" }); assert.deepEqual(d.sites.map((s) => s.id), ["global-art-monitor"]);
+assert.equal((await as(ADMIN, { action: "resendInvite", email: SAM })).emailed, true); assert.equal(mails.length, 2);
+
+// removing someone: they are turned away at once, and what they saved stays
+assert.equal((await as(ADMIN, { action: "removePerson", email: SAM })).ok, true);
+assert.equal((await as(SAM, { action: "overview" })).status, 403);
+assert.equal(JSON.parse(hub.read(WR, "main", "content/site.json")).articles[0].title, "Sam's edit");
+
+// with no database key, the admin still works and editors are simply not there
+key = ""; d = await as(ADMIN, { action: "overview" }); assert.equal(d.status, 200); assert.equal(d.sites.length, 5);
+assert.equal((await as(ADMIN, { action: "people" })).status, 500);
+console.log("PEOPLE CHECKS PASSED");

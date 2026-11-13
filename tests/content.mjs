@@ -50,7 +50,7 @@ assert.equal(d.collections.length, 4); assert.equal(d.collections[0].entries.len
 const first = d.collections[0].entries[0];
 r = await handle(post({ action: "saveEntry", site: "world-art-review", collection: "articles", id: first.id, values: { title: "Edited in a test" } })); assert.equal(r.status, 200);
 assert.equal(JSON.parse(store["content/site.json"]).articles[0].title, "Edited in a test");
-assert.equal(writes.at(-1), "Edit article: " + first.title + " (me@x.com)");
+assert.equal(writes.at(-1), "Edit article: " + first.title + " (by admin)");
 r = await handle(post({ action: "setHidden", site: "world-art-review", collection: "articles", id: first.id, hidden: true })); assert.equal(r.status, 200);
 assert.equal(JSON.parse(store["content/site.json"]).articles[0].hidden, true);
 r = await handle(post({ action: "setHidden", site: "world-art-review", collection: "artists", id: "zara-muse", hidden: true })); assert.equal(r.status, 400);
@@ -101,7 +101,7 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   assert.equal(saved.colours.green, "#22304A"); assert.equal(saved.colours.paper, "#EEE5D4"); assert.equal(saved.fonts.display, "EB Garamond");
   assert.ok(/^:root\{[^<>{}]*\}$/.test(saved.css) && saved.css.includes("--green:#22304A") && saved.css.includes("--green-dark:color-mix(in srgb, #22304A 78%, black)") && saved.css.includes("--display:'EB Garamond', Georgia, serif") && !saved.css.includes("--paper"));
   assert.deepEqual(saved.font_links, ["https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap"]);
-  assert.equal(writes.at(-1), "Theme: bands and buttons, headlines typeface (me@x.com)");
+  assert.equal(writes.at(-1), "Theme: bands and buttons, headlines typeface (by admin)");
   r2 = await handle(post({ action: "saveTheme", site: "world-art-review", values: { colours: { green: "url(x)" } } })); assert.equal(r2.status, 400);
   fs.writeFileSync("/tmp/theme-saved.json", JSON.stringify(saved, null, 2));
   for (const st of SITES.filter((x) => x.theme)) for (const l of st.theme.looks) cleanTheme(st.theme, { colours: l.colours });
@@ -116,7 +116,7 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   assert.equal(work(), undefined, "no working branch for the live site");
   let o = await over(); const live = o.copies[0];
   assert.equal(live.kind, "live"); assert.equal(live.ahead, 0); assert.ok(live.steps.length >= 5 && !live.canRedo);
-  assert.equal(live.steps[0].what, "Theme: bands and buttons, headlines typeface"); assert.equal(live.steps[0].by, "me@x.com");
+  assert.equal(live.steps[0].what, "Theme: bands and buttons, headlines typeface"); assert.equal(live.steps[0].by, "You");
   assert.equal(live.preview, "", "the live site has no preview link");
 
   // undo one step, then two, then redo everything undone
@@ -124,7 +124,7 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   assert.equal((await call({ action: "undoStep" })).ok, true);
   o = await over(); assert.equal(o.copies[0].steps.length, n0 - 1); assert.equal(o.copies[0].canRedo, true);
   assert.equal(hub.read(WR, "main", "content/theme.json"), null, "the theme step is undone on the live site");
-  assert.match(hub.lastMessage(WR, "main"), /^Undo: Theme: bands and buttons, headlines typeface \(me@x\.com\)\n/);
+  assert.match(hub.lastMessage(WR, "main"), /^Undo: Theme: bands and buttons, headlines typeface \(by admin\)\n/);
   assert.equal((await call({ action: "undoStep", steps: 2 })).ok, true);
   o = await over(); assert.equal(o.copies[0].steps.length, n0 - 3);
   assert.equal((await call({ action: "redoStep" })).ok, true);
@@ -161,14 +161,14 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   assert.equal((await call({ action: "refreshCopy", copy: t.copy })).status, 409);
   assert.equal((await call({ action: "publish", copy: t.copy, replace: true })).ok, true);
   assert.equal(title("main"), "Trial title"); assert.equal(hub.read(WR, "main", "tools/build_site.py"), "print(2)", "live keeps its own layout fix");
-  assert.equal(hub.lastMessage(WR, "main"), "Make live: Winter look (me@x.com)");
+  assert.equal(hub.lastMessage(WR, "main"), "Make live: Winter look (by admin)");
   o = await over(); assert.equal(o.copies.find((c) => c.id === t.copy).ahead, 0); assert.equal(o.copies[0].steps[0].what, "Make live: Winter look");
   assert.equal((await call({ action: "publish" })).unchanged, true);
 
   // History can put a published change back, straight onto the live site
   const hist = (await call({ action: "history" })).changes; const made = hist.find((h) => h.what === "Make live: Winter look"); assert.ok(made && made.canUndo);
   assert.equal((await call({ action: "undo", sha: made.sha })).ok, true);
-  assert.equal(title("main"), "Live edit in the meantime"); assert.match(hub.lastMessage(WR, "main"), /^Undo: Make live: Winter look \(me@x\.com\)/);
+  assert.equal(title("main"), "Live edit in the meantime"); assert.match(hub.lastMessage(WR, "main"), /^Undo: Make live: Winter look \(by admin\)/);
   assert.equal(hist.find((h) => h.what === "A layout fix made on live").canUndo, false);
 
   // a refresh that can be joined, then delete
@@ -205,7 +205,7 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   assert.deepEqual(saved.shared.header.settings.links[3], ["Guides", "#guides"]); assert.equal(saved.shared.header.settings.links.length, 4);
   assert.equal(ss[0].settings.artist, ""); assert.deepEqual(ss[0].settings.headline[0], { t: "See", ital: true });
   assert.equal(saved._how_to_edit, pg.pages._how_to_edit); assert.equal(saved.pages.home.title, "Home");
-  assert.equal(hub.lastMessage(WR, "main"), "Edit page: Add section: Quote (me@x.com)");
+  assert.equal(hub.lastMessage(WR, "main"), "Edit page: Add section: Quote (by admin)");
   // refused: unknown kind, bad id, duplicate id, too long a page
   doc.pages.home.sections.push({ id: "x", type: "carousel", settings: {} }); assert.equal((await call({ action: "savePages", pages: doc })).status, 400); doc.pages.home.sections.pop();
   doc.pages.home.sections.push({ id: "Bad Id", type: "text", settings: {} }); assert.equal((await call({ action: "savePages", pages: doc })).status, 400); doc.pages.home.sections.pop();
@@ -230,7 +230,7 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   const saved = JSON.parse(hub.read(WR, "main", "content/pages.json"));
   assert.equal(saved.pages.home.sections.at(-1).settings.image, "studio-shot.jpg");
   assert.equal(saved.pages.home.sections.find((x) => x.id === "method").settings.cards[1].hidden, true, "a hidden block stays hidden");
-  assert.match(hub.lastMessage(WR, "main"), /^Edit page: Add section: Picture \(me@x\.com\)$/);
+  assert.match(hub.lastMessage(WR, "main"), /^Edit page: Add section: Picture \(by admin\)$/);
   assert.equal((await call({ action: "savePages", pages: doc, uploads: [{ key: "x", name: "a", ext: "jpg", content: "not base64!" }] })).status, 400);
   // one Undo takes both back
   assert.equal((await call({ action: "undoStep" })).ok, true);

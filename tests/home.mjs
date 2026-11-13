@@ -5,7 +5,10 @@
 //
 // Secrets this function needs (set in Supabase, never in code):
 //   GITHUB_TOKEN     a fine-grained token limited to the site repositories
-//   ALLOWED_EMAILS   comma separated list of people who may use the console
+//   ALLOWED_EMAILS   the admin's email address (more than one only as a backstop)
+// Editors are kept in the "people" table of the Supabase database (see PEOPLE_SQL below).
+// SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEYS) is provided by Supabase and lets
+// this function, and nothing else, read and write that table.
 // SUPABASE_URL is provided by Supabase. This function checks every
 // request itself, so its "Verify JWT" setting is switched off.
 
@@ -1418,16 +1421,26 @@ export function copySlug(name) {
   return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30).replace(/-+$/g, "");
 }
 export function copyName(id) {
+  if (ownerOfCopy(id)) return "An editor's copy";
   const words = String(id).replace(/^trial-/, "").replace(/-[0-9a-f]{6}$/, "").replace(/-/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+// Who made a change is kept at the end of its message: "(by admin)" or "(by <editor tag>)".
+// Changes from before people existed end with an email address instead; both are read.
+// Email addresses are never written any more, because the site repositories are public.
+const WHO_TAIL = / \((?:[^()@ ]+@[^()]+|by [a-z0-9-]{1,40})\)$/;
+export function whatOf(first) { return String(first || "").replace(WHO_TAIL, ""); }
+export function byOf(first) {
+  const m = String(first || "").match(/\(([^()@ ]+@[^()]+)\)$/) || String(first || "").match(/\(by ([a-z0-9-]{1,40})\)$/);
+  return m ? m[1] : "";
 }
 function stepOf(c) {
   const first = String((c.commit && c.commit.message) || "").split("\n")[0];
   return {
     sha: c.sha,
-    what: first.replace(/ \([^()@ ]+@[^()]+\)$/, ""),
+    what: whatOf(first),
     when: c.commit && c.commit.author ? c.commit.author.date : "",
-    by: (first.match(/\(([^()@ ]+@[^()]+)\)$/) || [])[1] || "",
+    by: byOf(first),
   };
 }
 
@@ -1481,8 +1494,10 @@ function pickCopy(copies, id) {
   return copies.find((c) => c.id === id) || null;
 }
 function readRefOf(copy) { return copy.kind === "trial" ? copy.branch : "main"; }
-function publicCopy(c) {
-  return { id: c.id, kind: c.kind, name: c.name, ahead: c.ahead, behind: c.behind, since: c.since, steps: c.steps.map((x) => ({ what: x.what, when: x.when, by: x.by })), canRedo: c.canRedo, preview: c.kind === "trial" ? c.preview : "" };
+function publicCopy(c, me, names) {
+  const own = ownerOfCopy(c.id), name = own ? (me && own === me.tag ? "Your copy" : (names && names[own]) || "An editor's copy") : c.name;
+  const by = (x) => nameOf(x, me, names);
+  return { id: c.id, kind: c.kind, name, own: !!own, mine: !!(own && me && own === me.tag), ahead: c.ahead, behind: c.behind, since: c.since, steps: c.steps.map((x) => ({ what: x.what, when: x.when, by: by(x.by) })), canRedo: c.canRedo, preview: c.kind === "trial" ? c.preview : "" };
 }
 async function mainSha(site) {
   const r = await gh("/repos/" + site.repo + "/git/ref/heads/main");
@@ -1502,11 +1517,11 @@ async function branchForWriting(site, copy, _who) {
   return copy.branch || "main";
 }
 
-async function siteOverview(site, wanted = "") {
+async function siteOverview(site, wanted = "", me = null, names = {}) {
   const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta), edits: !!site.items };
   if (!site.live) return base;
   try {
-    const copies = await copiesOf(site);
+    const copies = (await copiesOf(site)).filter((c) => !me || me.admin || c.kind === "live" || ownerOfCopy(c.id) === me.tag);
     const copy = pickCopy(copies, wanted) || copies[0];
     const ref = readRefOf(copy);
     const [cal, log, drafts, inbox, slotFile] = await Promise.all([
@@ -1530,8 +1545,10 @@ async function siteOverview(site, wanted = "") {
       drafts,
       inbox,
       slots,
-      copies: copies.map(publicCopy),
+      copies: copies.map((c) => publicCopy(c, me, names)),
       copy: copy.id,
+      // the weekday agent's topics, log and drafts are the admin's to answer
+      ...(me && !me.admin ? { topics: { waiting: [], approved: [] }, log: [], drafts: [] } : {}),
     };
   } catch (_e) {
     return { ...base, error: "Could not read this site from GitHub just now." };
@@ -1560,6 +1577,79 @@ function publishableKey() {
     if (first) return String(first);
   } catch (_e) { /* fall through to the older variable */ }
   return env("SUPABASE_ANON_KEY");
+}
+
+// ---------- people: one admin, and editors ----------
+// Run once in the Supabase SQL editor. Row level security is on with no rules, so only this
+// function (with the service key Supabase gives it) can read or change the table.
+export const PEOPLE_SQL = `create table if not exists public.people (
+  email text primary key check (email = lower(email)),
+  id text not null unique,
+  name text not null default '',
+  sites text[] not null default '{}',
+  invited_at timestamptz not null default now(),
+  last_seen timestamptz
+);
+alter table public.people enable row level security;`;
+function secretKey() {
+  try {
+    const keys = JSON.parse(env("SUPABASE_SECRET_KEYS") || "{}");
+    const first = keys.default || Object.values(keys)[0];
+    if (first) return String(first);
+  } catch (_e) { /* fall through to the older variable */ }
+  return env("SUPABASE_SERVICE_ROLE_KEY");
+}
+async function db(path, init = {}) {
+  const key = secretKey();
+  if (!key) return { ok: false, status: 0, data: null };
+  const res = await fetch(env("SUPABASE_URL") + "/rest/v1/" + path, {
+    ...init,
+    headers: { apikey: key, Authorization: "Bearer " + key, "Content-Type": "application/json", Prefer: "return=representation", ...(init.headers || {}) },
+  });
+  let data = null;
+  try { data = await res.json(); } catch (_e) { data = null; }
+  return { ok: res.ok, status: res.status, data };
+}
+const EDITOR_TAG = /^[a-f0-9]{10}$/;
+function newTag() { const b = new Uint8Array(5); crypto.getRandomValues(b); return Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join(""); }
+// Who is asking: the admin (from ALLOWED_EMAILS), an editor from the people table, or nobody.
+export async function personOf(email) {
+  if (isAllowed(email)) return { email, admin: true, name: "Admin", tag: "admin", sites: SITES.map((s) => s.id) };
+  const r = await db("people?select=id,name,sites&email=eq." + encodeURIComponent(email));
+  const p = r.ok && Array.isArray(r.data) ? r.data[0] : null;
+  if (!p || !EDITOR_TAG.test(String(p.id))) return null;
+  return { email, admin: false, name: String(p.name || ""), tag: String(p.id), sites: (Array.isArray(p.sites) ? p.sites : []).map(String).filter((id) => SITES.some((s) => s.id === id)) };
+}
+// Each editor's names, by tag, to show who made a change. The admin also sees addresses.
+async function namesFor(me) {
+  const r = await db("people?select=id,name,email");
+  const out = {};
+  for (const p of r.ok && Array.isArray(r.data) ? r.data : []) out[p.id] = String(p.name || "") || (me.admin ? String(p.email) : "An editor");
+  return out;
+}
+function nameOf(by, me, names) {
+  if (!by) return "";
+  if (by === "admin" || (by.includes("@") && isAllowed(by))) return me && me.admin ? "You" : "The admin";
+  if (me && by === me.tag) return "You";
+  if (by.includes("@")) return me && me.admin ? by : "Someone";
+  return (names && names[by]) || "An editor";
+}
+// An editor's own copy of a site: one each, named by their tag, never by their address.
+export function ownCopyId(tag) { return "trial-own-" + tag; }
+export function ownerOfCopy(id) { const m = String(id).match(/^trial-own-([a-f0-9]{10})$/); return m ? m[1] : ""; }
+const EMAIL_OK = /^[^\s@<>"(),;:]{1,64}@[a-z0-9.-]{1,190}\.[a-z]{2,24}$/;
+export function cleanPerson(given) {
+  const g = given && typeof given === "object" ? given : {};
+  return {
+    name: cleanText(g.name, 60),
+    sites: [...new Set((Array.isArray(g.sites) ? g.sites : []).map(String))].filter((id) => SITES.some((s) => s.id === id)),
+  };
+}
+// Sends the normal sign-in email, the same one the admin gets.
+async function sendSignIn(email, back) {
+  const to = /^https:\/\/[a-z0-9.-]+(:\d+)?\/[^\s"<>]*$/i.test(String(back || "")) ? "?redirect_to=" + encodeURIComponent(back) : "";
+  const res = await fetch(env("SUPABASE_URL") + "/auth/v1/otp" + to, { method: "POST", headers: { apikey: publishableKey(), "Content-Type": "application/json" }, body: JSON.stringify({ email, create_user: true }) });
+  return res.ok;
 }
 
 async function signedInEmail(req) {
@@ -1592,7 +1682,8 @@ export async function handle(req) {
 
   const email = await signedInEmail(req);
   if (!email) return json({ error: "Please sign in again." }, 401);
-  if (!isAllowed(email)) return json({ error: "This email address does not have access." }, 403);
+  const me = await personOf(email);
+  if (!me) return json({ error: "This email address does not have access." }, 403);
   if (!env("GITHUB_TOKEN")) return json({ error: "The GitHub connection has not been set up yet." }, 500);
 
   let body = {};
@@ -1605,26 +1696,84 @@ export async function handle(req) {
 
   if (action === "overview") {
     const wanted = body.copies && typeof body.copies === "object" ? body.copies : {};
-    const sites = await Promise.all(SITES.map((s) => siteOverview(s, String(wanted[s.id] || ""))));
-    return json({ user: { email }, sites });
+    const names = await namesFor(me);
+    if (!me.admin) await db("people?email=eq." + encodeURIComponent(email), { method: "PATCH", body: JSON.stringify({ last_seen: new Date().toISOString() }) });
+    const mine = SITES.filter((s) => me.sites.includes(s.id));
+    const sites = await Promise.all(mine.map((s) => siteOverview(s, String(wanted[s.id] || ""), me, names)));
+    return json({ user: { email, admin: me.admin, name: me.name }, sites });
+  }
+
+  // ----- people: only the admin adds, changes and removes them -----
+  if (["people", "invitePerson", "updatePerson", "removePerson", "resendInvite"].includes(action)) {
+    if (!me.admin) return json({ error: "Only the admin can manage people." }, 403);
+    if (!secretKey()) return json({ error: "People are not set up yet. The database key is missing." }, 500);
+    const sites = SITES.map((s) => ({ id: s.id, name: s.name, live: s.live }));
+    if (action === "people") {
+      const r = await db("people?select=email,name,sites,invited_at,last_seen&order=invited_at.asc");
+      if (!r.ok) return json({ error: r.status === 404 ? "People are not set up yet. Run the setup line in Supabase first." : "The list of people could not be read." }, 502);
+      return json({ people: r.data.map((p) => ({ email: p.email, name: p.name, sites: p.sites, invited: p.invited_at, lastSeen: p.last_seen })), sites });
+    }
+    const who = String(body.email || "").trim().toLowerCase();
+    if (!EMAIL_OK.test(who)) return json({ error: "That does not look like an email address." }, 400);
+    if (isAllowed(who)) return json({ error: "That is the admin's address." }, 400);
+    if (action === "invitePerson") {
+      const p = cleanPerson(body);
+      const r = await db("people", { method: "POST", body: JSON.stringify({ email: who, id: newTag(), name: p.name, sites: p.sites }) });
+      if (r.status === 409) return json({ error: "That person is already in People." }, 409);
+      if (!r.ok) return json({ error: "The person could not be added. Please try again." }, 502);
+      return json({ ok: true, emailed: await sendSignIn(who, body.back) });
+    }
+    if (action === "updatePerson") {
+      const p = cleanPerson(body);
+      const r = await db("people?email=eq." + encodeURIComponent(who), { method: "PATCH", body: JSON.stringify({ name: p.name, sites: p.sites }) });
+      if (!r.ok || !Array.isArray(r.data) || !r.data.length) return json({ error: "That person is not in People." }, 404);
+      return json({ ok: true });
+    }
+    if (action === "resendInvite") {
+      const r = await db("people?select=email&email=eq." + encodeURIComponent(who));
+      if (!r.ok || !Array.isArray(r.data) || !r.data.length) return json({ error: "That person is not in People." }, 404);
+      return json({ ok: true, emailed: await sendSignIn(who, body.back) });
+    }
+    // removePerson: they cannot sign in from their next click. What they saved stays.
+    const r = await db("people?email=eq." + encodeURIComponent(who), { method: "DELETE" });
+    if (!r.ok) return json({ error: "The person could not be removed. Please try again." }, 502);
+    return json({ ok: true });
   }
 
   const site = liveSite(String(body.site || ""));
   if (!site) return json({ error: "That site is not available." }, 400);
+  if (!me.sites.includes(site.id)) return json({ error: "That site is not one of yours." }, 403);
 
   // ----- content -----
   const col = (site.collections || []).find((c) => c.id === body.collection) || null;
-  const who = " (" + email + ")";
+  const who = " (by " + me.tag + ")";
 
   // Which copy of the site this request is about, and the branch that goes with it.
   const WRITES = ["saveTheme", "saveEntry", "setHidden", "deleteEntry", "removePhoto", "undo", "uploadPhoto", "savePages", "saveFiles"];
   const COPY_ACTIONS = ["makeCopy", "deleteCopy", "refreshCopy", "publish", "discard", "undoStep", "redoStep"];
   const DRAFT_ACTIONS = ["answerTopic", "publishDraft", "returnDraft", "rejectDraft", "history"];
+  if (!me.admin && DRAFT_ACTIONS.includes(action)) return json({ error: "Only the admin can do that." }, 403);
   let copies = [], copy = null, ref = "main";
   if (!DRAFT_ACTIONS.includes(action)) {
     copies = await copiesOf(site);
+    if (!me.admin) {
+      // An editor works only on their own copy. They can read the live site, and publish their copy.
+      const mine = ownCopyId(me.tag);
+      copies = copies.filter((c) => c.kind === "live" || c.id === mine);
+      if (action === "makeCopy") {
+        if (copies.some((c) => c.id === mine)) return json({ ok: true, copy: mine });
+        const sha = await mainSha(site);
+        const made = await gh("/repos/" + site.repo + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/adh/" + mine, sha }) });
+        if (!sha || !made.ok) return json({ error: writeProblem(made, "GitHub did not make your copy. Please try again.") }, 502);
+        return json({ ok: true, copy: mine });
+      }
+    }
     copy = pickCopy(copies, String(body.copy || ""));
     if (!copy) return json({ error: "That trial copy is no longer there. Refresh and choose again." }, 409);
+    if (!me.admin && (WRITES.includes(action) || COPY_ACTIONS.includes(action)) && copy.id !== ownCopyId(me.tag)) {
+      return json({ error: "Editors work on their own copy. Open your copy to make changes." }, 403);
+    }
+    if (!me.admin && action === "deleteCopy") return json({ error: "Your copy is kept for you. Only the admin can delete it." }, 403);
     if (WRITES.includes(action)) {
       const b = await branchForWriting(site, copy, who);
       if (!b) return json({ error: "The working copy could not be prepared. Please try again." }, 502);
@@ -1992,12 +2141,13 @@ export async function handle(req) {
   // ----- history and undo -----
 
   if (action === "history") {
+    const names = await namesFor(me);
     const r = await gh("/repos/" + site.repo + "/commits?per_page=30");
     if (!r.ok || !Array.isArray(r.data)) return json({ error: "The history could not be read." }, 502);
     return json({
       changes: r.data.map((c) => {
         const first = String(c.commit.message || "").split("\n")[0];
-        return { sha: c.sha, what: first.replace(/ \([^()@ ]+@[^()]+\)$/, ""), when: c.commit.author ? c.commit.author.date : "", by: (first.match(/\(([^()@ ]+@[^()]+)\)$/) || [])[1] || (c.commit.author ? c.commit.author.name : ""), canUndo: UNDOABLE.test(first) };
+        return { sha: c.sha, what: whatOf(first), when: c.commit.author ? c.commit.author.date : "", by: nameOf(byOf(first), me, names) || (c.commit.author ? c.commit.author.name : ""), canUndo: UNDOABLE.test(first) };
       }),
     });
   }
@@ -2032,7 +2182,7 @@ export async function handle(req) {
     const made = await gh("/repos/" + site.repo + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: headCommit.data.tree.sha, tree }) });
     if (!made.ok) return json({ error: writeProblem(made, "GitHub did not save the undo.") }, 502);
     if (made.data.sha === headCommit.data.tree.sha) return json({ ok: true, unchanged: true });
-    const commit = await gh("/repos/" + site.repo + "/git/commits", { method: "POST", body: JSON.stringify({ message: "Undo: " + first.replace(/ \([^()@ ]+@[^()]+\)$/, "") + who, tree: made.data.sha, parents: [headSha] }) });
+    const commit = await gh("/repos/" + site.repo + "/git/commits", { method: "POST", body: JSON.stringify({ message: "Undo: " + whatOf(first) + who, tree: made.data.sha, parents: [headSha] }) });
     if (!commit.ok) return json({ error: writeProblem(commit, "GitHub did not save the undo.") }, 502);
     const moved = await moveBranch(site, ref, commit.data.sha, false);
     if (!moved.ok) return json({ error: writeProblem(moved, "GitHub did not save the undo.") }, 502);
@@ -2045,7 +2195,7 @@ export async function handle(req) {
     if (action === "makeCopy") {
       const slug = copySlug(body.name);
       if (!slug) return json({ error: "Give the trial copy a short name, for example Winter look." }, 400);
-      if (copies.filter((c) => c.kind === "trial").length >= MAX_TRIALS) return json({ error: "This site already has " + MAX_TRIALS + " trial copies. Delete one to make another." }, 400);
+      if (copies.filter((c) => c.kind === "trial" && !ownerOfCopy(c.id)).length >= MAX_TRIALS) return json({ error: "This site already has " + MAX_TRIALS + " trial copies. Delete one to make another." }, 400);
       const sha = await mainSha(site);
       const id = "trial-" + slug + "-" + randomTail();
       const made = await gh(repo + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/adh/" + id, sha }) });
@@ -2232,7 +2382,7 @@ export async function handle(req) {
       const label = action === "returnDraft" ? "Sent back by the owner" : "Rejected by the owner";
       await gh(base + "/issues/" + pull.number + "/comments", {
         method: "POST",
-        body: JSON.stringify({ body: label + " (" + email + "):\n\n" + note }),
+        body: JSON.stringify({ body: label + ":\n\n" + note }),
       });
     }
     if (action === "rejectDraft") {
@@ -2275,7 +2425,7 @@ export async function handle(req) {
         method: "PUT",
         body: JSON.stringify({
           message: "Photo description from Artiscope Digital Home",
-          content: encodeBase64Utf8(JSON.stringify({ alt, caption, sent_by: email }, null, 2) + "\n"),
+          content: encodeBase64Utf8(JSON.stringify({ alt, caption, sent_by: me.tag }, null, 2) + "\n"),
           ...(old.ok && old.data && old.data.sha ? { sha: old.data.sha } : {}),
         }),
       });
