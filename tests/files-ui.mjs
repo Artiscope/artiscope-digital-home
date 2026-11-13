@@ -30,7 +30,7 @@ try {
   // Konn Artiss has no picture yet: upload one from the panel, see it on the page at once
   await page.click('.sec.pic[data-key="artist:konn-artiss"]'); await page.waitForSelector(".ed-right h2:has-text('Picture of Konn Artiss')");
   assert.ok((await page.innerText(".ed-right")).includes("also shows on Konn Artiss's portfolio and the home page"));
-  assert.equal(await page.locator("#ed-float .float").count(), 0, "no move or hide for a shared picture");
+  assert.equal(await page.locator(".ptools").count(), 0, "no move or hide for a shared picture");
   await page.setInputFiles('[data-upload="image"]', "/tmp/s2/studio.jpg"); await page.waitForSelector(".picthumb[src^='data:image']"); await page.waitForTimeout(500);
   assert.ok(await frame().evaluate(() => [...document.querySelectorAll(".hero .srcs .plate img")].some((i) => i.src.startsWith("data:image"))), "the small box shows the new photo");
   await page.fill('[data-pf="alt"]', "Blocks of ice on a London pavement"); await page.fill('[data-pf="credit"]', "Photo: studio"); await page.waitForTimeout(300);

@@ -61,7 +61,8 @@ try {
   assert.equal(await page.inputValue(".pagepick"), "page-press");
   assert.equal(await frame().evaluate(() => document.querySelector(".page-head .h1").textContent), "Press");
   assert.ok(await frame().evaluate(() => [...document.querySelectorAll(".menu-list a")].some((a) => a.textContent.includes("Press"))));
-  await page.click('.addl[data-act="ed-secpicker"]'); assert.equal(await page.locator('.pk-item[data-key="hero"]:not([disabled])').count(), 0);
+  await page.click('.addl[data-act="ed-secpicker"]'); assert.equal(await page.locator('.pk-item[data-key="hero"]:not([disabled])').count(), 1, "every section is offered on a new page");
+  assert.equal(await page.locator('.pk-item[data-key="header"], .pk-item[data-key="footer"], .pk-item[disabled]').count(), 0);
   await page.click('.pk-item[data-key="panel"]'); await settle();
   // one Save keeps it all
   await page.click('[data-act="ed-save"]'); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved. Live in about two minutes"); await page.waitForSelector(".pagepick"); await settle();

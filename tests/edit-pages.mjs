@@ -88,7 +88,9 @@ try {
   assert.equal(await hash(), "#page-visit-us"); assert.ok((await frame().innerText("header.hdr")).includes("Visit us"), "the new page is in the menu bar");
   assert.ok((await frame().innerText("#main")).includes("Visit us"));
   await page.click('.addl[data-act="ed-secpicker"]'); await page.waitForSelector('.pk-item[data-key="quote"]');
-  assert.equal(await page.locator('.pk-item[data-key="hero"]:not([disabled])').count(), 0, "home-only sections are not offered");
+  assert.equal(await page.locator('.pk-item[data-key="hero"]:not([disabled])').count(), 1, "every section is offered on a new page");
+  assert.equal(await page.locator('.pk-item[data-key="header"], .pk-item[data-key="footer"], .pk-item[data-key="opening"], .pk-item[disabled]').count(), 0, "but not the menu bar, footer or opening screen, and nothing greyed out");
+  assert.deepEqual(await page.locator(".pk-gl").allTextContents(), ["Top of the page", "Words", "Pictures", "Art and artists", "Reading and trust", "Contact and sign-up"]);
   await page.click('.pk-item[data-key="quote"]'); await settle();
   assert.ok(await frame().evaluate(() => !!document.querySelector("#quote-1")));
 

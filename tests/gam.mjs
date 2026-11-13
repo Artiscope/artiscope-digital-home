@@ -68,8 +68,9 @@ assert.equal(gamForEditor(r.content, r.sales, r.images, imageFiles).artists[0].i
 // new pages get their own address
 const withPage = clone(cleanedPages); withPage.pages.press = { title: "Press | Global Art Monitor", description: "For the press.", sections: [{ id: "head", type: "page-head", settings: { eyebrow: "Press", headline: "For the press", lede: "", wide: true } }] };
 const np = cleanPages(ctx, withPage, pages).pages.press; assert.deepEqual([np.path, np.current, np.intro, np.description], ["press/index.html", "", false, "For the press."]);
-withPage.pages.press.sections.push({ id: "r", type: "results-table", settings: {} }); assert.throws(() => cleanPages(ctx, withPage, pages), /cannot go on a new page/);
-withPage.pages.press.sections.pop(); withPage.pages.assets = { title: "x", sections: [] }; assert.throws(() => cleanPages(ctx, withPage, pages), /web address/);
+withPage.pages.press.sections.push({ id: "r", type: "results-table", settings: {} }, { id: "r2", type: "results-table", settings: {} }, { id: "c", type: "contact-form", settings: {} }); assert.deepEqual(cleanPages(ctx, withPage, pages).pages.press.sections.map((x) => x.type), ["page-head", "results-table", "results-table", "contact-form"], "any section, any number of times, on a new page");
+withPage.pages.press.sections.splice(1);
+withPage.pages.assets = { title: "x", sections: [] }; assert.throws(() => cleanPages(ctx, withPage, pages), /web address/);
 
 // through the handler, as one step that one Undo takes back
 const GR = "Artiscope/global-art-monitor";

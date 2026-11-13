@@ -27,8 +27,8 @@ try {
   assert.equal(await frame().evaluate(() => document.querySelector("#numbers .eyebrow").textContent), "The review today");
   assert.ok((await page.innerText(".ed-top")).includes("Edited, not saved") && await page.isVisible('[data-act="ed-save"]'));
   // hide it, move it up, add a quote below it
-  await page.click('#ed-float [data-act="ed-hide"]'); await page.waitForTimeout(300); assert.ok(!(await ids()).includes("numbers"));
-  await page.click('#ed-float [data-act="ed-hide"]'); await page.click('#ed-float [data-act="ed-move"][data-dir="-1"]'); await page.waitForTimeout(300);
+  await page.click('.ptools [data-act="ed-hide"]'); await page.waitForTimeout(300); assert.ok(!(await ids()).includes("numbers"));
+  await page.click('.ptools [data-act="ed-hide"]'); await page.click('.ptools [data-act="ed-move"][data-dir="-1"]'); await page.waitForTimeout(300);
   assert.deepEqual(await ids(), ["hero", "featured", "sections", "numbers", "explainedHome", "method"]);
   await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="quote"]'); await page.waitForTimeout(400);
   assert.deepEqual(await ids(), ["hero", "featured", "sections", "numbers", "quote-1", "explainedHome", "method"]);
@@ -42,7 +42,7 @@ try {
   await page.click(".ed-right .rt-page"); await page.keyboard.press("Control+End"); await page.keyboard.type(" More words."); await page.waitForTimeout(400);
   assert.ok((await frame().evaluate(() => document.querySelector("#text-1 .prose").textContent)).includes("More words."));
   // remove it, with the question first
-  await page.click('#ed-float [data-act="ask"]'); await page.click('#ed-float [data-act="ed-remove"]'); await page.waitForTimeout(300);
+  await page.click('.ptools [data-act="ask"]'); await page.click('.ptools [data-act="ed-remove"]'); await page.waitForTimeout(300);
   assert.ok(!(await ids()).includes("text-1"));
   // leaving asks; discard puts everything back
   await page.click('[data-tab="overview"]'); assert.ok(await page.isVisible("text=You have changes that are not saved yet"));
@@ -64,13 +64,13 @@ try {
   assert.ok(await frame().evaluate(() => { const b = document.querySelectorAll("#method .mcard")[1]; return b.classList.contains("adh-picked-block") && b.getAttribute("data-adh-label") === "Card: Every fact, sourced"; }), "the block is outlined and labelled on the page");
   await page.fill('[data-pf="cards.1.title"]', "Every fact, checked"); await page.waitForTimeout(300);
   assert.ok((await frame().evaluate(() => document.querySelectorAll("#method .mcard")[1].textContent)).includes("Every fact, checked"));
-  await page.click('#ed-float [data-act="ed-hide"]'); await page.waitForTimeout(300);
+  await page.click('.ptools [data-act="ed-hide"]'); await page.waitForTimeout(300);
   assert.equal(await frame().evaluate(() => document.querySelectorAll("#method .mcard").length), 2, "a hidden card leaves the page");
-  await page.click('#ed-float [data-act="ed-hide"]'); await page.click('#ed-float [data-act="ed-move"][data-dir="-1"]'); await page.waitForTimeout(300);
+  await page.click('.ptools [data-act="ed-hide"]'); await page.click('.ptools [data-act="ed-move"][data-dir="-1"]'); await page.waitForTimeout(300);
   assert.ok((await frame().evaluate(() => document.querySelectorAll("#method .mcard")[0].textContent)).includes("Every fact, checked"));
   await page.click('.addl.blk[data-id="method"]'); await page.waitForTimeout(300);
   assert.equal(await frame().evaluate(() => document.querySelectorAll("#method .mcard").length), 4);
-  await page.click('#ed-float [data-act="ask"]'); await page.click('#ed-float [data-act="ed-remove"]'); await page.waitForTimeout(300);
+  await page.click('.ptools [data-act="ask"]'); await page.click('.ptools [data-act="ed-remove"]'); await page.waitForTimeout(300);
   assert.equal(await frame().evaluate(() => document.querySelectorAll("#method .mcard").length), 3);
   // click a card on the page itself
   await frame().click("#method .mcard >> nth=2"); await page.waitForSelector(".ed-right h2:has-text('Publicity, flagged')");

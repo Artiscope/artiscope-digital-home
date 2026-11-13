@@ -353,19 +353,20 @@ select.fontpick { width: auto; min-width: 180px; max-width: 210px; min-height: 3
   .ed-mid { min-height: 60vh; margin: 0; }
 }
 
-/* ---------- blocks, the floating tools and the photo picker ---------- */
+/* ---------- blocks, the tools and the photo picker ---------- */
 .ed .lt { font-family: var(--serif); font-size: 17px; color: var(--text); margin: 2px 8px 0; }
 .ed .blocks { margin: 0 0 2px; }
 .ed .sec.blk { padding-left: 33px; font-size: 13px; min-height: 30px; }
 .ed .sec.blk .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .45; flex: none; }
 .ed .addl.blk { padding-left: 33px; font-size: 12.5px; min-height: 30px; }
-.ed-frame #ed-float { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3; }
-.float { display: flex; gap: 2px; align-items: center; padding: 4px; border-radius: 10px; background: var(--rail); box-shadow: var(--shadow-pop); white-space: nowrap; }
-.float .fb { width: 34px; height: 34px; border: 0; border-radius: 7px; background: transparent; color: var(--text); cursor: pointer; display: grid; place-items: center; }
-.float .fb:hover { background: var(--hover); }
-.float .fb.danger { color: var(--problem); }
-.float .fw { border: 0; background: transparent; min-height: 34px; padding: 0 10px; border-radius: 7px; font-size: 13px; color: var(--text); cursor: pointer; }
-.float .fw:hover { background: var(--hover); }
+.ptools { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; margin-top: 4px; padding: 3px; border-radius: 9px; background: var(--bg); align-self: flex-start; }
+.ptools .tb { width: 32px; height: 32px; border: 0; border-radius: 7px; background: transparent; color: var(--text); cursor: pointer; display: grid; place-items: center; }
+.ptools .tb:hover, .ptools .tw:hover { background: var(--select); }
+.ptools .tb.danger { color: var(--problem); }
+.ptools .tw { border: 0; background: transparent; min-height: 32px; padding: 0 10px; border-radius: 7px; font: inherit; font-size: 13px; color: var(--text); cursor: pointer; }
+.ptools .tw[disabled], .ptools .tb[disabled] { opacity: .4; cursor: default; background: transparent; }
+.ptools.ask { gap: 8px; padding: 6px 8px; background: var(--select); }
+.ptools.ask .small { color: var(--select-text); font-weight: 600; flex-basis: 100%; margin: 0 2px 2px; }
 .ed-right .sub { font-size: 11.5px; color: var(--muted); font-weight: 600; margin: 14px 4px 6px; }
 .blocknote { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin: 0 4px 12px; padding: 10px 12px; border-radius: 9px; background: var(--bg); }
 .picrow { display: flex; gap: 12px; align-items: center; }
@@ -511,3 +512,14 @@ label.linklike.upl { display: inline-flex; align-items: center; font-weight: 400
 .pv-card { padding: 14px; border-radius: 8px; background: var(--rail); }
 .pv-block { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--accent); }
 @media (max-width: 1100px) { .pk { width: auto; right: 12px; bottom: auto; max-height: 70vh; } .pk-view { display: none; } }
+
+/* the eye and the bin on each row: shown on hover and on the picked row; a hidden row keeps its eye */
+.ed .sec .rtools { flex: none; display: inline-flex; gap: 1px; margin-left: auto; }
+.ed .sec .cnt + .rtools { margin-left: 0; }
+.ed .sec .rb { width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; display: grid; place-items: center; padding: 0; opacity: 0; transition: opacity .12s ease, background .12s ease; }
+.ed .sec:hover .rb, .ed .sec.on .rb, .ed .sec:focus-within .rb, .ed .sec .rb.is-off { opacity: 1; }
+.ed .sec .rb:hover { background: var(--bg); color: var(--text); }
+.ed .sec .rb.del:hover { color: var(--problem); }
+.ed .sec.on .rb { color: var(--select-text); }
+.ed .sec.on .rb:hover { background: #fff; }
+@media (hover: none) { .ed .sec .rb { opacity: 1; } }

@@ -104,7 +104,7 @@ const WAR_SECTIONS = {
     { name: "columns", label: "Link columns", type: "rows", fields: [{ name: "title", label: "Column title", type: "text", hint: "A short word or two, such as Read." }, { ...LINK_ROWS, label: "Links in this column" }] },
     { name: "copyright", label: "Copyright line", type: "text" }, { name: "elsewhere", label: "Links in the bottom bar", type: "rows", fields: LINK_ROWS.fields },
   ] },
-  hero: { label: "Opening banner", about: "The large green band at the top of the home page.", summary: (st) => (st.headline || []).filter((x) => x && !x.hidden).map((x) => x.t).join(" "), blocks: [
+  hero: { label: "Opening banner", about: "The large green band, usually at the top of the home page. On another page it takes the place of the menu bar.", summary: (st) => (st.headline || []).filter((x) => x && !x.hidden).map((x) => x.t).join(" "), blocks: [
     { field: "headline", label: "Headline line", add: "Add a headline line", about: "One line of the large headline." },
     { field: "picture", label: "Picture", one: true, hide: "hide_picture", fields: ["image", "alt", "credit", "artist"], about: "The picture on the right of the banner, with the artist's details beside it." },
     { field: "tagline", label: "Tagline line", add: "Add a tagline line", about: "One line of the smaller words at the bottom left." },
@@ -723,7 +723,6 @@ export function cleanPages(site, given, current) {
     const seen = new Set(), sections = [];
     for (const sec of list) {
       if (!sec || typeof sec !== "object" || !spec[sec.type]) throw new Error("One of the sections is of a kind this site cannot draw.");
-      if (!cur && !spec[sec.type].library) throw new Error("The " + spec[sec.type].label + " section cannot go on a new page.");
       const id = String(sec.id || "");
       if (!SECTION_ID.test(id) || seen.has(id)) throw new Error("Every section needs its own short name.");
       seen.add(id);
