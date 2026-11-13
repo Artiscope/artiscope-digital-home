@@ -2,7 +2,7 @@
 
 Read all of this before doing anything. It is the standing brief for
 building the console, carried over from the Claude conversation where it
-was built (Versions 1 to 31, up to 13 November 2026).
+was built (Versions 1 to 32, up to 13 November 2026).
 
 ## Who you work for
 
@@ -49,6 +49,7 @@ to this one, under either spelling of their names.
 | `Artiscope/artiscope-digital-home` (this one) | The console and its server | GitHub Pages |
 | `Artiscope/World-art-review` | worldartreview.com | GitHub Pages, on every push to main |
 | `Artiscope/global-art-monitor` | globalartmonitor.com | GitHub Pages, on every push to main |
+| `Artiscope/practice-site` | The Practice site, a copy of World Art Review for trying things out | GitHub Pages at artiscope.github.io/practice-site, unlisted, every page marked noindex |
 
 Each site has its own `CLAUDE.md`. Those are written for the unattended
 weekday agent. When the owner is here and asks for a change, their
@@ -159,7 +160,34 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
 - On Shopify, the owner signs in themselves. Look only; change or save
   nothing in the store unless they ask.
 
-## Where things stand (13 November 2026, Version 31)
+## People and access
+
+- One admin: the address in the `ALLOWED_EMAILS` secret. Everyone else is
+  an editor, kept in the `people` table in Supabase (`PEOPLE_SQL` in the
+  server). Row level security is on with no rules, so only the server,
+  with the key Supabase gives it, can read it. The table has been made.
+- The server checks every request (`personOf`): editors reach only their
+  own sites, read the live site, and change only their own copy
+  (`trial-own-<tag>`, one per site), which they can publish. Topics,
+  agent drafts, History, Go back and People are the admin's.
+- Never write an email address into GitHub: the site repositories are
+  public. Changes end "(by admin)" or "(by <tag>)", a random code per
+  editor; the console turns it into a name. Four early World Art Review
+  commits carry the owner's address; removing them would mean rewriting
+  history, which is the owner's call.
+- Versions: every publish (an editor's, the admin's Make live, an agent
+  draft, Go back) is the next number, kept as a GitHub release `vA.B`
+  with release notes. 1.0 marks where versions began. Only the admin can
+  mark a big change (a new first number) or go back. Notes carry first
+  names only. The console shows the latest 10, the rest archived.
+- The Practice site is a sixth site sharing World Art Review's setup. The
+  admin can start it again from World Art Review (`resetPractice`).
+- Sample mode as an editor: `index.html?demo&as=editor`.
+- The in-memory GitHub in `tests/fakegit.mjs` joins changes file by file,
+  where GitHub joins them line by line, so tests make two people change
+  different files when they should join cleanly.
+
+## Where things stand (13 November 2026, Version 32)
 
 Done:
 
@@ -184,9 +212,14 @@ Done:
   `src/index.html`) now works the same honest way: "Ask to join" opens
   the visitor's email app. It no longer says the first letter is on its
   way.
+- User access (Version 32): People screen, editors with their own copy,
+  Save and Save and publish, versions and release notes, the Versions
+  screen, and the Practice site. Sample: https://claude.ai/artifact/53dS5mbfCJkPL8eyKmCgS6
 
 Waiting for the owner:
 
+- To get release emails: on each site repository, Watch, Custom, tick
+  Releases.
 - Real address, opening hours and travel details for Visit us. The
   section starts with them empty, shown as "[To add]". Never guess them.
 - A real mailing list would need a service such as Mailchimp or
@@ -202,10 +235,9 @@ Notes for checking:
   tools. Link them rather than installing a second copy:
   `ln -s "$(npm root -g)/playwright" node_modules/playwright`.
 
-Later, in this order unless the owner says otherwise: user access, a Code
-screen, payments (Stripe), building the three new sites, extras. A
-comparison with Shopify is paused until the owner sends screenshots or
-code.
+Later, in this order unless the owner says otherwise: a Code screen,
+payments (Stripe), building the three new sites, extras. A comparison
+with Shopify is paused until the owner sends screenshots or code.
 
 Earlier samples and reports, for reference:
 

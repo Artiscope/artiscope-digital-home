@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "31";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "32";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
