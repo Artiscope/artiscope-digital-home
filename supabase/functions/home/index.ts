@@ -211,6 +211,38 @@ WAR_SECTIONS.gallery = { label: "Gallery", about: "A grid of photos with caption
 WAR_SECTIONS["logo-row"] = { label: "Logo row", about: "A row of logos, such as partners or fairs, each with an optional link.", summary: LOGO_SUMMARY, library: "A row of partner logos", blocks: [LOGO_ITEM_BLOCK],
   starter: { eyebrow: "", ...LOGO_STARTER, bg: "paper", fg: "" }, fields: [{ ...EYEBROW, label: "Small line above the logos" }, LOGO_ITEM_ROWS("A page on this site starts with #, or a full web address starting https://. Leave empty for no link."), LOGO_COLOUR, BG, FG] };
 
+// ----- new sections for any page: batch 3, art and reading -----
+const SRC_LINK = { name: "href", label: "Source link", type: "text", addr: true, hint: "Where this can be checked, such as the gallery's or a newspaper's page, starting https://." };
+const REPORTED = { name: "reported", label: "Only from publicity or the artist", type: "yesno", hint: "Marks it Reported, so readers know it has not been checked elsewhere." };
+const AW_ROWS = { name: "artworks", label: "Artworks", type: "rows", fields: [PIC, PIC_ALT, { name: "title", label: "Title", type: "text" }, { name: "year", label: "Year", type: "text", hint: "Leave empty if not known yet." }, { name: "medium", label: "Medium", type: "text", hint: "Such as Acrylic on canvas." }, { name: "size", label: "Size", type: "text", hint: "Such as 100 x 80 cm. Leave empty if not known." }, { name: "note", label: "Small line", type: "text", hint: "Such as where it is now. Leave empty for none." }, { ...ADDR, label: "Opens when clicked", hint: "A page on this site starts with #, or a full web address. Leave empty for no link." }] };
+const AW_BLOCK = { field: "artworks", label: "Artwork", add: "Add an artwork", about: "One work with its label: title, year, medium and size." };
+const AW_SUMMARY = (st) => { const n = (st.artworks || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " artwork" : " artworks"); };
+const AW_STARTER = { artworks: [1, 2, 3].map(() => ({ image: "", alt: "", title: "", year: "", medium: "", size: "", note: "", href: "" })), per_row: "3" };
+const AW_PER_ROW = { ...PHOTO_PER_ROW, label: "Artworks in a row" };
+const SHOW_ROWS = { name: "shows", label: "Exhibitions", type: "rows", fields: [{ name: "title", label: "Exhibition title", type: "text" }, { name: "dates", label: "Dates", type: "text", hint: "Such as 4 March to 12 April 2026. Leave empty if not confirmed." }, { name: "place", label: "Gallery and city", type: "text" }, { name: "kind", label: "Kind", type: "text", hint: "Such as Solo, Group or Art fair. Leave empty for none." }, SRC_LINK, REPORTED] };
+const SHOW_BLOCK = { field: "shows", label: "Exhibition", add: "Add an exhibition", about: "One exhibition with its dates, place and source." };
+const SHOW_SUMMARY = (st) => { const n = (st.shows || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " exhibition" : " exhibitions"); };
+const SHOW_STARTER = { shows: [{ title: "Exhibition title", dates: "", place: "", kind: "", href: "", reported: false }] };
+const EVENT_ROWS = { name: "events", label: "Moments", type: "rows", fields: [{ name: "when", label: "When", type: "text", hint: "A year, or a month and year. Leave empty if not confirmed." }, { name: "what", label: "What happened", type: "text", hint: "One sentence." }, SRC_LINK, REPORTED] };
+const EVENT_BLOCK = { field: "events", label: "Moment", add: "Add a moment", about: "One dated moment in the artist's career, with its source." };
+const EVENT_SUMMARY = (st) => { const n = (st.events || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " moment" : " moments"); };
+const EVENT_STARTER = { events: [{ when: "", what: "What happened.", href: "", reported: false }] };
+const QUOTE_ROWS = { name: "quotes", label: "Quotes", type: "rows", fields: [{ name: "quote", label: "The quote", type: "long", plain: true, hint: "A short line, word for word, from a named review. Keep it under twenty words." }, { name: "who", label: "Who wrote it", type: "text" }, { name: "publication", label: "Publication", type: "text" }, { name: "date", label: "Date", type: "text" }, { ...SRC_LINK, hint: "The page the quote comes from, starting https://. A quote is shown with its source." }] };
+const QUOTE_BLOCK = { field: "quotes", label: "Quote", add: "Add a quote", about: "One short quote from named press, with its source." };
+const QUOTE_SUMMARY = (st) => { const n = (st.quotes || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " quote" : " quotes"); };
+const QUOTE_STARTER = { quotes: [{ quote: "A short line from a named review.", who: "", publication: "", date: "", href: "" }] };
+WAR_SECTIONS.artworks = { label: "Artworks", about: "A grid of works, each with a label: title, year, medium and size.", summary: AW_SUMMARY, library: "Works, each with its label", blocks: [AW_BLOCK],
+  starter: { eyebrow: "", heading: ["Selected works"], ...AW_STARTER, bg: "paper", fg: "" }, fields: [EYEBROW, HEADING, AW_ROWS, AW_PER_ROW, BG, FG] };
+WAR_SECTIONS.exhibitions = { label: "Exhibitions", about: "A list of exhibitions with their dates, places and sources.", summary: SHOW_SUMMARY, library: "Exhibitions with dates and places", blocks: [SHOW_BLOCK],
+  starter: { eyebrow: "", heading: ["Exhibitions"], ...SHOW_STARTER, bg: "paper", fg: "" }, fields: [EYEBROW, HEADING, SHOW_ROWS, BG, FG] };
+WAR_SECTIONS.career = { label: "Career timeline", about: "Dated moments in an artist's career, each with its source, as on a portfolio.", summary: EVENT_SUMMARY, library: "Dated moments, with sources", blocks: [EVENT_BLOCK],
+  starter: { eyebrow: "", heading: ["Career timeline"], ...EVENT_STARTER, bg: "paper", fg: "" }, fields: [EYEBROW, HEADING, EVENT_ROWS, BG, FG] };
+WAR_SECTIONS.press = { label: "Press quotes", about: "Short quotes from named press, each with a link to its source.", summary: QUOTE_SUMMARY, library: "Quotes from the press, with sources", blocks: [QUOTE_BLOCK],
+  starter: { eyebrow: "", heading: ["In the press"], ...QUOTE_STARTER, bg: "paper", fg: "" }, fields: [EYEBROW, HEADING, QUOTE_ROWS, BG, FG] };
+WAR_SECTIONS["artist-cards"] = { label: "Artist cards", about: "A card for each artist, linking to their portfolio. With none added, every published artist is shown.", summary: (st) => ((st.artists || []).filter((x) => x && !x.hidden).length ? (st.artists || []).filter((x) => x && !x.hidden).length + " chosen" : "All published"), library: "Cards linking to portfolios",
+  blocks: [{ field: "artists", label: "Artist", add: "Add an artist", about: "One artist's card, in this order.", item: { name: null, label: "Which artist", type: "artists", one: true } }],
+  starter: { eyebrow: "", heading: ["Artists"], artists: [], bg: "paper", fg: "" }, fields: [EYEBROW, HEADING, { name: "artists", label: "Which artists", type: "artists", hint: "Leave empty to show every published artist." }, BG, FG] };
+
 // ----- articles, artist portfolios and sources, edited in place on their own pages -----
 // Each is a set of parts shown in the list on the left. A part with picture: true is the
 // item's shared picture. Fields not listed here (tone, letter, compare and so on) are kept as they are.
@@ -383,6 +415,12 @@ GAM_SECTIONS["text-picture"] = { label: "Text with picture", about: "Words on on
   starter: { eyebrow: "", heading: "A heading", body: "Write here.", link: "", href: "", image: "", alt: "", caption: "", side: "right" },
   fields: [...G_HEAD, { name: "body", label: "Text", type: "long", plain: true, hint: "Leave an empty line between paragraphs." }, { name: "link", label: "Link words", type: "text", hint: "Leave empty for no link." }, { ...ADDR, hint: G_ADDR_HINT },
     PIC, PIC_ALT, { name: "caption", label: "Caption", type: "text", hint: "Small text under the picture. Leave empty to hide." }, { name: "side", label: "Picture on the", type: "choice", group: "Look", seg: true, options: [["right", "Right"], ["left", "Left"]] }] };
+// ----- new sections for any page: batch 3, art and reading -----
+const G_SRC = (f) => f.name === "href" ? { ...f, hint: f.label === "Opens when clicked" ? G_ADDR_HINT + " Leave empty for no link." : f.hint } : f;
+GAM_SECTIONS.artworks = { ...WAR_SECTIONS.artworks, starter: { eyebrow: "", heading: "Selected works", ...AW_STARTER }, fields: [...G_HEAD, { ...AW_ROWS, fields: AW_ROWS.fields.map(G_SRC) }, AW_PER_ROW] };
+GAM_SECTIONS.exhibitions = { ...WAR_SECTIONS.exhibitions, starter: { eyebrow: "", heading: "Exhibitions", ...SHOW_STARTER }, fields: [...G_HEAD, SHOW_ROWS] };
+GAM_SECTIONS.career = { ...WAR_SECTIONS.career, about: "Dated moments in an artist's career, each with its source.", starter: { eyebrow: "", heading: "Career timeline", ...EVENT_STARTER }, fields: [...G_HEAD, EVENT_ROWS] };
+GAM_SECTIONS.press = { ...WAR_SECTIONS.press, starter: { eyebrow: "", heading: "In the press", ...QUOTE_STARTER }, fields: [...G_HEAD, QUOTE_ROWS] };
 const G_SALE_FIELDS = [
   { name: "title", label: "Title of the work", type: "text" }, { name: "year", label: "Year made", type: "text" },
   { name: "date", label: "Sale date, as year-month-day", type: "text", nullable: true, hint: "Such as 2025-03-18. Leave empty if not known yet." }, { name: "date_text", label: "Sale date in words", type: "text", hint: "Such as 18 March 2025." },

@@ -91,7 +91,7 @@ async function openSite(id) { await page.click('[data-tab="home"]', { timeout: 1
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all five sites", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 5, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 29"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 30"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-3"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await page.click('[data-tab="home"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -473,6 +473,36 @@ await check("Global Art Monitor: a picture banner with an uploaded picture, and 
   await liveSave(); const secs = read(GR, "data/pages.json").pages.partners.sections;
   must(secs.find((x) => x.id === pb).settings.image === "gal-wide.jpg" && hub.read(GR, "main", "assets/images/gal-wide.jpg") != null, "banner picture not saved");
   must(secs.find((x) => x.id === lr).settings.logos[0].href === "https://example.org", "logo link not saved");
+});
+
+// =============== 6e. New sections, batch 3 ===============
+area = "New sections: batch 3";
+await check("Exhibitions: one only from publicity shows Reported, and a source that is not a web address is not kept", async () => {
+  await openSite("world-art-review"); await newPage("Shows"); await addSec("exhibitions"); const ex = await secIdOf("exhibitions");
+  await page.click('.sec.blk[data-id="' + ex + '"][data-block="0"]'); await page.fill('[data-pf="shows.0.title"]', "Spring show"); await page.fill('[data-pf="shows.0.place"]', "A gallery, London");
+  await page.selectOption('[data-pf="shows.0.reported"]', "true"); await page.fill('[data-pf="shows.0.href"]', "javascript:alert(1)"); await settle(700);
+  const f = frame("worldartreview.com"); must((await f.textContent("#" + ex + " .exh li")).includes("Reported"), "no Reported marker");
+  must(!(await f.$("#" + ex + " a.src")), "an unsafe source link is drawn"); await shot("20-exhibitions");
+  await liveSave(); const x = read(WR, "content/pages.json").pages.shows.sections.find((y) => y.id === ex).settings.shows[0];
+  must(x.reported === true && x.href === "" && x.title === "Spring show", "saved " + JSON.stringify(x));
+});
+await check("Artist cards: choosing one artist shows just that artist's card", async () => {
+  await addSec("artist-cards"); const ac = await secIdOf("artist-cards"); const f = frame("worldartreview.com");
+  const all = await f.$$eval("#" + ac + " .acard", (x) => x.length); must(all >= 2, "with none chosen, all published artists should show: " + all);
+  await page.click('.ed-right [data-act="ed-blockpicker"]'); await settle(400); await page.selectOption('[data-pf="artists.0"]', "konn-artiss"); await settle(700);
+  const names = await f.$$eval("#" + ac + " .acard .wn", (x) => x.map((e) => e.textContent)); must(names.join() === "Konn Artiss", "cards: " + names.join());
+  await liveSave(); const a = read(WR, "content/pages.json").pages.shows.sections.find((y) => y.id === ac).settings.artists; must(JSON.stringify(a) === '["konn-artiss"]', "saved " + JSON.stringify(a));
+});
+await check("Global Art Monitor: a press quote with its source, and a career moment without a date shows To confirm", async () => {
+  await openSite("global-art-monitor"); await newPage("Record"); await addSec("press"); await addSec("career");
+  const pr = await secIdOf("press"), ca = await secIdOf("career");
+  await page.click('#ed-sections .sec[data-id="' + pr + '"]:not(.blk)'); await page.click('.sec.blk[data-id="' + pr + '"][data-block="0"]');
+  await page.fill('[data-pf="quotes.0.quote"]', "A careful, measured record."); await page.fill('[data-pf="quotes.0.publication"]', "A test paper"); await page.fill('[data-pf="quotes.0.href"]', "https://example.org/review"); await settle(700);
+  const f = frame("globalartmonitor.com");
+  must(!!(await f.$('.pq-card a.src[href="https://example.org/review"]')), "no source link on the quote");
+  must((await f.textContent('[data-adh="' + ca + '"] .exh-when')).includes("To confirm"), "an empty date is not shown as To confirm"); await shot("21-gam-press");
+  await liveSave(); const q = read(GR, "data/pages.json").pages.record.sections.find((y) => y.id === pr).settings.quotes[0];
+  must(q.href === "https://example.org/review" && q.publication === "A test paper", "saved " + JSON.stringify(q));
 });
 
 // =============== 7. Global Art Monitor ===============
