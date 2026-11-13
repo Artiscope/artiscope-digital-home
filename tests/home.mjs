@@ -159,6 +159,27 @@ WAR_SECTIONS.numbers.library = "Figures from the site, in a band"; WAR_SECTIONS.
 WAR_SECTIONS.method.library = "Three cards in a row"; WAR_SECTIONS.method.starter = { eyebrow: "How we research", heading: ["The work first,", "then the story"], cards: [{ n: "1", text: "Write here.", title: "A title", sub: "A small line" }] };
 WAR_SECTIONS.articles.library = "Fills itself from Content";
 
+// ----- new sections for any page: batch 1 -----
+const ADDR = { name: "href", label: "Where the link goes", type: "text", addr: true, hint: "A page on this site starts with #, such as #artists, or a full web address starting https://." };
+const SPACE = { label: "Space", about: "Empty room between two sections. Nothing is drawn, not even a line.", summary: (st) => ({ S: "Small", L: "Large" }[st.size] || "Medium"), library: "Empty room between two sections", starter: { size: "M" },
+  fields: [{ name: "size", label: "How much room", type: "choice", seg: true, dflt: "M", options: [["S", "Small"], ["M", "Medium"], ["L", "Large"]] }] };
+const ANN_ABOUT = "A thin band with a short message. With more than one message they take turns. As the first section on a page it sits above the menu bar.";
+const ANN_MESSAGES = { name: "messages", label: "Messages", type: "rows", fields: [{ name: "text", label: "Message", type: "text", hint: "One short sentence." }, { name: "link", label: "Link words", type: "text", hint: "Leave empty for no link." }, ADDR] };
+const ANN_BLOCK = { field: "messages", label: "Message", add: "Add a message", about: "One message in the bar. With more than one, they take turns." };
+const ANN_SUMMARY = (st) => { const m = (st.messages || []).filter((x) => x && !x.hidden); return m.length > 1 ? m.length + " messages" : (m[0] && m[0].text) || "No message yet"; };
+const SECONDS = { name: "seconds", label: "Seconds before the next message", type: "number", group: "Look", hint: "Between 3 and 30. Only used with more than one message." };
+const COL_BLOCK = { field: "columns", label: "Column", add: "Add a column", about: "One column: a title, a few words and a link." };
+const COL_ROWS = { name: "columns", label: "Columns", type: "rows", fields: [{ name: "title", label: "Title", type: "text" }, { name: "text", label: "Text", type: "long", plain: true, hint: "Two or three short sentences read best." }, { name: "link", label: "Link words", type: "text", hint: "Leave empty for no link." }, ADDR] };
+const PER_ROW = { name: "per_row", label: "Columns in a row", type: "choice", group: "Look", seg: true, dflt: "3", options: [["2", "Two"], ["3", "Three"], ["4", "Four"]], hint: "On a phone they always stack." };
+const NUMBERED = { name: "numbered", label: "Number the columns", type: "yesno", group: "Look" };
+const COL_SUMMARY = (st) => { const n = (st.columns || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " column" : " columns"); };
+const COL_STARTER = (heading) => ({ eyebrow: "", heading, columns: [{ title: "A title", text: "A few words about it.", link: "", href: "" }, { title: "A title", text: "A few words about it.", link: "", href: "" }, { title: "A title", text: "A few words about it.", link: "", href: "" }], per_row: "3", numbered: true });
+WAR_SECTIONS.announcement = { label: "Announcement bar", about: ANN_ABOUT, summary: ANN_SUMMARY, library: "A short message in a thin band", blocks: [ANN_BLOCK],
+  starter: { messages: [{ text: "A short message for visitors.", link: "", href: "" }], seconds: 6, bg: "green", fg: "" }, fields: [ANN_MESSAGES, SECONDS, BG, FG] };
+WAR_SECTIONS.columns = { label: "Columns", about: "Two to four columns side by side, each with a title, a few words and a link. On a phone they stack.", summary: COL_SUMMARY, library: "Columns side by side", blocks: [COL_BLOCK],
+  starter: { ...COL_STARTER(["A heading"]), bg: "paper", fg: "" }, fields: [EYEBROW, HEADING, COL_ROWS, PER_ROW, NUMBERED, BG, FG] };
+WAR_SECTIONS.space = SPACE;
+
 // ----- articles, artist portfolios and sources, edited in place on their own pages -----
 // Each is a set of parts shown in the list on the left. A part with picture: true is the
 // item's shared picture. Fields not listed here (tone, letter, compare and so on) are kept as they are.
@@ -294,6 +315,25 @@ const GAM_SECTIONS = {
     { name: "aside", label: "Side column, as it is written for the page", type: "long", plain: true },
   ] },
 };
+// ----- new sections for any page: batch 1 -----
+const G_HEAD = [{ name: "eyebrow", label: "Small line above the heading", type: "text", hint: "Leave empty to hide." }, { name: "heading", label: "Heading", type: "text" }];
+GAM_SECTIONS.announcement = { label: "Announcement bar", about: ANN_ABOUT, summary: ANN_SUMMARY, library: "A short message in a thin band", blocks: [ANN_BLOCK],
+  starter: { messages: [{ text: "A short message for visitors.", link: "", href: "" }], seconds: 6, style: "ink" },
+  fields: [{ ...ANN_MESSAGES, fields: ANN_MESSAGES.fields.map((g) => g.name === "href" ? { ...g, hint: "A page on this site such as auction-results/, or a full web address starting https://." } : g) }, SECONDS, { name: "style", label: "Colour", type: "choice", group: "Look", seg: true, options: [["ink", "Charcoal"], ["mint", "Mint"], ["blush", "Pink"]] }] };
+GAM_SECTIONS.columns = { label: "Columns", about: "Two to four rounded cards side by side, each with a title, a few words and a link. On a phone they stack.", summary: COL_SUMMARY, library: "Columns side by side", blocks: [COL_BLOCK],
+  starter: COL_STARTER("A heading"), fields: [...G_HEAD, { ...COL_ROWS, fields: COL_ROWS.fields.map((g) => g.name === "href" ? { ...g, hint: "A page on this site such as auction-results/, or a full web address starting https://." } : g) }, PER_ROW, NUMBERED] };
+GAM_SECTIONS.space = SPACE;
+GAM_SECTIONS.quote = { label: "Quote", about: "One line, shown large, with who said it.", summary: (st) => String(st.text || "").split("\n")[0], library: "A short line that stands out", starter: { text: "A line worth remembering.", who: "" },
+  fields: [{ name: "text", label: "The quote", type: "long", plain: true, hint: "Keep it to a sentence or two. A quote needs a named source." }, { name: "who", label: "Who said it", type: "text", hint: "Such as a name and a publication. Leave empty to hide." }] };
+GAM_SECTIONS.faq = { label: "Questions and answers", about: "Questions that open to show their answer.", summary: (st) => ((st.items || []).filter((x) => x && !x.hidden).length + " questions"), library: "A list that opens and closes",
+  blocks: [{ field: "items", label: "Question", add: "Add a question", about: "A question that opens to show its answer." }], starter: { eyebrow: "Questions", heading: "Questions and answers", items: [{ q: "A question?", a: "The answer." }] },
+  fields: [...G_HEAD, { name: "items", label: "Questions", type: "rows", fields: [{ name: "q", label: "Question", type: "text", hint: "Keep it short. Visitors click it to open the answer." }, { name: "a", label: "Answer", type: "long", plain: true }] }] };
+GAM_SECTIONS.button = { label: "Button or link", about: "A heading, a line and one button, in a dark panel or on the page.", summary: (st) => st.label || "Button", library: "Send visitors somewhere",
+  starter: { heading: "Find out more", text: "", label: "Read on", href: "auction-results/", colour: "mint", panel: true },
+  fields: [{ name: "heading", label: "Heading", type: "text" }, { name: "text", label: "Text", type: "text" }, { name: "label", label: "Button words", type: "text" },
+    { name: "href", label: "Where it goes", type: "text", addr: true, hint: "A page on this site such as auction-results/, or a full web address starting https://." },
+    { name: "colour", label: "Button colour", type: "choice", group: "Look", seg: true, options: [["mint", "Mint"], ["ink", "Charcoal"], ["blush", "Pink"]], hint: "On the dark panel, Charcoal shows light." },
+    { name: "panel", label: "In a dark panel", type: "yesno", group: "Look" }] };
 const G_SALE_FIELDS = [
   { name: "title", label: "Title of the work", type: "text" }, { name: "year", label: "Year made", type: "text" },
   { name: "date", label: "Sale date, as year-month-day", type: "text", nullable: true, hint: "Such as 2025-03-18. Leave empty if not known yet." }, { name: "date_text", label: "Sale date in words", type: "text", hint: "Such as 18 March 2025." },

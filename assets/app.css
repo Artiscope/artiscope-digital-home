@@ -516,6 +516,11 @@ label.linklike.upl { display: inline-flex; align-items: center; font-weight: 400
 /* the eye and the bin on each row: shown on hover and on the picked row; a hidden row keeps its eye */
 .ed .sec .rtools { flex: none; display: inline-flex; gap: 1px; margin-left: auto; }
 .ed .sec .cnt + .rtools { margin-left: 0; }
+/* the tools take the place of the block count while shown, so a long name keeps its room */
+.ed .sec .rtools { display: none; }
+.ed .sec:hover .rtools, .ed .sec.on .rtools, .ed .sec:focus-within .rtools, .ed .sec .rtools.keep { display: inline-flex; }
+.ed .sec:hover .cnt, .ed .sec.on .cnt, .ed .sec:focus-within .cnt { display: none; }
+.ed .sec .nm { overflow-wrap: anywhere; }
 .ed .sec .rb { width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; display: grid; place-items: center; padding: 0; opacity: 0; transition: opacity .12s ease, background .12s ease; }
 .ed .sec:hover .rb, .ed .sec.on .rb, .ed .sec:focus-within .rb, .ed .sec .rb.is-off { opacity: 1; }
 .ed .sec .rb:hover { background: var(--bg); color: var(--text); }
@@ -523,3 +528,13 @@ label.linklike.upl { display: inline-flex; align-items: center; font-weight: 400
 .ed .sec.on .rb { color: var(--select-text); }
 .ed .sec.on .rb:hover { background: #fff; }
 @media (hover: none) { .ed .sec .rb { opacity: 1; } }
+
+.pv-ann { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 10px 14px; background: var(--accent); color: #FFFFFF; font-size: 12px; }
+.pv-ann u { color: #E7D2F7; text-underline-offset: 3px; }
+.pv-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.pv-cols div { display: flex; flex-direction: column; gap: 6px; }
+.pv-cols small { font-size: 11px; color: var(--violet); }
+.pv-cols b { font-family: var(--serif); font-weight: 400; font-size: 15px; }
+.pv-space { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.pv-space span { width: 100%; height: 26px; border-radius: 6px; background: #D6CFE0; }
+.pv-space em { font-style: normal; font-size: 12px; color: var(--muted); padding: 14px 0; }

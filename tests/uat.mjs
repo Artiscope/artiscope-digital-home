@@ -91,7 +91,7 @@ async function openSite(id) { await page.click('[data-tab="home"]', { timeout: 1
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all five sites", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 5, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 27"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 28"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-3"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await page.click('[data-tab="home"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -390,6 +390,48 @@ await check("Global Art Monitor: two results tables and a contact form on a new 
   must(r.n >= 2 && r.own && r.labels, "copies not wired to their own table and form " + JSON.stringify(r)); must(r.dup.length === 0, "names used twice: " + r.dup.join(","));
   await liveSave(); const pg = read(GR, "data/pages.json").pages["market-desk"];
   must(pg && pg.path === "market-desk/index.html" && pg.sections.map((x) => x.type).join(",") === "page-head,results-table,results-table,contact-form", "saved " + JSON.stringify(pg && pg.sections.map((x) => x.type)));
+});
+
+// =============== 6c. New sections, batch 1 ===============
+area = "New sections: batch 1";
+const newPage = async (title) => { await page.click('[data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", title); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1200); };
+const addSec = async (key, at) => { await page.click(at == null ? '.addl[data-act="ed-secpicker"]' : "#ed-sections > .ins >> nth=" + at); await page.click('.pk-item[data-key="' + key + '"]'); await settle(400); };
+await check("An announcement bar with two messages sits above the menu bar, and each message is its own block", async () => {
+  await openSite("world-art-review"); await newPage("Notices"); await addSec("announcement", 0);
+  await page.click('.sec.blk[data-bf="messages"][data-block="0"]'); await page.fill('[data-pf="messages.0.text"]', "Two new sources added."); await page.fill('[data-pf="messages.0.link"]', "Read it"); await page.fill('[data-pf="messages.0.href"]', "#artists");
+  await page.click('.addl.blk[data-act="ed-blockpicker"]'); await settle(300); await page.fill('[data-pf="messages.1.text"]', "A second message."); await settle(800);
+  must((await text('.sec.blk[data-bf="messages"][data-block="1"]')).includes("A second message."), "the block row is not named by its message");
+  const f = frame("worldartreview.com"); const r = await f.evaluate(() => { const a = document.querySelector("[data-ann]"); return [a.querySelectorAll(".msg").length, a.compareDocumentPosition(document.querySelector("header.hdr")) & 4 ? "above" : "below"]; });
+  must(r[0] === 2 && r[1] === "above", JSON.stringify(r)); await shot("16-announcement");
+  await liveSave(); const sec = read(WR, "content/pages.json").pages.notices.sections[0];
+  must(sec.type === "announcement" && sec.settings.messages.length === 2 && sec.settings.messages[0].href === "#artists", "saved " + JSON.stringify(sec.settings.messages));
+});
+await check("Columns: hiding one with its eye takes it off the page, and it saves hidden", async () => {
+  await addSec("columns"); await settle(500); const id = (await page.$$eval("#ed-sections .sec:not(.blk)", (x) => x.map((e) => e.dataset.id))).find((x) => x.indexOf("columns") === 0);
+  const f = frame("worldartreview.com"); must((await f.$$eval("#" + id + " .col", (x) => x.length)) === 3, "three columns not drawn");
+  await page.hover('.sec.blk[data-id="' + id + '"][data-block="1"]'); await page.click('.sec.blk[data-id="' + id + '"][data-block="1"] [data-act="ed-row-hide"]'); await settle(600);
+  must((await f.$$eval("#" + id + " .col", (x) => x.length)) === 2, "hidden column still drawn");
+  await liveSave(); const c = read(WR, "content/pages.json").pages.notices.sections.find((x) => x.id === id).settings.columns; must(c[1].hidden === true && !c[0].hidden, "saved " + JSON.stringify(c));
+});
+await check("Space: Large saves, and draws as empty room", async () => {
+  await addSec("space"); await page.click('.segr:has-text("Large")'); await settle(500);
+  const id = (await page.$$eval("#ed-sections .sec:not(.blk)", (x) => x.map((e) => e.dataset.id))).find((x) => x.indexOf("space") === 0);
+  must(await frame("worldartreview.com").$eval("#" + id, (e) => e.classList.contains("l") && e.offsetHeight > 60 && !e.textContent.trim()), "not drawn as a large space");
+  await liveSave(); must(read(WR, "content/pages.json").pages.notices.sections.find((x) => x.id === id).settings.size === "L", "size not saved");
+});
+await check("Global Art Monitor: columns, quote, questions and a button on a new page, in its own look", async () => {
+  await openSite("global-art-monitor"); await newPage("Desk two");
+  for (const k of ["columns", "quote", "faq", "button"]) await addSec(k);
+  await settle(1200); const f = frame("globalartmonitor.com");
+  const r = await f.evaluate(() => ({ cards: document.querySelectorAll(".col-card").length, quote: !!document.querySelector(".big-quote"), qa: document.querySelectorAll("details.qa").length, pill: !!document.querySelector(".cta-panel .pill-mint") }));
+  must(r.cards === 3 && r.quote && r.qa === 1 && r.pill, JSON.stringify(r)); await shot("17-gam-batch1");
+});
+await check("A button with an unsafe address is not drawn, and the address is not saved", async () => {
+  const id = (await page.$$eval("#ed-sections .sec:not(.blk)", (x) => x.map((e) => e.dataset.id))).find((x) => x.indexOf("button") === 0);
+  await page.click('#ed-sections .sec[data-id="' + id + '"]'); await page.fill('[data-pf="href"]', "javascript:alert(1)"); await settle(500);
+  await liveSave(); const b = read(GR, "data/pages.json").pages["desk-two"].sections.find((x) => x.id === id).settings;
+  must(b.href === "", "saved " + b.href); must(!(await frame("globalartmonitor.com").$(".cta-panel .pill")), "button still drawn");
+  const types = read(GR, "data/pages.json").pages["desk-two"].sections.map((x) => x.type).join(","); must(types === "page-head,columns,quote,faq,button", types);
 });
 
 // =============== 7. Global Art Monitor ===============
