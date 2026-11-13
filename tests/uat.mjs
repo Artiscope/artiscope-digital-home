@@ -20,7 +20,8 @@ fs.writeFileSync("/tmp/uat-gam/assets/site.js", fs.readFileSync("/tmp/uat-gam/as
 
 // ----- the server, with GitHub in memory -----
 let signedIn = "tester@artiscope.co.uk";
-globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "tester@artiscope.co.uk", SUPABASE_URL: "https://s" }[k] || "") }, serve() {} };
+globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "tester@artiscope.co.uk", SUPABASE_URL: "https://s", SUPABASE_SERVICE_ROLE_KEY: "k" }[k] || "") }, serve() {} };
+const { makePeople } = await import("./fakepeople.mjs"); const ppl = makePeople();
 const { handle } = await import("./home.mjs");
 const { makeGitHub } = await import("./fakegit.mjs");
 const files = (dir, list) => Object.fromEntries(list.filter((f) => fs.existsSync(dir + f)).map((f) => [f, fs.readFileSync(dir + f, "utf8")]));
@@ -33,6 +34,7 @@ const hub = makeGitHub({
 let breakGitHub = false;
 globalThis.fetch = async (url, init = {}) => {
   if (String(url).includes("/auth/v1/user")) return new Response(JSON.stringify({ email: signedIn }));
+  if (ppl.handles(url)) return ppl.fetch(url, init);
   if (breakGitHub && (init.method || "GET") !== "GET") return new Response(JSON.stringify({ message: "Server Error" }), { status: 500 });
   return hub.fetch(url, init);
 };
@@ -530,6 +532,43 @@ await check("Global Art Monitor: the sign-up says it opens the visitor's email a
   await openSite("global-art-monitor"); await newPage("Join"); await addSec("signup"); const su = await secIdOf("signup"); const f = frame("globalartmonitor.com");
   must((await f.textContent('[data-adh="' + su + '"] .su-note')).includes("info@grovegallery.com"), "no plain line under the button"); await shot("23-gam-signup");
   await liveSave(); const s = read(GR, "data/pages.json").pages.join.sections.find((y) => y.id === su).settings; must(s.button === "Ask to join", "saved " + JSON.stringify(s));
+});
+
+// =============== 6g. People ===============
+area = "People";
+const goHome = async () => { await page.reload(); await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); await settle(600); };
+await check("The admin invites an editor for one site, and the normal sign-in email is sent", async () => {
+  await goHome(); await page.click('[data-tab="people"]'); await page.waitForSelector(".prow"); await settle(500);
+  must((await text("body")).includes("No editors yet"), "an empty list should say so");
+  await page.click('[data-act="people-invite"]'); await page.fill("#pi-email", "Editor@Example.org"); await page.fill("#pi-name", "Edie Tor");
+  await page.check('form[data-form="invite"] input[value="world-art-review"]'); await page.click('form[data-form="invite"] button[type=submit]'); await settle(900);
+  must(ppl.table.length === 1 && ppl.table[0].email === "editor@example.org" && JSON.stringify(ppl.table[0].sites) === '["world-art-review"]', "saved " + JSON.stringify(ppl.table));
+  must(ppl.mails.length === 1 && ppl.mails[0].to === "editor@example.org", "no sign-in email");
+  must((await text('.prow[data-email="editor@example.org"]')).includes("Editor, invited"), "the new editor is not shown as invited"); await shot("24-people");
+});
+await check("The admin gives the editor a second site", async () => {
+  await page.click('.prow[data-email="editor@example.org"]'); await page.check('form[data-form="person"] input[value="global-art-monitor"]');
+  await page.click('form[data-form="person"] button[type=submit]'); await settle(900);
+  must(JSON.stringify(ppl.table[0].sites) === '["world-art-review","global-art-monitor"]', "saved " + JSON.stringify(ppl.table[0].sites));
+});
+await check("An editor sees only their sites, and no People screen", async () => {
+  await page.click('.prow[data-email="editor@example.org"]'); await page.uncheck('form[data-form="person"] input[value="global-art-monitor"]');
+  await page.click('form[data-form="person"] button[type=submit]'); await settle(900);
+  signedIn = "editor@example.org";
+  try {
+    await goHome();
+    const n = await page.locator('[data-act="open-site"]').count(); must(n === 1, n + " sites shown to the editor");
+    must(!(await page.$('[data-tab="people"]')), "People shows for an editor"); await shot("25-editor-home");
+  } finally { signedIn = "tester@artiscope.co.uk"; }
+});
+await check("Removing someone asks once, and they are turned away from their next click", async () => {
+  await goHome(); await page.click('[data-tab="people"]'); await page.waitForSelector('.prow[data-email="editor@example.org"]');
+  await page.click('.prow[data-email="editor@example.org"]'); await page.click('[data-act="people-remove"]'); await settle(300);
+  must(ppl.table.length === 1, "removed before the second press");
+  await page.click('[data-act="people-remove-yes"]'); await settle(900); must(ppl.table.length === 0, "not removed");
+  signedIn = "editor@example.org";
+  try { await goHome().catch(() => {}); must((await text("body")).toLowerCase().includes("does not have access"), "the removed editor still got in"); }
+  finally { signedIn = "tester@artiscope.co.uk"; await goHome(); }
 });
 
 // =============== 7. Global Art Monitor ===============

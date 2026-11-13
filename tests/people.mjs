@@ -11,24 +11,13 @@ const { makeGitHub } = await import("./fakegit.mjs");
 const WR = "Artiscope/World-art-review", GR = "Artiscope/global-art-monitor";
 const hub = makeGitHub({ [WR]: { "content/site.json": fs.readFileSync(W_DIR + "/content/site.json", "utf8"), "content/pages.json": fs.readFileSync(W_DIR + "/content/pages.json", "utf8") }, [GR]: {} });
 
-// the people table, as Supabase's REST service would keep it
-let table = [], signedIn = ADMIN; const mails = [], dbKeys = [];
-function rest(url, init) {
-  const u = new URL(url), method = init.method || "GET", body = init.body ? JSON.parse(init.body) : null;
-  dbKeys.push(init.headers.Authorization);
-  const eq = u.searchParams.get("email"), match = (p) => !eq || p.email === eq.replace(/^eq\./, "");
-  const pick = (p) => { const cols = (u.searchParams.get("select") || "*").split(","); return cols[0] === "*" ? { ...p } : Object.fromEntries(cols.map((c) => [c, p[c]])); };
-  const out = (status, data) => new Response(JSON.stringify(data), { status });
-  if (method === "GET") return out(200, table.filter(match).map(pick));
-  if (method === "POST") { if (table.some((p) => p.email === body.email || p.id === body.id)) return out(409, { message: "duplicate" }); table.push({ invited_at: new Date().toISOString(), last_seen: null, ...body }); return out(201, [body]); }
-  if (method === "PATCH") { const hit = table.filter(match); hit.forEach((p) => Object.assign(p, body)); return out(200, hit); }
-  if (method === "DELETE") { const hit = table.filter(match); table = table.filter((p) => !match(p)); return out(200, hit); }
-}
+// the people table and the sign-in email, as Supabase would keep them
+const { makePeople } = await import("./fakepeople.mjs");
+const ppl = makePeople(); let signedIn = ADMIN; const mails = ppl.mails, dbKeys = ppl.keys;
+const table = new Proxy([], { get: (_t, k) => { const v = ppl.table[k]; return typeof v === "function" ? v.bind(ppl.table) : v; } });
 globalThis.fetch = async (url, init = {}) => {
-  url = String(url);
-  if (url.includes("/auth/v1/user")) return new Response(JSON.stringify({ email: signedIn }));
-  if (url.includes("/auth/v1/otp")) { mails.push({ to: JSON.parse(init.body).email, back: new URL(url).searchParams.get("redirect_to") }); return new Response("{}"); }
-  if (url.includes("/rest/v1/")) return rest(url, init);
+  if (String(url).includes("/auth/v1/user")) return new Response(JSON.stringify({ email: signedIn }));
+  if (ppl.handles(url)) return ppl.fetch(url, init);
   return hub.fetch(url, init);
 };
 const post = (b) => new Request("https://x", { method: "POST", headers: { Authorization: "Bearer t", apikey: "k" }, body: JSON.stringify(b) });

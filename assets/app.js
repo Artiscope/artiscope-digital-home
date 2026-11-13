@@ -42,6 +42,7 @@
     files: {},             // site id -> Files screen: { files, spots, imageBase, filter, open, assign, pick, bust }
     fileAdd: [],           // photos chosen in Files, waiting for their descriptions
     fileBust: {}, fileFilter: "all",   // photos replaced in this visit, so the new one shows; the last filter used
+    people: null,          // People screen: { list, sites, sel, mode, ask, note, busy }
   };
 
   // ---------- small helpers ----------
@@ -107,6 +108,7 @@
 
   // Fetches what the open screen needs, once per site.
   async function ensure(force) {
+    if (!state.inSite && state.tab === "people" && isAdmin() && (force || !state.people || !state.people.list)) { await loadPeople(); return; }
     var s = site(); if (!s) return;
     try {
       if ((state.tab === "content" || state.tab === "overview") && (force || !state.content[s.id])) {
@@ -237,8 +239,11 @@
   // Outside a site only "All sites" shows. Inside, the site's own screens.
   // Sites that keep their photos in Files show Files instead of Photos.
   var NAV_FILES = ["files", "Files", "M4 6a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z", "M8 15l2.5-2.5 2 2 1.5-1.5 2 2"];
+  var NAV_PEOPLE = ["people", "People", "M9 5.3a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4zM3.5 19.5c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5", "M16.8 7a2.5 2.5 0 1 1 0 5M16.5 14.6c2.2.1 3.7 1.6 4.1 4.4"];
+  // The admin sees everything; an editor sees only their own sites and their own copy.
+  function isAdmin() { return demo || !state.data || !state.data.user || state.data.user.admin !== false; }
   function navItems() {
-    var s = site(); if (!(state.inSite && s)) return NAV.slice(0, 1);
+    var s = site(); if (!(state.inSite && s)) return NAV.slice(0, 1).concat(isAdmin() ? [NAV_PEOPLE] : []);
     return (s.files ? NAV.map(function (n) { return n[0] === "photos" ? NAV_FILES : n; }) : NAV).filter(function (n) { return !(s.edits && n[0] === "content"); });
   }
   function photosTab(s) { return s && s.files ? "files" : "photos"; }
@@ -250,7 +255,8 @@
   function islandInner() {
     var s = site(), list = copiesOf(s), c = curCopy(), trial = c.kind === "trial", busy = state.status === "saving";
     if (!state.inSite || !s) {
-      return '<span class="dot" aria-hidden="true" style="background:#C9C2D3"></span><b class="island-name">All sites</b><span class="small">' + (state.status === "saving" ? "Saving" : state.flash || "Pick a site to work on") + '</span>';
+      var ppl = state.tab === "people";
+      return '<span class="dot" aria-hidden="true" style="background:#C9C2D3"></span><b class="island-name">' + (ppl ? "People" : "All sites") + '</b><span class="small">' + (state.status === "saving" ? "Saving" : state.flash || (ppl ? "Who can sign in, and which sites they work on" : "Pick a site to work on")) + '</span>';
     }
     var copyPick = list.length > 1
       ? '<label class="small" for="copy-pick" style="position:absolute;left:-9999px">Working on</label><select id="copy-pick" class="copypick" data-change="copy">' +
@@ -374,7 +380,8 @@
         '<span class="small" style="color:var(--accent);margin-top:8px">' + (x.live ? "Open" : "Not built yet") + '</span></span></button>';
     }).join("");
     return '<div class="page-head"><span class="small">' + esc(today()) + '</span><h1>' + greeting() + '</h1>' +
-      '<p>Your five sites. Open one to work on its words, colours and photos. On the live site, Save goes straight to visitors. On a trial copy, nothing is seen until you make it live. Every step can be undone.</p></div>' +
+      (isAdmin() ? '<p>Your five sites. Open one to work on its words, colours and photos. On the live site, Save goes straight to visitors. On a trial copy, nothing is seen until you make it live. Every step can be undone.</p></div>'
+        : '<p>' + (sites().length === 1 ? "Your site." : "Your sites.") + ' Open one to work on your own copy of it. Nothing you save is seen until you publish it, and every step can be undone.</p></div>') +
       '<div class="sites">' + cards + '</div>';
   }
   function viewUnbuilt(x) {
@@ -1884,6 +1891,96 @@
 
   // ----- sign in -----
 
+  // ---------- People: you are the admin, everyone else is an editor ----------
+  function peopleOf() { return state.people || (state.people = { list: null, sites: [], sel: "", mode: "", ask: "", note: "", busy: false }); }
+  async function loadPeople() {
+    var pp = peopleOf();
+    try {
+      var d = await api("people");
+      pp.list = d.people || []; pp.sites = d.sites || [];
+      if (!pp.mode && !pp.sel) pp.sel = pp.list.length ? pp.list[0].email : "admin";
+      if (pp.sel !== "admin" && !pp.list.some(function (x) { return x.email === pp.sel; })) pp.sel = pp.list.length ? pp.list[0].email : "admin";
+    } catch (e) { pp.list = pp.list || []; state.notice = { text: e.message, problem: true }; }
+    if (state.tab === "people") render();
+  }
+  function personSub(x) {
+    if (!x.lastSeen) return "Invited " + (when(x.invited) ? "on " + when(x.invited).split(",")[0] + ", " : "") + "not signed in yet";
+    return "Last signed in on " + when(x.lastSeen);
+  }
+  function siteNames(pp, ids) {
+    var n = (ids || []).map(function (id) { var x = pp.sites.find(function (y) { return y.id === id; }); return x ? x.name : ""; }).filter(Boolean);
+    return n.length ? n.join(", ") : "No sites yet";
+  }
+  function siteChecks(pp, chosen) {
+    return '<fieldset class="pfs"><legend>Sites they can work on</legend>' + pp.sites.map(function (x) {
+      return '<label class="chk pchk"><input type="checkbox" name="site" value="' + esc(x.id) + '"' + ((chosen || []).indexOf(x.id) >= 0 ? " checked" : "") + '><span>' + esc(x.name) + '</span>' + (x.live ? "" : '<span class="small">Not built yet</span>') + '</label>';
+    }).join("") + '</fieldset>';
+  }
+  function viewPeople() {
+    var pp = peopleOf(), busy = pp.busy ? " disabled" : "";
+    if (!pp.list) return '<div class="page-head"><h1>People</h1></div><p class="loading">Reading the list of people</p>';
+    var row = function (key, initial, name, sub, sitesText, how, chip, on) {
+      return '<button type="button" class="card prow' + (on ? " on" : "") + '" data-act="people-pick" data-email="' + esc(key) + '"' + (on ? ' aria-current="true"' : "") + '>' +
+        '<span class="pav" aria-hidden="true">' + esc(initial) + '</span>' +
+        '<span class="pmain"><b>' + esc(name) + '</b><span class="small">' + esc(sub) + '</span></span>' +
+        '<span class="pmeta"><span>' + esc(sitesText) + '</span><span class="small">' + esc(how) + '</span></span>' +
+        '<span class="chip' + (chip === "Admin" ? "" : " quiet") + '">' + esc(chip) + '</span></button>';
+    };
+    var me = demo ? "Sample admin" : (state.email || "You");
+    var rows = row("admin", "Y", "You", me, "Every site", "Live site and copies", "Admin", !pp.mode && pp.sel === "admin") +
+      pp.list.map(function (x) {
+        var invited = !x.lastSeen;
+        return row(x.email, invited ? "@" : (x.name || x.email).charAt(0).toUpperCase(), x.name || x.email, personSub(x), siteNames(pp, x.sites),
+          invited ? "Their own copy, once they sign in" : "Their own copy, and can publish it", invited ? "Editor, invited" : "Editor", !pp.mode && pp.sel === x.email);
+      }).join("") +
+      (pp.list.length ? "" : '<p class="small" style="margin:4px">No editors yet. Invite someone to give them their own copy of a site.</p>');
+    var panel;
+    if (pp.mode === "invite") {
+      var dr = pp.draft || { email: "", name: "", sites: [] };
+      panel = '<form class="stack-wide" data-form="invite"><div class="stack" style="gap:2px"><h2 class="cardh">Invite an editor</h2><span class="small">They get the same sign-in email you use. Nothing else is sent.</span></div>' +
+        '<div class="field"><label class="label" for="pi-email">Their email</label><input id="pi-email" name="email" type="email" autocomplete="off" required value="' + esc(dr.email) + '"></div>' +
+        '<div class="field"><label class="label" for="pi-name">Their name</label><input id="pi-name" name="name" type="text" autocomplete="off" maxlength="60" value="' + esc(dr.name) + '"><span class="small">Shown on their changes and in History. Optional.</span></div>' +
+        siteChecks(pp, dr.sites) +
+        '<p class="small">They get their own copy of each site you tick, and can publish it. They never work on the live site itself.</p>' +
+        '<div class="row"><button type="submit" class="btn"' + busy + '>Send the sign-in email</button><button type="button" class="linklike" data-act="people-close">Close</button></div></form>';
+    } else if (pp.sel === "admin") {
+      panel = '<div class="stack-wide"><h2 class="cardh">You, the admin</h2><p class="pnote">You can do everything, on every site: work on the live site and on copies, publish, answer the website agents and manage people. The admin is set outside the console, so you can never lock yourself out.</p></div>';
+    } else {
+      var x = pp.list.find(function (y) { return y.email === pp.sel; });
+      if (!x) panel = '<p class="small">Choose someone on the left.</p>';
+      else {
+        var first = String(x.name || "this editor").split(" ")[0];
+        panel = '<form class="stack-wide" data-form="person" data-email="' + esc(x.email) + '"><div class="stack" style="gap:2px"><h2 class="cardh">' + esc(x.name || x.email) + '</h2><span class="small">' + esc(x.email) + '</span></div>' +
+          '<div class="field"><label class="label" for="pp-name">Name</label><input id="pp-name" name="name" type="text" maxlength="60" value="' + esc(x.name || "") + '"></div>' +
+          siteChecks(pp, x.sites) +
+          '<p class="pnote">' + esc(first.charAt(0).toUpperCase() + first.slice(1)) + ' works on their own copy of each site and can publish it. Only you work on the live site.</p>' +
+          (!x.lastSeen ? '<div class="row"><button type="button" class="linklike" data-act="people-resend" data-email="' + esc(x.email) + '"' + busy + '>Send the sign-in email again</button></div>' : "") +
+          (pp.ask === x.email ? '<div class="pask"><span>Remove ' + esc(x.name || x.email) + '? They will not be able to sign in from their next click. Their copies and everything they saved stay.</span>' +
+            '<div class="row"><button type="button" class="btn danger" data-act="people-remove-yes" data-email="' + esc(x.email) + '"' + busy + '>Remove</button><button type="button" class="soft" data-act="people-remove-no">Keep</button></div></div>' : "") +
+          '<div class="row between"><button type="submit" class="btn"' + busy + '>Save changes</button><button type="button" class="linklike danger" data-act="people-remove" data-email="' + esc(x.email) + '">Remove access</button></div></form>';
+      }
+    }
+    return '<div class="page-head"><h1>People</h1><p>You are the admin. Everyone else is an editor: they work on their own copy of the sites you choose, and can publish it. A change here works from their next click.</p>' +
+      '<div class="row"><button type="button" class="btn" data-act="people-invite">Invite an editor</button></div></div>' +
+      (pp.note ? '<p class="notice" role="status">' + esc(pp.note) + '</p>' : "") +
+      '<div class="people"><div class="plist">' + rows + '</div><aside class="card ppanel" aria-label="Settings">' + panel + '</aside></div>';
+  }
+  async function peopleDo(action, payload, note, after) {
+    var pp = peopleOf(); if (pp.busy) return;
+    pp.busy = true; pp.note = ""; state.notice = null; render();
+    try {
+      var d = await api(action, payload);
+      pp.note = typeof note === "function" ? note(d) : note;
+      if (after) after(d);
+    } catch (e) { state.notice = { text: e.message, problem: true }; }
+    pp.busy = false;
+    await loadPeople();
+  }
+  // On a phone the settings sit under the list, so bring them into view.
+  function peopleShowPanel() { var pn = app.querySelector && app.querySelector(".ppanel"); if (pn && window.innerWidth < 900 && pn.scrollIntoView) pn.scrollIntoView({ block: "start" }); }
+  function formSites(form) { return Array.prototype.map.call(form.querySelectorAll('input[name="site"]:checked'), function (i) { return i.value; }); }
+
+  function signinBack() { return window.location.origin + window.location.pathname; }
   function viewSignin() {
     var pw = state.signinMode === "password", body;
     if (state.signinSent) {
@@ -1920,10 +2017,10 @@
         : '<p class="loading">Reading your sites</p>';
       return;
     }
-    var views = { home: viewHome, overview: viewOverview, content: viewContent, theme: viewTheme, photos: viewPhotos, files: viewFiles, history: viewHistory };
+    var views = { home: viewHome, overview: viewOverview, content: viewContent, theme: viewTheme, photos: viewPhotos, files: viewFiles, history: viewHistory, people: viewPeople };
     var s = site(), unbuilt = state.inSite && !s && state.site;
     if (state.inSite && s && state.tab === "pages") { app.innerHTML = viewPagesEditor(s); mountRich(); mountPages(); return; }
-    var inner = unbuilt ? viewUnbuilt(sites().find(function (x) { return x.id === state.site; }) || { name: "Site" }) : (views[state.inSite ? state.tab : "home"] || viewHome)();
+    var inner = unbuilt ? viewUnbuilt(sites().find(function (x) { return x.id === state.site; }) || { name: "Site" }) : (views[state.inSite ? state.tab : (state.tab === "people" && isAdmin() ? "people" : "home")] || viewHome)();
     app.innerHTML = viewShell(inner);
     mountRich(); mountTheme(); filterList();
     settle();
@@ -2001,7 +2098,7 @@
     go(x.live ? (state.place[id] || "pages") : "overview");
   }
   function go(tab) {
-    if (tab === "home") { state.inSite = false; }
+    if (tab === "home" || tab === "people") { state.inSite = false; }
     else if (site()) state.place[site().id] = tab;
     state.prevTab = state.tab; state.tab = tab; state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.notice = null;
     state.csearch = ""; state.cmore = false;
@@ -2122,7 +2219,14 @@
     var el = ev.target.closest("[data-tab],[data-act]"); if (!el) return;
     if (el.dataset.tab) { var to = el.dataset.tab; guard(function () { go(to); }); return; }
     var a = el.dataset.act, s = site();
-    if (a === "refresh") { state.content = {}; state.history = {}; load(); }
+    if (a === "refresh") { state.content = {}; state.history = {}; if (state.people) state.people.list = null; load(); }
+    else if (a === "people-pick") { var pk0 = peopleOf(); pk0.sel = el.dataset.email; pk0.mode = ""; pk0.ask = ""; pk0.note = ""; render(); peopleShowPanel(); }
+    else if (a === "people-invite") { var pk1 = peopleOf(); pk1.mode = "invite"; pk1.draft = null; pk1.ask = ""; pk1.note = ""; render(); peopleShowPanel(); var pe = app.querySelector("#pi-email"); if (pe) pe.focus({ preventScroll: true }); }
+    else if (a === "people-close") { peopleOf().mode = ""; render(); }
+    else if (a === "people-remove") { peopleOf().ask = el.dataset.email; render(); }
+    else if (a === "people-remove-no") { peopleOf().ask = ""; render(); }
+    else if (a === "people-remove-yes") { var gone = el.dataset.email; peopleDo("removePerson", { email: gone }, "Removed. They can no longer sign in.", function () { var pk2 = peopleOf(); pk2.ask = ""; pk2.sel = "admin"; }); }
+    else if (a === "people-resend") { peopleDo("resendInvite", { email: el.dataset.email, back: signinBack() }, function (d) { return d.emailed === false ? "The sign-in email could not be sent just now. Please try again." : "Sent again."; }); }
     else if (a === "signout") sb.auth.signOut();
     else if (a === "signin-mode") { state.signinMode = el.dataset.mode; state.signinSent = false; state.notice = null; var em = app.querySelector("#email"); if (em) state.email = em.value.trim(); render(); }
     else if (a === "open-site") { var sid = el.dataset.site; guard(function () { openSite(sid); }); }
@@ -2437,6 +2541,19 @@
     ev.preventDefault();
     var form = ev.target;
     if (form.dataset.form === "entry") { saveEntry(form); return; }
+    if (form.dataset.form === "invite") {
+      var ie = form.querySelector('[name="email"]').value.trim(), inm = form.querySelector('[name="name"]').value.trim(), isites = formSites(form);
+      peopleOf().draft = { email: ie, name: inm, sites: isites };
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ie)) { state.notice = { text: "Please type their email address.", problem: true }; render(); return; }
+      if (!isites.length) { state.notice = { text: "Tick at least one site, so they have something to work on.", problem: true }; render(); return; }
+      peopleDo("invitePerson", { email: ie, name: inm, sites: isites, back: signinBack() }, function (d) { return d.emailed === false ? "Added, but the sign-in email could not be sent just now. Use Send the sign-in email again." : "Sent. They appear as invited until they first sign in."; },
+        function () { var pk3 = peopleOf(); pk3.mode = ""; pk3.draft = null; pk3.sel = ie.toLowerCase(); });
+      return;
+    }
+    if (form.dataset.form === "person") {
+      peopleDo("updatePerson", { email: form.dataset.email, name: form.querySelector('[name="name"]').value.trim(), sites: formSites(form) }, "Saved. It works from their next click.");
+      return;
+    }
     if (form.dataset.form === "ednew") { makeNew(form); return; }
     if (form.dataset.form === "fdesc") {
       var dn = form.dataset.name, dalt = form.querySelector('[name="alt"]').value.trim(), dcap = form.querySelector('[name="caption"]').value.trim();
@@ -2471,6 +2588,11 @@
     { id: "artists", label: "Artists", singular: "artist", canHide: false, canDelete: false, entries: [
       { id: "zara-muse", title: "Zara Muse", sub: "Portraiture, London", hidden: false, fields: [{ name: "name", label: "Name", type: "text", value: "Zara Muse" }, { name: "published", label: "Shown on the site", type: "yesno", value: true }, { name: "ghostWords", label: "Large background words", type: "lines", value: ["Knives,", "not", "brushes."] }, { name: "glance.0.1", label: "Based in", type: "text", value: "London", group: "At a glance" }, { name: "glance.1.1", label: "Gallery", type: "long", value: '<span class="placeholder">[Gallery relationship to confirm]</span>', group: "At a glance" }, { name: "sections.0.title", label: "Biography: title", type: "text", value: "Biography", group: "Portfolio sections" }, { name: "sections.0.html", label: "Biography: text", type: "long", value: '<p>A sample biography paragraph, with a source at the end.<sup class="cite"><a data-src="sample-1">[sample-1]</a></sup></p>\n<p>A second paragraph, with a <strong>bold</strong> word in it.</p>', group: "Portfolio sections" }, { name: "timeline.0.when", label: "1: when", type: "text", value: "2019", group: "Timeline" }, { name: "timeline.0.what", label: "1: what happened", type: "text", value: "A sample event in the timeline.", group: "Timeline" }] }] },
     { id: "sources", label: "Sources", singular: "source", canHide: false, canDelete: false, entries: [] },
+  ];
+  // Example people for sample mode. The addresses are made up.
+  var demoPeople = [
+    { email: "sam@example.org", name: "Sam Taylor", sites: ["world-art-review", "global-art-monitor"], invited: "2026-11-02T10:00:00Z", lastSeen: "2026-11-10T14:20:00Z" },
+    { email: "kit@example.org", name: "", sites: ["global-art-monitor"], invited: "2026-11-12T09:30:00Z", lastSeen: null }
   ];
   var demoData = { user: { email: "sample" }, sites: [
     { id: "world-art-review", name: "World Art Review", domain: "worldartreview.com", live: true, files: true, edits: true, artists: [], inbox: [],
@@ -2539,6 +2661,15 @@
           resolve(d);
         }
         else if (a === "content") resolve({ collections: JSON.parse(JSON.stringify(demoContent)) });
+        else if (a === "people") resolve({ people: JSON.parse(JSON.stringify(demoPeople)), sites: demoData.sites.map(function (x) { return { id: x.id, name: x.name, live: x.live }; }) });
+        else if (a === "invitePerson") {
+          var ne = String(body.email || "").trim().toLowerCase();
+          if (demoPeople.some(function (x) { return x.email === ne; })) reject(new Error("That person is already in People."));
+          else { demoPeople.push({ email: ne, name: String(body.name || ""), sites: body.sites || [], invited: new Date().toISOString(), lastSeen: null }); resolve({ ok: true, emailed: true }); }
+        }
+        else if (a === "updatePerson") { var up = demoPeople.find(function (x) { return x.email === body.email; }); if (up) { up.name = String(body.name || ""); up.sites = body.sites || []; } resolve({ ok: true }); }
+        else if (a === "removePerson") { demoPeople = demoPeople.filter(function (x) { return x.email !== body.email; }); resolve({ ok: true }); }
+        else if (a === "resendInvite") resolve({ ok: true, emailed: true });
         else if (a === "history") resolve({ changes: demoHistory });
         else if (a === "pages") resolve({ site: demoSite.site ? JSON.parse(JSON.stringify(demoSite.site)) : null, itemKinds: demoSite.itemKinds, lists: demoSite.lists, listFields: demoSite.listFields, pictures: JSON.parse(JSON.stringify(demoSpots.filter(function (x) { return x.kind !== "work"; }))), imageMeta: JSON.parse(JSON.stringify(demoMeta)), pages: JSON.parse(JSON.stringify(demoPages)), kinds: demoKinds, summaries: demoSummaries, images: demoFiles.slice(), imageBase: (params.get("preview") || "https://worldartreview.com/") + "images/", artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }], preview: params.get("preview") || "https://worldartreview.com/" });
         else if (a === "savePages") {
