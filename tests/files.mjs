@@ -1,9 +1,10 @@
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
 // Shared pictures in the page editor, and the Files screen, against an in-memory GitHub.
 import fs from "node:fs"; import assert from "node:assert/strict";
 globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "me@x.com", SUPABASE_URL: "https://s" }[k] || "") }, serve() {} };
 const { handle, pictureSpots, applyPictures, usageOf, fillDescriptions } = await import("./home.mjs");
 const { makeGitHub } = await import("./fakegit.mjs");
-const WAR = "/home/claude/world-art-review/";
+const WAR = (W_DIR + "/");
 const war = JSON.parse(fs.readFileSync(WAR + "content/site.json", "utf8"));
 const WR = "Artiscope/World-art-review";
 // start from Konn Artiss without a picture, whatever the live site has now

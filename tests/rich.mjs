@@ -1,3 +1,4 @@
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
 // The plain-writing editor, checked in a real browser against the real
 // article bodies of both sites. Run: node tests/rich.mjs
 import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict";
@@ -9,7 +10,7 @@ if (war) { war.articles.forEach((a) => bodies.push(a.body)); war.artists.forEach
 if (gam) gam.features.forEach((f) => bodies.push(f.body));
 bodies.push('<p onclick="x()">Hi <img src=x onerror="window.bad=1"><a href="javascript:window.bad=1">link</a></p><script>window.bad=1</script><iframe src="https://example.com"></iframe>');
 
-const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch(chromeOptions());
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
 await page.route(/^https?:/, (r) => r.abort());

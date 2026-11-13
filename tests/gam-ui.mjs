@@ -1,14 +1,15 @@
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
 // Global Art Monitor in the page editor, in a real browser with a local copy of the site.
 import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict"; import { spawn, execFileSync } from "node:child_process";
 import { createRequire } from "node:module"; const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT || "playwright");
 const A = 8821, B = 8822, consoleAt = "http://localhost:" + B, siteAt = "http://localhost:" + A + "/";
 fs.rmSync("/tmp/gam-site", { recursive: true, force: true });
-fs.cpSync("/home/claude/global-art-monitor", "/tmp/gam-site", { recursive: true, filter: (p) => !p.includes("/.git") });
+fs.cpSync((G_DIR + "/"), "/tmp/gam-site", { recursive: true, filter: (p) => !p.includes("/.git") });
 execFileSync("node", ["/tmp/gam-site/tools/build.mjs"]);
 fs.writeFileSync("/tmp/gam-site/assets/site.js", fs.readFileSync("/tmp/gam-site/assets/site.js", "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
 const servers = [spawn("python3", ["-m", "http.server", String(A), "-d", "/tmp/gam-site"], { stdio: "ignore" }), spawn("python3", ["-m", "http.server", String(B), "-d", path.resolve(".")], { stdio: "ignore" })];
 await new Promise((r) => setTimeout(r, 900));
-const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch(chromeOptions());
 const shots = "/tmp/s4/"; fs.mkdirSync(shots, { recursive: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1500, height: 960 } });

@@ -1,14 +1,15 @@
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
 // Moving between pages in the editor, and editing lists, articles, portfolios, sources and new pages in place.
 import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict"; import { spawn, execFileSync } from "node:child_process";
 import { createRequire } from "node:module"; const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT || "playwright");
 const A = 8811, B = 8812, consoleAt = "http://localhost:" + B, siteAt = "http://localhost:" + A + "/";
 fs.rmSync("/tmp/site-e", { recursive: true, force: true });
-execFileSync("python3", ["/home/claude/world-art-review/tools/build_site.py", "/tmp/site-e"]);
-fs.cpSync("/home/claude/world-art-review/images", "/tmp/site-e/images", { recursive: true });
+execFileSync("python3", [(W_DIR + "/tools/build_site.py"), "/tmp/site-e"]);
+fs.cpSync((W_DIR + "/images"), "/tmp/site-e/images", { recursive: true });
 fs.writeFileSync("/tmp/site-e/index.html", fs.readFileSync("/tmp/site-e/index.html", "utf8").split('var ok="https://artiscope.github.io"').join('var ok="' + consoleAt + '"'));
 const servers = [spawn("python3", ["-m", "http.server", String(A), "-d", "/tmp/site-e"], { stdio: "ignore" }), spawn("python3", ["-m", "http.server", String(B), "-d", path.resolve(".")], { stdio: "ignore" })];
 await new Promise((r) => setTimeout(r, 900));
-const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch(chromeOptions());
 const shots = "/tmp/s3/"; fs.mkdirSync(shots, { recursive: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1500, height: 960 } });

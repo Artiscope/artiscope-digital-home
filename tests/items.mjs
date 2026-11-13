@@ -1,9 +1,10 @@
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
 // Articles, portfolios, sources, list headings and new pages, saved from the page editor.
 import fs from "node:fs"; import assert from "node:assert/strict";
 globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "me@x.com", SUPABASE_URL: "https://s" }[k] || "") }, serve() {} };
 const { handle, cleanSite, cleanPages, SITES, slugFrom, siteForEditor, canon } = await import("./home.mjs");
 const { makeGitHub } = await import("./fakegit.mjs");
-const WAR = "/home/claude/world-art-review/";
+const WAR = (W_DIR + "/");
 const war = JSON.parse(fs.readFileSync(WAR + "content/site.json", "utf8"));
 const pagesSeed = fs.readFileSync(WAR + "content/pages.json", "utf8");
 const W = SITES[0];

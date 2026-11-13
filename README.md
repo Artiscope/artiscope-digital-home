@@ -4,6 +4,10 @@ One private console for running the Artiscope websites: edit the words,
 add and remove photos, hide or delete content, and undo any change,
 without opening GitHub or touching code.
 
+Working on the console with Claude Code: start with `CLAUDE.md`, which
+explains how it is put together, how to check and publish a change, and
+where things stand.
+
 ## How it works
 
 - The console is a plain web page: `index.html`, `assets/app.css` and

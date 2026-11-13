@@ -1,13 +1,14 @@
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
 // The page editor on World Art Review, in a real browser with a local copy of the site.
 import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict"; import { spawn, execFileSync } from "node:child_process";
 import { createRequire } from "node:module"; const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT || "playwright");
 const A = 8781, B = 8782, consoleAt = "http://localhost:" + B, siteAt = "http://localhost:" + A + "/";
 fs.rmSync("/tmp/site-p", { recursive: true, force: true });
-execFileSync("python3", ["/home/claude/world-art-review/tools/build_site.py", "/tmp/site-p"]);
+execFileSync("python3", [(W_DIR + "/tools/build_site.py"), "/tmp/site-p"]);
 fs.writeFileSync("/tmp/site-p/index.html", fs.readFileSync("/tmp/site-p/index.html", "utf8").split('var ok="https://artiscope.github.io"').join('var ok="' + consoleAt + '"'));
 const servers = [spawn("python3", ["-m", "http.server", String(A), "-d", "/tmp/site-p"], { stdio: "ignore" }), spawn("python3", ["-m", "http.server", String(B), "-d", path.resolve(".")], { stdio: "ignore" })];
 await new Promise((r) => setTimeout(r, 900));
-const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch(chromeOptions());
 try {
   const page = await browser.newPage({ viewport: { width: 1500, height: 960 } });
   const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
@@ -76,7 +77,7 @@ try {
   await frame().click("#method .mcard >> nth=2"); await page.waitForSelector(".ed-right h2:has-text('Publicity, flagged')");
   // a picture: upload, see it on the page at once, describe it, save both together
   await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="picture"]'); await page.waitForSelector('[data-upload="image"]', { state: "attached" });
-  await page.setInputFiles('[data-upload="image"]', "/tmp/s2/studio.jpg"); await page.waitForSelector(".picthumb[src^='data:image']");
+  await page.setInputFiles('[data-upload="image"]', (FIX + "/studio.jpg")); await page.waitForSelector(".picthumb[src^='data:image']");
   await page.waitForTimeout(400);
   assert.ok(await frame().evaluate(() => (document.querySelector("#picture-1 img") || {}).src.startsWith("data:image/jpeg")), "the new photo shows on the page before saving");
   await page.click('[data-act="ed-picker"]'); assert.ok(await page.isVisible(".picgrid .pictile")); await page.click('[data-act="ed-picker"]');

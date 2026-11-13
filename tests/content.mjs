@@ -1,8 +1,9 @@
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
 import fs from "node:fs"; import assert from "node:assert/strict";
 import { SITES, entriesOf, fieldsOf, applyValues, handle } from "./home.mjs";
-const war = JSON.parse(fs.readFileSync("/home/claude/world-art-review/content/site.json", "utf8"));
-const gamC = JSON.parse(fs.readFileSync("/home/claude/global-art-monitor/data/content.json", "utf8"));
-const gamS = JSON.parse(fs.readFileSync("/home/claude/global-art-monitor/data/sales.json", "utf8"));
+const war = JSON.parse(fs.readFileSync((W_DIR + "/content/site.json"), "utf8"));
+const gamC = JSON.parse(fs.readFileSync((G_DIR + "/data/content.json"), "utf8"));
+const gamS = JSON.parse(fs.readFileSync((G_DIR + "/data/sales.json"), "utf8"));
 const W = SITES[0].collections, G = SITES[1].collections;
 const by = (cols, id) => cols.find((c) => c.id === id);
 assert.equal(entriesOf(war, by(W, "articles")).length, 16);
@@ -36,7 +37,7 @@ assert.deepEqual(bio.body, ["First paragraph.", "Second paragraph."]);
 globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "me@x.com", SUPABASE_URL: "https://s" }[k] || "") }, serve() {} };
 const { makeGitHub } = await import("./fakegit.mjs");
 const WR = "Artiscope/World-art-review";
-const hub = makeGitHub({ [WR]: { "content/site.json": JSON.stringify(war), "content/pages.json": fs.readFileSync("/home/claude/world-art-review/content/pages.json", "utf8"), "image-slots.json": fs.readFileSync("/home/claude/world-art-review/image-slots.json", "utf8"), "images/zara-muse.jpg": "picture", "images/notes.txt": "x", "tools/build_site.py": "print(1)" } });
+const hub = makeGitHub({ [WR]: { "content/site.json": JSON.stringify(war), "content/pages.json": fs.readFileSync((W_DIR + "/content/pages.json"), "utf8"), "image-slots.json": fs.readFileSync((W_DIR + "/image-slots.json"), "utf8"), "images/zara-muse.jpg": "picture", "images/notes.txt": "x", "tools/build_site.py": "print(1)" } });
 globalThis.fetch = async (url, init = {}) => String(url).includes("/auth/v1/user") ? new Response(JSON.stringify({ email: "me@x.com" })) : hub.fetch(url, init);
 // what the copy being worked on holds, and what visitors see
 const work = () => Object.keys(hub.refs(WR)).find((n) => n.startsWith("adh/live-"));

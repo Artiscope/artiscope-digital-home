@@ -1,0 +1,14 @@
+{
+  "name": "artiscope-digital-home",
+  "private": true,
+  "description": "The console for the Artiscope websites. Only the tests use this file; the console itself needs no build.",
+  "type": "module",
+  "scripts": {
+    "sync": "node tests/tools/sync-demo.mjs",
+    "test": "node tests/run-all.mjs",
+    "test:all": "node tests/run-all.mjs uat"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}

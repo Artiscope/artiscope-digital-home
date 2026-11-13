@@ -1,3 +1,4 @@
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
 // User acceptance run: the real console, signed in, talking to the real server code
 // over an in-memory GitHub seeded from both sites, with the real sites as previews.
 // Each case is recorded as passed or failed with a note; nothing stops the run.
@@ -6,7 +7,7 @@ import { createRequire } from "node:module";
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT || "playwright");
 const OUT = "/tmp/uat/"; fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT + "shots", { recursive: true });
 const PORT = 8841, consoleAt = "http://localhost:" + PORT;
-const WARDIR = "/home/claude/world-art-review/", GAMDIR = "/home/claude/global-art-monitor/";
+const WARDIR = (W_DIR + "/"), GAMDIR = (G_DIR + "/");
 
 // ----- the two sites, built as visitors would get them, with the editor bridge pointed at this console -----
 fs.rmSync("/tmp/uat-war", { recursive: true, force: true }); fs.rmSync("/tmp/uat-gam", { recursive: true, force: true });
@@ -63,7 +64,7 @@ async function check(name, fn) {
   catch (e) { await page.screenshot({ path: OUT + "shots/fail-" + results.length + ".png" }).catch(() => {}); results.push({ area, name, ok: false, note: String(e && e.message || e).split("\n")[0].slice(0, 240), ms: Date.now() - t0 }); }
 }
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
-const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch(chromeOptions());
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 page.setDefaultTimeout(7000);
 const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
@@ -140,7 +141,7 @@ await check("Uploading something that is not a photo is refused", async () => {
   await page.setInputFiles('[data-upload="image"]', "/tmp/uat/not-a-photo.txt"); await settle(500); const n = await notice(); must(/JPG or PNG/i.test(n), "notice: " + n);
 });
 await check("A photo without a description cannot be saved", async () => {
-  await page.setInputFiles('[data-upload="image"]', "/tmp/s2/studio.jpg"); await page.waitForSelector(".picthumb[src^='data:image']"); await page.fill('[data-pf="alt"]', "");
+  await page.setInputFiles('[data-upload="image"]', (FIX + "/studio.jpg")); await page.waitForSelector(".picthumb[src^='data:image']"); await page.fill('[data-pf="alt"]', "");
   await page.click('[data-act="ed-save"]'); await settle(500); const n = await notice(); must(/describe the picture/i.test(n), "notice: " + n);
 });
 await check("With a description, the photo and the page save together as one step", async () => {
@@ -232,7 +233,7 @@ await check("Deleting a trial copy asks first", async () => {
 // =============== 5. Files ===============
 area = "Files";
 await check("Files lists every photo with where it is used", async () => { await page.click('.navb[data-tab="files"]'); await page.waitForSelector(".filecard", { timeout: 9000 }); const n = await page.locator(".filecard").count(); must(n >= 2, n + " photos"); await shot("05-files"); });
-await check("Photos cannot be added until each has a description", async () => { await page.setInputFiles('[data-change="files-add"]', ["/tmp/s2/studio.jpg"]); await page.waitForSelector(".addrow"); must(await page.isDisabled('[data-act="files-send"]'), "button enabled"); await page.click('[data-act="fadd-drop"]'); });
+await check("Photos cannot be added until each has a description", async () => { await page.setInputFiles('[data-change="files-add"]', [(FIX + "/studio.jpg")]); await page.waitForSelector(".addrow"); must(await page.isDisabled('[data-act="files-send"]'), "button enabled"); await page.click('[data-act="fadd-drop"]'); });
 await check("A photo in use cannot be deleted", async () => { const t = await page.locator(".filecard").first().innerText(); must(t.includes("cannot be deleted") || !t.includes("Used in"), "deletable while used"); });
 await check("Replacing a JPG with a PNG is refused with a reason", async () => {
   const png = await page.evaluate(() => { const c = document.createElement("canvas"); c.width = 40; c.height = 40; return c.toDataURL("image/png").split(",")[1]; }); fs.writeFileSync("/tmp/uat/small.png", Buffer.from(png, "base64"));
@@ -437,7 +438,7 @@ await check("A button with an unsafe address is not drawn, and the address is no
 // =============== 6d. New sections, batch 2 ===============
 area = "New sections: batch 2";
 const secIdOf = async (t) => (await page.$$eval("#ed-sections .sec:not(.blk)", (x) => x.map((e) => e.dataset.id))).find((x) => x.indexOf(t) === 0);
-for (const [f, t] of [["tall.jpg", "gal-tall.jpg"], ["wide.jpg", "gal-wide.jpg"], ["logo.png", "row-logo.png"]]) if (fs.existsSync("/tmp/b2img/" + f)) fs.copyFileSync("/tmp/b2img/" + f, "/tmp/uat/" + t); else fs.copyFileSync("/tmp/s2/studio.jpg", "/tmp/uat/" + t.replace(/\.png$/, ".jpg"));
+for (const [f, t] of [["tall.jpg", "gal-tall.jpg"], ["wide.jpg", "gal-wide.jpg"], ["logo.png", "row-logo.png"]]) fs.copyFileSync(FIX + "/" + f, "/tmp/uat/" + t);
 await check("A gallery photo without a description stops the save, and opens that photo to describe", async () => {
   await openSite("world-art-review"); await newPage("Pictures"); await addSec("gallery"); const gl = await secIdOf("gallery");
   await page.click('.sec.blk[data-id="' + gl + '"][data-block="1"]'); await page.setInputFiles('[data-upload="photos.1.image"]', "/tmp/uat/gal-tall.jpg"); await page.waitForSelector(".picthumb[src^='data:image']");

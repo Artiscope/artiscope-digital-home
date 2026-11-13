@@ -1,9 +1,10 @@
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
 // Global Art Monitor in the page editor: its data as one object, saved back into its three files.
 import fs from "node:fs"; import assert from "node:assert/strict"; import { createRequire } from "node:module";
 globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "me@x.com", SUPABASE_URL: "https://s" }[k] || "") }, serve() {} };
 const { handle, SITES, gamForEditor, gamFromEditor, cleanPages, canon } = await import("./home.mjs");
 const { makeGitHub } = await import("./fakegit.mjs");
-const G = "/home/claude/global-art-monitor/";
+const G = (G_DIR + "/");
 const GAMR = createRequire(import.meta.url)(G + "assets/render.js");
 const read = (p) => JSON.parse(fs.readFileSync(G + p, "utf8"));
 const content = read("data/content.json"), sales = read("data/sales.json"), images = read("data/images.json"), pages = read("data/pages.json");

@@ -1,8 +1,9 @@
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { parseCalendar, setAnswer, parseLog, safePhotoName, parseSlots, slotPhotoName, notePhotoName, cleanText, handle, SITES, cleanPages } from "./home.mjs";
 
-const empty = fs.readFileSync("/home/claude/global-art-monitor/CONTENT-CALENDAR.md", "utf8");
+const empty = fs.readFileSync((G_DIR + "/CONTENT-CALENDAR.md"), "utf8");
 assert.deepEqual(parseCalendar(empty), { waiting: [], approved: [] });
 
 const cal = `# Content calendar
@@ -50,7 +51,7 @@ assert.equal(next.split("\n").length, cal.split("\n").length);       // nothing 
 assert.equal(setAnswer(cal, "How to read an auction estimate", "yes"), null); // not in waiting
 assert.equal(setAnswer(cal, "No such topic", "yes"), null);
 
-const log = fs.readFileSync("/home/claude/world-art-review/AGENT-LOG.md", "utf8");
+const log = fs.readFileSync((W_DIR + "/AGENT-LOG.md"), "utf8");
 const l = parseLog(log);
 assert.ok(/\d{4}/.test(l[0].date));
 assert.ok(l[0].lines.length >= 3);
@@ -60,7 +61,7 @@ assert.equal(safePhotoName("zara-muse", "../../etc", "png"), "zara-muse-etc.png"
 assert.equal(safePhotoName("zara-muse", "x", "exe"), null);
 assert.equal(safePhotoName("zara-muse", "", "jpg"), null);
 
-const war = parseSlots(fs.readFileSync("/home/claude/world-art-review/image-slots.json", "utf8"));
+const war = parseSlots(fs.readFileSync((W_DIR + "/image-slots.json"), "utf8"));
 assert.equal(war.length, 31);
 assert.ok(war.find((x) => x.id === "artist-zara-muse").filled);
 assert.equal(parseSlots("not json").length, 0);
@@ -95,11 +96,11 @@ globalThis.fetch = realFetch;
 // every section kind the console offers is one each site's build accepts, and the other way round
 {
   const kinds = (repo) => Object.keys(SITES.find((x) => x.repo === repo).sectionKinds).filter((k) => !["opening", "header", "footer"].includes(k)).sort();
-  const war = fs.readFileSync("/home/claude/world-art-review/tools/build_site.py", "utf8").match(/SECTION_TYPES = \{([^}]*)\}/)[1].match(/"([^"]+)"/g).map((x) => x.slice(1, -1)).sort();
-  const gam = fs.readFileSync("/home/claude/global-art-monitor/tools/build.mjs", "utf8").match(/const KINDS = \[([^\]]*)\]/)[1].match(/"([^"]+)"/g).map((x) => x.slice(1, -1)).sort();
+  const war = fs.readFileSync((W_DIR + "/tools/build_site.py"), "utf8").match(/SECTION_TYPES = \{([^}]*)\}/)[1].match(/"([^"]+)"/g).map((x) => x.slice(1, -1)).sort();
+  const gam = fs.readFileSync((G_DIR + "/tools/build.mjs"), "utf8").match(/const KINDS = \[([^\]]*)\]/)[1].match(/"([^"]+)"/g).map((x) => x.slice(1, -1)).sort();
   assert.deepEqual(kinds("Artiscope/World-art-review"), war, "World Art Review: console and build disagree");
   assert.deepEqual(kinds("Artiscope/global-art-monitor"), gam, "Global Art Monitor: console and build disagree");
-  const warSrc = fs.readFileSync("/home/claude/world-art-review/src/index.html", "utf8"), gamSrc = fs.readFileSync("/home/claude/global-art-monitor/assets/render.js", "utf8");
+  const warSrc = fs.readFileSync((W_DIR + "/src/index.html"), "utf8"), gamSrc = fs.readFileSync((G_DIR + "/assets/render.js"), "utf8");
   for (const k of war) assert.ok(warSrc.includes(k + "(st") || warSrc.includes("'" + k + "'(st"), "World Art Review cannot draw " + k);
   for (const k of gam) assert.ok(gamSrc.includes('S["' + k + '"]') || gamSrc.includes("S." + k + " ="), "Global Art Monitor cannot draw " + k);
   // the new sections keep only safe links

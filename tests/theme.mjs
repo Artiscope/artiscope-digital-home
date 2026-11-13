@@ -1,3 +1,4 @@
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
 // The Theme screen, the real-site preview and the easier lists, in a real browser.
 // Run: PLAYWRIGHT=<path to playwright> node tests/theme.mjs
 import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict"; import { spawn, execFileSync } from "node:child_process";
@@ -6,13 +7,13 @@ import { SITES, FONTS, themeCss } from "./home.mjs";
 const A = 8731, B = 8732, consoleAt = "http://localhost:" + B, siteAt = "http://localhost:" + A + "/";
 // a built copy of World Art Review that trusts this test console instead of the real one
 fs.rmSync("/tmp/site-a", { recursive: true, force: true });
-execFileSync("python3", ["/home/claude/world-art-review/tools/build_site.py", "/tmp/site-a"]);
+execFileSync("python3", [(W_DIR + "/tools/build_site.py"), "/tmp/site-a"]);
 let built = fs.readFileSync("/tmp/site-a/index.html", "utf8"); assert.ok(built.includes('var ok="https://artiscope.github.io"'));
 fs.writeFileSync("/tmp/site-a/index.html", built);
 fs.writeFileSync("/tmp/site-a/index.html", built.split('var ok="https://artiscope.github.io"').join('var ok="' + consoleAt + '"'));
 const servers = [spawn("python3", ["-m", "http.server", String(A), "-d", "/tmp/site-a"], { stdio: "ignore" }), spawn("python3", ["-m", "http.server", String(B), "-d", path.resolve(".")], { stdio: "ignore" })];
 await new Promise((r) => setTimeout(r, 900));
-const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch(chromeOptions());
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = []; page.on("pageerror", (e) => errors.push(String(e)));

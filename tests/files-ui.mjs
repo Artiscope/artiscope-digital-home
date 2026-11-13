@@ -1,14 +1,15 @@
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
 // Shared pictures in the page editor and the Files screen, in a real browser with a local copy of World Art Review.
 import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict"; import { spawn, execFileSync } from "node:child_process";
 import { createRequire } from "node:module"; const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT || "playwright");
 const A = 8791, B = 8792, consoleAt = "http://localhost:" + B, siteAt = "http://localhost:" + A + "/";
 fs.rmSync("/tmp/site-f", { recursive: true, force: true });
-execFileSync("python3", ["/home/claude/world-art-review/tools/build_site.py", "/tmp/site-f"]);
-fs.cpSync("/home/claude/world-art-review/images", "/tmp/site-f/images", { recursive: true });
+execFileSync("python3", [(W_DIR + "/tools/build_site.py"), "/tmp/site-f"]);
+fs.cpSync((W_DIR + "/images"), "/tmp/site-f/images", { recursive: true });
 fs.writeFileSync("/tmp/site-f/index.html", fs.readFileSync("/tmp/site-f/index.html", "utf8").split('var ok="https://artiscope.github.io"').join('var ok="' + consoleAt + '"'));
 const servers = [spawn("python3", ["-m", "http.server", String(A), "-d", "/tmp/site-f"], { stdio: "ignore" }), spawn("python3", ["-m", "http.server", String(B), "-d", path.resolve(".")], { stdio: "ignore" })];
 await new Promise((r) => setTimeout(r, 900));
-const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch(chromeOptions());
 try {
   const page = await browser.newPage({ viewport: { width: 1500, height: 960 } });
   const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
@@ -31,7 +32,7 @@ try {
   await page.click('.sec.pic[data-key="artist:konn-artiss"]'); await page.waitForSelector(".ed-right h2:has-text('Picture of Konn Artiss')");
   assert.ok((await page.innerText(".ed-right")).includes("also shows on Konn Artiss's portfolio and the home page"));
   assert.equal(await page.locator(".ptools").count(), 0, "no move or hide for a shared picture");
-  await page.setInputFiles('[data-upload="image"]', "/tmp/s2/studio.jpg"); await page.waitForSelector(".picthumb[src^='data:image']"); await page.waitForTimeout(500);
+  await page.setInputFiles('[data-upload="image"]', (FIX + "/studio.jpg")); await page.waitForSelector(".picthumb[src^='data:image']"); await page.waitForTimeout(500);
   assert.ok(await frame().evaluate(() => [...document.querySelectorAll(".hero .srcs .plate img")].some((i) => i.src.startsWith("data:image"))), "the small box shows the new photo");
   await page.fill('[data-pf="alt"]', "Blocks of ice on a London pavement"); await page.fill('[data-pf="credit"]', "Photo: studio"); await page.waitForTimeout(300);
   assert.ok((await page.innerText(".ed-top")).includes("Edited, not saved"));
@@ -75,7 +76,7 @@ try {
   await page.waitForSelector(".filters"); assert.equal(await page.locator('[data-act="files-filter"][data-f="nodesc"] .n').innerText(), "0");
   // upload two at once, each described
   await page.click('[data-act="files-filter"][data-f="all"]');
-  await page.setInputFiles('[data-change="files-add"]', ["/tmp/s2/studio.jpg", "/tmp/s2/studio.jpg"]);
+  await page.setInputFiles('[data-change="files-add"]', [(FIX + "/studio.jpg"), (FIX + "/studio.jpg")]);
   await page.waitForSelector(".addrow"); assert.ok(await page.isDisabled('[data-act="files-send"]'));
   await page.fill("#fa-alt-0", "A painter's studio"); await page.fill("#fa-alt-1", "The same studio again"); assert.ok(!(await page.isDisabled('[data-act="files-send"]')));
   await page.waitForTimeout(900); await page.screenshot({ path: "/tmp/s2/step2-upload.png" });
