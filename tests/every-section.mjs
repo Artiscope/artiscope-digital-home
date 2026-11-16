@@ -22,7 +22,7 @@ try {
     await page.goto(consoleAt + "/index.html?demo&preview=" + encodeURIComponent(warAt) + "&gampreview=" + encodeURIComponent(gamAt) + "&sadpreview=" + encodeURIComponent(sadAt));
     await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="' + siteKey + '"]');
     await page.waitForSelector("#ed-sections .sec"); await page.waitForTimeout(2500);
-    await page.click('[data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Every section"); await page.click('form[data-form="ednew"] button[type=submit]'); await page.waitForTimeout(1500);
+    await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Every section"); await page.click('form[data-form="ednew"] button[type=submit]'); await page.waitForTimeout(1500);
     await page.click('.addl[data-act="ed-secpicker"]'); await page.waitForSelector(".pk-item");
     const keys = await page.$$eval(".pk-item", (b) => b.map((x) => x.dataset.key)); await page.click('[data-act="ed-pick-close"] >> nth=-1').catch(() => page.keyboard.press("Escape"));
     for (const round of [1, 2]) for (const k of keys) { await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="' + k + '"]'); await page.waitForTimeout(120); }

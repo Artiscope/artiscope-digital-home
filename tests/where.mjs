@@ -20,3 +20,8 @@ export function chromeOptions() {
   const exe = process.env.CHROME || ["/usr/bin/google-chrome", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find((p) => fs.existsSync(p));
   return exe ? { executablePath: exe, args: ["--no-sandbox"] } : { args: ["--no-sandbox"] };
 }
+// Moves to another screen. The page editor has no menu down the side, so it leaves by Exit first.
+export async function goTab(page, tab) {
+  if (await page.isVisible(".ed-exit")) { await page.click(".ed-exit"); await page.waitForSelector('.navb[data-tab="overview"]'); }
+  await page.click('.navb[data-tab="' + tab + '"]');
+}

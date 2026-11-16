@@ -1,4 +1,4 @@
-import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, goTab } from "./where.mjs";
 // The plain-writing editor, checked in a real browser against the real
 // article bodies of both sites. Run: node tests/rich.mjs
 import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict";
@@ -15,7 +15,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
 await page.route(/^https?:/, (r) => r.abort());
 await page.goto("file://" + here + "/index.html?demo");
-await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="world-art-review"]'); await page.waitForSelector('[data-tab="theme"]');
+await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="world-art-review"]'); await page.waitForSelector('[data-tab="overview"]');
 
 // 1. nothing is lost: every real body survives a trip through the editor
 const results = await page.evaluate((list) => list.map((html) => {

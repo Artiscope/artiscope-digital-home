@@ -34,8 +34,13 @@ How they like to work. Follow this every time:
 - No boxed arrow icons or arrow buttons. Use words and spacing
   ("Previous", "Next", "Close", "Open").
 - Reuse the patterns already there before inventing new ones.
-- Console colours: background #F7F5FA, panels #FFFFFF, accent #52057B,
-  violet #892CDC, picked #F1E6FC, text #0B0A0F, muted #5D5866. Fonts:
+- Console look (since Version 35): charcoal and silver. Everything is cut
+  from one charcoal surface #26272B, raised with a soft shadow
+  (#18191C dark, #35373C light) or pressed in with an inner one. Text
+  #D4D7DC, headings #F2F3F5, muted #9A9EA6. Silver (#F4F5F7 to #B9BDC3,
+  text #1C1D20) only for Save and the main button of a screen. Lamps: green
+  #3DDC84 live, amber #F2B33D unsaved or trial; problems in red #FF7A7A.
+  The colours are the variables at the top of `assets/app.css`. Fonts:
   Castoro and Libre Franklin. Icons are line icons in the `IC` set in
   `assets/app.js`.
 
@@ -190,7 +195,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (16 November 2026, Version 34)
+## Where things stand (16 November 2026, Version 35)
 
 Done:
 
@@ -246,6 +251,23 @@ Done:
   `tests/run.mjs` fails if a site does not offer one of them.
 - Words saved through Content on any site lose anything that could run
   on a page (`safeMarks` on the server), keeping ordinary formatting.
+
+- The Shopify-style editor, step 1 of 9 (Version 35), from the owner's
+  reference document: the charcoal and silver look on every screen, and
+  the page editor as a full screen with its own top bar (Exit, the
+  Sections, Theme settings and Add-ons switches with Ctrl+Alt+1 to 3, the
+  site button with its lamp and copies, the page picker with search and
+  kinds of page, Inspector with Alt+Shift+I, Computer and Phone, Undo,
+  Redo, More, and a split Save that stays off until something changes).
+  There is no side menu in the editor: Exit leads back to it, and tests
+  use `goTab` from `tests/where.mjs`. The old page list `select.pagepick`
+  stays on the page, out of sight, so checks can still choose a page.
+  With the inspector off the preview loads without the editor link, so
+  links work and nothing is picked; turning it on loads it again with the
+  unsaved changes. Under 1800 pixels wide the settings sit under the list
+  in the left column. Theme settings and Add-ons in the left column, Edit
+  code and Edit default text are placeholders until their steps (6, 9).
+  Steps 2 to 9 wait for the owner's go ahead, one at a time.
 
 Waiting for the owner:
 

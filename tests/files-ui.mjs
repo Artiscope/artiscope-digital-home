@@ -1,4 +1,4 @@
-import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, goTab } from "./where.mjs";
 // Shared pictures in the page editor and the Files screen, in a real browser with a local copy of World Art Review.
 import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict"; import { spawn, execFileSync } from "node:child_process";
 import { createRequire } from "node:module"; const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT || "playwright");
@@ -18,7 +18,7 @@ try {
   await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="world-art-review"]');
   await page.waitForSelector("#ed-sections .sec"); await page.waitForTimeout(3000);
   const frame = () => page.frames().find((f) => f.url().startsWith(siteAt));
-  assert.ok(await page.isVisible('.navb[data-tab="files"]') && !(await page.isVisible('[data-tab="photos"]')), "Files replaces Photos");
+  assert.ok(!(await page.isVisible('[data-tab="photos"]')), "Files replaces Photos");
 
   // the banner lists the pictures it shows, each one shared
   await page.click('#ed-sections .sec[data-id="hero"]:not(.blk)'); await page.waitForSelector(".sec.pic");
@@ -59,7 +59,7 @@ try {
   await page.click('[data-act="ed-discard"]');
 
   // Files: every photo, what it shows and where it is used
-  await page.click('.navb[data-tab="files"]'); await page.waitForSelector(".filecard");
+  await goTab(page, "files"); await page.waitForSelector(".filecard");
   assert.ok(await page.isVisible('.navb[data-tab="files"]') && !(await page.isVisible('.navb[data-tab="photos"]')), "the menu shows Files, not Photos");
   const names = await page.locator(".filecard .fname").allInnerTexts();
   assert.deepEqual(names, ["zara-muse-portrait.jpg", "article-palette-knife-painting.jpg", "studio.jpg"]);

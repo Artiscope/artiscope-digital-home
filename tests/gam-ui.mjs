@@ -1,4 +1,4 @@
-import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, goTab } from "./where.mjs";
 // Global Art Monitor in the page editor, in a real browser with a local copy of the site.
 import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict"; import { spawn, execFileSync } from "node:child_process";
 import { createRequire } from "node:module"; const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT || "playwright");
@@ -58,7 +58,7 @@ try {
   await page.fill('[data-pf$=".0"]', "Reserve"); await page.fill('[data-pf$=".1"]', "The lowest price the seller will accept.");
   await page.screenshot({ path: shots + "site-details.png" });
   // a new page, in the full-screen menu
-  await page.click('[data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Press"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle();
+  await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Press"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle();
   assert.equal(await page.inputValue(".pagepick"), "page-press");
   assert.equal(await frame().evaluate(() => document.querySelector(".page-head .h1").textContent), "Press");
   assert.ok(await frame().evaluate(() => [...document.querySelectorAll(".menu-list a")].some((a) => a.textContent.includes("Press"))));
@@ -70,7 +70,7 @@ try {
   const after = await page.evaluate(() => { const p = window.__adh.pgOf(); return { press: !!p.doc.pages.press, sales: p.site.artists[0].sales.length, gloss: p.site.glossary.some((g) => g[0] === "Reserve") }; });
   assert.ok(after.press && after.gloss); assert.equal(after.sales, rows + 1);
   // Files lists Global Art Monitor's pictures; Photos and Content have gone
-  await page.click('.navb[data-tab="files"]'); await page.waitForSelector(".filecard");
+  await goTab(page, "files"); await page.waitForSelector(".filecard");
   assert.ok(!(await page.isVisible('.navb[data-tab="photos"]')) && !(await page.isVisible('.navb[data-tab="content"]')));
   assert.ok((await page.innerText(".files")).includes("zara-muse.jpg"));
   assert.deepEqual(errors, []);

@@ -1,4 +1,4 @@
-import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir } from "./where.mjs";
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir, goTab } from "./where.mjs";
 // User acceptance run: the real console, signed in, talking to the real server code
 // over an in-memory GitHub seeded from both sites, with the real sites as previews.
 // Each case is recorded as passed or failed with a note; nothing stops the run.
@@ -93,14 +93,14 @@ const frame = (host) => page.frames().find((f) => f.url().startsWith("https://" 
 const text = (sel) => page.innerText(sel);
 const notice = async () => (await page.locator(".notice").allInnerTexts()).join(" | ");
 async function liveSave() { await page.click('[data-act="ed-save"]'); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved", { timeout: 9000 }); await settle(900); }
-async function openSite(id) { await page.click('[data-tab="home"]', { timeout: 1500 }).catch(() => {}); await shot("open-" + id); await page.evaluate((x) => { window.__adh.state.leave = null; }, id); await page.waitForSelector('[data-act="open-site"][data-site="' + id + '"]', { timeout: 20000 }); await page.click('[data-act="open-site"][data-site="' + id + '"]'); await page.waitForSelector("#ed-sections .sec", { timeout: 12000 }); await settle(1800); }
+async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).catch(() => {}); await page.click('[data-tab="home"]', { timeout: 1500 }).catch(() => {}); await shot("open-" + id); await page.evaluate((x) => { window.__adh.state.leave = null; }, id); await page.waitForSelector('[data-act="open-site"][data-site="' + id + '"]', { timeout: 20000 }); await page.click('[data-act="open-site"][data-site="' + id + '"]'); await page.waitForSelector('[data-tab="overview"]'); if (!(await page.isVisible(".ed-exit"))) await page.click('.navb[data-tab="pages"]'); await page.waitForSelector("#ed-sections .sec", { timeout: 12000 }); await settle(1800); }
 
 // =============== 1. Getting in ===============
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all six sites, the Practice site among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 6, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 34"), "no version"));
-await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await page.click('[data-tab="home"]'); });
+await check("Version number is shown", async () => must((await text("body")).includes("Version 35"), "no version"));
+await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await goTab(page, "home"); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
   const t = await text("body"); signedIn = "tester@artiscope.co.uk";
@@ -110,7 +110,7 @@ await check("Someone not on the list is turned away with a plain message", async
 // =============== 2. World Art Review: the page editor ===============
 area = "Page editor, World Art Review";
 await check("Opening a site goes straight to the page editor with the real page", async () => { await openSite("world-art-review"); must(!!frame("worldartreview.com"), "no preview"); await shot("02-editor"); });
-await check("Menu has Overview, Pages, Theme, Files, History, and no Content or Photos", async () => { const t = await text(".ed .rail"); must(["Overview", "Pages", "Theme", "Files", "History"].every((w) => t.includes(w)) && !t.includes("Content") && !t.includes("Photos"), "menu: " + t); });
+await check("Exit leads to the menu: Overview, Pages, Theme, Files, History, and no Content or Photos", async () => { await page.click(".ed-exit"); await page.waitForSelector(".rail"); const t = await text(".rail"); await goTab(page, "pages"); await page.waitForSelector("#ed-sections .sec"); await settle(2500); must(["Overview", "Pages", "Theme", "Files", "History"].every((w) => t.includes(w)) && !t.includes("Content") && !t.includes("Photos"), "menu: " + t); });
 await check("Clicking a part of the page opens its settings", async () => { await frame("worldartreview.com").click("#numbers"); await page.waitForSelector(".ed-right h2:has-text('Numbers band')"); });
 await check("Typing redraws the page before saving", async () => { await page.fill('[data-pf="eyebrow"]', "The review in numbers"); await settle(500); must((await frame("worldartreview.com").evaluate(() => document.querySelector("#numbers .eyebrow").textContent)) === "The review in numbers", "not redrawn"); });
 await check("Save on the live site asks once, then saves to the live site", async () => { await page.click('[data-act="ed-save"]'); await page.waitForSelector("text=goes live in about two minutes"); await shot("03-live-question"); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved"); await settle(1200); must(JSON.stringify(read(WR, "content/pages.json")).includes("The review in numbers"), "not on main"); });
@@ -119,9 +119,48 @@ await check("Redo puts it back", async () => { await page.click('[data-act="redo
 await check("Discard throws away unsaved typing", async () => { await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await page.fill('[data-pf="eyebrow"]', "Throw me away"); await settle(300); await page.click('[data-act="ed-discard"]'); await settle(400); must(!(await text(".ed-top")).includes("Edited"), "still edited"); });
 await check("Leaving with unsaved changes asks first, and Keep editing keeps them", async () => {
   await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await page.fill('[data-pf="eyebrow"]', "Keep me"); await settle(300);
-  await page.click('.navb[data-tab="history"]'); await page.waitForSelector("text=You have changes that are not saved yet"); await page.click('[data-act="leave-stay"]');
+  await page.click('.ed-exit'); await page.waitForSelector("text=You have changes that are not saved yet"); await page.click('[data-act="leave-stay"]');
   must(await page.inputValue('[data-pf="eyebrow"]') === "Keep me", "lost"); await page.click('[data-act="ed-discard"]');
 });
+area = "Editor frame";
+if (ONLY && ONLY.includes(area) && !ONLY.includes("Page editor, World Art Review")) await openSite("world-art-review");
+await check("The top bar has Exit, the panel switches, the site, the page picker, Inspector, Computer and Phone, Undo, Redo, More and Save", async () => {
+  for (const sel of [".ed-exit", '[data-act="ed-panel"][data-panel="sections"]', '[data-act="ed-panel"][data-panel="theme"]', '[data-act="ed-panel"][data-panel="addons"]', ".ed-sitebtn", ".ed-pagebtn", ".insp", '[data-act="ed-mode"][data-mode="phone"]', '[data-act="undo-step"]', '[data-act="redo-step"]', '[data-act="ed-pop"][data-menu="more"]', '[data-act="ed-save"]']) must(await page.isVisible(sel), "missing " + sel);
+  must(!(await page.isVisible(".ed .rail")), "the side menu is still in the editor"); await shot("02b-topbar");
+});
+await check("Save stays off until something changes", async () => {
+  must(await page.isDisabled('[data-act="ed-save"]'), "Save is on with nothing to save");
+  await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await page.fill('[data-pf="eyebrow"]', "Now changed"); await settle(300);
+  must(!(await page.isDisabled('[data-act="ed-save"]')), "Save stayed off"); await page.click('[data-act="ed-discard"]'); await settle(300);
+});
+await check("The panel switches change the left column, and the open one hides it", async () => {
+  await page.click('[data-act="ed-panel"][data-panel="theme"]'); must((await text(".ed-left")).includes("Theme settings"), "no theme panel");
+  await page.click('[data-act="ed-panel"][data-panel="theme"]'); must(await page.isVisible(".ed.noleft"), "the column stayed");
+  await page.keyboard.press("Control+Alt+1"); await settle(200); must(await page.isVisible("#ed-sections .sec"), "Ctrl+Alt+1 did not bring the sections back");
+});
+await check("The page picker shows the kinds of page, then the pages of one kind", async () => {
+  await page.click(".ed-pagebtn"); await page.click('[data-act="ed-ppgroup"][data-g="lists"]'); must((await text(".pp")).includes("Reviews"), "no lists: " + await text(".pp"));
+  await page.click('.pp [data-act="ed-goto-item"][data-hash="reviews"]'); await settle(1200); must(await page.inputValue(".pagepick") === "reviews", "went to " + await page.inputValue(".pagepick"));
+});
+await check("Searching the page picker finds an article, and Enter opens it", async () => {
+  await page.click(".ed-pagebtn"); await page.fill("#pp-q", "palette"); await settle(200);
+  must(await page.locator(".pp-all .pp-item:not([hidden])").count() > 0, "nothing found"); await page.keyboard.press("Enter"); await settle(1200);
+  must((await page.inputValue(".pagepick")).startsWith("a-"), "opened " + await page.inputValue(".pagepick"));
+  await page.selectOption(".pagepick", "home"); await settle(1200);
+});
+await check("With the inspector off the page is shown as a visitor sees it, and on again it can be edited", async () => {
+  await page.click(".insp"); await settle(1500); must(await frame("worldartreview.com").evaluate(() => !window.ADH_EDIT), "still in editing mode");
+  await page.click(".insp"); await settle(2000); must(await frame("worldartreview.com").evaluate(() => !!window.ADH_EDIT), "editing did not come back");
+});
+await check("More has View the live page, and Edit code waits for a later step", async () => {
+  await page.click('[data-act="ed-pop"][data-menu="more"]'); const t = await text(".ed-pop"); await shot("02c-more");
+  must(t.includes("View the live page") && t.includes("Edit code") && t.includes("Keyboard shortcuts"), "menu: " + t); must(await page.isDisabled('.ed-pop .pp-item:has-text("Edit code")'), "Edit code works already");
+  await page.keyboard.press("Escape"); must(!(await page.isVisible(".ed-pop")), "Escape did not close it");
+});
+await check("The site button lists the live site and the trial copies", async () => {
+  await page.click(".ed-sitebtn"); must((await text(".ed-pop")).includes("Live site"), "no live site"); await page.click(".ed-mid", { position: { x: 60, y: 6 } }); must(!(await page.isVisible(".ed-pop")), "a click outside did not close it");
+});
+area = "Page editor, World Art Review";
 await check("Text that looks like code is shown as words, never run", async () => {
   await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await page.fill('[data-pf="eyebrow"]', '<img src=x onerror="window.__hacked=1"><script>window.__hacked=1</script>'); await settle(700);
   const hacked = await frame("worldartreview.com").evaluate(() => !!window.__hacked); must(!hacked, "the code ran in the preview"); await page.click('[data-act="ed-discard"]');
@@ -174,7 +213,7 @@ await check("A shared picture can be changed from the home page and says where e
 
 // =============== 3. Articles, portfolios and sources ===============
 area = "Articles, portfolios, sources";
-await check("New article without a title is refused", async () => { await page.click('[data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="article"]'); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(300); must(/title/i.test(await notice()), "notice: " + await notice()); });
+await check("New article without a title is refused", async () => { await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="article"]'); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(300); must(/title/i.test(await notice()), "notice: " + await notice()); });
 await check("New article with an existing title gets its own web address", async () => {
   await page.fill("#nw-title", "Understanding palette-knife painting"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1200);
   must(await page.inputValue(".pagepick") === "a-understanding-palette-knife-painting", "address: " + await page.inputValue(".pagepick"));
@@ -190,7 +229,7 @@ await check("Deleting an article asks first, and Undo brings it back", async () 
   await page.click('[data-act="undo-step"]'); await page.click('[data-act="livesave"]'); await settle(2500); must(read(WR, "content/site.json").articles.some((x) => x.slug === "understanding-palette-knife-painting"), "not back");
 });
 await check("A new source with a link that is not https is refused", async () => {
-  await page.click('[data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="source"]'); await page.fill("#nw-title", "A source"); await page.fill("#nw-url", "javascript:alert(1)");
+  await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="source"]'); await page.fill("#nw-title", "A source"); await page.fill("#nw-url", "javascript:alert(1)");
   await page.click('form[data-form="ednew"] button[type=submit]'); await settle(300); must(/https/i.test(await notice()), "notice: " + await notice()); await page.click('[data-act="ed-panel-close"]');
 });
 await check("Citing a source before clicking in the text explains what to do", async () => {
@@ -219,7 +258,7 @@ if (ONLY && ONLY.includes(area)) await openSite("world-art-review");
 await check("A trial copy needs a name", async () => { await page.click('.ed-top [data-tab="overview"]'); await page.waitForSelector("#copy-name"); await page.fill("#copy-name", ""); await page.click('form[data-form="copy"] button[type=submit]'); await settle(500); must(/name/i.test(await notice()), "notice: " + await notice()); });
 await check("Making a trial copy switches to it", async () => { await page.fill("#copy-name", "Spring look"); await page.click('form[data-form="copy"] button[type=submit]'); await page.waitForSelector("text=You are working on this", { timeout: 9000 }); await settle(800); must((await text("body")).includes("Spring look"), "no copy"); await shot("04-copies"); });
 await check("Saving on a trial copy does not ask and does not touch the live site", async () => {
-  await page.click('[data-tab="pages"]'); await page.waitForSelector("#ed-sections .sec", { timeout: 9000 }); await settle(1500);
+  await goTab(page, "pages"); await page.waitForSelector("#ed-sections .sec", { timeout: 9000 }); await settle(1500);
   await page.selectOption(".pagepick", "home"); await settle(1200);
   await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await page.fill('[data-pf="eyebrow"]', "Spring numbers"); await settle(300); await page.click('[data-act="ed-save"]');
   await page.waitForSelector("text=Saved on this copy", { timeout: 9000 }); must(!JSON.stringify(read(WR, "content/pages.json")).includes("Spring numbers"), "reached live");
@@ -239,7 +278,7 @@ await check("Deleting a trial copy asks first", async () => {
 
 // =============== 5. Files ===============
 area = "Files";
-await check("Files lists every photo with where it is used", async () => { await page.click('.navb[data-tab="files"]'); await page.waitForSelector(".filecard", { timeout: 9000 }); const n = await page.locator(".filecard").count(); must(n >= 2, n + " photos"); await shot("05-files"); });
+await check("Files lists every photo with where it is used", async () => { await goTab(page, "files"); await page.waitForSelector(".filecard", { timeout: 9000 }); const n = await page.locator(".filecard").count(); must(n >= 2, n + " photos"); await shot("05-files"); });
 await check("Photos cannot be added until each has a description", async () => { await page.setInputFiles('[data-change="files-add"]', [(FIX + "/studio.jpg")]); await page.waitForSelector(".addrow"); must(await page.isDisabled('[data-act="files-send"]'), "button enabled"); await page.click('[data-act="fadd-drop"]'); });
 await check("A photo in use cannot be deleted", async () => { const t = await page.locator(".filecard").first().innerText(); must(t.includes("cannot be deleted") || !t.includes("Used in"), "deletable while used"); });
 await check("Replacing a JPG with a PNG is refused with a reason", async () => {
@@ -256,9 +295,9 @@ await check("A place with no picture can be filled, but needs a description", as
 // =============== 6. Theme ===============
 area = "Theme";
 if (ONLY && ONLY.includes(area)) await openSite("world-art-review");
-await check("Theme tile shows the site's colours", async () => { await page.click('.navb[data-tab="overview"]'); await page.waitForSelector(".tile .swatches i"); });
+await check("Theme tile shows the site's colours", async () => { await goTab(page, "overview"); await page.waitForSelector(".tile .swatches i"); });
 await check("A colour that is hard to read is flagged", async () => {
-  await page.click('.navb[data-tab="theme"]'); await page.waitForSelector("[data-theme-hex]", { timeout: 9000 }); const hex = page.locator("[data-theme-hex]").nth(3); await hex.fill("#EEE5D4"); await settle(400);
+  await goTab(page, "theme"); await page.waitForSelector("[data-theme-hex]", { timeout: 9000 }); const hex = page.locator("[data-theme-hex]").nth(3); await hex.fill("#EEE5D4"); await settle(400);
   must(/hard to read/i.test(await text("body")), "no warning"); await shot("06-theme");
 });
 await check("A colour code that is not real is ignored", async () => { const hex = page.locator("[data-theme-hex]").nth(0); await hex.fill("#ZZZ"); await settle(300); await page.click('[data-act="theme-discard"]').catch(() => {}); });
@@ -372,7 +411,7 @@ await check("The panel's own tools: eye, copy, move and bin", async () => {
   must(!(await page.$("#ed-float")), "the floating bar is still over the page");
 });
 await check("A new page takes the opening banner, which replaces the menu bar there, and two Featured artists", async () => {
-  await page.click('[data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Exhibition"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1200);
+  await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Exhibition"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1200);
   const groups = await (await page.click('.addl[data-act="ed-secpicker"]'), page.$$eval(".pk-gl", (x) => x.map((e) => e.textContent).join("|")));
   must(groups === "Top of the page|Words|Pictures|Art and artists|Reading and trust|Contact and sign-up", groups);
   must((await page.$$(".pk-item[disabled]")).length === 0, "something is greyed out");
@@ -388,7 +427,7 @@ await check("A new page takes the opening banner, which replaces the menu bar th
 });
 await check("Global Art Monitor: two results tables and a contact form on a new page, each with its own names", async () => {
   await openSite("global-art-monitor");
-  await page.click('[data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Market desk"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1200);
+  await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Market desk"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1200);
   for (const k of ["results-table", "results-table", "contact-form"]) { await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="' + k + '"]'); await settle(400); }
   await settle(1500); const f = frame("globalartmonitor.com");
   const r = await f.evaluate(() => { const g = [...document.querySelectorAll("[data-filter-group]")], t = g.map((x) => document.getElementById(x.getAttribute("data-filter-group")));
@@ -402,7 +441,7 @@ await check("Global Art Monitor: two results tables and a contact form on a new 
 
 // =============== 6c. New sections, batch 1 ===============
 area = "New sections: batch 1";
-const newPage = async (title) => { await page.click('[data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", title); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1200); };
+const newPage = async (title) => { await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", title); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1200); };
 const addSec = async (key, at) => { await page.click(at == null ? '.addl[data-act="ed-secpicker"]' : "#ed-sections > .ins >> nth=" + at); await page.click('.pk-item[data-key="' + key + '"]'); await settle(400); };
 await check("An announcement bar with two messages sits above the menu bar, and each message is its own block", async () => {
   await openSite("world-art-review"); await newPage("Notices"); await addSec("announcement", 0);
@@ -543,7 +582,7 @@ await check("Global Art Monitor: the sign-up says it opens the visitor's email a
 area = "People";
 const goHome = async () => { await page.reload(); await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); await settle(600); };
 await check("The admin invites an editor for one site, and the normal sign-in email is sent", async () => {
-  await goHome(); await page.click('[data-tab="people"]'); await page.waitForSelector(".prow"); await settle(500);
+  await goHome(); await goTab(page, "people"); await page.waitForSelector(".prow"); await settle(500);
   must((await text("body")).includes("No editors yet"), "an empty list should say so");
   await page.click('[data-act="people-invite"]'); await page.fill("#pi-email", "Editor@Example.org"); await page.fill("#pi-name", "Edie Tor");
   await page.check('form[data-form="invite"] input[value="world-art-review"]'); await page.click('form[data-form="invite"] button[type=submit]'); await settle(900);
@@ -567,7 +606,7 @@ await check("An editor sees only their sites, and no People screen", async () =>
   } finally { signedIn = "tester@artiscope.co.uk"; }
 });
 await check("Removing someone asks once, and they are turned away from their next click", async () => {
-  await goHome(); await page.click('[data-tab="people"]'); await page.waitForSelector('.prow[data-email="editor@example.org"]');
+  await goHome(); await goTab(page, "people"); await page.waitForSelector('.prow[data-email="editor@example.org"]');
   await page.click('.prow[data-email="editor@example.org"]'); await page.click('[data-act="people-remove"]'); await settle(300);
   must(ppl.table.length === 1, "removed before the second press");
   await page.click('[data-act="people-remove-yes"]'); await settle(900); must(ppl.table.length === 0, "not removed");
@@ -578,7 +617,7 @@ await check("Removing someone asks once, and they are turned away from their nex
 
 let edVersion = "", edBefore = "";
 await check("An editor gets their own copy, saves, then saves and publishes, and the live site changes", async () => {
-  await page.click('[data-tab="people"]'); await page.waitForSelector(".prow"); await page.click('[data-act="people-invite"]');
+  await goTab(page, "people"); await page.waitForSelector(".prow"); await page.click('[data-act="people-invite"]');
   await page.fill("#pi-email", "writer@example.org"); await page.check('form[data-form="invite"] input[value="world-art-review"]');
   await page.click('form[data-form="invite"] button[type=submit]'); await settle(900);
   const tag = (ppl.table.find((p) => p.email === "writer@example.org") || {}).id; must(!!tag, "not invited");
@@ -609,7 +648,7 @@ await check("The admin sees the editor's new version on All sites, with its note
   const nv = await text(".newv").catch(() => "");
   must(nv.includes("World Art Review " + edVersion) && nv.includes("Two spaces for breathing room."), "no notice of the new version " + edVersion + ": " + nv.slice(0, 120)); await shot("27-new-version");
   await page.click('.newv [data-act="v-seen"]'); await settle(300); must(!(await page.$(".newv")), "Seen did not put it away");
-  await openSite("world-art-review"); await page.click('[data-tab="versions"]'); await page.waitForSelector(".vrow");
+  await openSite("world-art-review"); await goTab(page, "versions"); await page.waitForSelector(".vrow");
   const nums = await page.$$eval(".vnum", (x) => x.map((e) => e.textContent)); must(nums[0] === edVersion && nums.includes(edBefore.slice(1)), "versions shown: " + nums);
   const before = read(WR, "content/pages.json").pages.home.sections.length;
   await page.click('[data-act="ask-goback"][data-v="' + edBefore.slice(1) + '"]'); await page.click('.ask [data-act="goback"]'); await settle(2500);
@@ -693,7 +732,7 @@ await check("Opening Street Art Dispatch goes straight to the page editor with t
   await page.evaluate(() => { window.__adh.state.leave = null; window.__adh.state.dirty = false; const p = window.__adh.pgOf(); if (p) p.dirty = false; });
   await openSite("street-art-dispatch"); must(!!SF(), "no preview"); await shot("40-sad-editor");
 });
-await check("Menu has Overview, Pages, Theme, Files, Versions and History, and no Content", async () => { const t = await text(".rail"); must(["Overview", "Pages", "Theme", "Files", "Versions", "History"].every((w) => t.includes(w)) && !t.includes("Content"), "menu: " + t.replace(/\n/g, " ")); });
+await check("Exit leads to the menu: Overview, Pages, Theme, Files, Versions and History, and no Content", async () => { await page.click(".ed-exit"); await page.waitForSelector(".rail"); const t = await text(".rail"); await page.click('.navb[data-tab="pages"]'); await page.waitForSelector("#ed-sections .sec"); await settle(2500); must(["Overview", "Pages", "Theme", "Files", "Versions", "History"].every((w) => t.includes(w)) && !t.includes("Content"), "menu: " + t.replace(/\n/g, " ")); });
 await check("Its own sections are listed, and clicking one on the page opens its settings", async () => {
   const t = await text("#ed-sections"); must(["Opening banner", "Article cards", "Intervention archive", "Collecting band", "Email sign-up"].every((w) => t.includes(w)), "list: " + t.replace(/\n/g, " "));
   await SF().click("#heroTitle"); await page.waitForSelector(".ed-right h2:has-text('Opening banner')");

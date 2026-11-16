@@ -1,4 +1,4 @@
-import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, goTab } from "./where.mjs";
 // The Theme screen, the real-site preview and the easier lists, in a real browser.
 // Run: PLAYWRIGHT=<path to playwright> node tests/theme.mjs
 import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict"; import { spawn, execFileSync } from "node:child_process";
@@ -19,7 +19,7 @@ try {
   const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
   await page.route((u) => !u.hostname.includes("localhost"), (r) => r.abort());
   await page.goto(consoleAt + "/index.html?demo&preview=" + encodeURIComponent(siteAt));
-  await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="world-art-review"]'); await page.waitForSelector('[data-tab="theme"]');
+  await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="world-art-review"]'); await page.waitForSelector('[data-tab="overview"]');
 
   // the console and the server work the theme out the same way
   for (const s of SITES.filter((x) => x.theme)) {
@@ -28,7 +28,7 @@ try {
     assert.deepEqual(await page.evaluate(([a, b]) => window.__adh.themeCss(a, b), [spec, vals]), themeCss(s.theme, vals), s.id);
   }
 
-  await page.click('[data-tab="theme"]'); await page.waitForSelector("#pv-live:not([hidden])", { timeout: 9000 });
+  await goTab(page, "theme"); await page.waitForSelector("#pv-live:not([hidden])", { timeout: 9000 });
   assert.ok((await page.innerText("#pv-note")).includes("real homepage"));
   const frame = page.frames().find((f) => f.url().startsWith(siteAt));
   const band = () => frame.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--green").trim());
@@ -77,13 +77,13 @@ try {
   await page.locator(".egroup:not([hidden]) input[type=text]").first().fill("Life story");
   await page.click('.seg.wide button >> nth=0'); await page.fill("#f-0", "Zara M");
   await page.screenshot({ path: "/tmp/editor-parts.png" });
-  await page.click('[data-tab="files"]');
+  await goTab(page, "files");
   assert.ok(await page.isVisible("text=You have changes that are not saved yet"));
   assert.equal(await page.inputValue("#f-0"), "Zara M", "typing survives the question");
   await page.click('[data-act="leave-stay"]'); assert.equal(await page.inputValue("#f-0"), "Zara M");
   const sent = await page.evaluate(() => { window.__adh.render(); return window.__adh.state.draft.values; });
   assert.equal(sent["sections.0.title"], "Life story"); assert.equal(sent.name, "Zara M");
-  await page.click('[data-tab="files"]'); await page.click('[data-act="leave-go"]'); await page.waitForSelector(".files");
+  await goTab(page, "files"); await page.click('[data-act="leave-go"]'); await page.waitForSelector(".files");
   assert.equal(await page.evaluate(() => window.__adh.state.tab), "files");
   // long lists open short, and search looks through all of them
   await page.evaluate(() => window.__adh.go("content")); await page.waitForSelector("#clist"); await page.click('[data-act="ctab"][data-i="0"]');
@@ -100,6 +100,6 @@ try {
 
   // phone width: nothing runs off the side
   await page.setViewportSize({ width: 390, height: 800 });
-  for (const tab of ["theme", "files"]) { await page.click('[data-tab="' + tab + '"]'); await page.waitForTimeout(400); const wide = await page.evaluate(() => document.documentElement.scrollWidth <= 392 ? "" : ([...document.querySelectorAll("#app *")].filter((e) => e.getBoundingClientRect().right > 392).slice(0, 6).map((e) => e.tagName + "." + e.className + "#" + e.id + " " + Math.round(e.getBoundingClientRect().right)).join(" | ") || "page " + document.documentElement.scrollWidth)); assert.equal(wide, "", tab + " fits a phone"); }
+  for (const tab of ["theme", "files"]) { await goTab(page, tab); await page.waitForTimeout(400); const wide = await page.evaluate(() => document.documentElement.scrollWidth <= 392 ? "" : ([...document.querySelectorAll("#app *")].filter((e) => e.getBoundingClientRect().right > 392).slice(0, 6).map((e) => e.tagName + "." + e.className + "#" + e.id + " " + Math.round(e.getBoundingClientRect().right)).join(" | ") || "page " + document.documentElement.scrollWidth)); assert.equal(wide, "", tab + " fits a phone"); }
   console.log("theme and editor: all good");
 } finally { await browser.close(); servers.forEach((s) => s.kill()); }

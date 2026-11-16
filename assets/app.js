@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "34";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "35";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -224,7 +224,20 @@
     calendar: "M4 6h16v14H4z M4 10h16 M8 3.5v4 M16 3.5v4",
     mail: "M3.5 6h17v12h-17z M4 6.5l8 6.5 8-6.5",
     pin: "M12 20.5s-6-5.6-6-10.5a6 6 0 0 1 12 0c0 4.9-6 10.5-6 10.5z M12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
-    block: "M4 5h16v14H4z"
+    block: "M4 5h16v14H4z",
+    exit: "M10 5H5v14h5 M14 8l-4 4 4 4 M10 12h10",
+    layout: "M4 4h16v5H4z M4 11h16v9H4z",
+    palette: "M12 4a8 8 0 1 1 0 16a8 8 0 1 1 0-16z M9 8.8a1.2 1.2 0 1 1 0 2.4a1.2 1.2 0 1 1 0-2.4z M14.5 7.8a1.2 1.2 0 1 1 0 2.4a1.2 1.2 0 1 1 0-2.4z M12 20a2.5 2.5 0 0 1 0-5h2a3 3 0 0 0 3-3",
+    addons: "M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M16.5 13.5v6 M13.5 16.5h6",
+    cursor: "M5 5l6 14 2-6 6-2z",
+    undo: "M8 8H5V5 M5.5 8.5A8 8 0 1 1 12 20",
+    redo: "M16 8h3V5 M18.5 8.5A8 8 0 1 0 12 20",
+    dots: "M6 10.8a1.2 1.2 0 1 1 0 2.4a1.2 1.2 0 1 1 0-2.4z M12 10.8a1.2 1.2 0 1 1 0 2.4a1.2 1.2 0 1 1 0-2.4z M18 10.8a1.2 1.2 0 1 1 0 2.4a1.2 1.2 0 1 1 0-2.4z",
+    home: "M4 11l8-7 8 7 M6 10v10h12V10",
+    keys: "M3.5 7h17v10h-17z M7 10.5h1 M10.5 10.5h1 M14 10.5h1 M17 10.5h.5 M7.5 14h9",
+    help: "M12 3.5a8.5 8.5 0 1 1 0 17a8.5 8.5 0 1 1 0-17z M9.6 9.5a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8v.4 M12 17h.01",
+    code: "M9 7l-5 5 5 5 M15 7l5 5-5 5",
+    globe: "M12 3.5a8.5 8.5 0 1 1 0 17a8.5 8.5 0 1 1 0-17z M3.5 12h17 M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"
   };
   function ic(name, size) { var z = size || 16; return '<svg class="i" width="' + z + '" height="' + z + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + (IC[name] || IC.block) + '"></path></svg>'; }
   // Which icon stands for each kind of section, on both sites.
@@ -270,7 +283,7 @@
   function firstTab(x) { return hasScreen(x, "pages") ? "pages" : "content"; }
   function photosTab(s) { return s && s.files ? "files" : "photos"; }
   function navIndex(tab) { var i = navItems().findIndex(function (n) { return n[0] === tab; }); return i < 0 ? 0 : i; }
-  function mark() { return '<svg width="20" height="20" viewBox="0 0 26 26"><path d="M2 24V10l11-9 11 9v14z" fill="#FFFFFF"></path><rect x="10" y="14" width="6" height="10" fill="#52057B"></rect></svg>'; }
+  function mark() { return '<svg width="20" height="20" viewBox="0 0 26 26"><path d="M2 24V10l11-9 11 9v14z" fill="#1C1D20"></path><rect x="10" y="14" width="6" height="10" fill="#E6E8EB"></rect></svg>'; }
 
   // The floating bar: which site, and what state its changes are in.
   function islandBusy() { return state.status !== "live" || (curCopy().kind === "trial" && curCopy().ahead > 0); }
@@ -278,7 +291,7 @@
     var s = site(), list = copiesOf(s), c = curCopy(), trial = c.kind === "trial", busy = state.status === "saving";
     if (!state.inSite || !s) {
       var ppl = state.tab === "people";
-      return '<span class="dot" aria-hidden="true" style="background:#C9C2D3"></span><b class="island-name">' + (ppl ? "People" : "All sites") + '</b><span class="small">' + (state.status === "saving" ? "Saving" : state.flash || (ppl ? "Who can sign in, and which sites they work on" : "Pick a site to work on")) + '</span>';
+      return '<span class="dot" aria-hidden="true" style="background:#9A9EA6"></span><b class="island-name">' + (ppl ? "People" : "All sites") + '</b><span class="small">' + (state.status === "saving" ? "Saving" : state.flash || (ppl ? "Who can sign in, and which sites they work on" : "Pick a site to work on")) + '</span>';
     }
     var copyPick = list.length > 1 && isAdmin()
       ? '<label class="small" for="copy-pick" style="position:absolute;left:-9999px">Working on</label><select id="copy-pick" class="copypick" data-change="copy">' +
@@ -288,7 +301,7 @@
     var canUndo = trial ? c.ahead > 0 : (c.steps && c.steps.length > 0);
     var act = !isAdmin() && c.behind && !busy ? '<button type="button" class="soft slim" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Bring my copy up to date</button>' + (c.ahead ? '<button type="button" class="btn slim" data-act="ask-makelive">Publish</button>' : "")
       : trial && c.ahead && !busy ? '<button type="button" class="btn slim" data-act="ask-makelive">' + (isAdmin() ? "Make live" : "Publish") + '</button>'
-      : '<span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#52057B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>';
+      : '<span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#3DDC84" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>';
     return '<span class="dot" aria-hidden="true" style="background:' + (s ? colours(s.id)[0] : "#C9C2D3") + '"></span>' +
       '<b class="island-name">' + esc(s.name) + '</b>' + copyPick +
       '<button type="button" class="soft slim" data-act="undo-step"' + (canUndo && !busy ? "" : " disabled") + '>Undo</button>' +
@@ -925,53 +938,139 @@
   // What each site calls an artist's page.
   function artistsWord(pgd) { return pgd.model === "sad" ? "Artist profiles" : pgd.gam ? "Artist market profiles" : "Artist portfolios"; }
   function artistWord(pgd) { return pgd.model === "sad" ? "Artist profile" : pgd.gam ? "Artist market profile" : "Artist portfolio"; }
-  // Pages, lists, articles and portfolios, for the picker at the top.
-  function pagePicker(pgd) {
-    var cur = atHash(pgd), o = function (v, label) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + '>' + esc(label) + '</option>'; };
-    var pages = Object.keys(pgd.doc.pages).map(function (k) { return o(k === "home" ? "home" : "page-" + k, shortTitle(pgd, pgd.doc.pages[k].title) || k); }).join("");
-    var lists = Object.keys(pgd.lists).map(function (k) { return o(k, pgd.lists[k].label); }).join("");
-    var out = '<optgroup label="Pages">' + pages + '</optgroup>' + (lists ? '<optgroup label="Lists">' + lists + '</optgroup>' : "");
-    if (pgd.site) {
-      var arts = pgd.site.articles.slice().sort(function (a, b) { return String(a.title).localeCompare(String(b.title)); });
-      out += '<optgroup label="Articles">' + arts.map(function (a) { return o("a-" + a.slug, a.title + (a.hidden ? " (hidden)" : "")); }).join("") + '</optgroup>';
-      out += '<optgroup label="' + artistsWord(pgd) + '">' + pgd.site.artists.map(function (a) { return o("artist-" + a.slug, a.name + (pgd.gam || a.published ? "" : " (not published)")); }).join("") + '</optgroup>';
-      if (pgd.gam) out += '<optgroup label="Across the site">' + o("site-details", pgd.model === "sad" ? "Issue details, archive and glossary" : "Site details, sections and glossary") + '</optgroup>';
-    }
-    if (atKind(pgd) === "other") out += o(cur, pageLabel(pgd) + " (not editable here)");
-    return '<select class="box pagepick" data-change="ed-goto" aria-label="Page being edited">' + out + '</select>';
-  }
+
 
   function viewLeave() {
     return state.leave ? '<div class="sunk stack ask"><b>You have changes that are not saved yet.</b>' +
       '<div class="row"><button type="button" class="btn" data-act="leave-save">Save</button><button type="button" class="soft" data-act="leave-go">Leave without saving</button><button type="button" class="linklike" data-act="leave-stay">Keep editing</button></div></div>' : "";
   }
+  function edClass(pgd, right) { return "ed" + (right ? " with-right" : "") + (pgd && pgd.leftHidden ? " noleft" : "") + (pgd && pgd.inspector === false ? " noinsp" : ""); }
+  // The editor's left column: the sections of the page, the theme settings or the add-ons.
+  function edLeft(pgd) {
+    var p = pgd.leftPanel || "sections";
+    if (p === "theme") return '<div class="lpanel"><h2 class="lt">Theme settings</h2><p class="small">Colours and typefaces for the whole site. They move into this panel in a later step. Until then they are on the Theme screen.</p><button type="button" class="soft" data-tab="theme">Open the Theme screen</button></div>';
+    if (p === "addons") return '<div class="lpanel"><h2 class="lt">Add-ons</h2><p class="small">Extra pieces for the pages of the site will be listed here. They come in a later step.</p></div>';
+    return edList(pgd);
+  }
+  function edFrameSrc(pgd) {
+    if (pgd.inspector !== false) return pgd.preview;
+    if (pgd.gam) return pgd.preview; // the site opens at its home page
+    var h = atHash(pgd); return pgd.preview.replace(/#.*$/, "") + (h && h !== "home" ? "#" + h : "");
+  }
   function viewPagesEditor(s) {
     var pgd = pgOf();
-    if (!pgd) return '<div class="ed">' + viewRail(navHtml()) + '<div class="ed-top">' + edTop(s, null) + '</div><p class="loading" style="grid-column:1/-1">Reading the pages of ' + esc(s.name) + '</p></div>';
+    if (!pgd) return '<div class="ed noleft"><div class="ed-top">' + edTop(s, null) + '</div><p class="loading" style="grid-column:1/-1">Reading the pages of ' + esc(s.name) + '</p></div>';
     var right = edRight(pgd);
-    return '<div class="ed' + (right ? " with-right" : "") + '">' + viewRail(navHtml()) +
+    return '<div class="' + edClass(pgd, right) + '">' +
       '<div class="ed-top">' + edTop(s, pgd) + '</div>' +
-      '<div class="ed-left">' + edList(pgd) + '</div>' +
+      '<div class="ed-left">' + edLeft(pgd) + '</div>' +
       '<div class="ed-mid">' + viewLeave() + viewAsk() + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
-        '<div class="ed-frame ' + esc(pgd.mode) + '"><iframe id="ed-frame" title="The page being edited" src="' + esc(pgd.preview) + '"></iframe></div><div id="ed-pick">' + edPicker(pgd) + '</div></div>' +
+        '<div class="ed-frame ' + esc(pgd.mode) + '"><iframe id="ed-frame" title="The page being edited" src="' + esc(edFrameSrc(pgd)) + '"></iframe></div><div id="ed-pick">' + edPicker(pgd) + '</div></div>' +
       (right ? '<div class="ed-right">' + right + '</div>' : "") + '</div>';
   }
+
+  // Pages, lists, articles and portfolios, grouped for the page picker at the top.
+  function pageGroups(pgd) {
+    var o = function (v, label) { return { v: v, label: label }; }, g = [];
+    g.push({ id: "pages", label: "Pages", icon: "doc", items: Object.keys(pgd.doc.pages).map(function (k) { return o(k === "home" ? "home" : "page-" + k, shortTitle(pgd, pgd.doc.pages[k].title) || k); }) });
+    var lists = Object.keys(pgd.lists).map(function (k) { return o(k, pgd.lists[k].label); });
+    if (lists.length) g.push({ id: "lists", label: "Lists", icon: "list", items: lists });
+    if (pgd.site) {
+      var arts = pgd.site.articles.slice().sort(function (a, b) { return String(a.title).localeCompare(String(b.title)); });
+      g.push({ id: "articles", label: "Articles", icon: "book", items: arts.map(function (a) { return o("a-" + a.slug, a.title + (a.hidden ? " (hidden)" : "")); }) });
+      g.push({ id: "artists", label: artistsWord(pgd), icon: "person", items: pgd.site.artists.map(function (a) { return o("artist-" + a.slug, a.name + (pgd.gam || a.published ? "" : " (not published)")); }) });
+      if (pgd.gam) g.push({ id: "site", label: "Across the site", icon: "gear", items: [o("site-details", pgd.model === "sad" ? "Issue details, archive and glossary" : "Site details, sections and glossary")] });
+    }
+    return g;
+  }
+  // The plain list behind the picker. It stays on the page, out of sight, so keyboards and checks can still use it.
+  function pagePicker(pgd) {
+    var cur = atHash(pgd), o = function (x) { return '<option value="' + esc(x.v) + '"' + (x.v === cur ? " selected" : "") + '>' + esc(x.label) + '</option>'; };
+    var out = pageGroups(pgd).map(function (g) { return '<optgroup label="' + esc(g.label) + '">' + g.items.map(o).join("") + '</optgroup>'; }).join("");
+    if (atKind(pgd) === "other") out += o({ v: cur, label: pageLabel(pgd) + " (not editable here)" });
+    return '<select class="box pagepick" data-change="ed-goto" aria-label="Page being edited" tabindex="-1" aria-hidden="true">' + out + '</select>';
+  }
+  function pageIcon(pgd) { var k = atKind(pgd); return k === "page" ? (atKey(pgd) === "home" ? "home" : "doc") : { list: "list", article: "book", artist: "person", site: "gear" }[k] || "doc"; }
+  // The page picker: a search box, the kinds of page, then the pages of one kind.
+  function pagePop(pgd) {
+    var cur = atHash(pgd), groups = pageGroups(pgd), g = groups.find(function (x) { return x.id === state.ppGroup; });
+    var item = function (grp) { return function (x) {
+      return '<button type="button" class="pp-item' + (x.v === cur ? " on" : "") + '" data-act="ed-goto-item" data-hash="' + esc(x.v) + '" data-q="' + esc((x.label + " " + grp.label).toLowerCase()) + '">' + ic(grp.icon) + '<span class="t">' + esc(x.label) + '</span>' + (x.v === cur ? '<em>Open now</em>' : "") + '</button>'; }; };
+    var level = g ? '<button type="button" class="pp-back" data-act="ed-ppgroup" data-g="">All kinds of page</button><p class="cap">' + esc(g.label) + '</p>' + g.items.map(item(g)).join("")
+      : groups.map(function (x) { return '<button type="button" class="pp-item" data-act="ed-ppgroup" data-g="' + x.id + '">' + ic(x.icon) + '<span class="t">' + esc(x.label) + '</span><span class="count">' + x.items.length + '</span></button>'; }).join("");
+    return '<div class="ed-pop pp" role="dialog" aria-label="Choose the page to edit">' +
+      '<label class="pp-search">' + ic("search") + '<input type="text" id="pp-q" placeholder="Search pages, articles and artists" autocomplete="off" aria-label="Search pages"></label>' +
+      '<div class="pp-lvl">' + level + '</div>' +
+      '<div class="pp-all" hidden>' + groups.map(function (x) { return x.items.map(item(x)).join(""); }).join("") + '<p class="small pp-none" hidden>Nothing matches that.</p></div>' +
+      '<button type="button" class="pp-item pp-new" data-act="ed-new">' + ic("plus") + '<span class="t">Make something new</span></button></div>';
+  }
+  // The web address of this page on the live site.
+  function liveHref(s, pgd) {
+    var base = "https://" + String(s.domain || "").replace(/^https?:\/\//, "").replace(/\/+$/, "") + "/";
+    if (!pgd) return base;
+    var k = atKind(pgd), key = atKey(pgd);
+    if (!pgd.gam) { var h = atHash(pgd); return h === "home" || h === "site-details" ? base : base + "#" + h; }
+    if (k === "page") return base + String((pgd.doc.pages[key] || {}).path || "").replace(/index\.html$/, "");
+    if (k === "artist") return base + "artists/" + key + "/";
+    if (k === "article") { var a = itemOf(pgd) || {}; return base + (pgd.model === "sad" ? (a.section || "dispatches") : "research") + "/" + key + "/"; }
+    return base;
+  }
+  var ED_KEYS = [["Ctrl+Alt+1", "Sections"], ["Ctrl+Alt+2", "Theme settings"], ["Ctrl+Alt+3", "Add-ons"], ["Alt+Shift+I", "Inspector on or off"], ["Escape", "Close a menu"]];
+  function sitePop(s) {
+    var c = curCopy(), list = isAdmin() ? copiesOf(s) : [c];
+    return '<div class="ed-pop sp" role="dialog" aria-label="Which copy you are working on"><p class="cap">Working on</p>' +
+      list.map(function (x) {
+        var nm = !isAdmin() ? "Your copy" : x.kind === "live" ? "Live site" : "Trial: " + x.name;
+        return '<button type="button" class="pp-item' + (x.id === c.id ? " on" : "") + '" data-act="ed-copy" data-copy="' + esc(x.kind === "live" ? "" : x.id) + '"><i class="lamp ' + (x.kind === "live" ? "g" : "a") + '" aria-hidden="true"></i><span class="t">' + esc(nm) + '</span>' + (x.id === c.id ? '<em>Open now</em>' : "") + '</button>';
+      }).join("") +
+      '<button type="button" class="pp-item" data-tab="overview">' + ic("copy") + '<span class="t">' + (isAdmin() ? "Live site and trial copies" : "About your copy") + '</span></button></div>';
+  }
+  function morePop(s, pgd) {
+    var keys = state.edMenu === "keys", help = state.edMenu === "help";
+    var body = keys ? '<p class="cap">Keyboard shortcuts</p>' + ED_KEYS.map(function (k) { return '<div class="pp-item still"><span class="t">' + esc(k[1]) + '</span><span class="kbd">' + esc(k[0]) + '</span></div>'; }).join("")
+      : help ? '<p class="cap">Help</p><p class="pop-note">Click a part of the page, or a row on the left, to change it. Save keeps your changes on the copy you are working on. On a trial copy, Make live puts them on the site.</p><p class="pop-note">The hover outlines and clicks on the page come from the inspector. Turn it off to use the page as a visitor would.</p>'
+      : '<a class="pp-item" href="' + esc(liveHref(s, pgd)) + '" target="_blank" rel="noopener">' + ic("globe") + '<span class="t">View the live page</span></a>' +
+        '<button type="button" class="pp-item" disabled>' + ic("code") + '<span class="t">Edit code</span><em>Later step</em></button>' +
+        '<button type="button" class="pp-item" disabled>' + ic("text") + '<span class="t">Edit default text</span><em>Later step</em></button>' +
+        '<button type="button" class="pp-item" data-act="ed-pop" data-menu="help">' + ic("help") + '<span class="t">Help</span></button>' +
+        '<button type="button" class="pp-item" data-act="ed-pop" data-menu="keys">' + ic("keys") + '<span class="t">Keyboard shortcuts</span></button>';
+    return '<div class="ed-pop mp" role="dialog" aria-label="More">' + (keys || help ? '<button type="button" class="pp-back" data-act="ed-pop" data-menu="more">Back to More</button>' : "") + body +
+      '<p class="pop-foot"><span>' + esc(s.name) + ' theme</span><span>Version ' + VERSION + '</span></p></div>';
+  }
+  function savePop(s, pgd, c) {
+    var dirty = pgd && pgd.dirty, trial = c.kind === "trial", out = "";
+    if (dirty) out += '<button type="button" class="pp-item" data-act="ed-save">' + ic("doc") + '<span class="t">Save</span></button>';
+    if (dirty && !isAdmin()) out += '<button type="button" class="pp-item" data-act="ed-save-publish">' + ic("globe") + '<span class="t">Save and publish</span></button>';
+    if (!dirty && trial && c.ahead) out += '<button type="button" class="pp-item" data-act="ask-makelive">' + ic("globe") + '<span class="t">' + (isAdmin() ? "Make live" : "Publish") + '</span></button>';
+    if (!isAdmin() && c.behind) out += '<button type="button" class="pp-item" data-act="refresh-copy" data-copy="' + esc(c.id) + '">' + ic("copy") + '<span class="t">Bring my copy up to date</span></button>';
+    if (dirty) out += '<button type="button" class="pp-item danger" data-act="ed-discard">' + ic("bin") + '<span class="t">Discard changes</span></button>';
+    out += '<button type="button" class="pp-item" data-tab="versions">' + ic("clock") + '<span class="t">See the versions</span></button>';
+    return '<div class="ed-pop svp" role="dialog" aria-label="Other ways to save">' + out + '</div>';
+  }
+  // The top bar of the page editor.
   function edTop(s, pgd) {
-    var c = curCopy(), trial = c.kind === "trial", saving = state.status === "saving";
-    var said = saving ? "Saving" : pgd && pgd.dirty ? "Edited, not saved" : state.flash || (isAdmin() ? (trial ? (c.ahead ? c.ahead + (c.ahead === 1 ? " change" : " changes") + " on this copy" : "Same as the live site") : "Live site") : copyWords(c));
-    var dot = saving || (pgd && pgd.dirty) ? "warn" : trial ? "trial" : "live";
-    return '<div class="lefty"><button type="button" class="ed-site" data-tab="overview" title="Back to the overview">' + esc(s.name) + '</button>' +
-      (copiesOf(s).length > 1 && isAdmin() ? '<select class="copypick" data-change="copy" aria-label="Working on">' + copiesOf(s).map(function (x) { return '<option value="' + esc(x.kind === "live" ? "" : x.id) + '"' + (x.id === c.id ? " selected" : "") + '>' + esc(x.kind === "live" ? "Live site" : "Trial: " + x.name) + '</option>'; }).join("") + '</select>' : '<span class="chip quiet">' + (!isAdmin() ? "Your copy" : trial ? "Trial: " + esc(c.name) : "Live site") + '</span>') + '</div>' +
-      '<div class="mid">' + (pgd ? pagePicker(pgd) + '<button type="button" class="ib" data-act="ed-new" aria-label="New page, article, artist or source" title="New page, article, artist or source">' + ic("plus", 18) + '</button>' : "") +
-        '<div class="seg mini icons"><button type="button" class="' + (!pgd || pgd.mode === "computer" ? "on" : "") + '" data-act="ed-mode" data-mode="computer" aria-label="Computer view" title="Computer view">' + ic("monitor", 18) + '</button><button type="button" class="' + (pgd && pgd.mode === "phone" ? "on" : "") + '" data-act="ed-mode" data-mode="phone" aria-label="Phone view" title="Phone view">' + ic("phone", 18) + '</button></div></div>' +
-      '<div class="righty"><button type="button" class="plain" data-act="undo-step"' + ((trial ? c.ahead > 0 : (c.steps || []).length > 0) && !saving ? "" : " disabled") + '>Undo</button>' +
-      '<button type="button" class="plain" data-act="redo-step"' + (c.canRedo && !saving ? "" : " disabled") + '>Redo</button>' +
-      '<span class="state"><i class="sdot ' + dot + '" aria-hidden="true"></i><span id="island-text">' + esc(said) + '</span></span>' +
-      (pgd && pgd.dirty ? '<button type="button" class="plain" data-act="ed-discard">Discard</button>' +
-          (isAdmin() ? '<button type="button" class="btn" data-act="ed-save"' + (saving ? " disabled" : "") + '>Save</button>'
-            : '<button type="button" class="soft" data-act="ed-save"' + (saving ? " disabled" : "") + '>Save</button><button type="button" class="btn" data-act="ed-save-publish"' + (saving ? " disabled" : "") + '>Save and publish</button>')
-        : !isAdmin() && c.behind ? '<button type="button" class="soft" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Bring my copy up to date</button>' + (c.ahead ? '<button type="button" class="btn" data-act="ask-makelive">Publish</button>' : "")
-        : trial && c.ahead ? '<button type="button" class="btn" data-act="ask-makelive">' + (isAdmin() ? "Make live" : "Publish") + '</button>' : "") + '</div>';
+    var c = curCopy(), trial = c.kind === "trial", saving = state.status === "saving", dirty = !!(pgd && pgd.dirty), m = state.edMenu || "";
+    var said = saving ? "Saving" : dirty ? "Edited, not saved" : state.flash || (isAdmin() ? (trial ? (c.ahead ? c.ahead + (c.ahead === 1 ? " change" : " changes") + " on this copy" : "Same as the live site") : "Live site") : copyWords(c));
+    var lamp = saving || dirty ? "a" : trial ? "a" : "g", panel = pgd ? pgd.leftPanel || "sections" : "sections", leftOn = pgd ? !pgd.leftHidden : true;
+    var sw = function (id, icon, label, key) { var on = leftOn && panel === id; return '<button type="button" class="tb' + (on ? " on" : "") + '" data-act="ed-panel" data-panel="' + id + '" aria-pressed="' + on + '" aria-label="' + label + '" data-tip="' + label + '" data-key="' + key + '">' + ic(icon, 17) + '</button>'; };
+    var insp = !pgd || pgd.inspector !== false;
+    return '<div class="lefty"><button type="button" class="tb word ed-exit" data-tab="overview" title="Back to the overview">' + ic("exit", 17) + '<span>Exit</span></button>' +
+        '<div class="seg tbs" role="group" aria-label="Left panel">' + sw("sections", "layout", "Sections", "Ctrl+Alt+1") + sw("theme", "palette", "Theme settings", "Ctrl+Alt+2") + sw("addons", "addons", "Add-ons", "Ctrl+Alt+3") + '</div></div>' +
+      '<div class="mid">' +
+        '<span class="popat"><button type="button" class="tb word ed-sitebtn' + (m === "site" ? " on" : "") + '" data-act="ed-pop" data-menu="site" aria-haspopup="dialog" aria-expanded="' + (m === "site") + '"><span class="ed-site">' + esc(s.name) + '</span><i class="lamp ' + lamp + '" aria-hidden="true"></i><span class="state" id="island-text" title="' + esc(said) + '">' + esc(said) + '</span></button>' + (m === "site" ? sitePop(s) : "") + '</span>' +
+        (pgd ? '<span class="popat"><button type="button" class="tb word ed-pagebtn' + (m === "page" ? " on" : "") + '" data-act="ed-pop" data-menu="page" aria-haspopup="dialog" aria-expanded="' + (m === "page") + '">' + ic(pageIcon(pgd), 16) + '<span class="pn">' + esc(pageLabel(pgd)) + '</span><span class="ch">Change</span></button>' + pagePicker(pgd) + (m === "page" ? pagePop(pgd) : "") + '</span>' : "") +
+      '</div>' +
+      '<div class="righty">' +
+        '<button type="button" class="tb word insp" data-act="ed-inspector" role="switch" aria-checked="' + insp + '" title="Inspector: pick parts of the page by clicking them (Alt+Shift+I)">' + ic("cursor", 16) + '<span class="lbl">Inspector</span><span class="sw2' + (insp ? "" : " off") + '" aria-hidden="true"><i></i></span></button>' +
+        '<div class="seg tbs" role="group" aria-label="Screen size"><button type="button" class="tb word' + (!pgd || pgd.mode === "computer" ? " on" : "") + '" data-act="ed-mode" data-mode="computer" aria-label="Computer view" title="Computer view">' + ic("monitor", 17) + '<span class="lbl">Computer</span></button><button type="button" class="tb word' + (pgd && pgd.mode === "phone" ? " on" : "") + '" data-act="ed-mode" data-mode="phone" aria-label="Phone view" title="Phone view">' + ic("phone", 17) + '<span class="lbl">Phone</span></button></div>' +
+        '<button type="button" class="tb word" data-act="undo-step" aria-label="Undo" title="Undo"' + ((trial ? c.ahead > 0 : (c.steps || []).length > 0) && !saving ? "" : " disabled") + '>' + ic("undo", 16) + '<span class="lbl">Undo</span></button>' +
+        '<button type="button" class="tb word" data-act="redo-step" aria-label="Redo" title="Redo"' + (c.canRedo && !saving ? "" : " disabled") + '>' + ic("redo", 16) + '<span class="lbl">Redo</span></button>' +
+        '<span class="popat"><button type="button" class="tb word' + (m === "more" || m === "keys" || m === "help" ? " on" : "") + '" data-act="ed-pop" data-menu="more" aria-haspopup="dialog" aria-label="More" title="More">' + ic("dots", 17) + '<span class="lbl">More</span></button>' + (m === "more" || m === "keys" || m === "help" ? morePop(s, pgd) : "") + '</span>' +
+        (dirty ? '<button type="button" class="tb word" data-act="ed-discard">Discard</button>' + (!isAdmin() ? '<button type="button" class="tb word" data-act="ed-save-publish"' + (saving ? " disabled" : "") + '>Save and publish</button>' : "")
+          : !isAdmin() && c.behind ? '<button type="button" class="tb word" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Bring my copy up to date</button>' + (c.ahead ? '<button type="button" class="tb word" data-act="ask-makelive">Publish</button>' : "")
+          : trial && c.ahead ? '<button type="button" class="tb word" data-act="ask-makelive">' + (isAdmin() ? "Make live" : "Publish") + '</button>' : "") +
+        '<span class="popat split"><button type="button" class="btn" data-act="ed-save"' + (dirty && !saving ? "" : " disabled") + '>Save</button><button type="button" class="btn sm" data-act="ed-pop" data-menu="save" aria-haspopup="dialog" aria-label="Other ways to save" title="Other ways to save">' + ic("dots", 16) + '</button>' + (m === "save" ? savePop(s, pgd, c) : "") + '</span>' +
+      '</div>';
   }
   // The eye and the bin on a row of the list. The bin only on what can be removed.
   function rowTools(pgd, where, id, bf, block, off, canHide, canDel, word) {
@@ -1374,7 +1473,7 @@
   }
   var pushTimer = null;
   function pushPreview(pick) {
-    var pgd = pgOf(), frame = app.querySelector && app.querySelector("#ed-frame"); if (!pgd || !frame || !frame.contentWindow) return;
+    var pgd = pgOf(), frame = app.querySelector && app.querySelector("#ed-frame"); if (!pgd || !frame || !frame.contentWindow || pgd.inspector === false) return;
     var sel = pgSel(pgd), images = {};
     Object.keys(pgd.uploads || {}).forEach(function (k) { images[k] = pgd.uploads[k].dataUrl; });
     var block = -1, label = "", bf = "", bi = -1;
@@ -1414,14 +1513,30 @@
       var moved = secs.splice(from, 1)[0]; secs.splice(to, 0, moved); dragId = null; pgMark(pgd); edPatch(); pushPreview();
     });
   }
+  // The three switches at the top left: Sections, Theme settings, Add-ons. The one already open hides the column.
+  function edPanel(p) {
+    var pgd = pgOf(); if (!pgd || !p) return;
+    if ((pgd.leftPanel || "sections") === p && !pgd.leftHidden) pgd.leftHidden = true;
+    else { pgd.leftPanel = p; pgd.leftHidden = false; }
+    edPatch();
+  }
+  // With the inspector off, the page is shown as a visitor sees it: links work and clicks pick nothing.
+  // Turning it back on loads the page again with the changes not yet saved.
+  function edInspector() {
+    var pgd = pgOf(); if (!pgd) return;
+    pgd.inspector = pgd.inspector === false;
+    pgd.sent = false;
+    var fr = app.querySelector && app.querySelector("#ed-frame"); if (fr) fr.src = edFrameSrc(pgd);
+    edPatch();
+  }
   // Redraws the editor's panels without touching the page in the middle, which would reload it.
   function edPatch() {
     var ed = app.querySelector && app.querySelector(".ed"), s = site(), pgd = pgOf();
     if (!ed || !s || !pgd) { render(); return; }
     var right = edRight(pgd);
-    ed.className = "ed" + (right ? " with-right" : "");
+    ed.className = edClass(pgd, right);
     ed.querySelector(".ed-top").innerHTML = edTop(s, pgd);
-    ed.querySelector(".ed-left").innerHTML = edList(pgd);
+    ed.querySelector(".ed-left").innerHTML = edLeft(pgd);
     var rp = ed.querySelector(".ed-right");
     if (right) { if (!rp) { rp = document.createElement("div"); rp.className = "ed-right"; ed.appendChild(rp); } rp.innerHTML = right; }
     else if (rp) rp.remove();
@@ -1429,6 +1544,7 @@
     mid.insertAdjacentHTML("afterbegin", viewLeave() + viewAsk() + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : ""));
     var pkb = ed.querySelector("#ed-pick"); if (pkb) pkb.innerHTML = edPicker(pgd);
     mountRich(); mountDrag();
+    var onRow = ed.querySelector(".ed-left .sec.on"); if (onRow && right && typeof onRow.scrollIntoView === "function") onRow.scrollIntoView({ block: "nearest" });
   }
   function edRemember() { var s = site(), p = pgOf(); if (s && p) state.edPrefs[s.id] = { mode: p.mode, page: p.page, sel: p.sel, at: p.at }; }
   function pickSection(id, block, fromPage, where, bf) {
@@ -1962,7 +2078,7 @@
         (!live && c.ahead ? '<button type="button" class="soft slim" data-act="ask-big" data-kind="makelive" data-copy="' + esc(c.id) + '">Make this the live site</button>' : "") +
         (!live && c.behind ? '<button type="button" class="linklike small" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Refresh from live</button>' : "") +
         (!live ? '<button type="button" class="linklike small" data-act="ask-big" data-kind="deletecopy" data-copy="' + esc(c.id) + '">Delete</button>' : "");
-      return '<div class="card copycard' + (on ? " on" : "") + '"><div class="copytop" style="background:' + (live ? tone[0] : "#F1E6FC") + ';color:' + (live ? tone[1] : "#52057B") + '"><span>' + (live ? "Live site" : "Trial copy") + '</span></div>' +
+      return '<div class="card copycard' + (on ? " on" : "") + '"><div class="copytop" style="background:' + (live ? tone[0] : "#1E1F22") + ';color:' + (live ? tone[1] : "#F2B33D") + '"><span>' + (live ? "Live site" : "Trial copy") + '</span></div>' +
         '<div class="stack copybody"><b class="copyname">' + esc(live ? "What visitors see" : c.name) + '</b>' +
         '<span class="small">' + esc(live ? (s ? s.domain : "") : (c.since ? "Copied from live on " + when(c.since).split(",")[0] : "A copy of the live site")) + '</span>' +
         lines.map(function (l) { return '<span>' + esc(l) + '</span>'; }).join("") + '<div class="row">' + acts + '</div></div></div>';
@@ -2252,7 +2368,7 @@
     if (tab === "home" || tab === "people") { state.inSite = false; }
     else if (site()) state.place[site().id] = tab;
     state.prevTab = state.tab; state.tab = tab; state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.notice = null;
-    state.csearch = ""; state.cmore = false;
+    state.csearch = ""; state.cmore = false; state.edMenu = "";
     if (state.status === "saved") state.status = "live";
     state.flash = ""; state.ask = null;
     render(); ensure();
@@ -2372,9 +2488,20 @@
 
   app.addEventListener("click", function (ev) {
     var rt = ev.target.closest("[data-rt]"); if (rt && rt.dataset && rt.dataset.rt) { state.dirty = true; richCmd(rt); return; }
-    var el = ev.target.closest("[data-tab],[data-act]"); if (!el) return;
+    var el = ev.target.closest("[data-tab],[data-act]");
+    if (state.edMenu) {
+      var inPop = ev.target.closest(".ed-pop"), keep = el && (el.dataset.act === "ed-pop" || el.dataset.act === "ed-ppgroup");
+      if (!keep && (!inPop || el)) { state.edMenu = ""; if (!el) { patchEdTop(); return; } if (!el.dataset.tab && ["ed-goto-item", "ed-copy", "ed-new", "ed-discard", "ed-save", "ed-save-publish", "ask-makelive", "refresh-copy"].indexOf(el.dataset.act) < 0) patchEdTop(); }
+    }
+    if (!el) return;
     if (el.dataset.tab) { var to = el.dataset.tab; guard(function () { go(to); }); return; }
     var a = el.dataset.act, s = site();
+    if (a === "ed-pop") { var wm = el.dataset.menu; state.edMenu = state.edMenu === wm || (wm === "more" && (state.edMenu === "keys" || state.edMenu === "help") && !ev.target.closest(".ed-pop")) ? "" : wm; if (wm === "page") state.ppGroup = ""; patchEdTop(); if (state.edMenu === "page") { var q = app.querySelector("#pp-q"); if (q) q.focus(); } return; }
+    if (a === "ed-ppgroup") { state.ppGroup = el.dataset.g || ""; patchEdTop(); var q2 = app.querySelector("#pp-q"); if (q2) q2.focus(); return; }
+    if (a === "ed-goto-item") { var gh = el.dataset.hash; navTo(gh); return; }
+    if (a === "ed-copy") { var cid = el.dataset.copy || ""; guard(function () { workOn(cid); }); return; }
+    if (a === "ed-panel") { edPanel(el.dataset.panel); return; }
+    if (a === "ed-inspector") { edInspector(); return; }
     if (a === "refresh") { state.content = {}; state.history = {}; if (state.people) state.people.list = null; load(); }
     else if (a === "v-notes") { var vs = state.versions[state.site]; if (vs) { vs.open = vs.open === el.dataset.v ? "" : el.dataset.v; render(); } }
     else if (a === "v-archive") { var va = state.versions[state.site]; if (va) { va.archive = !va.archive; render(); } }
@@ -2662,8 +2789,25 @@
   }
   app.addEventListener("mouseover", function (ev) { var b = ev.target.closest && ev.target.closest(".pk-item"); if (b) pickerHover(b); });
   app.addEventListener("focusin", function (ev) { var b = ev.target.closest && ev.target.closest(".pk-item"); if (b) pickerHover(b); });
+  if (typeof document.addEventListener === "function") document.addEventListener("keydown", function (ev) {
+    if (state.tab !== "pages" || !pgOf()) return;
+    if (ev.key === "Escape" && state.edMenu) { state.edMenu = ""; patchEdTop(); var mb = app.querySelector(".ed-pagebtn"); if (mb) mb.focus(); return; }
+    if (ev.key === "Enter" && ev.target.id === "pp-q") { var first = app.querySelector(".pp-all .pp-item:not([hidden])"); if (first) { ev.preventDefault(); first.click(); } return; }
+    var typing = ev.target && (ev.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName || ""));
+    if (typing) return; // AltGr is Ctrl+Alt on many keyboards, so leave typing alone
+    var digit = /^Digit([123])$/.exec(ev.code || "");
+    if (ev.ctrlKey && ev.altKey && !ev.shiftKey && digit) { ev.preventDefault(); edPanel(["sections", "theme", "addons"][Number(digit[1]) - 1]); return; }
+    if (ev.altKey && ev.shiftKey && !ev.ctrlKey && !ev.metaKey && ev.code === "KeyI") { ev.preventDefault(); edInspector(); }
+  });
   app.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && app.querySelector && app.querySelector(".pk")) { var pe2 = pgOf(); if (pe2) { pe2.picker2 = null; edPatch(); } } });
   app.addEventListener("input", function (ev) {
+    if (ev.target.id === "pp-q") {
+      var pq = ev.target.value.trim().toLowerCase(), pop = ev.target.closest(".pp"), hits = 0; if (!pop) return;
+      pop.querySelector(".pp-lvl").hidden = !!pq; pop.querySelector(".pp-all").hidden = !pq;
+      Array.prototype.forEach.call(pop.querySelectorAll(".pp-all .pp-item"), function (b) { var hit = !!pq && b.dataset.q.indexOf(pq) >= 0; b.hidden = !hit; if (hit) hits++; });
+      pop.querySelector(".pp-none").hidden = !pq || hits > 0;
+      return;
+    }
     if (ev.target.dataset && ev.target.dataset.pickQ) {
       var words = ev.target.value.trim().toLowerCase(), any = false;
       Array.prototype.forEach.call(app.querySelectorAll(".pk-grp"), function (g) { var shown = 0; Array.prototype.forEach.call(g.querySelectorAll(".pk-item"), function (b) { var hit = !words || b.dataset.words.indexOf(words) >= 0; b.hidden = !hit; if (hit) shown++; }); g.hidden = !shown; if (shown) any = true; });
