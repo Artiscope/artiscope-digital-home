@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "35";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "36";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -283,7 +283,7 @@
   function firstTab(x) { return hasScreen(x, "pages") ? "pages" : "content"; }
   function photosTab(s) { return s && s.files ? "files" : "photos"; }
   function navIndex(tab) { var i = navItems().findIndex(function (n) { return n[0] === tab; }); return i < 0 ? 0 : i; }
-  function mark() { return '<svg width="20" height="20" viewBox="0 0 26 26"><path d="M2 24V10l11-9 11 9v14z" fill="#1C1D20"></path><rect x="10" y="14" width="6" height="10" fill="#E6E8EB"></rect></svg>'; }
+  function mark() { return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#F2F3F5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7"></path><path d="M6 10v10h12V10"></path><path d="M10 20v-5h4v5"></path></svg>'; }
 
   // The floating bar: which site, and what state its changes are in.
   function islandBusy() { return state.status !== "live" || (curCopy().kind === "trial" && curCopy().ahead > 0); }
@@ -996,12 +996,12 @@
     var cur = atHash(pgd), groups = pageGroups(pgd), g = groups.find(function (x) { return x.id === state.ppGroup; });
     var item = function (grp) { return function (x) {
       return '<button type="button" class="pp-item' + (x.v === cur ? " on" : "") + '" data-act="ed-goto-item" data-hash="' + esc(x.v) + '" data-q="' + esc((x.label + " " + grp.label).toLowerCase()) + '">' + ic(grp.icon) + '<span class="t">' + esc(x.label) + '</span>' + (x.v === cur ? '<em>Open now</em>' : "") + '</button>'; }; };
-    var level = g ? '<button type="button" class="pp-back" data-act="ed-ppgroup" data-g="">All kinds of page</button><p class="cap">' + esc(g.label) + '</p>' + g.items.map(item(g)).join("")
-      : groups.map(function (x) { return '<button type="button" class="pp-item" data-act="ed-ppgroup" data-g="' + x.id + '">' + ic(x.icon) + '<span class="t">' + esc(x.label) + '</span><span class="count">' + x.items.length + '</span></button>'; }).join("");
+    var level = g ? '<button type="button" class="pp-back" data-act="ed-ppgroup" data-g="">All kinds of page</button><p class="cap">' + esc(g.label) + '</p>' + g.items.filter(function (x) { return x.v !== "home"; }).map(item(g)).join("")
+      : item({ label: "Home page", icon: "home" })({ v: "home", label: "Home page" }) + groups.map(function (x) { var n = x.id === "pages" ? x.items.length - 1 : x.items.length; return '<button type="button" class="pp-item" data-act="ed-ppgroup" data-g="' + x.id + '">' + ic(x.icon) + '<span class="t">' + esc(x.label) + '</span><span class="count">' + n + '</span></button>'; }).join("");
     return '<div class="ed-pop pp" role="dialog" aria-label="Choose the page to edit">' +
       '<label class="pp-search">' + ic("search") + '<input type="text" id="pp-q" placeholder="Search pages, articles and artists" autocomplete="off" aria-label="Search pages"></label>' +
       '<div class="pp-lvl">' + level + '</div>' +
-      '<div class="pp-all" hidden>' + groups.map(function (x) { return x.items.map(item(x)).join(""); }).join("") + '<p class="small pp-none" hidden>Nothing matches that.</p></div>' +
+      '<div class="pp-all" hidden>' + groups.map(function (x) { return x.items.map(function (y) { return y.v === "home" ? item({ label: "Home page", icon: "home" })({ v: "home", label: "Home page" }) : item(x)(y); }).join(""); }).join("") + '<p class="small pp-none" hidden>Nothing matches that.</p></div>' +
       '<button type="button" class="pp-item pp-new" data-act="ed-new">' + ic("plus") + '<span class="t">Make something new</span></button></div>';
   }
   // The web address of this page on the live site.
@@ -1015,7 +1015,9 @@
     if (k === "article") { var a = itemOf(pgd) || {}; return base + (pgd.model === "sad" ? (a.section || "dispatches") : "research") + "/" + key + "/"; }
     return base;
   }
-  var ED_KEYS = [["Ctrl+Alt+1", "Sections"], ["Ctrl+Alt+2", "Theme settings"], ["Ctrl+Alt+3", "Add-ons"], ["Alt+Shift+I", "Inspector on or off"], ["Escape", "Close a menu"]];
+  var ED_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
+  var ED_CTRL = ED_MAC ? "Cmd" : "Ctrl";
+  var ED_KEYS = [[ED_CTRL + "+Alt+1", "Sections"], [ED_CTRL + "+Alt+2", "Theme settings"], [ED_CTRL + "+Alt+3", "Add-ons"], [ED_CTRL + "+Shift+I, or Alt+Shift+I", "Inspector on or off"], ["Escape", "Close a menu"]];
   function sitePop(s) {
     var c = curCopy(), list = isAdmin() ? copiesOf(s) : [c];
     return '<div class="ed-pop sp" role="dialog" aria-label="Which copy you are working on"><p class="cap">Working on</p>' +
@@ -1029,16 +1031,16 @@
     var keys = state.edMenu === "keys", help = state.edMenu === "help";
     var body = keys ? '<p class="cap">Keyboard shortcuts</p>' + ED_KEYS.map(function (k) { return '<div class="pp-item still"><span class="t">' + esc(k[1]) + '</span><span class="kbd">' + esc(k[0]) + '</span></div>'; }).join("")
       : help ? '<p class="cap">Help</p><p class="pop-note">Click a part of the page, or a row on the left, to change it. Save keeps your changes on the copy you are working on. On a trial copy, Make live puts them on the site.</p><p class="pop-note">The hover outlines and clicks on the page come from the inspector. Turn it off to use the page as a visitor would.</p>'
-      : '<a class="pp-item" href="' + esc(liveHref(s, pgd)) + '" target="_blank" rel="noopener">' + ic("globe") + '<span class="t">View the live page</span></a>' +
-        '<button type="button" class="pp-item" disabled>' + ic("code") + '<span class="t">Edit code</span><em>Later step</em></button>' +
+      : '<button type="button" class="pp-item" disabled>' + ic("code") + '<span class="t">Edit code</span><em>Later step</em></button>' +
         '<button type="button" class="pp-item" disabled>' + ic("text") + '<span class="t">Edit default text</span><em>Later step</em></button>' +
+        '<a class="pp-item" href="' + esc(liveHref(s, pgd)) + '" target="_blank" rel="noopener">' + ic("globe") + '<span class="t">View the live page</span></a>' +
         '<button type="button" class="pp-item" data-act="ed-pop" data-menu="help">' + ic("help") + '<span class="t">Help</span></button>' +
         '<button type="button" class="pp-item" data-act="ed-pop" data-menu="keys">' + ic("keys") + '<span class="t">Keyboard shortcuts</span></button>';
     return '<div class="ed-pop mp" role="dialog" aria-label="More">' + (keys || help ? '<button type="button" class="pp-back" data-act="ed-pop" data-menu="more">Back to More</button>' : "") + body +
       '<p class="pop-foot"><span>' + esc(s.name) + ' theme</span><span>Version ' + VERSION + '</span></p></div>';
   }
   function savePop(s, pgd, c) {
-    var dirty = pgd && pgd.dirty, trial = c.kind === "trial", out = "";
+    var dirty = pgd && pgd.dirty, trial = c.kind === "trial", out = '<button type="button" class="pp-item" disabled>' + ic("calendar") + '<span class="t">Publish later</span><em>Later step</em></button>';
     if (dirty) out += '<button type="button" class="pp-item" data-act="ed-save">' + ic("doc") + '<span class="t">Save</span></button>';
     if (dirty && !isAdmin()) out += '<button type="button" class="pp-item" data-act="ed-save-publish">' + ic("globe") + '<span class="t">Save and publish</span></button>';
     if (!dirty && trial && c.ahead) out += '<button type="button" class="pp-item" data-act="ask-makelive">' + ic("globe") + '<span class="t">' + (isAdmin() ? "Make live" : "Publish") + '</span></button>';
@@ -1050,18 +1052,19 @@
   // The top bar of the page editor.
   function edTop(s, pgd) {
     var c = curCopy(), trial = c.kind === "trial", saving = state.status === "saving", dirty = !!(pgd && pgd.dirty), m = state.edMenu || "";
-    var said = saving ? "Saving" : dirty ? "Edited, not saved" : state.flash || (isAdmin() ? (trial ? (c.ahead ? c.ahead + (c.ahead === 1 ? " change" : " changes") + " on this copy" : "Same as the live site") : "Live site") : copyWords(c));
-    var lamp = saving || dirty ? "a" : trial ? "a" : "g", panel = pgd ? pgd.leftPanel || "sections" : "sections", leftOn = pgd ? !pgd.leftHidden : true;
+    var n = function (x) { return x + (x === 1 ? " change" : " changes"); };
+    var said = saving ? "Saving" : dirty ? "Edited, not saved" : state.flash || (!isAdmin() && c.behind ? "The live site has moved on" : trial || !isAdmin() ? (c.ahead ? n(c.ahead) + (isAdmin() ? " on this copy" : " not published yet") : "Same as the live site") : "All saved");
+    var copyName = !isAdmin() ? "Your copy" : trial ? "Trial copy: " + c.name : "Live", panel = pgd ? pgd.leftPanel || "sections" : "sections", leftOn = pgd ? !pgd.leftHidden : true;
     var sw = function (id, icon, label, key) { var on = leftOn && panel === id; return '<button type="button" class="tb' + (on ? " on" : "") + '" data-act="ed-panel" data-panel="' + id + '" aria-pressed="' + on + '" aria-label="' + label + '" data-tip="' + label + '" data-key="' + key + '">' + ic(icon, 17) + '</button>'; };
     var insp = !pgd || pgd.inspector !== false;
     return '<div class="lefty"><button type="button" class="tb word ed-exit" data-tab="overview" title="Back to the overview">' + ic("exit", 17) + '<span>Exit</span></button>' +
-        '<div class="seg tbs" role="group" aria-label="Left panel">' + sw("sections", "layout", "Sections", "Ctrl+Alt+1") + sw("theme", "palette", "Theme settings", "Ctrl+Alt+2") + sw("addons", "addons", "Add-ons", "Ctrl+Alt+3") + '</div></div>' +
+        '<div class="seg tbs" role="group" aria-label="Left panel">' + sw("sections", "layout", "Sections", ED_CTRL + "+Alt+1") + sw("theme", "palette", "Theme settings", ED_CTRL + "+Alt+2") + sw("addons", "addons", "Add-ons", ED_CTRL + "+Alt+3") + '</div></div>' +
       '<div class="mid">' +
-        '<span class="popat"><button type="button" class="tb word ed-sitebtn' + (m === "site" ? " on" : "") + '" data-act="ed-pop" data-menu="site" aria-haspopup="dialog" aria-expanded="' + (m === "site") + '"><span class="ed-site">' + esc(s.name) + '</span><i class="lamp ' + lamp + '" aria-hidden="true"></i><span class="state" id="island-text" title="' + esc(said) + '">' + esc(said) + '</span></button>' + (m === "site" ? sitePop(s) : "") + '</span>' +
+        '<span class="popat"><button type="button" class="tb word ed-sitebtn' + (m === "site" ? " on" : "") + '" data-act="ed-pop" data-menu="site" aria-haspopup="dialog" aria-expanded="' + (m === "site") + '"><span class="ed-site">' + esc(s.name) + '</span><i class="lamp ' + (trial ? "a" : "g") + '" aria-hidden="true"></i><span class="copyname" title="' + esc(copyName) + '">' + esc(copyName) + '</span></button>' + (m === "site" ? sitePop(s) : "") + '</span>' +
         (pgd ? '<span class="popat"><button type="button" class="tb word ed-pagebtn' + (m === "page" ? " on" : "") + '" data-act="ed-pop" data-menu="page" aria-haspopup="dialog" aria-expanded="' + (m === "page") + '">' + ic(pageIcon(pgd), 16) + '<span class="pn">' + esc(pageLabel(pgd)) + '</span><span class="ch">Change</span></button>' + pagePicker(pgd) + (m === "page" ? pagePop(pgd) : "") + '</span>' : "") +
       '</div>' +
       '<div class="righty">' +
-        '<button type="button" class="tb word insp" data-act="ed-inspector" role="switch" aria-checked="' + insp + '" title="Inspector: pick parts of the page by clicking them (Alt+Shift+I)">' + ic("cursor", 16) + '<span class="lbl">Inspector</span><span class="sw2' + (insp ? "" : " off") + '" aria-hidden="true"><i></i></span></button>' +
+        '<button type="button" class="tb word insp" data-act="ed-inspector" role="switch" aria-checked="' + insp + '" title="Inspector: pick parts of the page by clicking them (' + ED_CTRL + '+Shift+I)">' + ic("cursor", 16) + '<span class="lbl">Inspector</span><span class="sw2' + (insp ? "" : " off") + '" aria-hidden="true"><i></i></span></button>' +
         '<div class="seg tbs" role="group" aria-label="Screen size"><button type="button" class="tb word' + (!pgd || pgd.mode === "computer" ? " on" : "") + '" data-act="ed-mode" data-mode="computer" aria-label="Computer view" title="Computer view">' + ic("monitor", 17) + '<span class="lbl">Computer</span></button><button type="button" class="tb word' + (pgd && pgd.mode === "phone" ? " on" : "") + '" data-act="ed-mode" data-mode="phone" aria-label="Phone view" title="Phone view">' + ic("phone", 17) + '<span class="lbl">Phone</span></button></div>' +
         '<button type="button" class="tb word" data-act="undo-step" aria-label="Undo" title="Undo"' + ((trial ? c.ahead > 0 : (c.steps || []).length > 0) && !saving ? "" : " disabled") + '>' + ic("undo", 16) + '<span class="lbl">Undo</span></button>' +
         '<button type="button" class="tb word" data-act="redo-step" aria-label="Redo" title="Redo"' + (c.canRedo && !saving ? "" : " disabled") + '>' + ic("redo", 16) + '<span class="lbl">Redo</span></button>' +
@@ -1069,6 +1072,7 @@
         (dirty ? '<button type="button" class="tb word" data-act="ed-discard">Discard</button>' + (!isAdmin() ? '<button type="button" class="tb word" data-act="ed-save-publish"' + (saving ? " disabled" : "") + '>Save and publish</button>' : "")
           : !isAdmin() && c.behind ? '<button type="button" class="tb word" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Bring my copy up to date</button>' + (c.ahead ? '<button type="button" class="tb word" data-act="ask-makelive">Publish</button>' : "")
           : trial && c.ahead ? '<button type="button" class="tb word" data-act="ask-makelive">' + (isAdmin() ? "Make live" : "Publish") + '</button>' : "") +
+        '<span class="state" id="island-text" title="' + esc(said) + '">' + (dirty || saving ? '<i class="lamp a" aria-hidden="true"></i>' : "") + esc(said) + '</span>' +
         '<span class="popat split"><button type="button" class="btn" data-act="ed-save"' + (dirty && !saving ? "" : " disabled") + '>Save</button><button type="button" class="btn sm" data-act="ed-pop" data-menu="save" aria-haspopup="dialog" aria-label="Other ways to save" title="Other ways to save">' + ic("dots", 16) + '</button>' + (m === "save" ? savePop(s, pgd, c) : "") + '</span>' +
       '</div>';
   }
@@ -1877,7 +1881,7 @@
       '<h1>' + esc(e.title) + '</h1><p>' + esc(s.name) + (e.hidden ? ". Hidden from the site at the moment." : "") + '</p></div>' +
       leaving +
       '<form class="card stack-wide" data-form="entry">' + (fields || '<p class="muted">Nothing on this entry can be edited here yet.</p>') +
-        '<div class="savebar"><button type="submit" class="btn"' + (busy ? " disabled" : "") + '>' + (busy ? "Saving" : "Save") + '</button>' +
+        '<div class="savebar"><button type="submit" class="btn key"' + (busy ? " disabled" : "") + '>' + (busy ? "Saving" : "Save") + '</button>' +
         '<button type="button" class="soft" data-act="close">Cancel</button>' +
         (groups.length > 1 ? '<span class="small">Saves every part of this page, not only the one on screen.</span>' : "") + '</div></form>' + danger;
   }
@@ -1986,7 +1990,7 @@
           '<div class="stack" style="gap:2px"><b class="fname">' + esc(x.name) + '</b><span class="small">' + (x.size ? Math.max(1, Math.round(x.size / 1024)) + " KB" : "") + '</span></div>' +
           (open ? '<form class="stack" data-form="fdesc" data-name="' + esc(x.name) + '"><div class="field"><label for="fd-alt">Describe the picture</label><input type="text" id="fd-alt" name="alt" maxlength="240" value="' + esc(x.alt) + '"><span class="small">Places that show this photo without a description get this one too.</span></div>' +
               '<div class="field"><label for="fd-cap">Caption or credit (optional)</label><input type="text" id="fd-cap" name="caption" maxlength="160" value="' + esc(x.caption) + '"></div>' +
-              '<div class="row"><button type="submit" class="btn slim"' + (state.busy[k] ? " disabled" : "") + '>Save</button><button type="button" class="linklike small" data-act="files-describe" data-name="">Cancel</button></div></form>'
+              '<div class="row"><button type="submit" class="btn slim key"' + (state.busy[k] ? " disabled" : "") + '>Save</button><button type="button" class="linklike small" data-act="files-describe" data-name="">Cancel</button></div></form>'
             : (x.alt ? '<p class="fdesc">' + esc(x.alt) + '</p>' : '<span class="chip warn" style="align-self:flex-start">No description yet</span>') + (x.caption && !open ? '<span class="small">' + esc(x.caption) + '</span>' : "")) +
           '<div class="stack" style="gap:4px"><span class="label">Used in</span>' + used + '</div>' +
           '<div class="row factions">' + actions + '</div>' +
@@ -2217,7 +2221,7 @@
           (!x.lastSeen ? '<div class="row"><button type="button" class="linklike" data-act="people-resend" data-email="' + esc(x.email) + '"' + busy + '>Send the sign-in email again</button></div>' : "") +
           (pp.ask === x.email ? '<div class="pask"><span>Remove ' + esc(x.name || x.email) + '? They will not be able to sign in from their next click. Their copies and everything they saved stay.</span>' +
             '<div class="row"><button type="button" class="btn danger" data-act="people-remove-yes" data-email="' + esc(x.email) + '"' + busy + '>Remove</button><button type="button" class="soft" data-act="people-remove-no">Keep</button></div></div>' : "") +
-          '<div class="row between"><button type="submit" class="btn"' + busy + '>Save changes</button><button type="button" class="linklike danger" data-act="people-remove" data-email="' + esc(x.email) + '">Remove access</button></div></form>';
+          '<div class="row between"><button type="submit" class="btn key"' + busy + '>Save changes</button><button type="button" class="linklike danger" data-act="people-remove" data-email="' + esc(x.email) + '">Remove access</button></div></form>';
       }
     }
     return '<div class="page-head"><h1>People</h1><p>You are the admin. Everyone else is an editor: they work on their own copy of the sites you choose, and can publish it. A change here works from their next click.</p>' +
@@ -2796,8 +2800,9 @@
     var typing = ev.target && (ev.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName || ""));
     if (typing) return; // AltGr is Ctrl+Alt on many keyboards, so leave typing alone
     var digit = /^Digit([123])$/.exec(ev.code || "");
-    if (ev.ctrlKey && ev.altKey && !ev.shiftKey && digit) { ev.preventDefault(); edPanel(["sections", "theme", "addons"][Number(digit[1]) - 1]); return; }
-    if (ev.altKey && ev.shiftKey && !ev.ctrlKey && !ev.metaKey && ev.code === "KeyI") { ev.preventDefault(); edInspector(); }
+    var mod = ev.ctrlKey || ev.metaKey;
+    if (mod && ev.altKey && !ev.shiftKey && digit) { ev.preventDefault(); edPanel(["sections", "theme", "addons"][Number(digit[1]) - 1]); return; }
+    if (ev.shiftKey && ev.code === "KeyI" && ((mod && !ev.altKey) || (ev.altKey && !mod))) { ev.preventDefault(); edInspector(); }
   });
   app.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && app.querySelector && app.querySelector(".pk")) { var pe2 = pgOf(); if (pe2) { pe2.picker2 = null; edPatch(); } } });
   app.addEventListener("input", function (ev) {

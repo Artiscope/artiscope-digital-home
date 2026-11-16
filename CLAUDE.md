@@ -38,7 +38,10 @@ How they like to work. Follow this every time:
   from one charcoal surface #26272B, raised with a soft shadow
   (#18191C dark, #35373C light) or pressed in with an inner one. Text
   #D4D7DC, headings #F2F3F5, muted #9A9EA6. Silver (#F4F5F7 to #B9BDC3,
-  text #1C1D20) only for Save and the main button of a screen. Lamps: green
+  text #1C1D20) only for Save and Publish (Save, Save and publish, Make
+  live, Publish: `.btn.key` or the save actions listed in `app.css`);
+  every other button is raised charcoal and sinks 1px when pressed.
+  Group headings are small capitals. Outline icons only. Lamps: green
   #3DDC84 live, amber #F2B33D unsaved or trial; problems in red #FF7A7A.
   The colours are the variables at the top of `assets/app.css`. Fonts:
   Castoro and Libre Franklin. Icons are line icons in the `IC` set in
@@ -195,7 +198,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (16 November 2026, Version 35)
+## Where things stand (16 November 2026, Version 36)
 
 Done:
 
@@ -267,6 +270,22 @@ Done:
   unsaved changes. Under 1800 pixels wide the settings sit under the list
   in the left column. Theme settings and Add-ons in the left column, Edit
   code and Edit default text are placeholders until their steps (6, 9).
+  Version 36 finished step 1 against the updated brief
+  ("Digital Home page editor: build prompt, Shopify reference and chosen
+  look", 16 November 2026, 49 pages): silver only on Save and Publish,
+  22px corners, small capital headings, no glass, an outline house, the
+  site button says Live, Trial copy: name or Your copy with the save state
+  beside Save, Publish later first in Save's dropdown (a later step), Home
+  page first in the page picker, Cmd on a Mac, Ctrl/Cmd+Shift+I or
+  Alt+Shift+I for the inspector, and charcoal picked outlines and name
+  tags in all four sites' editor link.
+  The owner agreed (16 November): no free images, add-ons only on our own
+  code (no analytics, cookie or review services), own MP4 videos only, no
+  arrows (words instead), Undo means unsaved edits (Go back on Versions
+  for saved ones), Remove without a question, selling-art theme groups
+  marked "Not used on this site", a second shortcut where the browser
+  keeps one, and plain group names (Top of every page, Popups, This page,
+  Bottom of every page).
   Steps 2 to 9 wait for the owner's go ahead, one at a time.
 
 Waiting for the owner:

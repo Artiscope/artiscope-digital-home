@@ -99,7 +99,7 @@ async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).cat
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all six sites, the Practice site among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 6, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 35"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 36"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await goTab(page, "home"); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -156,6 +156,13 @@ await check("More has View the live page, and Edit code waits for a later step",
   await page.click('[data-act="ed-pop"][data-menu="more"]'); const t = await text(".ed-pop"); await shot("02c-more");
   must(t.includes("View the live page") && t.includes("Edit code") && t.includes("Keyboard shortcuts"), "menu: " + t); must(await page.isDisabled('.ed-pop .pp-item:has-text("Edit code")'), "Edit code works already");
   await page.keyboard.press("Escape"); must(!(await page.isVisible(".ed-pop")), "Escape did not close it");
+});
+await check("The site button says Live, the save state sits beside Save, and Save's dropdown starts with Publish later", async () => {
+  must((await text(".ed-sitebtn")).includes("Live"), "site button: " + await text(".ed-sitebtn")); must((await text(".ed-top .righty .state")).length > 0, "no save state beside Save");
+  await page.click('[data-act="ed-pop"][data-menu="save"]'); must((await page.locator(".ed-pop .pp-item").first().innerText()).includes("Publish later"), "first: " + await page.locator(".ed-pop .pp-item").first().innerText()); await page.keyboard.press("Escape");
+});
+await check("The page picker starts with the home page as a row of its own", async () => {
+  await page.click(".ed-pagebtn"); must((await page.locator(".pp-lvl .pp-item").first().innerText()).includes("Home page"), "first row: " + await page.locator(".pp-lvl .pp-item").first().innerText()); await page.keyboard.press("Escape");
 });
 await check("The site button lists the live site and the trial copies", async () => {
   await page.click(".ed-sitebtn"); must((await text(".ed-pop")).includes("Live site"), "no live site"); await page.click(".ed-mid", { position: { x: 60, y: 6 } }); must(!(await page.isVisible(".ed-pop")), "a click outside did not close it");
