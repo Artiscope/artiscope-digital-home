@@ -82,7 +82,7 @@ try {
   await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="article"]');
   await page.fill("#nw-title", "Reading a certificate"); await page.selectOption("#nw-section", "library"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle();
   assert.equal(await hash(), "#a-reading-a-certificate"); assert.ok((await frame().evaluate(() => document.querySelector(".phead h1").textContent)).includes("Reading a certificate"));
-  await page.click('.sec[data-where="item"][data-id="settings"]'); assert.equal(await page.inputValue('[data-pf="hidden"]'), "true");
+  await page.click('.sec[data-where="item"][data-id="settings"]'); assert.equal(await page.isChecked('[data-pf="hidden"]'), true);
   await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Visit us");
   await page.screenshot({ path: shots + "new-page.png" });
   await page.click('form[data-form="ednew"] button[type=submit]'); await settle();

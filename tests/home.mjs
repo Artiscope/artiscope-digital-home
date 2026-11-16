@@ -146,7 +146,7 @@ const WAR_SECTIONS = {
     starter: { image: "", alt: "", caption: "", size: "", bg: "paper" } },
   quote: { label: "Quote", about: "One line, shown large.", summary: (st) => (Array.isArray(st.text) ? st.text[0] : String(st.text || "").split("\n")[0]) || "", library: "A short line that stands out", fields: [{ name: "text", label: "The quote", type: "lines", hint: "Each line of the quote on its own line." }, { name: "who", label: "Who said it", type: "text", hint: "Leave empty to hide." }, BG, FG],
     starter: { text: ["A line worth remembering."], who: "", bg: "green", fg: "" } },
-  articles: { label: "Latest articles", about: "Article cards, filled in from Content.", summary: (st) => ((Number(st.count) || 3) + " from " + (st.section && st.section !== "all" ? st.section : "all")), library: "Fills itself from Content", fields: [EYEBROW, HEADING, { name: "section", label: "Which articles", type: "choice", options: [["all", "All"], ["reviews", "Reviews"], ["explained", "Art explained"], ["library", "Collector's library"], ["features", "Artist portfolios"]] }, { name: "count", label: "How many", type: "number" }, BG, FG],
+  articles: { label: "Latest articles", about: "Article cards, filled in from Content.", summary: (st) => ((Number(st.count) || 3) + " from " + (st.section && st.section !== "all" ? st.section : "all")), library: "Fills itself from Content", fields: [EYEBROW, HEADING, { name: "section", label: "Which articles", type: "choice", options: [["all", "All"], ["reviews", "Reviews"], ["explained", "Art explained"], ["library", "Collector's library"], ["features", "Artist portfolios"]] }, { name: "count", label: "How many", type: "number" }, { type: "info", text: "The cards are filled in from your articles, so their words and pictures are changed there, not here.", go: "content", goLabel: "Open Content" }, BG, FG],
     starter: { eyebrow: "Latest", heading: ["Recent pieces"], section: "all", count: 3, bg: "paper", fg: "" } },
   faq: { label: "Questions and answers", about: "Questions that open to show their answer.", summary: (st) => ((st.items || []).length + " questions"), blocks: { field: "items", label: "Question", add: "Add a question", title: (b) => b.q }, library: "A list that opens and closes", fields: [EYEBROW, HEADING, { name: "items", label: "Questions", type: "rows", fields: [{ name: "q", label: "Question", type: "text", hint: "Keep it short. Visitors click it to open the answer." }, { name: "a", label: "Answer", type: "long" }] }, BG, FG],
     starter: { eyebrow: "", heading: ["Questions"], items: [{ q: "A question?", a: "<p>The answer.</p>" }], bg: "paper", fg: "" } },
@@ -171,7 +171,7 @@ const ANN_ABOUT = "A thin band with a short message. With more than one message 
 const ANN_MESSAGES = { name: "messages", label: "Messages", type: "rows", fields: [{ name: "text", label: "Message", type: "text", hint: "One short sentence." }, { name: "link", label: "Link words", type: "text", hint: "Leave empty for no link." }, ADDR] };
 const ANN_BLOCK = { field: "messages", label: "Message", add: "Add a message", about: "One message in the bar. With more than one, they take turns." };
 const ANN_SUMMARY = (st) => { const m = (st.messages || []).filter((x) => x && !x.hidden); return m.length > 1 ? m.length + " messages" : (m[0] && m[0].text) || "No message yet"; };
-const SECONDS = { name: "seconds", label: "Seconds before the next message", type: "number", group: "Look", hint: "Between 3 and 30. Only used with more than one message." };
+const SECONDS = { name: "seconds", label: "Seconds before the next message", type: "range", min: 3, max: 30, step: 1, unit: "s", dflt: 6, group: "Look", hint: "Only used with more than one message." };
 const COL_BLOCK = { field: "columns", label: "Column", add: "Add a column", about: "One column: a title, a few words and a link." };
 const COL_ROWS = { name: "columns", label: "Columns", type: "rows", fields: [{ name: "title", label: "Title", type: "text" }, { name: "text", label: "Text", type: "long", plain: true, hint: "Two or three short sentences read best." }, { name: "link", label: "Link words", type: "text", hint: "Leave empty for no link." }, ADDR] };
 const PER_ROW = { name: "per_row", label: "Columns in a row", type: "choice", group: "Look", seg: true, dflt: "3", options: [["2", "Two"], ["3", "Three"], ["4", "Four"]], hint: "On a phone they always stack." };
@@ -191,7 +191,7 @@ const PB_PLACE = { name: "place", label: "Box of words at the", type: "choice", 
 const PB_FIT = { name: "fit", label: "Picture", type: "choice", group: "Look", seg: true, dflt: "fill", options: [["fill", "Fill the banner"], ["whole", "Show it whole"]], hint: "Fill the banner trims the edges to fit. Choose Show it whole for an artwork, so none of it is cut off." };
 const SLIDE_ROWS = { name: "slides", label: "Slides", type: "rows", max: 10, fields: [PIC, PIC_ALT, { name: "caption", label: "Caption", type: "text", hint: "Such as the title, year and medium, and who took the photo. Leave empty for none." }] };
 const SLIDE_BLOCK = { field: "slides", label: "Slide", add: "Add a slide", max: 10, about: "One picture in the slideshow, with its caption." };
-const SLIDE_LOOK = [{ name: "auto", label: "Move on by itself", type: "yesno", group: "Look", hint: "Every few seconds, until a visitor uses Previous or Next. Pictures stay still for people who ask their device for less motion." }, { name: "seconds", label: "Seconds on each slide", type: "number", group: "Look", hint: "Between 3 and 30." }];
+const SLIDE_LOOK = [{ name: "auto", label: "Move on by itself", type: "yesno", group: "Look", hint: "Every few seconds, until a visitor uses Previous or Next. Pictures stay still for people who ask their device for less motion." }, { name: "seconds", label: "Seconds on each slide", type: "range", min: 3, max: 30, step: 1, unit: "s", dflt: 6, group: "Look" }];
 const SLIDE_SUMMARY = (st) => { const n = (st.slides || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " slide" : " slides"); };
 const SLIDE_STARTER = { slides: [{ image: "", alt: "", caption: "" }, { image: "", alt: "", caption: "" }, { image: "", alt: "", caption: "" }], auto: true, seconds: 6 };
 const PHOTO_ROWS = { name: "photos", label: "Photos", type: "rows", fields: [PIC, PIC_ALT, { name: "caption", label: "Title under the photo", type: "text", hint: "Leave empty for none." }, { name: "sub", label: "Small line", type: "text", hint: "Such as the year and medium. Leave empty for none." }] };
@@ -263,7 +263,7 @@ WAR_SECTIONS.signup = { label: "Email sign-up", about: SIGNUP_ABOUT, summary: (s
   starter: { eyebrow: "Get the review", heading: ["New portfolios,", "once a month."], text: "One short letter when there is something new to read. No spare emails.", button: "Ask to join", bg: "green", fg: "" },
   fields: [EYEBROW, HEADING, FORM_TEXT, FORM_BUTTON("Ask to join"), BG, FG] };
 // A sign-up box that pops up once a visit, after a few seconds, and opens the visitor's own email app. It lives in the Popups group only.
-const POPUP_DELAY = { name: "delay", label: "Seconds before it shows", type: "number", hint: "Between 3 and 60. It shows once a visit, and Close or Escape puts it away." };
+const POPUP_DELAY = { name: "delay", label: "Seconds before it shows", type: "range", min: 3, max: 60, step: 1, unit: "s", dflt: 8, hint: "It shows once a visit, and Close or Escape puts it away." };
 const SIGNUP_POPUP = { label: "Sign-up popup", about: "A small box that pops up once a visit, with an email box and one button." + FORM_HONEST, popup: true, summary: (st) => "After " + (st.delay || 8) + " seconds",
   library: "A sign-up box that pops up", starter: { eyebrow: "", heading: "Join the mailing list", text: "Leave your email and we will add you.", button: "Ask to join", delay: 8 },
   fields: [{ ...EYEBROW, label: "Small line above the heading" }, { name: "heading", label: "Heading", type: "text" }, FORM_TEXT, FORM_BUTTON("Ask to join"), POPUP_DELAY] };
@@ -880,6 +880,15 @@ function cleanField(f, v, site) {
     const ok = f.options.map((o) => o[0]); return ok.includes(String(v)) ? String(v) : ok[0];
   }
   if (t === "yesno") return v === true || v === "true";
+  if (t === "range") { const lo = f.min ?? 0, hi = f.max ?? 100, st = f.step || 1, n = Number(v); const x = Number.isFinite(n) ? n : (f.dflt ?? lo); return Math.min(hi, Math.max(lo, Math.round(x / st) * st)); }
+  if (t === "datetime") { const x = String(v == null ? "" : v); return /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):[0-5]\d$/.test(x) ? x : ""; }
+  if (t === "font") { const m = /^([^:]{1,60}?)(?::(\d{3}i?))?$/.exec(String(v == null ? "" : v).trim()); if (!m) return ""; const ok = Object.keys(f.fonts || {}).concat(["system-sans", "system-serif", "system-mono"]); return ok.includes(m[1]) ? m[1] + (m[2] && m[2] !== "400" ? ":" + m[2] : "") : ""; }
+  if (t === "video") { const x = String(v == null ? "" : v).trim(); if (/^https:\/\/[^\s<>"']+\.mp4(\?[^\s<>"']*)?$/i.test(x)) return x.slice(0, 300); return /^[A-Za-z0-9._-]{1,120}\.mp4$/i.test(x) ? x : ""; }
+  if (t === "set") {
+    const rows = Array.isArray(v) ? v : [], out = [];
+    for (let i = 0; i < (f.count || 3); i++) { const row = rows[i] && typeof rows[i] === "object" ? rows[i] : {}, o = { on: row.on !== false }; for (const g of f.fields || []) o[g.name] = cleanField(g, row[g.name], site); out.push(o); }
+    return out;
+  }
   if (t === "piece") { const ok = site.articleSlugs || []; return ok.includes(String(v == null ? "" : v)) ? String(v) : null; }
   if (t === "choice") { const ok = f.options.map((o) => o[0]); return ok.includes(String(v == null ? "" : v)) ? String(v) : (f.dflt && ok.includes(f.dflt) ? f.dflt : ok[0]); }
   if (t === "colour") { const x = String(v == null ? "" : v).trim(); const themeOk = (f.theme || []).map((o) => o[0]); return themeOk.includes(x) ? x : (/^#[0-9a-fA-F]{6}$/.test(x) ? x.toUpperCase() : (themeOk[0] || "")); }
@@ -894,7 +903,7 @@ function cleanField(f, v, site) {
     return rows.map((row) => {
       const isList = f.fields.some((g) => typeof g.name === "number");
       const out = isList ? [] : {};
-      for (const g of f.fields) out[g.name] = cleanField(g, row && row[g.name], site);
+      for (const g of f.fields) { if (g.type === "info") continue; out[g.name] = cleanField(g, row && row[g.name], site); }
       if (!isList && row && row.hidden === true) out.hidden = true;
       // a few small values kept as they are, such as a section's address or an artwork's colour
       for (const k of f.keep || []) { const x = row && row[k]; if (typeof x === "boolean" || x === null || (typeof x === "string" && x.length <= 80 && !/[<>"]/.test(x))) { if (x !== undefined) out[k] = x; } }
@@ -905,7 +914,7 @@ function cleanField(f, v, site) {
 }
 export function cleanSettings(schema, given, site) {
   const out = {};
-  for (const f of schema.fields) out[f.name] = cleanField(f, given ? given[f.name] : undefined, site);
+  for (const f of schema.fields) { if (f.type === "info") continue; out[f.name] = cleanField(f, given ? given[f.name] : undefined, site); }
   return out;
 }
 const SECTION_ID = /^[A-Za-z][A-Za-z0-9-]{0,40}$/;
@@ -1111,7 +1120,16 @@ function cleanSection(spec, sec, id, site) {
   const out = { id, type: sec.type, visible: sec.visible !== false, settings: cleanSettings(spec[sec.type], sec.settings, site) };
   if (spec[sec.type].popup) out.settings.delay = Math.max(3, Math.min(60, Math.round(Number(out.settings.delay) || 8)));
   const nm = cleanText(sec.name, 40); if (nm) out.name = nm;
+  const css = cleanCss(sec.css); if (css) out.css = css;
   return out;
+}
+// Custom CSS for one section. Nothing that could load from another website or run as code is kept.
+export function cleanCss(v) {
+  let x = String(v == null ? "" : v).replace(/\r/g, "").slice(0, 6000);
+  x = x.replace(/\/\*[\s\S]*?\*\//g, "").replace(/[<>]/g, "").replace(/\\/g, "");
+  x = x.replace(/@import[^;]*;?/gi, "").replace(/@font-face\s*\{[^}]*\}/gi, "").replace(/@charset[^;]*;?/gi, "").replace(/@namespace[^;]*;?/gi, "");
+  x = x.replace(/url\s*\([^)]*\)/gi, "none").replace(/expression\s*\(/gi, "(").replace(/javascript\s*:/gi, "").replace(/-moz-binding|behaviou?r\s*:/gi, "");
+  return x.split("\n").map((l) => l.replace(/\s+$/, "")).join("\n").trim().slice(0, 5000);
 }
 export function cleanPages(site, given, current) {
   const spec = site.sectionKinds;
@@ -1122,6 +1140,7 @@ export function cleanPages(site, given, current) {
     if (!spec[cur.type]) { out.shared[key] = cur; continue; }
     out.shared[key] = { type: cur.type, visible: g.visible !== false, settings: cleanSettings(spec[cur.type], g.settings, site) };
     const nm = cleanText(g.name, 40); if (nm) out.shared[key].name = nm;
+    const css = cleanCss(g.css); if (css) out.shared[key].css = css;
   }
   // sections shared by every page, above the page's own and below them
   out.groups = { top: [], popups: [], bottom: [] };

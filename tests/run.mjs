@@ -1,7 +1,7 @@
 import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir } from "./where.mjs";
 import fs from "node:fs";
 import assert from "node:assert/strict";
-import { parseCalendar, setAnswer, parseLog, safePhotoName, parseSlots, slotPhotoName, notePhotoName, cleanText, handle, SITES, cleanPages } from "./home.mjs";
+import { parseCalendar, setAnswer, parseLog, safePhotoName, parseSlots, slotPhotoName, notePhotoName, cleanText, handle, SITES, cleanPages, cleanCss, cleanSettings } from "./home.mjs";
 
 const empty = fs.readFileSync((G_DIR + "/CONTENT-CALENDAR.md"), "utf8");
 assert.deepEqual(parseCalendar(empty), { waiting: [], approved: [] });
@@ -145,13 +145,25 @@ globalThis.fetch = realFetch;
   // a page of its own layout keeps the mark; the home page and the site's own pages never take it
   const ownDoc = cleanPages(ctx, { ...cur, pages: { ...cur.pages, home: { title: "Home", sections: [], own: true }, soon: { title: "Soon", sections: [], own: true } } }, cur);
   assert.equal(ownDoc.pages.soon.own, true); assert.equal(ownDoc.pages.home.own, undefined);
+  // step 3: the settings panel's new kinds of setting, cleaned on the server
+  const sch = { fields: [{ name: "g", type: "range", min: 0, max: 120, step: 4 }, { type: "info", text: "A note" }, { name: "d", type: "datetime" }, { name: "f", type: "font", fonts: { "Castoro": "Castoro" } },
+    { name: "v", type: "video" }, { name: "w", type: "video" }, { name: "x", type: "video" }, { name: "s", type: "set", count: 2, fields: [{ name: "t", type: "text" }] }] };
+  const cs = cleanSettings(sch, { g: 999, d: "2027-02-30T09:00", f: "Castoro:700i", v: "https://www.example.com/film.mp4", w: "javascript:alert(1)", x: "film.mp4", s: [{ t: "One", on: false }] }, {});
+  assert.deepEqual(cs, { g: 120, d: "2027-02-30T09:00", f: "Castoro:700i", v: "https://www.example.com/film.mp4", w: "", x: "film.mp4", s: [{ on: false, t: "One" }, { on: true, t: "" }] });
+  assert.equal(cleanSettings(sch, { g: 13, d: "tomorrow", f: "Comic Sans" }, {}).g, 12, "a slider keeps to its steps");
+  assert.equal(cleanSettings(sch, { d: "tomorrow", f: "Comic Sans" }, {}).f, "", "only the fonts on offer");
+  assert.ok(!("undefined" in cs), "an info line keeps nothing");
+  // a section's own CSS: nothing that loads from elsewhere or runs as code
+  assert.equal(cleanCss("h2 { color: red; }\n@import url(https://evil.example/x.css);\na { background: url(https://evil.example/t.gif) }\n</style><script>alert(1)</script>"), "h2 { color: red; }\n\na { background: none }\n/stylescriptalert(1)/script");
+  const withCss = cleanPages(ctx, { ...cur, groups: { top: [], popups: [], bottom: [{ ...quote, id: "every-quote-9", css: "p { color: #123456 }" }] } }, cur);
+  assert.equal(withCss.groups.bottom[0].css, "p { color: #123456 }");
   // the footer's columns hold their links as blocks one level down
   const fk = W.sectionKinds.footer; assert.ok(fk.blocks && fk.blocks.blocks && fk.blocks.blocks[0].field === "links", "footer links are not blocks inside the columns");
   // each site draws them, on its own pages and on articles and artists
   const { execFileSync } = await import("node:child_process"); const path = await import("node:path");
   for (const [dir, file, build] of [[G_DIR, "data/pages.json", ["tools/build.py"]], [sadDir(), "data/pages.json", ["tools/build.py", "/tmp/grp-sad-out"]]]) {
     const tmp = "/tmp/grp-" + path.basename(dir); fs.rmSync(tmp, { recursive: true, force: true }); fs.cpSync(dir, tmp, { recursive: true, filter: (x) => !/\/\.git(\/|$)/.test(x) });
-    const pj = JSON.parse(fs.readFileSync(tmp + "/" + file, "utf8")); pj.groups = { top: [], popups: [{ id: "every-signup-popup-1", type: "signup-popup", visible: true, settings: { heading: "Join the list", text: "", button: "Ask to join", delay: 8 } }], bottom: [{ id: "every-quote-1", type: "quote", visible: true, settings: { text: "Shared on every page", who: "" } }] };
+    const pj = JSON.parse(fs.readFileSync(tmp + "/" + file, "utf8")); pj.groups = { top: [], popups: [{ id: "every-signup-popup-1", type: "signup-popup", visible: true, settings: { heading: "Join the list", text: "", button: "Ask to join", delay: 8 } }], bottom: [{ id: "every-quote-1", type: "quote", visible: true, css: "p { color: #123456 }\n:scope { padding: 1px }", settings: { text: "Shared on every page", who: "" } }] };
     pj.pages.soon = { path: "soon/index.html", title: "Coming soon", description: "", current: "", intro: false, own: true, sections: [{ id: "q", type: "quote", visible: true, settings: { text: "Opening in spring", who: "" } }] };
     fs.writeFileSync(tmp + "/" + file, JSON.stringify(pj)); execFileSync("python3", build, { cwd: tmp, stdio: "pipe" });
     const outDir = build[1] || tmp, pages = [];
@@ -162,6 +174,9 @@ globalThis.fetch = realFetch;
     const missing = pages.filter((f) => f !== soon && !fs.readFileSync(f, "utf8").includes("Shared on every page"));
     assert.deepEqual(missing, [], dir + ": pages without the shared section");
     assert.deepEqual(pages.filter((f) => !fs.readFileSync(f, "utf8").includes("data-popup")), [], dir + ": pages without the popup");
+    const one = fs.readFileSync(pages.find((f) => f !== soon), "utf8");
+    assert.ok(one.includes('[data-css="every-quote-1"] p { color: #123456 }') && one.includes('[data-css="every-quote-1"] { padding: 1px }') && /<[a-z]+ data-css="every-quote-1"/.test(one), dir + ": the section's own CSS");
+    assert.ok(!fs.readFileSync(soon, "utf8").includes("data-sec-css"), dir + ": no CSS left over on a page without it");
   }
   const wtmp = "/tmp/grp-war"; fs.rmSync(wtmp, { recursive: true, force: true }); fs.cpSync(W_DIR, wtmp, { recursive: true, filter: (x) => !/\/\.git(\/|$)/.test(x) });
   const wp = JSON.parse(fs.readFileSync(wtmp + "/content/pages.json", "utf8")); wp.groups = { top: [], bottom: [{ id: "every-quote-1", type: "quote", visible: true, settings: { text: "Shared on every page", who: "" } }] };

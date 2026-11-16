@@ -198,7 +198,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (16 November 2026, Version 38)
+## Where things stand (16 November 2026, Version 39)
 
 Done:
 
@@ -332,7 +332,44 @@ Done:
     popups still shown. Set when making the page or under its settings.
   - Pages the site draws itself (search, Page not found) show a fixed
     row: only the shared groups can be changed for them.
-  Steps 3 to 9 wait for the owner's go ahead, one at a time.
+  Step 3, the settings panel (Version 39):
+  - Header (`pHead`): Section, Block or Settings, More (Rename, Hide or
+    Show, Edit code later) and Close, then the icon and the name. It stays
+    in place while the settings scroll. A section's name changes by
+    clicking it (Enter keeps, Escape cancels). Remove section or Remove
+    block sits at the bottom in red (`pRemove`), never for a main section
+    or the shared frame.
+  - Settings follow the schema's order; those with a `group` sit under a
+    small heading of that name (`grouped`). `hint` is grey help, `more` a
+    Learn more link.
+  - Controls by `type`: text (a link field with the site's pages when
+    `addr`, or named href, url or map), long, lines, number, `range`
+    (slider and number box: `min`, `max`, `step`, `unit`, `dflt`),
+    `yesno` (a switch), choice (side by side when 2 to 4 short options,
+    or `seg`; a dropdown otherwise or with `select`), `colour` (swatch,
+    hex, and a picker with square, hue strip, theme colours, eyedropper),
+    `image` (Select, Upload, Change, Remove), `video` (own MP4 from the
+    site's files or an https link to an .mp4), `font` (opens in the panel;
+    `fonts` on the field, or the theme's list; value "Family", "Family:700"
+    or "Family:400i"), `datetime` ("YYYY-MM-DDTHH:MM", five dropdowns),
+    `info` (a grey note, `go` opens a screen), `set` (numbered groups such
+    as Slide 1 and 2, `count`, each with an `on` switch), rows, artists
+    and the pickers already there. The server cleans each type
+    (`cleanField`). No section uses video, font, date or numbered groups
+    yet; they are ready for when one does.
+  - Custom CSS (`sec.css`, a folding box with line numbers on sections
+    in the page and group lists): the server cleans it (`cleanCss`: no
+    imports, no url(), no code); each site limits every rule to that
+    section (`scopeCss`, `cssMark`, the root gets `data-css="<id>"`).
+    `:scope` or `&` means the section itself. The box in the console is
+    off (`state.customCss: false`) until the owner says yes; the sites and
+    the server already handle it. World Art Review puts it
+    in `style#sec-css`, the other two in `style[data-sec-css]` in the head.
+  - The address keeps `?ed=<site>~<page or at>~<where.id.block.bf.sf.sub>`
+    (`edAddress`), and opening such a link goes straight there.
+  - Checks: the "Settings panel" area of `tests/uat.mjs`, and the step 3
+    lines in `tests/run.mjs`.
+  Steps 4 to 9 wait for the owner's go ahead, one at a time.
 
 Waiting for the owner:
 

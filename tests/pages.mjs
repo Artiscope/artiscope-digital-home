@@ -35,7 +35,7 @@ try {
   assert.deepEqual(await ids(), ["hero", "featured", "sections", "numbers", "quote-1", "explainedHome", "method"]);
   await page.fill('[data-pf="text"]', "Knives,\nnot brushes."); await page.fill('[data-pf="who"]', "House rule"); await page.waitForTimeout(400);
   assert.ok((await frame().evaluate(() => document.querySelector("#quote-1").textContent)).includes("not brushes."));
-  await page.selectOption('[data-pf="bg"]', "custom"); await page.waitForTimeout(300);
+  await page.fill('.colour [data-pf="bg"]', "#1D4A35"); await page.waitForTimeout(300);
   assert.ok((await frame().evaluate(() => document.querySelector("#quote-1").getAttribute("style") || "")).includes("background:#1D4A35"));
   await page.screenshot({ path: "/tmp/editor-live.png" });
   // a text section with the plain-writing editor
@@ -43,7 +43,7 @@ try {
   await page.click(".ed-right .rt-page"); await page.keyboard.press("Control+End"); await page.keyboard.type(" More words."); await page.waitForTimeout(400);
   assert.ok((await frame().evaluate(() => document.querySelector("#text-1 .prose").textContent)).includes("More words."));
   // remove it: at once, with Put it back offered
-  await page.click('.ptools [data-act="ed-remove"]'); await page.waitForTimeout(300);
+  await page.click('.premove [data-act="ed-remove"]'); await page.waitForTimeout(300);
   assert.ok(!(await ids()).includes("text-1"));
   // leaving asks; discard puts everything back
   await page.click('[data-tab="overview"]'); assert.ok(await page.isVisible("text=You have changes that are not saved yet"));
@@ -73,7 +73,7 @@ try {
   assert.ok((await frame().evaluate(() => document.querySelectorAll("#method .mcard")[0].textContent)).includes("Every fact, checked"));
   await page.click('.addl.blk[data-id="method"]'); await page.waitForTimeout(300);
   assert.equal(await frame().evaluate(() => document.querySelectorAll("#method .mcard").length), 4);
-  await page.click('.ptools [data-act="ed-remove"]'); await page.waitForTimeout(300);
+  await page.click('.premove [data-act="ed-remove"]'); await page.waitForTimeout(300);
   assert.equal(await frame().evaluate(() => document.querySelectorAll("#method .mcard").length), 3);
   // click a card on the page itself
   await frame().click("#method .mcard >> nth=2"); await page.waitForSelector(".ed-right h2:has-text('Publicity, flagged')");
