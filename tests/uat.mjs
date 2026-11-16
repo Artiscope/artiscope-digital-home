@@ -99,7 +99,7 @@ async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).cat
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all six sites, the Practice site among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 6, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 36"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 37"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await goTab(page, "home"); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -179,7 +179,7 @@ await check("A long dash typed in is saved as a comma", async () => {
 await check("Hiding, moving and adding sections shows on the page at once", async () => {
   await page.click('#ed-sections .sec[data-id="method"]:not(.blk)'); await page.click('.ptools [data-act="ed-hide"]'); await settle(400);
   const ids = await frame("worldartreview.com").evaluate(() => [...document.querySelectorAll("#main > section")].map((s) => s.id)); must(!ids.includes("method"), "still shown");
-  await page.click('.ptools [data-act="ed-hide"]'); await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="quote"]'); await settle(500);
+  await page.click('.ptools [data-act="ed-hide"]'); await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); await page.click('.pk-item[data-key="quote"]'); await settle(500);
   must(await frame("worldartreview.com").evaluate(() => !!document.querySelector('[id^="quote-"]')), "quote not added"); await page.click('[data-act="ed-discard"]');
 });
 await check("A page with more than 40 sections is refused with a plain reason", async () => {
@@ -190,7 +190,7 @@ await check("A page with more than 40 sections is refused with a plain reason", 
 });
 await check("Uploading something that is not a photo is refused", async () => {
   fs.writeFileSync("/tmp/uat/not-a-photo.txt", "hello");
-  await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="picture"]'); await page.waitForSelector('[data-upload="image"]', { state: "attached" });
+  await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); await page.click('.pk-item[data-key="picture"]'); await page.waitForSelector('[data-upload="image"]', { state: "attached" });
   await page.setInputFiles('[data-upload="image"]', "/tmp/uat/not-a-photo.txt"); await settle(500); const n = await notice(); must(/JPG or PNG/i.test(n), "notice: " + n);
 });
 await check("A photo without a description cannot be saved", async () => {
@@ -204,7 +204,7 @@ await check("With a description, the photo and the page save together as one ste
 await check("A very large photo is made smaller before it is sent", async () => {
   const big = await page.evaluate(async () => { const c = document.createElement("canvas"); c.width = 5200; c.height = 3400; const x = c.getContext("2d"); x.fillStyle = "#884422"; x.fillRect(0, 0, 5200, 3400); return c.toDataURL("image/jpeg", .9).split(",")[1]; });
   fs.writeFileSync("/tmp/uat/big.jpg", Buffer.from(big, "base64"));
-  await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="picture"]'); await page.waitForSelector('[data-upload="image"]', { state: "attached" });
+  await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); await page.click('.pk-item[data-key="picture"]'); await page.waitForSelector('[data-upload="image"]', { state: "attached" });
   await page.setInputFiles('[data-upload="image"]', "/tmp/uat/big.jpg"); await page.waitForSelector(".picthumb[src^='data:image']");
   const dims = await page.evaluate(() => new Promise((r) => { const p = window.__adh.pgOf(), k = Object.keys(p.uploads).pop(), i = new Image(); i.onload = () => r([i.width, i.height]); i.src = p.uploads[k].dataUrl; }));
   await page.click('[data-act="ed-discard"]'); must(Math.max(...dims) <= 2000, "sent at " + dims.join("x")); return "Sent at " + dims.join(" by ") + " pixels";
@@ -352,10 +352,10 @@ await check("Add a section at the + line between two sections, found by searchin
   await page.fill("[data-pick-q]", "quote"); await settle(200); await page.click('.pk-item[data-key="quote"]'); await settle(800);
   const ids = await page.$$eval("#ed-sections .sec:not(.blk)", (xs) => xs.map((x) => x.dataset.id));
   must(ids[2] && ids[2].indexOf("quote") === 0, "placed at " + ids.indexOf(ids.find((x) => x.indexOf("quote") === 0)) + ": " + ids.join(","));
-  await page.click('.ptools [data-act="ask"]'); await page.click('.ptools [data-act="ed-remove"]'); await settle(300); await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(500);
+  await page.click('.ptools [data-act="ed-remove"]'); await settle(300); await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(500);
 });
 await check("A search with no match says so", async () => {
-  await page.click('.addl[data-act="ed-secpicker"]'); await page.fill("[data-pick-q]", "zzzz"); await settle(200);
+  await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); await page.fill("[data-pick-q]", "zzzz"); await settle(200);
   must(await page.isVisible(".pk-none"), "no message"); await page.click('.pk [data-act="ed-pick-close"]'); await settle(200); must(!(await page.isVisible(".pk")), "picker still open");
 });
 await check("A logo goes into the menu bar, on the right, and saves with its picture and name", async () => {
@@ -372,14 +372,14 @@ await check("A logo with no name is stopped before saving", async () => {
   await page.click('.sec[data-where="shared"][data-id="header"]:not(.blk)'); await page.click('.ed-right [data-act="ed-blockpicker"]'); await page.click('.pk-item[data-key="logos"]'); await settle(300);
   await page.click('[data-act="ed-picker"][data-path="logos.1.image"]'); await page.click('[data-act="ed-pic-choose"] >> nth=0'); await settle(300);
   await page.click('[data-act="ed-save"]'); await settle(500); const n = await notice(); must(/give the logo in the menu bar a name/i.test(n), "notice: " + n);
-  await page.click('.ptools [data-act="ask"]'); await page.click('.ptools [data-act="ed-remove"]'); await settle(300); await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(400);
+  await page.click('.ptools [data-act="ed-remove"]'); await settle(300); await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(400);
 });
 await check("Global Art Monitor's menu bar takes logos too", async () => {
   await openSite("global-art-monitor"); await page.click('.sec[data-where="shared"][data-id="header"]:not(.blk)'); await page.click('.ed-right [data-act="ed-blockpicker"]'); await page.click('.pk-item[data-key="logos"]'); await settle(300);
   await page.fill('[data-pf="logos.0.alt"]', "Grove Gallery"); await page.click('.segr:has-text("Centre")'); await settle(900);
   must((await frame("globalartmonitor.com").$$('header.site-head .head-mid [data-adh-b="logos.0"]')).length === 1, "not in the middle of the bar");
   await liveSave(); const g = read(GR, "data/pages.json").shared.header.settings.logos[0]; must(g && g.place === "C" && g.alt === "Grove Gallery", "saved " + JSON.stringify(g));
-  await page.click('.sec.blk[data-id="header"][data-bf="logos"]'); await page.click('.ptools [data-act="ask"]'); await page.click('.ptools [data-act="ed-remove"]'); await settle(300); await liveSave();
+  await page.click('.sec.blk[data-id="header"][data-bf="logos"]'); await page.click('.ptools [data-act="ed-remove"]'); await settle(300); await liveSave();
 });
 
 // =============== 6b. Tools on each row, and any section on any page ===============
@@ -395,16 +395,17 @@ await check("The eye on a row hides a section without leaving the one being chan
   await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk) [data-act="ed-row-hide"]'); await settle(600); must(!!(await frame("worldartreview.com").$("#numbers")), "not back");
   await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(400);
 });
-await check("The bin asks once, and Keep it keeps the section", async () => {
-  await page.hover('#ed-sections .sec[data-id="method"]:not(.blk)'); await page.click('#ed-sections .sec[data-id="method"]:not(.blk) [data-act="ed-row-del"]'); await settle(400);
-  must(/Remove this section\?/.test(await text(".ptools.ask")), "no question asked"); await shot("14-row-bin");
-  await page.click('.ptools [data-act="cancel"]'); await settle(300); must(await page.isVisible('#ed-sections .sec[data-id="method"]'), "gone without a yes");
-  await page.click('#ed-sections .sec[data-id="method"]:not(.blk) [data-act="ed-row-del"]'); await page.click('.ptools [data-act="ed-remove"]'); await settle(500);
+await check("The bin removes a section at once, and Put it back brings it back where it was", async () => {
+  const was = await page.$$eval("#ed-sections .sec:not(.blk)", (x) => x.map((r) => r.dataset.id));
+  await page.hover('#ed-sections .sec[data-id="method"]:not(.blk)'); await page.click('#ed-sections .sec[data-id="method"]:not(.blk) [data-act="ed-row-del"]'); await settle(500);
   must(!(await page.$('#ed-sections .sec[data-id="method"]')), "still listed"); must(!(await frame("worldartreview.com").$("#method")), "still on the page");
-  await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(500); must(!!(await page.$('#ed-sections .sec[data-id="method"]')), "discard did not bring it back");
+  must((await text(".putback")).includes("How we research"), "no Put it back: " + await text(".ed-mid")); await shot("14-row-bin");
+  await page.click('[data-act="ed-putback"]'); await settle(600); const order = await page.$$eval("#ed-sections .sec:not(.blk)", (x) => x.map((r) => r.dataset.id));
+  must(order.join(",") === was.join(","), "came back at " + order.join(","));
+  await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(500);
 });
 await check("No bin on the menu bar, footer, opening screen or the banner's one-only blocks, but they can be hidden", async () => {
-  const bins = await page.$$eval('.sec[data-where="shared"] [data-act="ed-row-del"]', (x) => x.length); must(bins === 0, bins + " bins on shared rows");
+  const bins = await page.$$eval('.sec:not(.blk)[data-where="shared"] [data-act="ed-row-del"]', (x) => x.length); must(bins === 0, bins + " bins on shared rows");
   must((await page.$$('.sec[data-where="shared"] [data-act="ed-row-hide"]')).length >= 3, "shared rows cannot be hidden");
   await page.click('#ed-sections .sec[data-id="hero"]:not(.blk)'); await settle(300);
   must(!(await page.$('.sec.blk[data-id="hero"][data-bf="rule"] [data-act="ed-row-del"]')), "the rule box has a bin");
@@ -414,17 +415,17 @@ await check("No bin on the menu bar, footer, opening screen or the banner's one-
 });
 await check("The panel's own tools: eye, copy, move and bin", async () => {
   await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await settle(300);
-  const tools = await page.$$eval(".ptools [data-act]", (x) => x.map((e) => e.dataset.act).join(",")); must(tools === "ed-hide,ed-dup,ed-move,ed-move,ask", tools);
+  const tools = await page.$$eval(".ptools [data-act]", (x) => x.map((e) => e.dataset.act).join(",")); must(tools === "ed-hide,ed-dup,ed-move,ed-move,ed-remove", tools);
   must(!(await page.$("#ed-float")), "the floating bar is still over the page");
 });
 await check("A new page takes the opening banner, which replaces the menu bar there, and two Featured artists", async () => {
   await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Exhibition"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1200);
-  const groups = await (await page.click('.addl[data-act="ed-secpicker"]'), page.$$eval(".pk-gl", (x) => x.map((e) => e.textContent).join("|")));
+  const groups = await (await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'), page.$$eval(".pk-gl", (x) => x.map((e) => e.textContent).join("|")));
   must(groups === "Top of the page|Words|Pictures|Art and artists|Reading and trust|Contact and sign-up", groups);
   must((await page.$$(".pk-item[disabled]")).length === 0, "something is greyed out");
   await page.click('#ed-pick [data-act="ed-pick-close"] >> nth=-1'); await settle(200);
   await page.click("#ed-sections > .ins >> nth=0"); await page.click('.pk-item[data-key="hero"]'); await settle(400);
-  for (let i = 0; i < 2; i++) { await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="featured"]'); await settle(400); }
+  for (let i = 0; i < 2; i++) { await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); await page.click('.pk-item[data-key="featured"]'); await settle(400); }
   await settle(1500); const f = frame("worldartreview.com");
   must((await f.$$eval("header.hdr", (x) => x.length + ":" + x.filter((e) => e.closest(".hero")).length)) === "1:1", "the menu bar is drawn twice, or not inside the banner");
   must((await f.$$("[data-latest]")).length === 1 && (await f.$$(".feat, [id^=featured]")).length >= 2, "copies not drawn"); await shot("15-new-page-banner");
@@ -435,7 +436,7 @@ await check("A new page takes the opening banner, which replaces the menu bar th
 await check("Global Art Monitor: two results tables and a contact form on a new page, each with its own names", async () => {
   await openSite("global-art-monitor");
   await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Market desk"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1200);
-  for (const k of ["results-table", "results-table", "contact-form"]) { await page.click('.addl[data-act="ed-secpicker"]'); await page.click('.pk-item[data-key="' + k + '"]'); await settle(400); }
+  for (const k of ["results-table", "results-table", "contact-form"]) { await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); await page.click('.pk-item[data-key="' + k + '"]'); await settle(400); }
   await settle(1500); const f = frame("globalartmonitor.com");
   const r = await f.evaluate(() => { const g = [...document.querySelectorAll("[data-filter-group]")], t = g.map((x) => document.getElementById(x.getAttribute("data-filter-group")));
     const own = g.every((x, i) => t[i] && x.closest("section") === t[i].closest("section") && document.getElementById(t[i].id + "-empty"));
@@ -446,10 +447,90 @@ await check("Global Art Monitor: two results tables and a contact form on a new 
   must(pg && pg.path === "market-desk/index.html" && pg.sections.map((x) => x.type).join(",") === "page-head,results-table,results-table,contact-form", "saved " + JSON.stringify(pg && pg.sections.map((x) => x.type)));
 });
 
+// =============== 6b2. The sections list (step 2) ===============
+area = "Sections list";
+const SL = async (sel) => page.$$eval(sel, (x) => x.map((r) => r.dataset.id));
+await check("The list has Top of every page, This page and Bottom of every page, each ending with Add section", async () => {
+  await openSite("world-art-review"); await page.selectOption(".pagepick", "home"); await settle(1200);
+  const t = await text(".ed-left"); must(["Top of every page", "This page", "Bottom of every page"].every((w) => t.toLowerCase().includes(w.toLowerCase())), "groups: " + t.slice(0, 200));
+  for (const g of ["top", "page", "bottom"]) must(await page.isVisible('.addl[data-act="ed-secpicker"][data-g="' + g + '"]'), "no Add section for " + g);
+});
+await check("The block count opens and closes a section's blocks without picking it", async () => {
+  await page.click('#ed-sections .sec[data-id="method"] .cnt'); await settle(300);
+  must(await page.locator('#ed-sections .sec.blk[data-id="method"]').count() === 3, "blocks not shown"); must(!(await page.isVisible(".ed-right h2")), "the section was picked");
+  must((await page.locator('#ed-sections .sec.blk[data-id="method"] .nm').first().innerText()).startsWith("Card: "), "block row: " + await page.locator('#ed-sections .sec.blk[data-id="method"] .nm').first().innerText());
+  await page.click('#ed-sections .sec[data-id="method"] .cnt'); await settle(300); must(await page.locator('#ed-sections .sec.blk[data-id="method"]').count() === 0, "blocks still shown");
+});
+await check("A right click opens Copy, Paste, Duplicate, Rename, Hide, Add before and after, Edit code and Remove; Paste waits for a Copy", async () => {
+  await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)', { button: "right" }); const t = await text(".ctxm"); await shot("15-right-click");
+  must(["Copy", "Paste", "Duplicate", "Rename", "Hide", "Add section before", "Add section after", "Edit code", "Remove"].every((w) => t.includes(w)), "menu: " + t);
+  must(await page.isDisabled('.ctxm [data-op="paste"]') && await page.isDisabled('.ctxm [data-op="code"]'), "Paste or Edit code is on");
+  await page.keyboard.press("Escape"); must(!(await page.isVisible(".ctxm")), "Escape did not close it");
+});
+await check("Copy then Paste puts a copy straight after the row it was pasted on", async () => {
+  await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)', { button: "right" }); await page.click('.ctxm [data-op="copy"]');
+  await page.click('#ed-sections .sec[data-id="hero"]:not(.blk)', { button: "right" }); await page.click('.ctxm [data-op="paste"]'); await settle(800);
+  const ids = await SL("#ed-sections .sec:not(.blk)"); must(ids[1] && ids[1].startsWith("numbers-"), "order: " + ids.join(","));
+  must(await frame("worldartreview.com").evaluate((x) => !!document.getElementById(x), ids[1]), "not on the page");
+  await page.click('[data-act="ed-discard"]'); await settle(500);
+});
+await check("Rename in place: Enter keeps the new name, Escape puts the old one back, and visitors never see it", async () => {
+  await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)', { button: "right" }); await page.click('.ctxm [data-op="rename"]'); await page.fill("#ed-rename", "Our figures"); await page.keyboard.press("Escape"); await settle(200);
+  must((await page.locator('#ed-sections .sec[data-id="numbers"]:not(.blk) .nm').innerText()).startsWith("Numbers band"), "Escape kept the new name");
+  await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)', { button: "right" }); await page.click('.ctxm [data-op="rename"]'); await page.fill("#ed-rename", "Our figures"); await page.keyboard.press("Enter"); await settle(200);
+  must((await page.locator('#ed-sections .sec[data-id="numbers"]:not(.blk) .nm').innerText()).startsWith("Our figures"), "name not kept");
+  await liveSave(); const sec = read(WR, "content/pages.json").pages.home.sections.find((x) => x.id === "numbers"); must(sec && sec.name === "Our figures", "saved " + JSON.stringify(sec && sec.name));
+  must(!(await frame("worldartreview.com").evaluate(() => document.body.innerText.includes("Our figures"))), "the name shows on the page");
+});
+await check("A section added to every page shows on another page and on an article, and saves in the shared list", async () => {
+  await page.click('.addl[data-act="ed-secpicker"][data-g="top"]'); await page.fill("[data-pick-q]", "announcement"); await page.click('.pk-item[data-key="announcement"]'); await settle(900);
+  must(await page.locator('.dl[data-g="top"] .sec:not(.blk)').count() === 1, "not in the top group");
+  must(await frame("worldartreview.com").evaluate(() => !!document.querySelector('[id^="every-announcement"]')), "not on the home page");
+  await page.selectOption(".pagepick", "a-palette-knife-painting"); await settle(1400);
+  must(await frame("worldartreview.com").evaluate(() => !!document.querySelector('[id^="every-announcement"]')), "not on the article");
+  await frame("worldartreview.com").click('[id^="every-announcement"]', { position: { x: 20, y: 10 } }); await settle(700); must((await panelH2()) === "Announcement bar", "a click on it opened " + await panelH2());
+  await liveSave(); const g = read(WR, "content/pages.json").groups; must(g && g.top.length === 1 && g.top[0].id.startsWith("every-announcement"), "saved " + JSON.stringify(g));
+  // take it off again, so the checks after this one see the site as it was
+  await page.hover('.dl[data-g="top"] .sec:not(.blk)'); await page.click('.dl[data-g="top"] .sec:not(.blk) [data-act="ed-row-del"]'); await settle(400); await liveSave();
+  must(read(WR, "content/pages.json").groups.top.length === 0, "the shared section stayed");
+  await page.selectOption(".pagepick", "home"); await settle(1000);
+});
+await check("Dragging a section moves it within its group, and dragging a block moves it within its section", async () => {
+  await page.dragAndDrop('#ed-sections .sec[data-id="method"]:not(.blk)', '#ed-sections .sec[data-id="featured"]:not(.blk)'); await settle(600);
+  const ids = await SL("#ed-sections .sec:not(.blk)"); must(ids.indexOf("method") < ids.indexOf("featured"), "order: " + ids.join(","));
+  await page.click('#ed-sections .sec[data-id="method"] .cnt'); await settle(300);
+  const before = await page.locator('#ed-sections .sec.blk[data-id="method"] .nm').allInnerTexts();
+  await page.dragAndDrop('#ed-sections .sec.blk[data-id="method"][data-block="2"]', '#ed-sections .sec.blk[data-id="method"][data-block="0"]'); await settle(600);
+  const after = await page.locator('#ed-sections .sec.blk[data-id="method"] .nm').allInnerTexts(); must(after[0] === before[2], "blocks: " + after.join(" | "));
+  await page.click('[data-act="ed-discard"]'); await settle(500);
+});
+await check("Ctrl+Shift+H hides the picked section and Shift+Delete removes it", async () => {
+  await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await settle(300); await page.focus(".ed-left"); await page.keyboard.press("Control+Shift+H"); await settle(400);
+  must(await page.locator('#ed-sections .sec.off[data-id="numbers"]').count() === 1, "not hidden"); must(await page.isVisible('#ed-sections .sec[data-id="numbers"]:not(.blk) .rb.is-off'), "no crossed-out eye");
+  await page.keyboard.press("Shift+Delete"); await settle(400); must(!(await page.$('#ed-sections .sec[data-id="numbers"]')), "not removed");
+  await page.click('[data-act="ed-discard"]'); await settle(500);
+});
+await check("A slideshow takes up to 10 slides: Add a slide then turns off and says 10 of 10", async () => {
+  await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); await page.fill("[data-pick-q]", "slideshow"); await page.click('.pk-item[data-key="slideshow"]'); await settle(700);
+  for (let i = 0; i < 12; i++) { const b = page.locator('.blocks[data-id^="slideshow"] .addl.blk').first(); if (await b.isDisabled()) break; await b.click(); await settle(150); }
+  const b = page.locator('.blocks[data-id^="slideshow"] .addl.blk').first(); must(await b.isDisabled() && (await b.innerText()).includes("10 of 10"), "button: " + await b.innerText());
+  await page.click('[data-act="ed-discard"]'); await settle(500);
+});
+await check("The main section of a page the site was built with has no Remove, and the server refuses to remove it", async () => {
+  await page.selectOption(".pagepick", "page-standards"); await settle(1200);
+  const first = await page.evaluate(() => window.__adh.pgOf().doc.pages.standards.sections.find((x) => x.type === "long-text").id); await page.hover('#ed-sections .sec[data-id="' + first + '"]:not(.blk)');
+  must(!(await page.isVisible('#ed-sections .sec[data-id="' + first + '"]:not(.blk) [data-act="ed-row-del"]')), "the main section has a bin");
+  await page.click('#ed-sections .sec[data-id="' + first + '"]:not(.blk)', { button: "right" }); must(!(await text(".ctxm")).includes("Remove"), "the menu offers Remove"); await page.keyboard.press("Escape");
+  const r = await page.evaluate(async (id) => { const p = JSON.parse(JSON.stringify(window.__adh.pgOf().doc)); p.pages.standards.sections = p.pages.standards.sections.filter((x) => x.id !== id);
+    const res = await fetch("/__fn", { method: "POST", body: JSON.stringify({ action: "savePages", site: "world-art-review", pages: p }) }); return (await res.json()).error || ""; }, first);
+  must(/main section/i.test(r), "server said: " + r);
+  await page.selectOption(".pagepick", "home"); await settle(1000);
+});
+
 // =============== 6c. New sections, batch 1 ===============
 area = "New sections: batch 1";
 const newPage = async (title) => { await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", title); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1200); };
-const addSec = async (key, at) => { await page.click(at == null ? '.addl[data-act="ed-secpicker"]' : "#ed-sections > .ins >> nth=" + at); await page.click('.pk-item[data-key="' + key + '"]'); await settle(400); };
+const addSec = async (key, at) => { await page.click(at == null ? '.addl[data-act="ed-secpicker"][data-g="page"]' : "#ed-sections > .ins >> nth=" + at); await page.click('.pk-item[data-key="' + key + '"]'); await settle(400); };
 await check("An announcement bar with two messages sits above the menu bar, and each message is its own block", async () => {
   await openSite("world-art-review"); await newPage("Notices"); await addSec("announcement", 0);
   await page.click('.sec.blk[data-bf="messages"][data-block="0"]'); await page.fill('[data-pf="messages.0.text"]', "Two new sources added."); await page.fill('[data-pf="messages.0.link"]', "Read it"); await page.fill('[data-pf="messages.0.href"]', "#artists");
@@ -750,7 +831,7 @@ await check("Typing redraws the page, and Save writes only the page list", async
   must(hub.read(SR, "main", "data/content.json") === fs.readFileSync(SADDIR + "data/content.json", "utf8"), "the content file changed");
 });
 await check("Add a section offers the same sections as the other sites", async () => {
-  await page.click('.addl[data-act="ed-secpicker"]'); await page.waitForSelector(".pk-item");
+  await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); await page.waitForSelector(".pk-item");
   const keys = await page.$$eval(".pk-item", (b) => b.map((x) => x.dataset.key));
   const want = ["announcement", "columns", "space", "quote", "faq", "button", "picture-banner", "slideshow", "gallery", "logo-row", "picture", "text-picture", "artworks", "exhibitions", "career", "press", "signup", "visit", "contact-form"];
   must(want.every((k) => keys.includes(k)), "missing: " + want.filter((k) => !keys.includes(k)).join(", "));

@@ -189,8 +189,8 @@ const PIC = { name: "image", label: "Picture", type: "image", alt: "alt" };
 const PIC_ALT = { name: "alt", label: "Describe the picture", type: "text", hint: "For people who cannot see it. Needed before you save." };
 const PB_PLACE = { name: "place", label: "Box of words at the", type: "choice", group: "Look", seg: true, dflt: "L", options: [["L", "Left"], ["C", "Centre"], ["R", "Right"]] };
 const PB_FIT = { name: "fit", label: "Picture", type: "choice", group: "Look", seg: true, dflt: "fill", options: [["fill", "Fill the banner"], ["whole", "Show it whole"]], hint: "Fill the banner trims the edges to fit. Choose Show it whole for an artwork, so none of it is cut off." };
-const SLIDE_ROWS = { name: "slides", label: "Slides", type: "rows", fields: [PIC, PIC_ALT, { name: "caption", label: "Caption", type: "text", hint: "Such as the title, year and medium, and who took the photo. Leave empty for none." }] };
-const SLIDE_BLOCK = { field: "slides", label: "Slide", add: "Add a slide", about: "One picture in the slideshow, with its caption." };
+const SLIDE_ROWS = { name: "slides", label: "Slides", type: "rows", max: 10, fields: [PIC, PIC_ALT, { name: "caption", label: "Caption", type: "text", hint: "Such as the title, year and medium, and who took the photo. Leave empty for none." }] };
+const SLIDE_BLOCK = { field: "slides", label: "Slide", add: "Add a slide", max: 10, about: "One picture in the slideshow, with its caption." };
 const SLIDE_LOOK = [{ name: "auto", label: "Move on by itself", type: "yesno", group: "Look", hint: "Every few seconds, until a visitor uses Previous or Next. Pictures stay still for people who ask their device for less motion." }, { name: "seconds", label: "Seconds on each slide", type: "number", group: "Look", hint: "Between 3 and 30." }];
 const SLIDE_SUMMARY = (st) => { const n = (st.slides || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " slide" : " slides"); };
 const SLIDE_STARTER = { slides: [{ image: "", alt: "", caption: "" }, { image: "", alt: "", caption: "" }, { image: "", alt: "", caption: "" }], auto: true, seconds: 6 };
@@ -199,8 +199,8 @@ const PHOTO_BLOCK = { field: "photos", label: "Photo", add: "Add a photo", about
 const PHOTO_PER_ROW = { name: "per_row", label: "Photos in a row", type: "choice", group: "Look", seg: true, dflt: "3", options: [["2", "Two"], ["3", "Three"], ["4", "Four"]], hint: "Two in a row on a phone." };
 const PHOTO_SUMMARY = (st) => { const n = (st.photos || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " photo" : " photos"); };
 const PHOTO_STARTER = { photos: [1, 2, 3].map(() => ({ image: "", alt: "", caption: "", sub: "" })), per_row: "3" };
-const LOGO_ITEM_ROWS = (hint) => ({ name: "logos", label: "Logos", type: "rows", fields: [{ ...PIC, label: "Logo", button: "Upload a logo", hint: "A PNG with a clear background works best." }, { name: "alt", label: "Name, read aloud to people who cannot see it", type: "text", hint: "Shown as words until a logo is uploaded." }, { name: "href", label: "Opens when clicked", type: "text", addr: true, hint }] });
-const LOGO_ITEM_BLOCK = { field: "logos", label: "Logo", add: "Add a logo", about: "One logo in the row, with an optional link." };
+const LOGO_ITEM_ROWS = (hint) => ({ name: "logos", label: "Logos", type: "rows", max: 12, fields: [{ ...PIC, label: "Logo", button: "Upload a logo", hint: "A PNG with a clear background works best." }, { name: "alt", label: "Name, read aloud to people who cannot see it", type: "text", hint: "Shown as words until a logo is uploaded." }, { name: "href", label: "Opens when clicked", type: "text", addr: true, hint }] });
+const LOGO_ITEM_BLOCK = { field: "logos", label: "Logo", add: "Add a logo", max: 12, about: "One logo in the row, with an optional link." };
 const LOGO_COLOUR = { name: "colour", label: "Logo colours", type: "choice", group: "Look", seg: true, dflt: "one", options: [["one", "One colour"], ["own", "Their own colours"]], hint: "One colour keeps a row of different logos calm." };
 const LOGO_SUMMARY = (st) => { const n = (st.logos || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " logo" : " logos"); };
 const LOGO_STARTER = { logos: [1, 2, 3].map(() => ({ image: "", alt: "Partner", href: "" })), colour: "one" };
@@ -882,7 +882,7 @@ function cleanField(f, v, site) {
   }
   if (t === "artists") { const ok = (site.artists || []).map((a) => a.slug); if (f.one) return ok.includes(String(v)) ? String(v) : ""; return (Array.isArray(v) ? v : []).map((x) => x && typeof x === "object" ? (ok.includes(String(x.v)) ? { v: String(x.v), hidden: true } : "") : (ok.includes(String(x)) ? String(x) : "")).filter(Boolean).slice(0, 20); }
   if (t === "rows") {
-    const rows = (Array.isArray(v) ? v : []).slice(0, 40);
+    const rows = (Array.isArray(v) ? v : []).slice(0, f.max || 40);
     return rows.map((row) => {
       const isList = f.fields.some((g) => typeof g.name === "number");
       const out = isList ? [] : {};
@@ -978,6 +978,7 @@ export function usageOf(name, pagesDoc, kinds, spots) {
   const has = (v) => (Array.isArray(v) ? v.some(has) : v && typeof v === "object" ? Object.values(v).some(has) : v === name);
   const used = [];
   for (const [key, part] of Object.entries((pagesDoc && pagesDoc.shared) || {})) if (part && has(part.settings)) used.push({ label: "Every page: " + ((kinds[part.type] || {}).label || key), page: "home", where: "shared", id: key });
+  for (const where of ["top", "bottom"]) for (const sec of ((pagesDoc && pagesDoc.groups) || {})[where] || []) if (has(sec.settings)) used.push({ label: "Every page: " + ((kinds[sec.type] || {}).label || sec.type) + (sec.visible === false ? " (hidden)" : ""), page: "home", where, id: sec.id });
   for (const [pk, pg] of Object.entries((pagesDoc && pagesDoc.pages) || {})) for (const sec of (pg && pg.sections) || []) {
     if (has(sec.settings)) used.push({ label: (pg.title || pk) + " page: " + ((kinds[sec.type] || {}).label || sec.type) + (sec.visible === false ? " (hidden)" : ""), page: pk, where: "page", id: sec.id });
   }
@@ -1097,6 +1098,12 @@ export function siteForEditor(data) {
   return out;
 }
 
+const GROUP_ID = /^every-[a-z0-9-]{1,40}$/;
+function cleanSection(spec, sec, id, site) {
+  const out = { id, type: sec.type, visible: sec.visible !== false, settings: cleanSettings(spec[sec.type], sec.settings, site) };
+  const nm = cleanText(sec.name, 40); if (nm) out.name = nm;
+  return out;
+}
 export function cleanPages(site, given, current) {
   const spec = site.sectionKinds;
   if (!given || typeof given !== "object") throw new Error("The page could not be read.");
@@ -1105,6 +1112,19 @@ export function cleanPages(site, given, current) {
     const cur = current.shared[key], g = (given.shared || {})[key] || cur;
     if (!spec[cur.type]) { out.shared[key] = cur; continue; }
     out.shared[key] = { type: cur.type, visible: g.visible !== false, settings: cleanSettings(spec[cur.type], g.settings, site) };
+    const nm = cleanText(g.name, 40); if (nm) out.shared[key].name = nm;
+  }
+  // sections shared by every page, above the page's own and below them
+  out.groups = { top: [], bottom: [] };
+  for (const where of ["top", "bottom"]) {
+    const list = Array.isArray(given.groups && given.groups[where]) ? given.groups[where] : ((current.groups || {})[where] || []);
+    if (list.length > 10) throw new Error("Up to 10 sections can be shared by every page, at the top and at the bottom.");
+    for (const sec of list) {
+      if (!sec || typeof sec !== "object" || !spec[sec.type]) throw new Error("One of the sections shared by every page is of a kind this site cannot draw.");
+      const id = String(sec.id || "");
+      if (!GROUP_ID.test(id) || out.groups.top.concat(out.groups.bottom).some((x) => x.id === id)) throw new Error("Every shared section needs its own short name, starting every-.");
+      out.groups[where].push(cleanSection(spec, sec, id, site));
+    }
   }
   // the home page is always there; other pages can be added and removed
   const gp = given.pages && typeof given.pages === "object" ? given.pages : current.pages || {};
@@ -1122,8 +1142,10 @@ export function cleanPages(site, given, current) {
       const id = String(sec.id || "");
       if (!SECTION_ID.test(id) || seen.has(id)) throw new Error("Every section needs its own short name.");
       seen.add(id);
-      sections.push({ id, type: sec.type, visible: sec.visible !== false, settings: cleanSettings(spec[sec.type], sec.settings, site) });
+      sections.push(cleanSection(spec, sec, id, site));
     }
+    const main = cur && mainSectionOf(site, key, cur.sections);
+    if (main && !sections.some((x) => x.id === main)) throw new Error("The main section of a page can be hidden or moved, but not removed.");
     const title = cleanText(g && g.title, site.model ? 120 : 60) || (cur && cur.title) || "";
     if (!title) throw new Error("Every page needs a title.");
     if (site.model) {
@@ -1141,6 +1163,13 @@ export function cleanPages(site, given, current) {
   }
   return out;
 }
+// The page's own content: on a page the site was built with (not the home page), the first section after its heading.
+export function mainSectionOf(site, key, sections) {
+  const built = site.builtIn || (site.model ? [] : ["standards"]);
+  if (key === "home" || !built.includes(key)) return "";
+  const s = (sections || []).find((x) => x && !["page-head", "page-heading", "announcement"].includes(x.type));
+  return s ? s.id : "";
+}
 const PAGE_KEY = /^[a-z][a-z0-9-]{0,40}$/;
 const RESERVED = ["home", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search", "assets", "data", "tools", "inbox", "preview", "auction-results", "market-intelligence", "collecting-valuation", "about", "contact", "dispatches", "urban-culture", "interventions", "exhibitions", "collecting", "images"];
 // A section's kinds of block, as a list. A kind is a list of rows, a list of names, or one block made of some of the section's own fields.
@@ -1149,6 +1178,7 @@ export function blockKinds(b) {
     const o = { field: x.field, label: x.label, add: x.add || "", about: x.about || "" };
     if (x.one) { o.one = true; o.hide = x.hide || ""; o.fields = x.fields || []; }
     if (x.item) o.item = x.item;
+    if (x.max) o.max = x.max;
     return o;
   });
 }
@@ -1165,6 +1195,7 @@ function summariesFor(site, pages) {
   const f = (sec) => { const k = site.sectionKinds[sec.type]; try { return k && k.summary ? String(k.summary(sec.settings || {})) : ""; } catch (_e) { return ""; } };
   const out = {};
   for (const [key, part] of Object.entries(pages.shared || {})) out["shared:" + key] = f(part);
+  for (const where of ["top", "bottom"]) for (const sec of ((pages.groups || {})[where] || [])) out["every:" + sec.id] = f(sec);
   for (const [key, pg] of Object.entries(pages.pages || {})) for (const sec of pg.sections || []) out[key + ":" + sec.id] = f(sec);
   return out;
 }
@@ -2390,7 +2421,7 @@ export async function handle(req) {
           await textBlob(tree, ps.meta, metaDoc);
           // places that show this photo without a description get this one
           if (alt) {
-            if (pf && fillDescriptions(pagesDoc.pages, name, alt) + fillDescriptions(pagesDoc.shared, name, alt)) await textBlob(tree, ps.file, pagesDoc);
+            if (pf && fillDescriptions(pagesDoc.pages, name, alt) + fillDescriptions(pagesDoc.shared, name, alt) + fillDescriptions(pagesDoc.groups || {}, name, alt)) await textBlob(tree, ps.file, pagesDoc);
             if (cf && spots.some((sp) => sp.image === name && !String(sp.alt || "").trim())) {
               const ch = {}; spots.forEach((sp) => { if (sp.image === name && !String(sp.alt || "").trim()) ch[sp.key] = { alt }; });
               if (applyPictures(cf.data, ch, null).done.length) await textBlob(tree, ps.content, cf.data);

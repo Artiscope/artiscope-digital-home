@@ -517,7 +517,6 @@ label.linklike.upl { display: inline-flex; align-items: center; font-weight: 400
 /* the tools take the place of the block count while shown, so a long name keeps its room */
 .ed .sec .rtools { display: none; }
 .ed .sec:hover .rtools, .ed .sec.on .rtools, .ed .sec:focus-within .rtools, .ed .sec .rtools.keep { display: inline-flex; }
-.ed .sec:hover .cnt, .ed .sec.on .cnt, .ed .sec:focus-within .cnt { display: none; }
 .ed .sec .nm { overflow-wrap: anywhere; }
 .ed .sec .rb { width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; display: grid; place-items: center; padding: 0; opacity: 0; transition: opacity .12s ease, background .12s ease; }
 .ed .sec:hover .rb, .ed .sec.on .rb, .ed .sec:focus-within .rb, .ed .sec .rb.is-off { opacity: 1; }
@@ -799,3 +798,22 @@ input[type="file"] { color: var(--muted); }
   .ed-mid { min-height: 70vh; padding: 10px; }
   .ed-right { max-height: none; }
 }
+
+/* ---------- step 2: the sections list ---------- */
+/* the drag handle takes the icon's place while the pointer is over a row that can move */
+.ed .sec .grip { display: none; opacity: 1; margin: 0; width: 16px; justify-content: center; }
+.ed .sec[draggable]:hover > .grip { display: grid; }
+.ed .sec[draggable]:hover > .kic, .ed .sec[draggable]:hover > .mini { display: none; }
+.ed .sec .grip i { background: var(--text); }
+/* the block count opens and closes the blocks */
+.ed .sec .cnt { border: 0; cursor: pointer; font: inherit; font-size: 11px; background: var(--bg); }
+.ed .sec .cnt:hover { color: var(--bright); box-shadow: var(--shadow-small); }
+.ed .sec .cnt[aria-expanded="true"] { color: var(--bright); }
+.ed .sec .nm small { white-space: normal; }
+.ed .sec.blk .mini { width: 22px; height: 22px; border-radius: 6px; object-fit: cover; flex: none; box-shadow: var(--shadow-small); }
+.ed .addl[disabled] { color: var(--dim); cursor: default; box-shadow: none; }
+.ed .sec input.rename { flex: 1; min-height: 28px; padding: 4px 8px; font-size: 13.5px; border-radius: 9px; }
+.ctxm { position: fixed; z-index: 60; width: 270px; }
+.ctxm .pp-item .kbd { margin-left: auto; }
+.notice.putback { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; box-shadow: var(--shadow-small); background: var(--bg); border-radius: 14px; padding: 10px 14px; }
+.notice.putback .linklike { min-height: 0; }

@@ -121,4 +121,37 @@ globalThis.fetch = realFetch;
   assert.deepEqual(out[0].settings.messages.map((m) => [m.text, m.href]), [["Hi, there", ""], ["Two", "#artists"]]);
   assert.equal(out[1].settings.per_row, "3"); assert.equal(out[1].settings.columns[0].href, "https://example.org"); assert.equal(out[2].settings.size, "M");
 }
+// sections shared by every page: kept in their own list, drawn on every page by each site's build
+{
+  const W = SITES.find((x) => x.repo === "Artiscope/World-art-review");
+  const ctx = { ...W, artists: [], articleSlugs: [], sourceIds: [] };
+  const cur = { shared: {}, pages: { home: { title: "Home", sections: [] }, standards: { title: "Standards", sections: [{ id: "h", type: "page-heading", settings: {} }, { id: "body", type: "long-text", settings: {} }] } } };
+  const quote = { id: "every-quote-1", type: "quote", name: "Pull quote", settings: { text: "A line", who: "" } };
+  const out = cleanPages(ctx, { ...cur, groups: { top: [], bottom: [quote] } }, cur);
+  assert.equal(out.groups.bottom[0].id, "every-quote-1"); assert.equal(out.groups.bottom[0].name, "Pull quote"); assert.deepEqual(out.groups.top, []);
+  assert.throws(() => cleanPages(ctx, { ...cur, groups: { top: [{ ...quote, id: "quote-1" }], bottom: [] } }, cur), /every-/);
+  assert.throws(() => cleanPages(ctx, { ...cur, groups: { top: [quote], bottom: [quote] } }, cur), /its own short name/);
+  // the main section of a page the site was built with can move and hide, not go
+  assert.throws(() => cleanPages(ctx, { ...cur, pages: { ...cur.pages, standards: { title: "Standards", sections: [cur.pages.standards.sections[0]] } } }, cur), /main section/);
+  const moved = cleanPages(ctx, { ...cur, pages: { ...cur.pages, standards: { title: "Standards", sections: [{ ...cur.pages.standards.sections[1], visible: false }, cur.pages.standards.sections[0]] } } }, cur);
+  assert.equal(moved.pages.standards.sections[0].visible, false);
+  // each site draws them, on its own pages and on articles and artists
+  const { execFileSync } = await import("node:child_process"); const path = await import("node:path");
+  for (const [dir, file, build] of [[G_DIR, "data/pages.json", ["tools/build.py"]], [sadDir(), "data/pages.json", ["tools/build.py", "/tmp/grp-sad-out"]]]) {
+    const tmp = "/tmp/grp-" + path.basename(dir); fs.rmSync(tmp, { recursive: true, force: true }); fs.cpSync(dir, tmp, { recursive: true, filter: (x) => !/\/\.git(\/|$)/.test(x) });
+    const pj = JSON.parse(fs.readFileSync(tmp + "/" + file, "utf8")); pj.groups = { top: [], bottom: [{ id: "every-quote-1", type: "quote", visible: true, settings: { text: "Shared on every page", who: "" } }] };
+    fs.writeFileSync(tmp + "/" + file, JSON.stringify(pj)); execFileSync("python3", build, { cwd: tmp, stdio: "pipe" });
+    const outDir = build[1] || tmp, pages = [];
+    const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach((e) => { const f = d + "/" + e.name; if (e.isDirectory() && !/^(\.git|assets|data|tools|inbox|node_modules)$/.test(e.name)) walk(f); else if (e.name === "index.html") pages.push(f); });
+    walk(outDir); assert.ok(pages.length > 5, dir + ": built " + pages.length + " pages");
+    const missing = pages.filter((f) => !fs.readFileSync(f, "utf8").includes("Shared on every page"));
+    assert.deepEqual(missing, [], dir + ": pages without the shared section");
+  }
+  const wtmp = "/tmp/grp-war"; fs.rmSync(wtmp, { recursive: true, force: true }); fs.cpSync(W_DIR, wtmp, { recursive: true, filter: (x) => !/\/\.git(\/|$)/.test(x) });
+  const wp = JSON.parse(fs.readFileSync(wtmp + "/content/pages.json", "utf8")); wp.groups = { top: [], bottom: [{ id: "every-quote-1", type: "quote", visible: true, settings: { text: "Shared on every page", who: "" } }] };
+  fs.writeFileSync(wtmp + "/content/pages.json", JSON.stringify(wp)); execFileSync("python3", ["tools/build_site.py", "/tmp/grp-war-out"], { cwd: wtmp, stdio: "pipe" });
+  assert.ok(fs.readFileSync("/tmp/grp-war-out/index.html", "utf8").includes("Shared on every page"));
+  wp.groups.top = [{ id: "quote-1", type: "quote", settings: {} }]; fs.writeFileSync(wtmp + "/content/pages.json", JSON.stringify(wp));
+  assert.throws(() => execFileSync("python3", ["tools/build_site.py", "/tmp/grp-war-out"], { cwd: wtmp, stdio: "pipe" }), "a shared section without every- in its id still built");
+}
 console.log("ALL TESTS PASSED");

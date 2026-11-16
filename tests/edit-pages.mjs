@@ -88,7 +88,7 @@ try {
   await page.click('form[data-form="ednew"] button[type=submit]'); await settle();
   assert.equal(await hash(), "#page-visit-us"); assert.ok((await frame().innerText("header.hdr")).includes("Visit us"), "the new page is in the menu bar");
   assert.ok((await frame().innerText("#main")).includes("Visit us"));
-  await page.click('.addl[data-act="ed-secpicker"]'); await page.waitForSelector('.pk-item[data-key="quote"]');
+  await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); await page.waitForSelector('.pk-item[data-key="quote"]');
   assert.equal(await page.locator('.pk-item[data-key="hero"]:not([disabled])').count(), 1, "every section is offered on a new page");
   assert.equal(await page.locator('.pk-item[data-key="header"], .pk-item[data-key="footer"], .pk-item[data-key="opening"], .pk-item[disabled]').count(), 0, "but not the menu bar, footer or opening screen, and nothing greyed out");
   assert.deepEqual(await page.locator(".pk-gl").allTextContents(), ["Top of the page", "Words", "Pictures", "Art and artists", "Reading and trust", "Contact and sign-up"]);

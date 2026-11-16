@@ -198,7 +198,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (16 November 2026, Version 36)
+## Where things stand (16 November 2026, Version 37)
 
 Done:
 
@@ -286,7 +286,38 @@ Done:
   marked "Not used on this site", a second shortcut where the browser
   keeps one, and plain group names (Top of every page, Popups, This page,
   Bottom of every page).
-  Steps 2 to 9 wait for the owner's go ahead, one at a time.
+  Step 2, the sections list (Version 37):
+  - Three groups: Top of every page (opening screen, menu bar, then
+    `groups.top`), This page, Bottom of every page (`groups.bottom`, then
+    the footer), each ending with an Add section button (`data-g`).
+    Sections shared by every page live in the page list file under
+    `groups: {top: [], bottom: []}`, with ids starting `every-`. Each
+    site draws them on every page, articles and artists included:
+    announcement bars above the menu bar, the rest after the menu bar
+    (after an opening banner that holds it) and above the footer
+    (`groupHTML` in World Art Review, `groupHtml` in the other two). The
+    editor link reports a click on one with `view: "every"`.
+  - Rows: a name the owner gives (`name`, never shown to visitors), the
+    block count opens and closes the blocks, a drag handle in place of
+    the icon on hover, eye and bin. Blocks read "Kind: first words" with
+    a small picture. Lists of blocks can have a limit (`max` on the rows
+    field and its block; slides 10, logos 12) and Add then reads
+    "(10 of 10)" and turns off.
+  - Drag sections within their group and blocks within their section.
+  - Right-click menu: Copy, Paste, Duplicate, Rename (in place, Enter
+    keeps, Escape cancels), Hide or Show, Add section before and after,
+    Edit code (later step), Remove. Ctrl/Cmd+Shift+H (or Alt+Shift+H)
+    hides, Shift+Delete removes.
+  - Remove happens at once, with "Put it back" above the preview, until
+    the session undo of step 8.
+  - The main section of a page the site was built with (not the home
+    page: the first section after its heading, `mainSectionOf` on the
+    server, `mainId` in the console) has no Remove; the server refuses
+    it too.
+  - Left out for now: a Popups group (no popup sections exist), blocks
+    inside blocks (no section uses them), fixed and own-layout pages
+    (with templates, step 7).
+  Steps 3 to 9 wait for the owner's go ahead, one at a time.
 
 Waiting for the owner:
 
