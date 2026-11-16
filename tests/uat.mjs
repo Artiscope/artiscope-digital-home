@@ -1,4 +1,4 @@
-import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir } from "./where.mjs";
 // User acceptance run: the real console, signed in, talking to the real server code
 // over an in-memory GitHub seeded from both sites, with the real sites as previews.
 // Each case is recorded as passed or failed with a note; nothing stops the run.
@@ -26,9 +26,11 @@ const { handle } = await import("./home.mjs");
 const { makeGitHub } = await import("./fakegit.mjs");
 const files = (dir, list) => Object.fromEntries(list.filter((f) => fs.existsSync(dir + f)).map((f) => [f, fs.readFileSync(dir + f, "utf8")]));
 const pics = (dir, sub) => Object.fromEntries(fs.readdirSync(dir + sub).map((f) => [sub + "/" + f, "picture"]));
-const WR = "Artiscope/World-art-review", GR = "Artiscope/global-art-monitor";
+const WR = "Artiscope/World-art-review", GR = "Artiscope/global-art-monitor", SR = "Artiscope/street-art-dispatch";
+const SADDIR = sadDir() + "/", sad0 = JSON.parse(fs.readFileSync(SADDIR + "data/content.json", "utf8"));
 const hub = makeGitHub({
   [WR]: { ...files(WARDIR, ["content/site.json", "content/pages.json", "content/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(WARDIR, "images") },
+  [SR]: files(SADDIR, ["data/content.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]),
   [GR]: { ...files(GAMDIR, ["data/content.json", "data/sales.json", "data/images.json", "data/pages.json", "data/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(GAMDIR, "assets/images") },
 });
 let breakGitHub = false;
@@ -94,8 +96,8 @@ async function openSite(id) { await page.click('[data-tab="home"]', { timeout: 1
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all six sites, the Practice site among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 6, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 32"), "no version"));
-await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-3"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await page.click('[data-tab="home"]'); });
+await check("Version number is shown", async () => must((await text("body")).includes("Version 33"), "no version"));
+await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await page.click('[data-tab="home"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
   const t = await text("body"); signedIn = "tester@artiscope.co.uk";
@@ -679,6 +681,64 @@ await check("Every form box has a label", async () => {
   const bad = await page.evaluate(() => [...document.querySelectorAll("input:not([type=hidden]):not([type=file]), select, textarea")].filter((i) => !(i.id && document.querySelector('label[for="' + i.id + '"]')) && !i.getAttribute("aria-label") && !i.closest("label")).map((i) => i.dataset.pf || i.dataset.change || i.className)); must(bad.length === 0, bad.length + " without a label: " + bad.slice(0, 5).join(", "));
 });
 await check("You can see where the keyboard is", async () => { await page.keyboard.press("Tab"); await page.keyboard.press("Tab"); const o = await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle); must(o !== "none", "no visible focus"); });
+
+// =============== 10. Street Art Dispatch ===============
+area = "Street Art Dispatch";
+const sadWide = async () => { await page.setViewportSize({ width: 390, height: 844 }); await settle(700); const w = await page.evaluate(() => document.documentElement.scrollWidth); await page.setViewportSize({ width: 1440, height: 900 }); await settle(300); return w; };
+async function sadSave() { await page.click('form[data-form="entry"] button[type="submit"]'); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved", { timeout: 9000 }); await settle(900); }
+async function sadOpen(label, nth = 0) { await page.click('.tabb:has-text("' + label + '")'); await settle(400); await page.click('[data-act="open"] >> nth=' + nth); await page.waitForSelector('form[data-form="entry"]'); }
+await check("Opening Street Art Dispatch goes straight to Content", async () => {
+  await page.evaluate(() => { window.__adh.state.leave = null; window.__adh.state.dirty = false; const p = window.__adh.pgOf(); if (p) p.dirty = false; window.__adh.go("home"); }); await settle(600);
+  await page.click('[data-act="open-site"][data-site="street-art-dispatch"]'); await page.waitForSelector(".tabs.many", { timeout: 12000 }); await settle(600);
+  must(await page.evaluate(() => window.__adh.state.tab) === "content", "opened on " + await page.evaluate(() => window.__adh.state.tab)); await shot("40-sad-content");
+});
+await check("Menu has Overview, Content, Versions and History, and no Pages, Theme, Photos or Files", async () => {
+  const t = await text(".rail"); must(["Overview", "Content", "Versions", "History"].every((w) => t.includes(w)) && !["Pages", "Theme", "Photos", "Files"].some((w) => t.includes(w)), "menu: " + t);
+});
+await check("Every list of the site is offered, all on screen at once", async () => {
+  const tabs = await page.locator(".tabb").allInnerTexts(); must(tabs.length === 11, tabs.length + " lists: " + tabs.join(", "));
+  const cut = await page.evaluate(() => [...document.querySelectorAll(".tabb")].filter((b) => b.scrollWidth > b.clientWidth + 1).length); must(cut === 0, cut + " names cut short");
+});
+await check("Editing a dispatch title saves that title and nothing else", async () => {
+  await sadOpen("Dispatches", 1); await page.fill('[data-field="title"]', "A title changed in the console"); await sadSave();
+  const now = read(SR, "data/content.json"); must(now.features[1].title === "A title changed in the console", "title is " + now.features[1].title);
+  must(JSON.stringify({ ...now, features: null }) === JSON.stringify({ ...sad0, features: null }) && JSON.stringify(now.features.slice(2)) === JSON.stringify(sad0.features.slice(2)), "something else changed too");
+});
+await check("Web addresses, pictures and links are not offered for editing", async () => {
+  const names = await page.evaluate(() => window.__adh.state.content["street-art-dispatch"].flatMap((c) => c.entries.flatMap((e) => e.fields.map((f) => f.name))));
+  must(!names.some((x) => ["slug", "cover", "read", "column", "name"].includes(x)), "locked field offered");
+});
+await check("A year typed as words is saved as a number, and the Venice date stays to confirm", async () => {
+  await page.click('[data-act="close"]').catch(() => {}); await settle(300);
+  const i = sad0.archive.findIndex((x) => typeof x.y === "number"); await sadOpen("Interventions archive", i);
+  await page.fill('[data-field="y"]', String(sad0.archive[i].y + 1)); await sadSave();
+  const now = read(SR, "data/content.json"); must(now.archive[i].y === sad0.archive[i].y + 1, "saved as " + JSON.stringify(now.archive[i].y));
+  must(now.archive.find((x) => x.pending).y === "TBC", "the Venice date changed");
+});
+await check("An exhibition can be deleted, after asking once", async () => {
+  await page.click('[data-act="close"]').catch(() => {}); await settle(300); await sadOpen("Exhibitions", 2);
+  await page.click('[data-act="ask"]'); must((await text("body")).includes("Delete this exhibition?"), "did not ask"); await page.click('[data-act="entry-delete"]');
+  await page.click('[data-act="livesave"]').catch(() => {}); await page.waitForSelector("text=Saved", { timeout: 9000 }); await settle(900);
+  must(read(SR, "data/content.json").exhibitions.length === sad0.exhibitions.length - 1, "not deleted");
+});
+await check("Dispatches and artists cannot be deleted or hidden", async () => {
+  await sadOpen("Dispatches", 0); const a = await page.locator('[data-act="ask"], [data-act="entry-hide"]').count(); await page.click('[data-act="close"]'); await settle(300);
+  await sadOpen("Artists", 0); const b = await page.locator('[data-act="ask"], [data-act="entry-hide"]').count(); await page.click('[data-act="close"]'); await settle(300);
+  must(a === 0 && b === 0, "delete or hide offered");
+});
+await check("Changes are signed by admin, with no email address in GitHub", async () => {
+  const msgs = hub.commitLog(SR).map((c) => c.message).filter((m) => m !== "Start"); must(msgs.length >= 3 && msgs.every((m) => !/@/.test(m)), "messages: " + msgs.join(" | "));
+  must(msgs.filter((m) => /\(by admin\)$/.test(m)).length >= 3, "not signed: " + msgs.join(" | "));
+});
+await check("Overview shows Content, Versions and History, and no Theme or Photos", async () => {
+  await page.evaluate(() => window.__adh.go("overview")); await settle(900); await shot("41-sad-overview");
+  const t = await text(".grid-3"); must(t.includes("Content") && t.includes("Versions") && t.includes("History") && !t.includes("Theme") && !t.includes("Photos"), "tiles: " + t.replace(/\n/g, " "));
+});
+await check("No sideways scrolling on a phone: overview, content and an open entry", async () => {
+  const a = await sadWide(); await page.evaluate(() => window.__adh.go("content")); await settle(600); const b = await sadWide();
+  await sadOpen("About page", 0); const c = await sadWide(); await page.setViewportSize({ width: 390, height: 844 }); await settle(500); await shot("42-sad-phone-entry"); await page.setViewportSize({ width: 1440, height: 900 });
+  must(a <= 392 && b <= 392 && c <= 392, [a, b, c].join(", ") + " pixels wide");
+});
 
 // =============== results ===============
 results.push(...errors.map((e) => ({ area: "Script errors on the page", name: e.slice(0, 160), ok: false, note: "" })));

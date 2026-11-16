@@ -129,6 +129,7 @@ export function makeGitHub(seed) {   // seed: { "Owner/repo": { "path": "text" }
     read(repo, ref, file) { const r = repoOf(repo), s = resolve(r, ref), f = s && filesAt(r, s)[file]; return f ? Buffer.from(r.blobs[f], "base64").toString("utf8") : null; },
     refs(repo) { return { ...repoOf(repo).refs }; },
     releases(repo) { return [...(repoOf(repo).releases || [])]; },
+    commitLog(repo) { return Object.values(repoOf(repo).commits).map((c) => ({ sha: c.sha, message: c.message })); },
     addPull(repo, number, branch, title) { const r = repoOf(repo); (r.pulls = r.pulls || {})[number] = { number, title, state: "open", head: { ref: branch }, user: { login: "agent" }, html_url: "https://github.com/" + repo + "/pull/" + number, body: "", created_at: new Date(clock).toISOString() }; },
     lastMessage(repo, ref) { const r = repoOf(repo); return r.commits[resolve(r, ref)].message; },
     commitOn(repo, ref, file, text, message) { const r = repoOf(repo), head = resolve(r, ref); r.refs[ref] = commit(r, tree(r, { ...filesAt(r, head), [file]: blob(r, b64(text)) }), [head], message); return r.refs[ref]; },

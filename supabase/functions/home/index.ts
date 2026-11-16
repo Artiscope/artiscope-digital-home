@@ -1018,7 +1018,46 @@ export const SITES = [
       { id: "site", label: "Site details", singular: "site details", file: "data/content.json", path: ["site"], shape: "single", title: "name", sub: ["tagline"], canHide: false, canDelete: false },
     ],
   },
-  { id: "site-3", name: "Site 3", domain: "", repo: "", live: false, artists: [], collections: [] },
+  {
+    // Street Art Dispatch: its words live in one file, data/content.json, which its build turns into pages.
+    // Pages, Theme and Photos are not set up for it yet, so the console shows only Content and the shared screens.
+    id: "street-art-dispatch",
+    name: "Street Art Dispatch",
+    domain: "streetartdispatch.com",
+    repo: "Artiscope/street-art-dispatch",
+    live: true,
+    noPhotos: true,
+    artists: [
+      { slug: "konn-artiss", name: "Konn Artiss" },
+      { slug: "banksy", name: "Banksy" },
+      { slug: "invader", name: "Invader" },
+      { slug: "shepard-fairey", name: "Shepard Fairey" },
+    ],
+    // The build needs every article, and the artist pages point at particular ones, so articles and
+    // artists are edited but never hidden or deleted here. Their web addresses, pictures and links stay locked.
+    collections: [
+      { id: "dispatches", label: "Dispatches", singular: "dispatch", file: "data/content.json", path: ["features"], shape: "list", key: "slug", title: "title", sub: ["kicker"], canHide: false, canDelete: false,
+        inside: { cover: false }, labels: { draft: "Draft: show the note that details are still being confirmed" } },
+      { id: "columns", label: "Urban Culture columns", singular: "column", file: "data/content.json", path: ["columns"], shape: "list", key: "slug", title: "title", sub: ["kicker"], canHide: false, canDelete: false,
+        inside: { cover: false, column: false } },
+      { id: "artists", label: "Artists", singular: "artist", file: "data/content.json", path: ["artists"], shape: "list", key: "name", title: "name", sub: ["role"], canHide: false, canDelete: false,
+        inside: { name: false, cover: false, read: false, facts: { labelFrom: 0, cols: { 1: "" } } }, labels: { role: "Kinds of work", summary: "Short summary" } },
+      { id: "notes", label: "Artist notes", singular: "artist note", file: "data/content.json", path: ["artist_notes"], shape: "textmap", title: null, canHide: false, canDelete: false, labels: { "*": "Note shown on the artist's page" } },
+      { id: "archive", label: "Interventions archive", singular: "archive entry", file: "data/content.json", path: ["archive"], shape: "list", key: null, title: "title", sub: ["artist", "y"], year: "y", canHide: false, canDelete: true,
+        inside: { read: false, artist: true }, labels: { artist: "Artist", y: "Year (or TBC)", city: "City", country: "Country", type: "Kind of work", note: "Note", pending: "Date to confirm: show Awaiting confirmation" } },
+      { id: "exhibitions", label: "Exhibitions", singular: "exhibition", file: "data/content.json", path: ["exhibitions"], shape: "list", key: null, title: "t", sub: ["venue", "when"], canHide: false, canDelete: true,
+        labels: { t: "Title", sub: "Second line", venue: "Venue", when: "Dates", status: "Status" } },
+      { id: "glossary", label: "Glossary", singular: "glossary term", file: "data/content.json", path: ["glossary"], shape: "rows", titleAt: 0, columns: ["Term", "Meaning"], canHide: false, canDelete: false },
+      { id: "figures", label: "Collecting figures", singular: "figure", file: "data/content.json", path: ["stats"], shape: "rows", titleAt: 0, columns: ["Figure", "What it is"], canHide: false, canDelete: false },
+      { id: "about", label: "About page", singular: "About page", file: "data/content.json", path: ["pages", "about"], shape: "single", title: null, canHide: false, canDelete: false,
+        inside: { standards: { labelFrom: 0, cols: { 0: "heading", 1: "" } } }, labels: { stand: "Opening line", intro: "Opening paragraphs", contact: "Get in touch" } },
+      { id: "contact", label: "Contact page", singular: "Contact page", file: "data/content.json", path: ["pages", "contact"], shape: "single", title: null, canHide: false, canDelete: false,
+        inside: { routes: { labelFrom: 0, cols: { 0: "heading", 1: "" } } }, labels: { stand: "Opening line" } },
+      { id: "issue", label: "Issue details", singular: "issue details", file: "data/content.json", path: [], shape: "single", title: null, canHide: false, canDelete: false,
+        inside: { features: false, columns: false, artists: false, archive: false, exhibitions: false, stats: false, glossary: false, photos: false, artist_photos: false, artist_notes: false, pages: false },
+        labels: { desk: "Name of the desk", date: "Issue date" } },
+    ],
+  },
   { id: "site-4", name: "Site 4", domain: "", repo: "", live: false, artists: [], collections: [] },
   { id: "site-5", name: "Site 5", domain: "", repo: "", live: false, artists: [], collections: [] },
 ];
@@ -1235,7 +1274,8 @@ export function fieldsOf(entry, numbers = [], inside = {}) {
   const rules = inside && !Array.isArray(inside) ? inside : {};
   const later = [];
   for (const name of Object.keys(entry || {})) {
-    if (LOCKED.includes(name) || rules[name] === false) continue;
+    // true opens a field that is usually locked, where it is plain words on this site
+    if ((LOCKED.includes(name) && rules[name] !== true) || rules[name] === false) continue;
     const v = entry[name];
     const type = kindOf(name, v, numbers);
     if (type) { out.push({ name, label: labelFor(name), type, value: v }); continue; }
@@ -1277,9 +1317,11 @@ export function entriesOf(data, col) {
   const node = dig(data, col.path);
   const list = [];
   if (col.shape === "single" && node && typeof node === "object") {
-    list.push({ id: "only", ref: node, parent: null, title: node[col.title] || col.label });
+    list.push({ id: "only", ref: node, parent: null, title: (col.title && node[col.title]) || col.label });
   } else if (col.shape === "map" && node && typeof node === "object") {
     for (const k of Object.keys(node)) list.push({ id: k, ref: node[k], parent: null, title: (col.title && node[k][col.title]) || k });
+  } else if (col.shape === "textmap" && node && typeof node === "object") {
+    for (const k of Object.keys(node)) if (typeof node[k] === "string") list.push({ id: k, ref: node, parent: null, title: k, only: k });
   } else if (col.shape === "list" && Array.isArray(node)) {
     node.forEach((e, i) => list.push({ id: col.key && e[col.key] ? String(e[col.key]) : "n" + i, ref: e, parent: null, title: e[col.title] || "Untitled" }));
   } else if (col.shape === "rows" && Array.isArray(node)) {
@@ -1294,12 +1336,43 @@ export function entriesOf(data, col) {
   return list;
 }
 
-function entryView(x, col) {
+export function entryView(x, col) {
   const sub = (col.sub || []).map((k) => x.ref[k]).filter((v) => typeof v === "string" && v).join(", ");
   return {
     id: x.id, title: String(x.title), sub: [x.group, sub].filter(Boolean).join(". "),
-    hidden: x.ref.hidden === true, fields: fieldsOf(x.ref, col.numbers || [], col.columns || col.inside || {}),
+    hidden: x.ref.hidden === true, fields: labelled(fieldsOf(x.ref, col.numbers || [], col.columns || col.inside || {}).filter((f) => !x.only || f.name === x.only), col)
+      .map((f) => (col.year && f.name === col.year ? { ...f, type: "text", value: f.value == null ? "TBC" : String(f.value) } : f)),
   };
+}
+
+// A site can give its own short field names clearer labels ("*" for every field).
+function labelled(fields, col) {
+  const L = col.labels || {};
+  return fields.map((f) => (L[f.name] || L["*"] ? { ...f, label: L[f.name] || L["*"] } : f));
+}
+
+// Saves one entry of a collection, as the console sent it. Returns how many values changed.
+export function applyEntry(x, col, given) {
+  given = given && typeof given === "object" ? given : {};
+  const vals = x.only ? (x.only in given ? { [x.only]: given[x.only] } : {}) : { ...given };
+  let extra = 0;
+  // a year is a whole number, or "TBC" while it is being confirmed
+  if (col.year && col.year in vals && col.year in x.ref) {
+    const raw = String(vals[col.year] == null ? "" : vals[col.year]).trim();
+    const v = /^\d{3,4}$/.test(raw) ? Number(raw) : "TBC";
+    if (x.ref[col.year] !== v) { x.ref[col.year] = v; extra++; }
+    delete vals[col.year];
+  }
+  return extra + applyValues(x.ref, vals, col.numbers || [], col.columns || col.inside || {});
+}
+
+// Words can carry simple marks (paragraphs, bold, links), but never anything that runs on the page.
+export function safeMarks(v) {
+  return String(v)
+    .replace(/<(script|style|iframe|object|embed|form|template)\b[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<\/?(script|style|iframe|object|embed|form|template|link|meta|base|input|button|textarea|select)\b[^>]*>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/(href|src)\s*=\s*(["']?)\s*(javascript|data|vbscript):[^"'\s>]*\2/gi, '$1="#"');
 }
 
 // Applies edited values to one entry. Only fields the entry already has,
@@ -1316,9 +1389,9 @@ export function applyValues(entry, values, numbers = [], inside = {}) {
     } else if (f.type === "yesno") {
       v = v === true || v === "true";
     } else if (f.type === "lines") {
-      v = (Array.isArray(v) ? v : String(v).split(/\n+/)).map((x) => String(x).trim()).filter(Boolean).slice(0, 60);
+      v = (Array.isArray(v) ? v : String(v).split(/\n+/)).map((x) => safeMarks(String(x).trim())).filter(Boolean).slice(0, 60);
     } else {
-      v = String(v == null ? "" : v).replace(/ *— */g, ", ").replace(/, ,/g, ",").slice(0, 60000);
+      v = safeMarks(String(v == null ? "" : v).replace(/ *— */g, ", ").replace(/, ,/g, ",").slice(0, 60000));
       if (f.value === null && v === "") v = null;
     }
     // the name is a path that fieldsOf produced from this same entry, so every step exists
@@ -1522,7 +1595,8 @@ async function branchForWriting(site, copy, _who) {
 }
 
 async function siteOverview(site, wanted = "", me = null, names = {}) {
-  const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta), edits: !!site.items, practice: !!site.practice };
+  const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta), edits: !!site.items, practice: !!site.practice,
+    pagesOn: !!site.pages, themeOn: !!site.theme, photosOn: !site.noPhotos };
   if (!site.live) return base;
   try {
     const copies = (await copiesOf(site)).filter((c) => !me || me.admin || c.kind === "live" || ownerOfCopy(c.id) === me.tag);
@@ -2159,7 +2233,7 @@ export async function handle(req) {
 
     if (action === "saveEntry") {
       let changed = 0;
-      try { changed = applyValues(x.ref, body.values || {}, col.numbers || [], col.columns || col.inside || {}); }
+      try { changed = applyEntry(x, col, body.values || {}); }
       catch (e) { return json({ error: e.message }, 400); }
       if (!changed) return json({ ok: true, unchanged: true });
       message = "Edit " + col.singular + ": " + x.title;

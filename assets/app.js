@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "32";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "33";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -65,7 +65,7 @@
   function liveSites() { return sites().filter(function (s) { return s.live; }); }
   function site() { return liveSites().find(function (s) { return s.id === state.site; }) || null; }
   function initials(name) { return String(name).split(/\s+/).map(function (w) { return w.charAt(0); }).join("").slice(0, 3).toUpperCase(); }
-  var COLOURS = { "world-art-review": ["#1D4A35", "#EEE5D4"], "global-art-monitor": ["#F3C3C8", "#2A2A2F"], "practice-site": ["#F1E6FC", "#52057B"] };
+  var COLOURS = { "world-art-review": ["#1D4A35", "#EEE5D4"], "global-art-monitor": ["#F3C3C8", "#2A2A2F"], "practice-site": ["#F1E6FC", "#52057B"], "street-art-dispatch": ["#163A30", "#EFE6D3"] };
   function colours(id) { return COLOURS[id] || ["#EDE8F3", "#5D5866"]; }
 
   // ---------- talking to the server ----------
@@ -120,7 +120,7 @@
       if ((state.tab === "content" || state.tab === "overview") && (force || !state.content[s.id])) {
         var c = await api("content", { site: s.id }); state.content[s.id] = c.collections || []; render();
       }
-      if ((state.tab === "theme" || state.tab === "overview") && !state.theme[s.id]) {
+      if ((state.tab === "theme" || state.tab === "overview") && !state.theme[s.id] && hasScreen(s, "theme")) {
         var t = await api("theme", { site: s.id });
         state.theme[s.id] = { spec: t.spec, values: t.values, draft: JSON.parse(JSON.stringify(t.values)), mode: "computer", live: null }; render();
       }
@@ -256,8 +256,18 @@
   function myCopy(s) { return copiesOf(s).find(function (c) { return c.mine; }) || null; }
   function navItems() {
     var s = site(); if (!(state.inSite && s)) return NAV.slice(0, 1).concat(isAdmin() ? [NAV_PEOPLE] : []);
-    return (s.files ? NAV.map(function (n) { return n[0] === "photos" ? NAV_FILES : n; }) : NAV).filter(function (n) { return !(s.edits && n[0] === "content") && !(n[0] === "history" && !isAdmin()); });
+    return (s.files ? NAV.map(function (n) { return n[0] === "photos" ? NAV_FILES : n; }) : NAV).filter(function (n) { return !(s.edits && n[0] === "content") && !(n[0] === "history" && !isAdmin()) && hasScreen(s, n[0]); });
   }
+  // A site that is not yet set up for Pages, Theme or Photos leaves those screens out.
+  function hasScreen(s, tab) {
+    if (!s) return true;
+    if (tab === "pages") return s.pagesOn !== false;
+    if (tab === "theme") return s.themeOn !== false;
+    if (tab === "photos" || tab === "files") return s.photosOn !== false;
+    return true;
+  }
+  // The screen a site opens on: Pages where it has them, otherwise Content.
+  function firstTab(x) { return hasScreen(x, "pages") ? "pages" : "content"; }
   function photosTab(s) { return s && s.files ? "files" : "photos"; }
   function navIndex(tab) { var i = navItems().findIndex(function (n) { return n[0] === tab; }); return i < 0 ? 0 : i; }
   function mark() { return '<svg width="20" height="20" viewBox="0 0 26 26"><path d="M2 24V10l11-9 11 9v14z" fill="#FFFFFF"></path><rect x="10" y="14" width="6" height="10" fill="#52057B"></rect></svg>'; }
@@ -441,11 +451,13 @@
       '<p>' + esc(s.domain) + (isAdmin() ? '. Everything for this site is here. Saves on the live site reach visitors straight away. Use a trial copy to try things first.' : '. You work on your own copy. Nothing you save is seen until you publish it.') + '</p></div>' +
       '<div class="grid-3">' +
         (s.edits ? tile("pages", "", "Pages", "Every page, article and artist portfolio, edited beside the real page", "Open the editor")
-          : tile("content", entries, "Content", (cols ? cols.map(function (c) { return c.label.toLowerCase(); }).join(", ") : "Articles, artists and more"), "Edit, hide or delete")) +
-        (t ? '<button type="button" class="card lift sitecard tile" data-tab="theme"><span class="swatches" aria-hidden="true">' + t.spec.colours.map(function (c) { return '<i style="background:' + esc(t.values.colours[c.id] || c.default) + '" title="' + esc(c.label) + '"></i>'; }).join("") + '</span>' +
+          : tile("content", entries, "Content", (cols ? cols.map(function (c) { return c.label.toLowerCase(); }).join(", ") : "Articles, artists and more"), cols && cols.some(function (c) { return c.canHide; }) ? "Edit, hide or delete" : "Edit the words")) +
+        (!hasScreen(s, "theme") ? "" : t ? '<button type="button" class="card lift sitecard tile" data-tab="theme"><span class="swatches" aria-hidden="true">' + t.spec.colours.map(function (c) { return '<i style="background:' + esc(t.values.colours[c.id] || c.default) + '" title="' + esc(c.label) + '"></i>'; }).join("") + '</span>' +
           '<b>Theme</b><span class="small">' + t.spec.fonts.map(function (f) { return esc(t.values.fonts[f.id] || f.default); }).join(" &nbsp;&middot;&nbsp; ") + '</span><span class="small" style="color:var(--accent);margin-top:6px">Change the look</span></button>'
           : tile("theme", "", "Theme", "Colours and typefaces", "Change the look")) +
-        (s.files ? tile("files", state.files[s.id] ? state.files[s.id].files.length : "", "Files", "Every photo on the site, what it shows and where it is used", "Upload and describe")
+        (!hasScreen(s, "photos") ? tile("versions", s.versions && s.versions[0] ? s.versions[0].number : "", "Versions", "Every publish, numbered, with notes on what changed", "See the versions") +
+          (isAdmin() ? tile("history", "", "History", "Every change made to the site, and who made it", "See the history") : "")
+        : s.files ? tile("files", state.files[s.id] ? state.files[s.id].files.length : "", "Files", "Every photo on the site, what it shows and where it is used", "Upload and describe")
           : tile("photos", empty, "Photos", empty + " empty " + (empty === 1 ? "spot" : "spots") + ", " + waiting + " on the way", "Add photos")) +
       '</div>' + (s.practice && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start the Practice site again</h2><span class="small">Its words, pages, theme and photos become World Art Review\'s as they are now. Its versions stay in the list. Anyone practising is asked to bring their copy up to date.</span><div class="row"><button type="button" class="soft" data-act="ask-resetpractice">Start again from World Art Review</button></div></div>' : "") +
       (isAdmin() ? viewCopies() : viewMyCopy());
@@ -484,7 +496,8 @@
     var col = cols[ci];
     var right = ci >= prev, lead = ".28s cubic-bezier(.3,1.3,.6,1)", trail = ".55s cubic-bezier(.3,1.3,.6,1) .04s";
     function pos(i) { return ["calc(" + (i * 100 / n) + "% + 4px)", "calc(" + ((n - 1 - i) * 100 / n) + "% + 4px)"]; }
-    var tabs = '<div class="tabs" role="tablist" style="grid-template-columns:repeat(' + n + ',minmax(0,1fr))">' +
+    // more lists than fit side by side wrap onto a second line, each at its own width
+    var tabs = '<div class="tabs' + (n > 5 ? " many" : "") + '" role="tablist" style="grid-template-columns:repeat(' + n + ',minmax(0,1fr))">' +
       '<span class="blob" aria-hidden="true" data-left="' + pos(ci)[0] + '" data-right="' + pos(ci)[1] + '" style="left:' + pos(prev)[0] + ";right:" + pos(prev)[1] + ";transition:left " + (right ? trail : lead) + ",right " + (right ? lead : trail) + '"></span>' +
       cols.map(function (c, i) { return '<button type="button" role="tab" class="tabb' + (i === ci ? " on" : "") + '" aria-selected="' + (i === ci) + '" data-act="ctab" data-i="' + i + '">' + esc(c.label) + '</button>'; }).join("") + '</div>';
     var order = col.entries.map(function (e, ei) { return ei; });
@@ -498,7 +511,8 @@
         (e.hidden ? '<span class="chip quiet">Hidden from the site</span>' : "") +
         '<button type="button" class="soft" data-act="open" data-ci="' + ci + '" data-ei="' + ei + '">Edit</button></div>';
     }).join("");
-    return head("Content", "The words your pages are made from. Open anything to edit it, hide it from visitors, or delete it.") + tabs +
+    var canHide = cols.some(function (c) { return c.canHide; }), canDel = cols.some(function (c) { return c.canDelete; });
+    return head("Content", "The words your pages are made from. Open anything to edit it" + (canHide && canDel ? ", hide it from visitors, or delete it." : canHide ? " or hide it from visitors." : canDel ? ". Some lists also let you delete an entry." : ".")) + tabs +
       (col.problem ? '<p class="notice problem">' + esc(col.problem) + '</p>' : "") + tools +
       '<div class="stack" id="clist">' + (list || '<p class="notice">Nothing here yet.</p>') + '</div>' +
       '<p class="notice" id="cnone" hidden>Nothing matches that search.</p>' +
@@ -2224,7 +2238,8 @@
       return;
     }
     state.flash = ""; state.ask = null; state.site = id; state.inSite = true; state.photoFiles = []; state.prevCtab = 0;
-    go(x.live ? (state.place[id] || "pages") : "overview");
+    var back = state.place[id]; if (back && !hasScreen(x, back)) back = "";
+    go(x.live ? (back || firstTab(x)) : "overview");
   }
   function go(tab) {
     if (tab === "home" || tab === "people") { state.inSite = false; }
@@ -2751,7 +2766,8 @@
       slots: [{ id: "artist-zara-muse", group: "Artist main images", label: "Zara Muse", filled: true, waiting: false }, { id: "artist-konn-artiss", group: "Artist main images", label: "Konn Artiss", filled: false, waiting: false }, { id: "article-sample", group: "Articles", label: "[Sample] An article", filled: false, waiting: false }] },
     { id: "global-art-monitor", name: "Global Art Monitor", domain: "globalartmonitor.com", live: true, files: true, edits: true, artists: [], inbox: ["slot--artist-zara-muse.jpg"],
       slots: [{ id: "artist-zara-muse", group: "Artist profile images", label: "Zara Muse", filled: false, waiting: true }, { id: "artist-konn-artiss", group: "Artist profile images", label: "Konn Artiss", filled: true, waiting: false }] },
-    { id: "site-3", name: "Site 3", domain: "", live: false }, { id: "site-4", name: "Site 4", domain: "", live: false }, { id: "site-5", name: "Site 5", domain: "", live: false },
+    { id: "street-art-dispatch", name: "Street Art Dispatch", domain: "streetartdispatch.com", live: true, files: false, edits: false, pagesOn: false, themeOn: false, photosOn: false, artists: [], inbox: [], slots: [] },
+    { id: "site-4", name: "Site 4", domain: "", live: false }, { id: "site-5", name: "Site 5", domain: "", live: false },
     { id: "practice-site", name: "Practice site", domain: "artiscope.github.io/practice-site", live: true, files: true, edits: true, practice: true, artists: [], inbox: [], slots: [] },
   ] };
   var demoHistory = [
@@ -2792,6 +2808,7 @@
   var demoSummaries = { "shared:opening": "World Art Review", "shared:header": "3 links", "shared:footer": "3 columns", "home:hero": "Discover Artists.", "home:featured": "All published", "home:sections": "4 rows", "home:explainedHome": "2 articles", "home:numbers": "Four figures", "home:method": "3 cards" };
   var demoSite = null;   // the sample site's articles, artists and sources, read once from assets/demo-site.json
   var demoGam = null;    // Global Art Monitor's sample, from assets/demo-gam.json
+  var demoSad = null;    // Street Art Dispatch's lists, from assets/demo-sad.json
   function demoApi(body) {
     if (body.action === "pages" && body.site === "global-art-monitor") {
       if (!demoGam) return fetch("assets/demo-gam.json").then(function (r) { return r.json(); }).then(function (d) { demoGam = d; return demoApi(body); }, function () { return Promise.reject(new Error("The sample could not be read.")); });
@@ -2803,6 +2820,15 @@
         files: demoGam.images.map(function (n) { return { name: n, size: 120000, alt: "", caption: "", used: demoGam.site.artists.filter(function (a) { return a.image === n; }).map(function (a) { return { label: "Artist: " + a.name, spot: "artist:" + a.slug }; }) }; }) });
     }
     if (body.action === "savePages" && body.site === "global-art-monitor" && demoGam) { demoGam.pages = JSON.parse(JSON.stringify(body.pages)); if (body.content) demoGam.site = JSON.parse(JSON.stringify(body.content)); return Promise.resolve({ ok: true }); }
+    if (body.site === "street-art-dispatch" && /^(content|saveEntry|deleteEntry)$/.test(body.action)) {
+      if (!demoSad) return fetch("assets/demo-sad.json").then(function (r) { return r.json(); }).then(function (d) { demoSad = d.collections; return demoApi(body); }, function () { return Promise.reject(new Error("The sample could not be read.")); });
+      var sc = demoSad.find(function (x) { return x.id === body.collection; });
+      var se = sc && sc.entries.find(function (x) { return x.id === body.id; });
+      if (body.action === "saveEntry" && se) se.fields.forEach(function (f) { if (f.name in (body.values || {})) f.value = body.values[f.name]; });
+      if (body.action === "deleteEntry" && se) sc.entries = sc.entries.filter(function (x) { return x !== se; });
+      if (body.action !== "content") { demoStep(body, (body.action === "deleteEntry" ? "Delete " : "Edit ") + (sc ? sc.singular : "entry") + ": " + (se ? se.title : "")); return Promise.resolve({ ok: true }); }
+      return Promise.resolve({ collections: JSON.parse(JSON.stringify(demoSad)) });
+    }
     if (body.action === "pages" && !demoSite) return fetch("assets/demo-site.json").then(function (r) { return r.json(); }).then(function (d) { demoSite = d; if (!demoPages.lists) demoPages.lists = d.pageLists; return demoApi(body); }, function () { demoSite = { site: null, itemKinds: null, lists: {}, listFields: [] }; return demoApi(body); });
     return new Promise(function (resolve, reject) {
       setTimeout(function () {

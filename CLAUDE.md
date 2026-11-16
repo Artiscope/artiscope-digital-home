@@ -39,16 +39,18 @@ How they like to work. Follow this every time:
   Castoro and Libre Franklin. Icons are line icons in the `IC` set in
   `assets/app.js`.
 
-## The three repositories
+## The repositories
 
-Clone them side by side in one folder. The tests find the two sites next
-to this one, under either spelling of their names.
+Clone them side by side in one folder. The tests find the sites next
+to this one, under either spelling of their names (or set `WAR_DIR`,
+`GAM_DIR`, `SAD_DIR`).
 
 | Repository | What it is | Published at |
 |---|---|---|
 | `Artiscope/artiscope-digital-home` (this one) | The console and its server | GitHub Pages |
 | `Artiscope/World-art-review` | worldartreview.com | GitHub Pages, on every push to main |
 | `Artiscope/global-art-monitor` | globalartmonitor.com | GitHub Pages, on every push to main |
+| `Artiscope/street-art-dispatch` | streetartdispatch.com. Its words are all in `data/content.json`; `tools/build.py <folder>` builds every page on publish, and no built pages are kept in the repository | GitHub Pages, on every push to main |
 | `Artiscope/practice-site` | The Practice site, a copy of World Art Review for trying things out | GitHub Pages at artiscope.github.io/practice-site, unlisted, every page marked noindex |
 
 Each site has its own `CLAUDE.md`. Those are written for the unattended
@@ -63,8 +65,8 @@ rules on facts, sources, honesty, images and design still hold.
 - `assets/app.js` is the whole console. `VERSION` near the top is shown
   on screen, so the owner can tell which copy is loaded.
 - `index.html?demo` is sample mode: it runs with no sign-in, using sample
-  data written into `assets/app.js`, `assets/demo-site.json` and
-  `assets/demo-gam.json`. Add `&preview=<World Art Review address>` and
+  data written into `assets/app.js`, `assets/demo-site.json`,
+  `assets/demo-gam.json` and `assets/demo-sad.json`. Add `&preview=<World Art Review address>` and
   `&gampreview=<Global Art Monitor address>` to preview local copies.
 - The server is a Supabase edge function,
   `supabase/functions/home/index.ts`. It is published by
@@ -187,7 +189,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (13 November 2026, Version 32)
+## Where things stand (16 November 2026, Version 33)
 
 Done:
 
@@ -215,6 +217,22 @@ Done:
 - User access (Version 32): People screen, editors with their own copy,
   Save and Save and publish, versions and release notes, the Versions
   screen, and the Practice site. Sample: https://claude.ai/artifact/53dS5mbfCJkPL8eyKmCgS6
+- Street Art Dispatch is the third site (Version 33). It has only
+  Overview, Content, Versions and History for now: the server tells the
+  console `pagesOn`, `themeOn` and `photosOn` for each site, and screens
+  that are off are left out. Its Content lists are Dispatches, Urban
+  Culture columns, Artists, Artist notes, Interventions archive,
+  Exhibitions, Glossary, Collecting figures, About page, Contact page and
+  Issue details. Web addresses, cover pictures, `read` links, the column
+  flag and artist names stay locked. Only archive entries and
+  exhibitions can be deleted; nothing is hidden, because the build needs
+  every article and artist. An archive year is a whole number or "TBC".
+  The site publishes previews of `adh/*` copies at
+  `streetartdispatch.com/preview/<copy>/`, marked noindex.
+  Checks: `tests/dispatch.mjs` and the "Street Art Dispatch" area of
+  `tests/uat.mjs`.
+- Words saved through Content on any site lose anything that could run
+  on a page (`safeMarks` on the server), keeping ordinary formatting.
 
 Waiting for the owner:
 
@@ -235,7 +253,12 @@ Notes for checking:
   tools. Link them rather than installing a second copy:
   `ln -s "$(npm root -g)/playwright" node_modules/playwright`.
 
-Later, in this order unless the owner says otherwise: a Code screen,
+- Street Art Dispatch's own rules: Konn Artiss's Draft note and "Date to
+  confirm" on the Venice entry stay until the owner gives confirmed
+  facts. Only one session changes its repository at a time.
+
+Later, in this order unless the owner says otherwise: Pages, Theme and
+Photos for Street Art Dispatch if wanted, a Code screen,
 payments (Stripe), building the three new sites, extras. A comparison
 with Shopify is paused until the owner sends screenshots or code.
 

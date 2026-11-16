@@ -117,6 +117,10 @@ svg.i { flex: none; display: block; }
 .tabb { position: relative; z-index: 1; border: 0; background: none; cursor: pointer; height: 40px; font-weight: 500; color: var(--muted); transition: color .2s ease; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 6px; }
 .tabb.on { color: var(--accent); font-weight: 600; }
 .blob { position: absolute; top: 3px; bottom: 3px; border-radius: 8px; background: var(--rail); box-shadow: var(--shadow); }
+.tabs.many { display: flex; flex-wrap: wrap; gap: 3px; padding: 3px; max-width: 900px; }
+.tabs.many .blob { display: none; }
+.tabs.many .tabb { flex: 0 1 auto; height: 38px; padding: 0 14px; border-radius: 8px; }
+.tabs.many .tabb.on { background: var(--rail); box-shadow: var(--shadow); }
 
 /* ---------- all sites ---------- */
 .sites { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
@@ -260,6 +264,7 @@ select.fontpick { width: auto; min-width: 180px; max-width: 210px; min-height: 3
   .tabs .blob { display: none; }
   .tabb { flex: 1 1 30%; height: 38px; border-radius: 8px; }
   .tabb.on { background: var(--rail); }
+  .tabs.many .tabb { flex: 1 1 auto; padding: 0 10px; }
   .swrow { flex-wrap: wrap; }
 }
 
