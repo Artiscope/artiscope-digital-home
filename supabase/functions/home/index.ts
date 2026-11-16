@@ -19,6 +19,7 @@
 // Fonts needs for it. A short list on purpose.
 export const FONTS = {
   "Castoro": "Castoro:ital@0;1",
+  "Gloock": "Gloock",
   "Libre Caslon Display": "Libre+Caslon+Display",
   "Cormorant Garamond": "Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400",
   "EB Garamond": "EB+Garamond:ital,wght@0,400;0,500;0,600;1,400",
@@ -614,6 +615,243 @@ export function gamSpots(content, sales, images, imageFiles) {
   return gamForEditor(content, sales, images, imageFiles).artists.map((a) => ({ key: "artist:" + a.slug, kind: "artist", label: a.name, group: "Artists", also: a.name + "'s market profile", image: a.image, alt: a.alt, credit: a.caption, slot: "artist-" + a.slug, hasCredit: true }));
 }
 
+// ---------- Street Art Dispatch: its sections, articles, artists and issue details ----------
+// The site is drawn by its own assets/render.js from data/content.json and data/pages.json,
+// like Global Art Monitor. Its own sections come first; then the same set every site offers.
+const S_ADDR_HINT = "A page on this site such as dispatches/, or a full web address starting https://.";
+const S_SRC = (f) => f.name === "href" ? { ...f, hint: S_ADDR_HINT + " Leave empty for no link." } : f;
+const S_TOP = { name: "top", label: "The page's own heading", type: "yesno", group: "Look", hint: "Yes when this section starts the page: its heading is then the large page heading." };
+const S_FLUSH = { name: "flush", label: "Sit close to the section above", type: "yesno", group: "Look" };
+const S_HEAD = [{ name: "heading", label: "Heading", type: "text" }, { name: "intro", label: "Line under the heading", type: "text", hint: "Leave empty to hide." }];
+const S_WHICH = { name: "which", label: "Which articles", type: "which", options: [["dispatches", "Every dispatch"], ["columns", "Every Urban Culture column"], ["all", "Every article"]], hint: "Or choose the articles one by one." };
+const SAD_SECTIONS = {
+  header: { label: "Menu bar", about: "The name, the links along the top of every page, and the menu on a phone.", summary: (st) => ((st.links || []).length + " links" + ((st.logos || []).length ? ", " + st.logos.length + (st.logos.length === 1 ? " logo" : " logos") : "")),
+    blocks: [{ field: "links", label: "Menu link", add: "Add a menu link", about: "A link in the menu bar, the phone menu and the footer." }, LOGO_BLOCK], fields: [
+    { name: "name", label: "Site name", type: "text" }, { name: "tagline", label: "Tagline", type: "text", hint: "Shown under the name at the top of the home page." },
+    { ...LINK_ROWS, fields: [LINK_ROWS.fields[0], { ...ADDRESS, hint: S_ADDR_HINT }] },
+    { name: "subscribe", label: "Subscribe button words", type: "text" }, { name: "subscribe_href", label: "Subscribe button address", type: "text", hint: "#newsletter is the sign-up on the home page." },
+    { ...LOGO_ROWS, fields: LOGO_ROWS.fields.map((g) => g.name === "href" ? { ...g, hint: S_ADDR_HINT + " Leave empty for no link." } : g) },
+  ] },
+  footer: { label: "Footer", about: "The name, the section links and the small print at the bottom of every page.", summary: (st) => ((st.about_links || []).length + " links"), blocks: { field: "about_links", label: "Link", add: "Add a link", title: (b) => b[0] }, fields: [
+    { name: "tagline", label: "Line under the name", type: "text" }, { name: "sections_heading", label: "Heading over the section links", type: "text" }, { name: "about_heading", label: "Heading over the other links", type: "text" },
+    { ...LINK_ROWS, name: "about_links", label: "Other links", fields: [LINK_ROWS.fields[0], { ...ADDRESS, hint: S_ADDR_HINT }] }, { name: "legal", label: "Small print", type: "text" },
+  ] },
+  hero: { label: "Opening banner", about: "The large heading, introduction and lead picture at the top of the home page.", summary: (st) => st.headline || "", library: "A large heading with a lead picture",
+    starter: { eyebrow: "", headline: "A heading", intro: "", button: "", button_href: "", link: "", link_href: "", photo: "Lead picture", caption: "", caption_link: "", caption_href: "" }, fields: [
+    { name: "eyebrow", label: "Small line above the heading", type: "text", hint: "Leave empty to hide." }, { name: "headline", label: "Heading", type: "text" }, { name: "intro", label: "Introduction", type: "long", plain: true },
+    { name: "button", label: "Button words", type: "text" }, { name: "button_href", label: "Button address", type: "text", hint: S_ADDR_HINT }, { name: "link", label: "Link words", type: "text" }, { name: "link_href", label: "Link address", type: "text", hint: S_ADDR_HINT },
+    { name: "photo", label: "The lead picture, described", type: "text", hint: "Shown in the Photo to come frame until the photo arrives." },
+    { name: "caption", label: "Caption", type: "text" }, { name: "caption_link", label: "Caption link words", type: "text" }, { name: "caption_href", label: "Caption link address", type: "text", hint: S_ADDR_HINT },
+  ] },
+  features: { label: "Article cards", about: "Cards for dispatches or Urban Culture columns, as a grid with a lead story or as a row of columns.", summary: (st) => (Array.isArray(st.which) ? st.which.length + " chosen" : { dispatches: "Every dispatch", columns: "Every column", all: "Every article" }[st.which] || ""),
+    library: "Cards for articles", starter: { heading: "Dispatches", intro: "", which: "dispatches", look: "grid", top: false, flush: false }, fields: [
+    ...S_HEAD, S_WHICH, { name: "look", label: "Look", type: "choice", group: "Look", seg: true, options: [["grid", "Lead story and grid"], ["list", "Row of columns"]] }, S_TOP, S_FLUSH,
+  ] },
+  profiles: { label: "Artist cards", about: "A card for each artist. Artists without a profile yet show as Coming soon.", summary: (st) => ((st.artists || []).filter((x) => typeof x === "string").length ? st.artists.filter((x) => typeof x === "string").length + " chosen" : "Every artist"),
+    library: "Cards for the artists", starter: { heading: "Artists", intro: "", artists: [], top: false, flush: false }, fields: [
+    ...S_HEAD, { name: "artists", label: "Which artists", type: "artists", hint: "Leave all empty for every artist." }, S_TOP, S_FLUSH,
+  ] },
+  archive: { label: "Intervention archive", about: "The archive of art made in public: the latest few, or every entry with search and filters. The entries themselves are in Issue details.", summary: (st) => (st.show === "all" ? "Every entry, with search" : "The latest " + (st.count || 6)),
+    library: "The archive, latest or searchable", starter: { heading: "The Intervention Archive", intro: "", show: "recent", count: 6, button: "Search all {count} interventions", button_href: "interventions/", search_hint: "", note: "", note_link: "", top: false, flush: false }, fields: [
+    ...S_HEAD, { name: "show", label: "Show", type: "choice", seg: true, options: [["recent", "The latest few"], ["all", "Every entry, with search"]] }, { name: "count", label: "How many of the latest", type: "number" },
+    { name: "button", label: "Button words", type: "text", hint: "{count} is the number of entries. Leave empty for no button." }, { name: "button_href", label: "Button address", type: "text", hint: S_ADDR_HINT },
+    { name: "search_hint", label: "Words in the empty search box", type: "text" }, { name: "note", label: "Note under the archive", type: "long", plain: true }, { name: "note_link", label: "Words of the link to send an entry", type: "text", hint: "Opens an email to info@grovegallery.com. Leave empty for none." }, S_TOP, S_FLUSH,
+  ] },
+  "exhibition-list": { label: "Exhibition listings", about: "The exhibitions in Issue details, each in a card with its dates and status.", summary: () => "From Issue details", library: "The exhibition listings", starter: { heading: "Exhibitions", intro: "", top: false, flush: false }, fields: [...S_HEAD, S_TOP, S_FLUSH] },
+  collecting: { label: "Collecting band", about: "The collecting figures, a short primer and the glossary, in a dark green band. The figures and terms are in Issue details.", summary: (st) => st.heading || "", library: "Figures, primer and glossary",
+    starter: { heading: "Collecting Street Art", intro: "", primer_heading: "A collector’s primer", primer: "", button: "", button_href: "", top: false }, fields: [
+    ...S_HEAD, { name: "primer_heading", label: "Primer heading", type: "text" }, { name: "primer", label: "Primer", type: "long", plain: true }, { name: "button", label: "Button words", type: "text", hint: "Leave empty for no button." }, { name: "button_href", label: "Button address", type: "text", hint: S_ADDR_HINT }, S_TOP,
+  ] },
+  signup: { label: "Email sign-up", about: "Get the Dispatch: an email box and one button." + FORM_HONEST, summary: (st) => st.button || "Sign-up", library: "Visitors ask to join the letter",
+    starter: { heading: "Get the Dispatch", text: "", button: "Subscribe", pitch: "" }, fields: [
+    { name: "heading", label: "Heading", type: "text" }, FORM_TEXT, FORM_BUTTON("Subscribe"), { name: "pitch", label: "Line before the email address", type: "text", hint: "Such as Pitches, tips and press:. Leave empty to hide." },
+  ] },
+  "text-page": { label: "Page text", about: "A page heading, paragraphs, a list of headed points and a closing part, as on About and Contact.", summary: (st) => st.heading || "", library: "A page of text with a list",
+    blocks: { field: "items", label: "Point", add: "Add a point", title: (b) => b.term }, starter: { heading: "A new page", stand: "", intro: [], list_heading: "", list_anchor: "", items: [], end_heading: "", end_text: "" }, fields: [
+    { name: "heading", label: "Heading", type: "text" }, { name: "stand", label: "Opening line", type: "long" }, { name: "intro", label: "Paragraphs", type: "lines", hint: "One paragraph per item." },
+    { name: "list_heading", label: "Heading over the points", type: "text", hint: "Leave empty to hide." }, { name: "list_anchor", label: "Name for links to the points", type: "text", hint: "Such as standards, so about/#standards leads here. Leave empty for none." },
+    { name: "items", label: "Points", type: "rows", fields: [{ name: "term", label: "Heading", type: "text" }, { name: "text", label: "Words", type: "long" }] },
+    { name: "end_heading", label: "Closing heading", type: "text", hint: "Leave empty to hide." }, { name: "end_text", label: "Closing words", type: "long" },
+  ] },
+  // the same set of sections every site offers, drawn in this site's look
+  announcement: { ...GAM_SECTIONS.announcement, fields: GAM_SECTIONS.announcement.fields.map((f) => f.name === "style" ? { ...f, dflt: "pine", options: [["pine", "Dark green"], ["linen", "Linen"]] } : f.name === "messages" ? { ...f, fields: f.fields.map(S_SRC) } : f),
+    starter: { ...GAM_SECTIONS.announcement.starter, style: "pine" } },
+  columns: { ...GAM_SECTIONS.columns, about: "Two to four cards side by side, each with a title, a few words and a link. On a phone they stack.", fields: GAM_SECTIONS.columns.fields.map((f) => f.name === "columns" ? { ...f, fields: f.fields.map(S_SRC) } : f) },
+  space: SPACE,
+  quote: GAM_SECTIONS.quote,
+  faq: GAM_SECTIONS.faq,
+  button: { ...GAM_SECTIONS.button, about: "A heading, a line and one button, in a dark green band or on the page.", starter: { heading: "Find out more", text: "", label: "Read on", href: "dispatches/", panel: true },
+    fields: GAM_SECTIONS.button.fields.filter((f) => f.name !== "colour").map((f) => f.name === "href" ? { ...f, hint: S_ADDR_HINT } : f.name === "panel" ? { ...f, label: "In a dark green band" } : f) },
+  "picture-banner": { ...GAM_SECTIONS["picture-banner"], starter: { ...GAM_SECTIONS["picture-banner"].starter, href: "dispatches/", box: "pine" },
+    fields: GAM_SECTIONS["picture-banner"].fields.filter((f) => f.name !== "colour").map((f) => f.name === "box" ? { ...f, dflt: "pine", options: [["pine", "Dark green"], ["linen", "Linen"]] } : f.name === "href" ? { ...f, hint: S_ADDR_HINT } : f) },
+  slideshow: GAM_SECTIONS.slideshow,
+  gallery: GAM_SECTIONS.gallery,
+  "logo-row": { ...GAM_SECTIONS["logo-row"], fields: GAM_SECTIONS["logo-row"].fields.map((f) => f.name === "logos" ? { ...f, fields: f.fields.map(S_SRC) } : f) },
+  picture: GAM_SECTIONS.picture,
+  "text-picture": { ...GAM_SECTIONS["text-picture"], fields: GAM_SECTIONS["text-picture"].fields.map(S_SRC) },
+  artworks: { ...GAM_SECTIONS.artworks, fields: GAM_SECTIONS.artworks.fields.map((f) => f.name === "artworks" ? { ...f, fields: f.fields.map(S_SRC) } : f) },
+  exhibitions: { ...GAM_SECTIONS.exhibitions, about: "Exhibitions added by hand, each in a card with its dates and a source. The site's own listings are the Exhibition listings section." },
+  career: GAM_SECTIONS.career,
+  press: GAM_SECTIONS.press,
+  visit: GAM_SECTIONS.visit,
+  "contact-form": { ...WAR_SECTIONS["contact-form"], starter: { eyebrow: "Contact", heading: "Write to us", text: "Pitches, tips, corrections and press all reach the same desk.", topics: ["A pitch or a tip", "A correction", "Press", "Something else"], button: "Write the email" },
+    fields: [...G_HEAD, FORM_TEXT, WAR_SECTIONS["contact-form"].fields.find((f) => f.name === "topics"), FORM_BUTTON("Write the email")] },
+};
+const S_ARCHIVE = { name: "archive", label: "Entries", type: "rows", keep: ["read"], fields: [
+  { name: "y", label: "Year", type: "text", hint: "A year such as 2018, or TBC while it is being confirmed." }, { name: "title", label: "Title", type: "text" }, { name: "artist", label: "Artist", type: "text", hint: "As the artist's name is written on the site." },
+  { name: "city", label: "City", type: "text" }, { name: "country", label: "Country", type: "text" }, { name: "type", label: "Kind of work", type: "text" }, { name: "note", label: "Note", type: "long", plain: true },
+  { name: "pending", label: "Date to confirm: show Awaiting confirmation", type: "yesno" },
+] };
+const S_SHOWS = { name: "exhibitions", label: "Exhibitions", type: "rows", fields: [
+  { name: "t", label: "Title", type: "text" }, { name: "sub", label: "Second line", type: "text" }, { name: "venue", label: "Venue", type: "text" }, { name: "when", label: "Dates", type: "text", hint: "Leave as To be confirmed until the venue confirms." }, { name: "status", label: "Status", type: "text" },
+] };
+const SAD_ITEMS = {
+  article: { label: "Article", parts: [
+    { id: "words", label: "Title and summary", about: "The heading of the article and how it is listed.", fields: [
+      { name: "title", label: "Title", type: "text" }, { name: "kicker", label: "Label above the title", type: "text", hint: "Such as Essay or Artist Profile." },
+      { name: "standfirst", label: "Opening line", type: "long", plain: true, hint: "Shown on the article's card and under its title." },
+      { name: "section", label: "Listed under", type: "choice", seg: true, options: [["dispatches", "Dispatches"], ["urban-culture", "Urban Culture"]], hint: "Moving an article changes its web address." },
+      { name: "tags", label: "Filed under", type: "lines", hint: "One per item, shown at the foot of the article." },
+      { name: "draft", label: "Show the Draft note", type: "yesno", hint: "Says that details are still being confirmed. Keep it on until the facts are confirmed." },
+    ] },
+    { id: "body", label: "Body", about: "The text of the article.", fields: [{ name: "body", label: "Text", type: "long", hint: "Type as you would in a document." }] },
+    { id: "settings", label: "Settings", about: "Whether visitors can see the article.", fields: [{ name: "hidden", label: "Hidden from the site", type: "yesno", hint: "A hidden article is kept but not shown or listed. New articles start hidden." }] },
+  ] },
+  artist: { label: "Artist profile", parts: [
+    { id: "words", label: "Words", about: "The name and the lines about the artist.", fields: [
+      { name: "name", label: "Name", type: "text" }, { name: "role", label: "Kinds of work", type: "text", hint: "Such as Intervention · Installation." },
+      { name: "summary", label: "Short summary", type: "long", plain: true }, { name: "note", label: "Note on the profile", type: "long", plain: true },
+      { name: "read", label: "The story the profile links to", type: "piece", hint: "An artist with a story gets a profile page. Without one the card says Coming soon." },
+    ] },
+    { id: "facts", label: "Key facts", about: "The facts in the box on the profile, each with its label.", fields: [{ name: "facts", label: "Facts", type: "rows", fields: [{ name: 0, label: "Label", type: "text" }, { name: 1, label: "Fact", type: "long", plain: true }] }], blocks: { field: "facts", label: "Fact", add: "Add a fact" } },
+  ] },
+  site: { label: "Issue details", parts: [
+    { id: "details", label: "Issue", about: "The byline and date on every article.", fields: [{ name: "site.desk", label: "Name of the desk", type: "text", hint: "Articles say By and this name." }, { name: "site.date", label: "Issue date", type: "text", hint: "Such as November 2026." }] },
+    { id: "archive", label: "Intervention archive", about: "Every entry in the archive, newest first on the site.", fields: [S_ARCHIVE], blocks: { field: "archive", label: "Entry", add: "Add an entry" } },
+    { id: "exhibitions", label: "Exhibition listings", about: "The exhibitions on the home page and the Exhibitions page.", fields: [S_SHOWS], blocks: { field: "exhibitions", label: "Exhibition", add: "Add an exhibition" } },
+    { id: "figures", label: "Collecting figures", about: "The large figures in the Collecting band.", fields: [{ name: "stats", label: "Figures", type: "rows", fields: [{ name: 0, label: "Figure", type: "text" }, { name: 1, label: "What it is", type: "text" }] }], blocks: { field: "stats", label: "Figure", add: "Add a figure" } },
+    { id: "glossary", label: "Glossary", about: "The terms in the Collecting band.", fields: [{ name: "glossary", label: "Terms", type: "rows", fields: [{ name: 0, label: "Term", type: "text" }, { name: 1, label: "Meaning", type: "long", plain: true }] }], blocks: { field: "glossary", label: "Term", add: "Add a term" } },
+  ] },
+};
+// The data file as one object for the editor, the same shape the site's assets/render.js draws from.
+export function sadForEditor(content) {
+  const c = JSON.parse(JSON.stringify(content || {})), notes = c.artist_notes || {};
+  return {
+    site: { desk: c.desk || "", date: c.date || "" }, photos: c.photos || {}, artist_photos: c.artist_photos || {},
+    articles: (c.features || []).map((f) => ({ ...f, section: "dispatches" })).concat((c.columns || []).map((f) => ({ ...f, section: "urban-culture" }))),
+    artists: (c.artists || []).map((a) => ({ slug: a.slug || slugOf(a.name), ...a, note: notes[a.name] || "" })),
+    archive: c.archive || [], exhibitions: c.exhibitions || [], stats: c.stats || [], glossary: c.glossary || [],
+  };
+}
+// A year is a whole number, or TBC while it is being confirmed.
+function sadYear(v) { const t = String(v == null ? "" : v).trim(); return /^\d{3,4}$/.test(t) ? Number(t) : "TBC"; }
+// Turns the edited object back into data/content.json. Unchanged parts keep their exact form. Throws with a plain reason.
+export function sadFromEditor(kinds, given, content) {
+  if (!given || typeof given !== "object") throw new Error("The content could not be read.");
+  const c = JSON.parse(JSON.stringify(content)), was = sadForEditor(content), changed = [];
+  const ga = Array.isArray(given.articles) ? given.articles : was.articles, gr = Array.isArray(given.artists) ? given.artists : was.artists;
+  const ctx = { artists: gr.map((a) => ({ slug: String((a && a.slug) || "") })), articleSlugs: ga.map((a) => String((a && a.slug) || "")) };
+  // issue details, the archive, exhibitions, figures and glossary
+  let siteChanged = false;
+  for (const f of kinds.site.parts[0].fields) {
+    const k = f.name.slice(5), r = keepOrClean(f, was.site[k], (given.site || {})[k], ctx);
+    if (!r.same) { c[k] = r.v; siteChanged = true; }
+  }
+  if (siteChanged) changed.push("Edit issue details");
+  const lists = [["archive", S_ARCHIVE, "Edit the archive"], ["exhibitions", S_SHOWS, "Edit the exhibition listings"], ["stats", kinds.site.parts[3].fields[0], "Edit the collecting figures"], ["glossary", kinds.site.parts[4].fields[0], "Edit the glossary"]];
+  for (const [key, f, note] of lists) {
+    const r = keepOrClean(f, content[key] || [], given[key], ctx);
+    if (r.same) continue;
+    let rows = r.v;
+    if (key === "archive") rows = rows.map((x) => { const o = { ...x, y: sadYear(x.y) }; if (!o.pending) delete o.pending; if (!o.read) delete o.read; return o; }).filter((x) => String(x.title || "").trim());
+    else if (key === "exhibitions") rows = rows.filter((x) => String(x.t || "").trim());
+    else rows = rows.filter((x) => String(x[0] || "").trim());
+    if (rows.length > 400) throw new Error("A list can hold up to 400 entries.");
+    c[key] = rows; changed.push(note);
+  }
+  // articles: dispatches and columns
+  const curAll = was.articles, seen = new Set(), feats = [], cols = [];
+  for (const g of ga) {
+    const slug = String((g && g.slug) || ""), cur = curAll.find((x) => x.slug === slug);
+    if (seen.has(slug)) throw new Error("Two articles have the same web address.");
+    seen.add(slug);
+    if (!cur && !SLUG.test(slug)) throw new Error("A new article needs a web address of letters, digits and hyphens.");
+    const base = cur || { slug, section: "dispatches", kicker: "", title: String((g && g.title) || "New article"), standfirst: "", tags: [], body: "<p>Write here.</p>", hidden: true };
+    const next = cleanItem(kinds.article, cur ? g : { ...base, ...g }, base, ctx);
+    if (!String(next.title || "").trim()) throw new Error("Every article needs a title.");
+    for (const k of ["hidden", "draft"]) if (next[k] === false && !(cur && k in cur)) delete next[k];
+    if (!cur) changed.push("Add article: " + next.title); else if (canon(next) !== canon(cur)) changed.push((cur.hidden === true && next.hidden !== true ? "Show article: " : next.hidden === true && cur.hidden !== true ? "Hide article: " : "Edit article: ") + next.title);
+    const out = { ...next }, col = out.section === "urban-culture";
+    delete out.section;
+    if (col) { out.column = true; cols.push(out); } else { delete out.column; feats.push(out); }
+  }
+  for (const cur of curAll) if (!seen.has(cur.slug)) changed.push("Delete article: " + cur.title);
+  c.features = feats; c.columns = cols;
+  // artists: their words, note and facts
+  const notes = { ...(content.artist_notes || {}) }, photos = { ...(content.artist_photos || {}) }, artistsOut = [], seenR = new Set();
+  for (const g of gr) {
+    const slug = String((g && g.slug) || ""), cur = was.artists.find((a) => a.slug === slug);
+    if (seenR.has(slug)) throw new Error("Two artists have the same web address.");
+    seenR.add(slug);
+    if (!cur && !SLUG.test(slug)) throw new Error("A new artist needs a web address of letters, digits and hyphens.");
+    const base = cur || { slug, name: String((g && g.name) || "New artist"), role: "", cover: "", read: null, summary: "", facts: [], note: "" };
+    const next = cleanItem(kinds.artist, cur ? g : { ...base, ...g }, base, ctx);
+    const name = String(next.name || "").trim();
+    if (!name) throw new Error("Every artist needs a name.");
+    if (!next.read) next.read = null;
+    for (const row of next.facts || []) if (!Array.isArray(row)) throw new Error("A key fact could not be read.");
+    const oldName = cur ? cur.name : name;
+    if (cur && name !== oldName) {
+      // the note, photo description and archive entries follow the artist's new name
+      if (oldName in notes) { notes[name] = notes[oldName]; delete notes[oldName]; }
+      if (oldName in photos) { photos[name] = photos[oldName]; delete photos[oldName]; }
+      c.archive = (c.archive || []).map((x) => x.artist === oldName ? { ...x, artist: name } : x);
+    }
+    if (next.note) notes[name] = next.note; else delete notes[name];
+    const out = { ...next }; delete out.note;
+    // the web address stays as it was, even when the name changes
+    if (slugOf(name) === slug) delete out.slug; else out.slug = slug;
+    if (!cur) changed.push("Add artist: " + name); else if (canon(next) !== canon(cur)) changed.push("Edit artist: " + name);
+    artistsOut.push(out);
+  }
+  for (const cur of was.artists) if (!seenR.has(cur.slug)) { changed.push("Delete artist: " + cur.name); delete notes[cur.name]; delete photos[cur.name]; }
+  c.artists = artistsOut; c.artist_notes = notes; c.artist_photos = photos;
+  // keep the file exactly as it was where nothing changed
+  for (const k of ["features", "columns", "artists", "artist_notes", "artist_photos", "archive"]) if (canon(c[k]) === canon(content[k])) c[k] = content[k];
+  return { content: c, changed };
+}
+// How each site that is drawn from its own data is read and saved. Global Art Monitor and Street Art Dispatch.
+const GAM_MODEL = {
+  id: "gam",
+  async load(loadJson, gh, repoPath, ref) {
+    const [content, sales, images, listing] = await Promise.all([loadJson("data/content.json"), loadJson("data/sales.json"), loadJson("data/images.json"), gh(repoPath + "/contents/assets/images?ref=" + encodeURIComponent(ref))]);
+    if (!content || !sales) return null;
+    const imageFiles = Array.isArray(listing.data) ? listing.data.filter((x) => x.type === "file").map((x) => x.name) : [];
+    return { content: content.data, sales: sales.data, images: images ? images.data : {}, imageFiles, shas: [content.sha, sales.sha, images ? images.sha : ""] };
+  },
+  forEditor: (n) => gamForEditor(n.content, n.sales, n.images, n.imageFiles),
+  fromEditor(kinds, given, n, newFiles) {
+    const r = gamFromEditor(kinds, given, n.content, n.sales, n.images, n.imageFiles.concat(newFiles));
+    const files = [["data/content.json", r.content, n.content], ["data/sales.json", r.sales, n.sales], ["data/images.json", r.images, n.images]].filter((x) => canon(x[1]) !== canon(x[2])).map((x) => [x[0], x[1]]);
+    return { files, changed: files.length ? r.changed : [] };
+  },
+  spots: (n) => gamSpots(n.content, n.sales, n.images, n.imageFiles),
+};
+const SAD_MODEL = {
+  id: "sad",
+  async load(loadJson) {
+    const content = await loadJson("data/content.json");
+    return content ? { content: content.data, shas: [content.sha] } : null;
+  },
+  forEditor: (n) => sadForEditor(n.content),
+  fromEditor(kinds, given, n) {
+    const r = sadFromEditor(kinds, given, n.content);
+    const files = canon(r.content) !== canon(n.content) ? [["data/content.json", r.content]] : [];
+    return { files, changed: files.length ? r.changed : [] };
+  },
+  spots: () => [],
+};
+
 function cleanField(f, v, site) {
   const t = f.type;
   if (t === "text") {
@@ -622,7 +860,7 @@ function cleanField(f, v, site) {
     if (f.addr) { const a = x.trim().replace(/[<>"\s]/g, ""); return /^(#|\/|[a-z0-9-]+\/|https?:\/\/|mailto:)/i.test(a) ? a.slice(0, 300) : ""; }
     return f.nullable && !x.trim() ? null : x;
   }
-  if (t === "long") { const x = String(v == null ? "" : v).replace(/ *— */g, ", ").replace(/, ,/g, ",").slice(0, 60000); return f.nullable && !x.trim() ? null : x; }
+  if (t === "long") { const x = safeMarks(String(v == null ? "" : v).replace(/ *— */g, ", ").replace(/, ,/g, ",").slice(0, 60000)); return f.nullable && !x.trim() ? null : x; }
   if (t === "sources") { const ok = site.sourceIds || []; return [...new Set((Array.isArray(v) ? v : []).map(String))].filter((x) => ok.includes(x)).slice(0, 40); }
   if (t === "articles") { const ok = site.articleSlugs || []; return [...new Set((Array.isArray(v) ? v : []).map(String))].filter((x) => ok.includes(x.replace(/^a-/, ""))).map((x) => "a-" + x.replace(/^a-/, "")).slice(0, 12); }
   if (t === "lines") return (Array.isArray(v) ? v : String(v == null ? "" : v).split(/\n\s*\n/)).map((x) => x && typeof x === "object" ? (String(x.v == null ? "" : x.v).trim() ? { v: String(x.v).trim(), hidden: true } : "") : String(x).trim()).filter(Boolean).slice(0, 40);
@@ -634,6 +872,7 @@ function cleanField(f, v, site) {
     const ok = f.options.map((o) => o[0]); return ok.includes(String(v)) ? String(v) : ok[0];
   }
   if (t === "yesno") return v === true || v === "true";
+  if (t === "piece") { const ok = site.articleSlugs || []; return ok.includes(String(v == null ? "" : v)) ? String(v) : null; }
   if (t === "choice") { const ok = f.options.map((o) => o[0]); return ok.includes(String(v == null ? "" : v)) ? String(v) : (f.dflt && ok.includes(f.dflt) ? f.dflt : ok[0]); }
   if (t === "colour") { const x = String(v == null ? "" : v).trim(); const themeOk = (f.theme || []).map((o) => o[0]); return themeOk.includes(x) ? x : (/^#[0-9a-fA-F]{6}$/.test(x) ? x.toUpperCase() : (themeOk[0] || "")); }
   if (t === "image") {
@@ -885,9 +1124,9 @@ export function cleanPages(site, given, current) {
       seen.add(id);
       sections.push({ id, type: sec.type, visible: sec.visible !== false, settings: cleanSettings(spec[sec.type], sec.settings, site) });
     }
-    const title = cleanText(g && g.title, site.gam ? 120 : 60) || (cur && cur.title) || "";
+    const title = cleanText(g && g.title, site.model ? 120 : 60) || (cur && cur.title) || "";
     if (!title) throw new Error("Every page needs a title.");
-    if (site.gam) {
+    if (site.model) {
       const base = cur || { path: key + "/index.html", title, description: "", current: "", intro: false };
       out.pages[key] = { ...base, title, description: cleanText(g && g.description != null ? g.description : base.description, 300), sections };
     } else out.pages[key] = { ...(cur || {}), title, sections };
@@ -903,7 +1142,7 @@ export function cleanPages(site, given, current) {
   return out;
 }
 const PAGE_KEY = /^[a-z][a-z0-9-]{0,40}$/;
-const RESERVED = ["home", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search", "assets", "data", "tools", "inbox", "preview", "auction-results", "market-intelligence", "collecting-valuation", "about", "contact"];
+const RESERVED = ["home", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search", "assets", "data", "tools", "inbox", "preview", "auction-results", "market-intelligence", "collecting-valuation", "about", "contact", "dispatches", "urban-culture", "interventions", "exhibitions", "collecting", "images"];
 // A section's kinds of block, as a list. A kind is a list of rows, a list of names, or one block made of some of the section's own fields.
 export function blockKinds(b) {
   return (Array.isArray(b) ? b : b ? [b] : []).map((x) => {
@@ -990,6 +1229,8 @@ export const SITES = [
     sectionKinds: GAM_SECTIONS,
     items: GAM_ITEMS,
     gam: true,
+    model: GAM_MODEL,
+    builtIn: ["home", "auction-results", "artists", "research", "market-intelligence", "collecting-valuation", "about", "contact"],
     theme: {
       file: "data/theme.json",
       colours: [
@@ -1019,45 +1260,47 @@ export const SITES = [
     ],
   },
   {
-    // Street Art Dispatch: its words live in one file, data/content.json, which its build turns into pages.
-    // Pages, Theme and Photos are not set up for it yet, so the console shows only Content and the shared screens.
+    // Street Art Dispatch: drawn by its own assets/render.js from data/content.json and data/pages.json,
+    // edited in the page editor like Global Art Monitor.
     id: "street-art-dispatch",
     name: "Street Art Dispatch",
     domain: "streetartdispatch.com",
     repo: "Artiscope/street-art-dispatch",
     live: true,
-    noPhotos: true,
     artists: [
       { slug: "konn-artiss", name: "Konn Artiss" },
       { slug: "banksy", name: "Banksy" },
       { slug: "invader", name: "Invader" },
       { slug: "shepard-fairey", name: "Shepard Fairey" },
     ],
-    // The build needs every article, and the artist pages point at particular ones, so articles and
-    // artists are edited but never hidden or deleted here. Their web addresses, pictures and links stay locked.
-    collections: [
-      { id: "dispatches", label: "Dispatches", singular: "dispatch", file: "data/content.json", path: ["features"], shape: "list", key: "slug", title: "title", sub: ["kicker"], canHide: false, canDelete: false,
-        inside: { cover: false }, labels: { draft: "Draft: show the note that details are still being confirmed" } },
-      { id: "columns", label: "Urban Culture columns", singular: "column", file: "data/content.json", path: ["columns"], shape: "list", key: "slug", title: "title", sub: ["kicker"], canHide: false, canDelete: false,
-        inside: { cover: false, column: false } },
-      { id: "artists", label: "Artists", singular: "artist", file: "data/content.json", path: ["artists"], shape: "list", key: "name", title: "name", sub: ["role"], canHide: false, canDelete: false,
-        inside: { name: false, cover: false, read: false, facts: { labelFrom: 0, cols: { 1: "" } } }, labels: { role: "Kinds of work", summary: "Short summary" } },
-      { id: "notes", label: "Artist notes", singular: "artist note", file: "data/content.json", path: ["artist_notes"], shape: "textmap", title: null, canHide: false, canDelete: false, labels: { "*": "Note shown on the artist's page" } },
-      { id: "archive", label: "Interventions archive", singular: "archive entry", file: "data/content.json", path: ["archive"], shape: "list", key: null, title: "title", sub: ["artist", "y"], year: "y", canHide: false, canDelete: true,
-        inside: { read: false, artist: true }, labels: { artist: "Artist", y: "Year (or TBC)", city: "City", country: "Country", type: "Kind of work", note: "Note", pending: "Date to confirm: show Awaiting confirmation" } },
-      { id: "exhibitions", label: "Exhibitions", singular: "exhibition", file: "data/content.json", path: ["exhibitions"], shape: "list", key: null, title: "t", sub: ["venue", "when"], canHide: false, canDelete: true,
-        labels: { t: "Title", sub: "Second line", venue: "Venue", when: "Dates", status: "Status" } },
-      { id: "glossary", label: "Glossary", singular: "glossary term", file: "data/content.json", path: ["glossary"], shape: "rows", titleAt: 0, columns: ["Term", "Meaning"], canHide: false, canDelete: false },
-      { id: "figures", label: "Collecting figures", singular: "figure", file: "data/content.json", path: ["stats"], shape: "rows", titleAt: 0, columns: ["Figure", "What it is"], canHide: false, canDelete: false },
-      { id: "about", label: "About page", singular: "About page", file: "data/content.json", path: ["pages", "about"], shape: "single", title: null, canHide: false, canDelete: false,
-        inside: { standards: { labelFrom: 0, cols: { 0: "heading", 1: "" } } }, labels: { stand: "Opening line", intro: "Opening paragraphs", contact: "Get in touch" } },
-      { id: "contact", label: "Contact page", singular: "Contact page", file: "data/content.json", path: ["pages", "contact"], shape: "single", title: null, canHide: false, canDelete: false,
-        inside: { routes: { labelFrom: 0, cols: { 0: "heading", 1: "" } } }, labels: { stand: "Opening line" } },
-      { id: "issue", label: "Issue details", singular: "issue details", file: "data/content.json", path: [], shape: "single", title: null, canHide: false, canDelete: false,
-        inside: { features: false, columns: false, artists: false, archive: false, exhibitions: false, stats: false, glossary: false, photos: false, artist_photos: false, artist_notes: false, pages: false },
-        labels: { desk: "Name of the desk", date: "Issue date" } },
-    ],
+    pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
+    sectionKinds: SAD_SECTIONS,
+    items: SAD_ITEMS,
+    model: SAD_MODEL,
+    builtIn: ["home", "dispatches", "urban-culture", "artists", "interventions", "exhibitions", "collecting", "about", "contact"],
+    theme: {
+      file: "data/theme.json",
+      colours: [
+        { id: "linen", role: "bg", label: "Page background", use: "Pages and cards", var: "--linen", default: "#EFE6D3",
+          derived: [["--linen-2", 95, "black"], ["--linen-3", 90, "black"]] },
+        { id: "pine", role: "band", label: "Bands and text", use: "Text, the footer and the dark green bands", var: "--pine", default: "#163A30", on: "linen", min: 4.5,
+          derived: [["--pine-2", 72, "white"], ["--pine-line", 16, "transparent"]] },
+        { id: "ruby", role: "accent", label: "Buttons", use: "Buttons only", var: "--ruby", default: "#F0283C", on: "linen", min: 3, derived: [["--ruby-dk", 88, "black"]] },
+      ],
+      fonts: [
+        { id: "display", role: "display", label: "Headlines", use: "Site name and titles", var: "--display", default: "Gloock", fallback: "Georgia, serif", options: ["Gloock", ...HEADLINE_FONTS] },
+        { id: "text", role: "body", label: "Reading text", use: "Articles and introductions", var: "--serif", default: "Source Serif 4", fallback: "Georgia, serif", options: READING_FONTS },
+        { id: "sans", role: "small", label: "Small text", use: "Buttons, labels and menus", var: "--sans", default: "Libre Franklin", fallback: "Arial, sans-serif", options: SMALL_FONTS },
+      ],
+      looks: [
+        { name: "Brick and soot", colours: { linen: "#EDE6DE", pine: "#2A2624", ruby: "#C2412D" } },
+        { name: "Concrete and cobalt", colours: { linen: "#E9E8E4", pine: "#1F2B44", ruby: "#E3462F" } },
+        { name: "Paper and moss", colours: { linen: "#EEEBE2", pine: "#2D3B23", ruby: "#D2422B" } },
+      ],
+    },
+    collections: [],
   },
+
   { id: "site-4", name: "Site 4", domain: "", repo: "", live: false, artists: [], collections: [] },
   { id: "site-5", name: "Site 5", domain: "", repo: "", live: false, artists: [], collections: [] },
 ];
@@ -1369,8 +1612,8 @@ export function applyEntry(x, col, given) {
 // Words can carry simple marks (paragraphs, bold, links), but never anything that runs on the page.
 export function safeMarks(v) {
   return String(v)
-    .replace(/<(script|style|iframe|object|embed|form|template)\b[\s\S]*?<\/\1\s*>/gi, "")
-    .replace(/<\/?(script|style|iframe|object|embed|form|template|link|meta|base|input|button|textarea|select)\b[^>]*>/gi, "")
+    .replace(/<(script|iframe|object|embed)\b[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<\/?(script|iframe|object|embed|link|meta|base)\b[^>]*>/gi, "")
     .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
     .replace(/(href|src)\s*=\s*(["']?)\s*(javascript|data|vbscript):[^"'\s>]*\2/gi, '$1="#"');
 }
@@ -1998,13 +2241,6 @@ export async function handle(req) {
   }
   const failed = (e) => json({ error: e.message || "GitHub did not save the change. Please try again." }, e.status || 502);
   // Global Art Monitor keeps its words, sales and picture notes in three files.
-  async function loadGam() {
-    const [content, sales, images, listing] = await Promise.all([loadJson("data/content.json"), loadJson("data/sales.json"), loadJson("data/images.json"),
-      gh(repoPath + "/contents/assets/images?ref=" + encodeURIComponent(ref))]);
-    if (!content || !sales) return null;
-    const imageFiles = Array.isArray(listing.data) ? listing.data.filter((x) => x.type === "file").map((x) => x.name) : [];
-    return { content: content.data, sales: sales.data, images: images ? images.data : {}, imageFiles, shas: [content.sha, sales.sha, images ? images.sha : ""] };
-  }
   // What the page fields may refer to: the artists and articles as they are now.
   function pageCtx(editorData) {
     if (!editorData) return site;
@@ -2017,9 +2253,9 @@ export async function handle(req) {
     const f = await loadJson(ps.file);
     if (!f) return json({ error: "The page list could not be read." }, 502);
     const c = ps.content ? await loadJson(ps.content) : null;
-    const gamNow = site.gam ? await loadGam() : null;
-    if (site.gam && !gamNow) return json({ error: "The site's words and sales could not be read." }, 502);
-    const editorNow = site.gam ? gamForEditor(gamNow.content, gamNow.sales, gamNow.images, gamNow.imageFiles) : c && site.items ? siteForEditor(c.data) : null;
+    const gamNow = site.model ? await site.model.load(loadJson, gh, repoPath, ref) : null;
+    if (site.model && !gamNow) return json({ error: "The site's words could not be read." }, 502);
+    const editorNow = site.model ? site.model.forEditor(gamNow) : c && site.items ? siteForEditor(c.data) : null;
     const pctx = pageCtx(editorNow);
     const version = [f.sha, c ? c.sha : "", ...(gamNow ? gamNow.shas : [])].join(".");
     if (action === "savePages" && body.version && body.version !== version && !body.replace) {
@@ -2035,8 +2271,8 @@ export async function handle(req) {
       const pictures = c ? pictureSpots(c.data).filter((x) => x.kind !== "work").map(publicSpot) : [];
       const imageMeta = meta && meta.data && meta.data.files && typeof meta.data.files === "object" ? meta.data.files : {};
       let doc = f.data; try { doc = cleanPages(pctx, f.data, f.data); } catch (_e) { /* shown as it is */ }
-      const extra = editorNow ? { site: editorNow, itemKinds: site.items, lists: Object.fromEntries(Object.entries(site.lists || {}).map(([k, l]) => [k, { label: l.label, section: l.section || "" }])), listFields: LIST_FIELDS, gam: !!site.gam,
-        pageFields: site.gam ? [{ name: "title", label: "Title in the browser tab and search results", type: "text" }, { name: "description", label: "Description for search engines", type: "long", plain: true, hint: "One or two sentences. Not shown on the page." }] : null } : {};
+      const extra = editorNow ? { site: editorNow, itemKinds: site.items, lists: Object.fromEntries(Object.entries(site.lists || {}).map(([k, l]) => [k, { label: l.label, section: l.section || "" }])), listFields: LIST_FIELDS, gam: !!site.model, model: site.model ? site.model.id : "", builtIn: site.builtIn || null,
+        pageFields: site.model ? [{ name: "title", label: "Title in the browser tab and search results", type: "text" }, { name: "description", label: "Description for search engines", type: "long", plain: true, hint: "One or two sentences. Not shown on the page." }] : null } : {};
       return json({ pages: doc, kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, version, ...extra });
     }
     // the page fields may refer to artists and articles added in this same save
@@ -2056,7 +2292,7 @@ export async function handle(req) {
       if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save the page. Please try again.") }, 502);
       return json({ ok: true, summaries: summariesFor(site, next) });
     }
-    if (hasPics && !c && !site.gam) return json({ error: "The pictures of this site could not be read." }, 502);
+    if (hasPics && !c && !site.model) return json({ error: "The pictures of this site could not be read." }, 502);
     // New photos, shared pictures and the page go in together, as one step that one Undo takes back.
     const tree = [], renamed = {};
     try {
@@ -2074,11 +2310,10 @@ export async function handle(req) {
     try { withPhotos = cleanPages(sctx, fix(body.pages), f.data); } catch (e) { return json({ error: e.message }, 400); }
     const slots = hasPics ? await loadJson("image-slots.json") : null;
     let items = { changed: [] }; const gamFiles = [];
-    if (hasSite && site.gam) {
-      let r; try { r = gamFromEditor(site.items, fix(body.content), gamNow.content, gamNow.sales, gamNow.images, gamNow.imageFiles.concat(Object.values(renamed))); } catch (e) { return json({ error: e.message }, 400); }
+    if (hasSite && site.model) {
+      let r; try { r = site.model.fromEditor(site.items, fix(body.content), gamNow, Object.values(renamed)); } catch (e) { return json({ error: e.message }, 400); }
       items = { changed: r.changed };
-      for (const [path, data, cur] of [["data/content.json", r.content, gamNow.content], ["data/sales.json", r.sales, gamNow.sales], ["data/images.json", r.images, gamNow.images]]) if (canon(data) !== canon(cur)) gamFiles.push([path, data]);
-      if (!gamFiles.length) items.changed = [];
+      for (const x of r.files) gamFiles.push(x);
     } else if (hasSite) {
       try { items = cleanSite(site.items, fix(body.content), c.data); } catch (e) { return json({ error: e.message }, 400); }
       if (items.changed.length) { c.data = items.data; if (slots) keepSlots(slots.data, c.data); }
@@ -2088,9 +2323,9 @@ export async function handle(req) {
     if (!uploads.length && !res.done.length && canon(withPhotos) === canon(was)) return json({ ok: true, unchanged: true });
     try {
       if (canon(withPhotos) !== canon(was)) await textBlob(tree, ps.file, withPhotos);
-      if (res.done.length && c && !site.gam) await textBlob(tree, ps.content, c.data);
+      if (res.done.length && c && !site.model) await textBlob(tree, ps.content, c.data);
       for (const [path, data] of gamFiles) await textBlob(tree, path, data);
-      if ((res.slotsChanged || items.changed.length) && slots && !site.gam) await textBlob(tree, "image-slots.json", slots.data);
+      if ((res.slotsChanged || items.changed.length) && slots && !site.model) await textBlob(tree, "image-slots.json", slots.data);
       // a new photo keeps the description it was given, for next time it is chosen
       if (uploads.length && ps.meta) {
         const m = await loadJson(ps.meta);
@@ -2127,8 +2362,8 @@ export async function handle(req) {
     if (!metaDoc.files || typeof metaDoc.files !== "object") metaDoc.files = {};
     const meta = metaDoc.files, kinds = site.sectionKinds || {};
     const pagesDoc = pf ? pf.data : { shared: {}, pages: {} };
-    const gamNow = site.gam ? await loadGam() : null;
-    const spots = gamNow ? gamSpots(gamNow.content, gamNow.sales, gamNow.images, gamNow.imageFiles) : cf ? pictureSpots(cf.data) : [];
+    const gamNow = site.model ? await site.model.load(loadJson, gh, repoPath, ref) : null;
+    const spots = gamNow ? site.model.spots(gamNow) : cf ? pictureSpots(cf.data) : [];
     if (action === "files") {
       const preview = copy.kind === "trial" ? copy.preview : "https://" + site.domain + "/";
       return json({
@@ -2172,7 +2407,7 @@ export async function handle(req) {
           tree.push({ path: ps.images + "/" + name, mode: "100644", type: "blob", sha: null });
           if (meta[name]) { delete meta[name]; await textBlob(tree, ps.meta, metaDoc); }
           message = "Remove photo: " + name;
-        } else if (op === "assign" && gamNow) {
+        } else if (op === "assign" && gamNow && site.gam) {
           const sp = spots.find((x) => x.key === String(body.spot || ""));
           if (!sp) return json({ error: "That place is no longer on the site. Refresh and try again." }, 409);
           const alt = cleanText(body.alt, 240) || (meta[name] || {}).alt || "";

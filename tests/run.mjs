@@ -1,4 +1,4 @@
-import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions } from "./where.mjs";
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir } from "./where.mjs";
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { parseCalendar, setAnswer, parseLog, safePhotoName, parseSlots, slotPhotoName, notePhotoName, cleanText, handle, SITES, cleanPages } from "./home.mjs";
@@ -103,6 +103,13 @@ globalThis.fetch = realFetch;
   const warSrc = fs.readFileSync((W_DIR + "/src/index.html"), "utf8"), gamSrc = fs.readFileSync((G_DIR + "/assets/render.js"), "utf8");
   for (const k of war) assert.ok(warSrc.includes(k + "(st") || warSrc.includes("'" + k + "'(st"), "World Art Review cannot draw " + k);
   for (const k of gam) assert.ok(gamSrc.includes('S["' + k + '"]') || gamSrc.includes("S." + k + " ="), "Global Art Monitor cannot draw " + k);
+  const sadDirNow = sadDir(), sad = fs.readFileSync(sadDirNow + "/tools/build.mjs", "utf8").match(/const KINDS = \[([^\]]*)\]/)[1].match(/"([^"]+)"/g).map((x) => x.slice(1, -1)).sort();
+  assert.deepEqual(kinds("Artiscope/street-art-dispatch"), sad, "Street Art Dispatch: console and build disagree");
+  const sadSrc = fs.readFileSync(sadDirNow + "/assets/render.js", "utf8");
+  for (const k of sad) assert.ok(sadSrc.includes('S["' + k + '"]') || sadSrc.includes("S." + k + " ="), "Street Art Dispatch cannot draw " + k);
+  // every site offers the same sections any page can use
+  const shared = ["announcement", "columns", "space", "quote", "faq", "button", "picture-banner", "slideshow", "gallery", "logo-row", "picture", "text-picture", "artworks", "exhibitions", "career", "press", "signup", "visit", "contact-form"];
+  for (const repo of ["Artiscope/World-art-review", "Artiscope/global-art-monitor", "Artiscope/street-art-dispatch"]) for (const k of shared) assert.ok(kinds(repo).includes(k), repo + " does not offer " + k);
   // the new sections keep only safe links
   const W = SITES.find((x) => x.repo === "Artiscope/World-art-review");
   const ctx = { sectionKinds: W.sectionKinds, artists: [], articleSlugs: [], sourceIds: [] };

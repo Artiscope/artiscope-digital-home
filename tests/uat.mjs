@@ -17,6 +17,8 @@ fs.writeFileSync("/tmp/uat-war/index.html", fs.readFileSync("/tmp/uat-war/index.
 fs.cpSync(GAMDIR, "/tmp/uat-gam", { recursive: true, filter: (p) => !p.includes("/.git") });
 execFileSync("node", ["/tmp/uat-gam/tools/build.mjs"]);
 fs.writeFileSync("/tmp/uat-gam/assets/site.js", fs.readFileSync("/tmp/uat-gam/assets/site.js", "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
+fs.rmSync("/tmp/uat-sad", { recursive: true, force: true }); execFileSync("python3", [sadDir() + "/tools/build.py", "/tmp/uat-sad"]);
+fs.writeFileSync("/tmp/uat-sad/assets/site.js", fs.readFileSync("/tmp/uat-sad/assets/site.js", "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
 
 // ----- the server, with GitHub in memory -----
 let signedIn = "tester@artiscope.co.uk";
@@ -30,7 +32,7 @@ const WR = "Artiscope/World-art-review", GR = "Artiscope/global-art-monitor", SR
 const SADDIR = sadDir() + "/", sad0 = JSON.parse(fs.readFileSync(SADDIR + "data/content.json", "utf8"));
 const hub = makeGitHub({
   [WR]: { ...files(WARDIR, ["content/site.json", "content/pages.json", "content/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(WARDIR, "images") },
-  [SR]: files(SADDIR, ["data/content.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]),
+  [SR]: files(SADDIR, ["data/content.json", "data/pages.json", "data/theme.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]),
   [GR]: { ...files(GAMDIR, ["data/content.json", "data/sales.json", "data/images.json", "data/pages.json", "data/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(GAMDIR, "assets/images") },
 });
 let breakGitHub = false;
@@ -82,6 +84,7 @@ await page.route("**/*", async (route) => {
   if (url.startsWith("https://cdn.jsdelivr.net/npm/@supabase")) return route.fulfill({ status: 200, contentType: "text/javascript", body: SUPA });
   if (url.startsWith("https://worldartreview.com/")) return serveSite("/tmp/uat-war", route, url);
   if (url.startsWith("https://globalartmonitor.com/")) return serveSite("/tmp/uat-gam", route, url);
+  if (url.startsWith("https://streetartdispatch.com/")) return serveSite("/tmp/uat-sad", route, url);
   return route.abort();
 });
 const shot = (n) => page.screenshot({ path: OUT + "shots/" + n + ".png" });
@@ -96,7 +99,7 @@ async function openSite(id) { await page.click('[data-tab="home"]', { timeout: 1
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all six sites, the Practice site among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 6, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 33"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 34"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await page.click('[data-tab="home"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -682,62 +685,54 @@ await check("Every form box has a label", async () => {
 });
 await check("You can see where the keyboard is", async () => { await page.keyboard.press("Tab"); await page.keyboard.press("Tab"); const o = await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle); must(o !== "none", "no visible focus"); });
 
-// =============== 10. Street Art Dispatch ===============
+// =============== 10. Street Art Dispatch: the same console as the other sites ===============
 area = "Street Art Dispatch";
-const sadWide = async () => { await page.setViewportSize({ width: 390, height: 844 }); await settle(700); const w = await page.evaluate(() => document.documentElement.scrollWidth); await page.setViewportSize({ width: 1440, height: 900 }); await settle(300); return w; };
-async function sadSave() { await page.click('form[data-form="entry"] button[type="submit"]'); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved", { timeout: 9000 }); await settle(900); }
-async function sadOpen(label, nth = 0) { await page.click('.tabb:has-text("' + label + '")'); await settle(400); await page.click('[data-act="open"] >> nth=' + nth); await page.waitForSelector('form[data-form="entry"]'); }
-await check("Opening Street Art Dispatch goes straight to Content", async () => {
-  await page.evaluate(() => { window.__adh.state.leave = null; window.__adh.state.dirty = false; const p = window.__adh.pgOf(); if (p) p.dirty = false; window.__adh.go("home"); }); await settle(600);
-  await page.click('[data-act="open-site"][data-site="street-art-dispatch"]'); await page.waitForSelector(".tabs.many", { timeout: 12000 }); await settle(600);
-  must(await page.evaluate(() => window.__adh.state.tab) === "content", "opened on " + await page.evaluate(() => window.__adh.state.tab)); await shot("40-sad-content");
+const SF = () => frame("streetartdispatch.com");
+const sadWide = async () => { await page.setViewportSize({ width: 390, height: 844 }); await settle(900); const w = await page.evaluate(() => document.documentElement.scrollWidth); await page.setViewportSize({ width: 1440, height: 900 }); await settle(400); return w; };
+await check("Opening Street Art Dispatch goes straight to the page editor with the real page", async () => {
+  await page.evaluate(() => { window.__adh.state.leave = null; window.__adh.state.dirty = false; const p = window.__adh.pgOf(); if (p) p.dirty = false; });
+  await openSite("street-art-dispatch"); must(!!SF(), "no preview"); await shot("40-sad-editor");
 });
-await check("Menu has Overview, Content, Versions and History, and no Pages, Theme, Photos or Files", async () => {
-  const t = await text(".rail"); must(["Overview", "Content", "Versions", "History"].every((w) => t.includes(w)) && !["Pages", "Theme", "Photos", "Files"].some((w) => t.includes(w)), "menu: " + t);
+await check("Menu has Overview, Pages, Theme, Files, Versions and History, and no Content", async () => { const t = await text(".rail"); must(["Overview", "Pages", "Theme", "Files", "Versions", "History"].every((w) => t.includes(w)) && !t.includes("Content"), "menu: " + t.replace(/\n/g, " ")); });
+await check("Its own sections are listed, and clicking one on the page opens its settings", async () => {
+  const t = await text("#ed-sections"); must(["Opening banner", "Article cards", "Intervention archive", "Collecting band", "Email sign-up"].every((w) => t.includes(w)), "list: " + t.replace(/\n/g, " "));
+  await SF().click("#heroTitle"); await page.waitForSelector(".ed-right h2:has-text('Opening banner')");
 });
-await check("Every list of the site is offered, all on screen at once", async () => {
-  const tabs = await page.locator(".tabb").allInnerTexts(); must(tabs.length === 11, tabs.length + " lists: " + tabs.join(", "));
-  const cut = await page.evaluate(() => [...document.querySelectorAll(".tabb")].filter((b) => b.scrollWidth > b.clientWidth + 1).length); must(cut === 0, cut + " names cut short");
+await check("Typing redraws the page, and Save writes only the page list", async () => {
+  await page.fill('[data-pf="headline"]', "Art in the open"); await settle(600); must((await SF().textContent("#heroTitle")) === "Art in the open", "not redrawn");
+  await liveSave(); must(read(SR, "data/pages.json").pages.home.sections[0].settings.headline === "Art in the open", "not saved");
+  must(hub.read(SR, "main", "data/content.json") === fs.readFileSync(SADDIR + "data/content.json", "utf8"), "the content file changed");
 });
-await check("Editing a dispatch title saves that title and nothing else", async () => {
-  await sadOpen("Dispatches", 1); await page.fill('[data-field="title"]', "A title changed in the console"); await sadSave();
-  const now = read(SR, "data/content.json"); must(now.features[1].title === "A title changed in the console", "title is " + now.features[1].title);
-  must(JSON.stringify({ ...now, features: null }) === JSON.stringify({ ...sad0, features: null }) && JSON.stringify(now.features.slice(2)) === JSON.stringify(sad0.features.slice(2)), "something else changed too");
+await check("Add a section offers the same sections as the other sites", async () => {
+  await page.click('.addl[data-act="ed-secpicker"]'); await page.waitForSelector(".pk-item");
+  const keys = await page.$$eval(".pk-item", (b) => b.map((x) => x.dataset.key));
+  const want = ["announcement", "columns", "space", "quote", "faq", "button", "picture-banner", "slideshow", "gallery", "logo-row", "picture", "text-picture", "artworks", "exhibitions", "career", "press", "signup", "visit", "contact-form"];
+  must(want.every((k) => keys.includes(k)), "missing: " + want.filter((k) => !keys.includes(k)).join(", "));
+  await page.click('.pk-item[data-key="faq"]'); await settle(900); must(await SF().evaluate(() => !!document.querySelector("details.qa")), "not drawn");
+  await liveSave(); must(read(SR, "data/pages.json").pages.home.sections.some((x) => x.type === "faq"), "not saved");
 });
-await check("Web addresses, pictures and links are not offered for editing", async () => {
-  const names = await page.evaluate(() => window.__adh.state.content["street-art-dispatch"].flatMap((c) => c.entries.flatMap((e) => e.fields.map((f) => f.name))));
-  must(!names.some((x) => ["slug", "cover", "read", "column", "name"].includes(x)), "locked field offered");
+await check("An article opens from the page list and its title saves into the content file", async () => {
+  await page.selectOption(".pagepick", "a-spectacle-to-collectable"); await settle(1500); must((await SF().textContent("h1")).includes("Spectacle"), "not drawn");
+  await page.click('.sec[data-where="item"][data-id="words"]'); await page.fill('[data-pf="title"]', "From Spectacle to Collectable"); await settle(500);
+  must((await SF().textContent("h1")) === "From Spectacle to Collectable", "not redrawn"); await liveSave();
+  must(read(SR, "data/content.json").features.find((f) => f.slug === "spectacle-to-collectable").title === "From Spectacle to Collectable", "not saved");
 });
-await check("A year typed as words is saved as a number, and the Venice date stays to confirm", async () => {
-  await page.click('[data-act="close"]').catch(() => {}); await settle(300);
-  const i = sad0.archive.findIndex((x) => typeof x.y === "number"); await sadOpen("Interventions archive", i);
-  await page.fill('[data-field="y"]', String(sad0.archive[i].y + 1)); await sadSave();
-  const now = read(SR, "data/content.json"); must(now.archive[i].y === sad0.archive[i].y + 1, "saved as " + JSON.stringify(now.archive[i].y));
-  must(now.archive.find((x) => x.pending).y === "TBC", "the Venice date changed");
+await check("Issue details hold the archive, and a year is kept as a number while Venice stays to confirm", async () => {
+  await page.selectOption(".pagepick", "site-details"); await settle(1000); must((await text(".ed-left")).includes("Intervention archive"), "no archive part");
+  const i = sad0.archive.findIndex((x) => typeof x.y === "number");
+  await page.click('.sec[data-where="item"][data-id="archive"]'); await settle(400); await page.click('.sec.blk[data-id="archive"] >> nth=' + i); await settle(300); await page.fill('[data-pf="archive.' + i + '.y"]', String(sad0.archive[i].y + 1)); await settle(300); await liveSave();
+  const now = read(SR, "data/content.json"); must(now.archive[i].y === sad0.archive[i].y + 1, "saved as " + JSON.stringify(now.archive[i].y)); must(now.archive.find((x) => x.pending).y === "TBC", "Venice changed");
 });
-await check("An exhibition can be deleted, after asking once", async () => {
-  await page.click('[data-act="close"]').catch(() => {}); await settle(300); await sadOpen("Exhibitions", 2);
-  await page.click('[data-act="ask"]'); must((await text("body")).includes("Delete this exhibition?"), "did not ask"); await page.click('[data-act="entry-delete"]');
-  await page.click('[data-act="livesave"]').catch(() => {}); await page.waitForSelector("text=Saved", { timeout: 9000 }); await settle(900);
-  must(read(SR, "data/content.json").exhibitions.length === sad0.exhibitions.length - 1, "not deleted");
-});
-await check("Dispatches and artists cannot be deleted or hidden", async () => {
-  await sadOpen("Dispatches", 0); const a = await page.locator('[data-act="ask"], [data-act="entry-hide"]').count(); await page.click('[data-act="close"]'); await settle(300);
-  await sadOpen("Artists", 0); const b = await page.locator('[data-act="ask"], [data-act="entry-hide"]').count(); await page.click('[data-act="close"]'); await settle(300);
-  must(a === 0 && b === 0, "delete or hide offered");
+await check("The theme opens with the site's own colours and typefaces", async () => {
+  await page.evaluate(() => { window.__adh.state.leave = null; const p = window.__adh.pgOf(); if (p) p.dirty = false; window.__adh.go("theme"); }); await settle(1500);
+  const t = await text("body"); must(t.includes("Gloock") && t.includes("Buttons"), "theme: " + t.slice(0, 200));
 });
 await check("Changes are signed by admin, with no email address in GitHub", async () => {
-  const msgs = hub.commitLog(SR).map((c) => c.message).filter((m) => m !== "Start"); must(msgs.length >= 3 && msgs.every((m) => !/@/.test(m)), "messages: " + msgs.join(" | "));
-  must(msgs.filter((m) => /\(by admin\)$/.test(m)).length >= 3, "not signed: " + msgs.join(" | "));
+  const msgs = hub.commitLog(SR).map((c) => c.message).filter((m) => m !== "Start"); must(msgs.length >= 3 && msgs.every((m) => !/@/.test(m) && /\(by admin\)$/.test(m)), "messages: " + msgs.join(" | "));
 });
-await check("Overview shows Content, Versions and History, and no Theme or Photos", async () => {
-  await page.evaluate(() => window.__adh.go("overview")); await settle(900); await shot("41-sad-overview");
-  const t = await text(".grid-3"); must(t.includes("Content") && t.includes("Versions") && t.includes("History") && !t.includes("Theme") && !t.includes("Photos"), "tiles: " + t.replace(/\n/g, " "));
-});
-await check("No sideways scrolling on a phone: overview, content and an open entry", async () => {
-  const a = await sadWide(); await page.evaluate(() => window.__adh.go("content")); await settle(600); const b = await sadWide();
-  await sadOpen("About page", 0); const c = await sadWide(); await page.setViewportSize({ width: 390, height: 844 }); await settle(500); await shot("42-sad-phone-entry"); await page.setViewportSize({ width: 1440, height: 900 });
-  must(a <= 392 && b <= 392 && c <= 392, [a, b, c].join(", ") + " pixels wide");
+await check("No sideways scrolling on a phone: the editor and the overview", async () => {
+  await page.evaluate(() => window.__adh.go("pages")); await settle(2000); const a = await sadWide(); await page.evaluate(() => window.__adh.go("overview")); await settle(800); const b = await sadWide();
+  must(a <= 392 && b <= 392, a + ", " + b + " pixels wide");
 });
 
 // =============== results ===============

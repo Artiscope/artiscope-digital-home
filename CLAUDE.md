@@ -67,7 +67,8 @@ rules on facts, sources, honesty, images and design still hold.
 - `index.html?demo` is sample mode: it runs with no sign-in, using sample
   data written into `assets/app.js`, `assets/demo-site.json`,
   `assets/demo-gam.json` and `assets/demo-sad.json`. Add `&preview=<World Art Review address>` and
-  `&gampreview=<Global Art Monitor address>` to preview local copies.
+  `&gampreview=<Global Art Monitor address>` and
+  `&sadpreview=<Street Art Dispatch address>` to preview local copies.
 - The server is a Supabase edge function,
   `supabase/functions/home/index.ts`. It is published by
   `.github/workflows/deploy-function.yml` on every push to main. It holds
@@ -189,7 +190,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (16 November 2026, Version 33)
+## Where things stand (16 November 2026, Version 34)
 
 Done:
 
@@ -217,20 +218,32 @@ Done:
 - User access (Version 32): People screen, editors with their own copy,
   Save and Save and publish, versions and release notes, the Versions
   screen, and the Practice site. Sample: https://claude.ai/artifact/53dS5mbfCJkPL8eyKmCgS6
-- Street Art Dispatch is the third site (Version 33). It has only
-  Overview, Content, Versions and History for now: the server tells the
-  console `pagesOn`, `themeOn` and `photosOn` for each site, and screens
-  that are off are left out. Its Content lists are Dispatches, Urban
-  Culture columns, Artists, Artist notes, Interventions archive,
-  Exhibitions, Glossary, Collecting figures, About page, Contact page and
-  Issue details. Web addresses, cover pictures, `read` links, the column
-  flag and artist names stay locked. Only archive entries and
-  exhibitions can be deleted; nothing is hidden, because the build needs
-  every article and artist. An archive year is a whole number or "TBC".
-  The site publishes previews of `adh/*` copies at
-  `streetartdispatch.com/preview/<copy>/`, marked noindex.
-  Checks: `tests/dispatch.mjs` and the "Street Art Dispatch" area of
-  `tests/uat.mjs`.
+- Street Art Dispatch is the third site, and since Version 34 it works
+  exactly like Global Art Monitor: page editor, the same "Add a section"
+  list, Theme, Files, Versions and History, articles and artists as pages
+  in the page list, and "Issue details, archive and glossary" across the
+  site. Its pages are drawn by its own `assets/render.js` (run by
+  `tools/build.mjs`, which `python3 tools/build.py <folder>` runs) from
+  `data/content.json`, `data/pages.json` and `data/theme.json`.
+  On the server it has `SAD_SECTIONS`, `SAD_ITEMS` and `SAD_MODEL`
+  (`sadForEditor`, `sadFromEditor`). Sites drawn from their own data have
+  a `model` (`GAM_MODEL`, `SAD_MODEL`) that loads, opens and saves them;
+  `gam: true` in the console means "a site with a model", and
+  `pgd.model` says which. Archive years are a whole number or "TBC".
+  Hidden articles get no page. An artist's web address stays the same
+  when their name changes. Checks: `tests/dispatch.mjs`, the "Street Art
+  Dispatch" area of `tests/uat.mjs`, and `tests/every-section.mjs`.
+- The standard for every new site (follow it for the three still to
+  build): its pages in a page list file (`shared` header and footer,
+  `pages` with `path`, `title`, `description`, `sections`), a theme file,
+  a content file, a drawing program used both by the build and by the
+  console's preview, the editor link in its script (the `adh-pages`,
+  `adh-pick`, `adh-click`, `adh-nav` messages and the `data-adh` and
+  `data-adh-b` tags), and every section in the shared set: announcement,
+  columns, space, quote, faq, button, picture-banner, slideshow, gallery,
+  logo-row, picture, text-picture, artworks, exhibitions, career, press,
+  signup, visit and contact-form, drawn in the site's own look.
+  `tests/run.mjs` fails if a site does not offer one of them.
 - Words saved through Content on any site lose anything that could run
   on a page (`safeMarks` on the server), keeping ordinary formatting.
 
@@ -257,8 +270,7 @@ Notes for checking:
   confirm" on the Venice entry stay until the owner gives confirmed
   facts. Only one session changes its repository at a time.
 
-Later, in this order unless the owner says otherwise: Pages, Theme and
-Photos for Street Art Dispatch if wanted, a Code screen,
+Later, in this order unless the owner says otherwise: a Code screen,
 payments (Stripe), building the three new sites, extras. A comparison
 with Shopify is paused until the owner sends screenshots or code.
 
