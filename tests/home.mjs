@@ -103,7 +103,7 @@ const LOGO_BLOCK = { field: "logos", label: "Logo", add: "Add a logo", about: "A
 const WAR_SECTIONS = {
   opening: { label: "Opening screen", about: "The short screen shown while the site loads.", summary: (st) => st.name || "", fields: [{ name: "name", label: "Site name", type: "text", hint: "Shown beside the logo." }, { name: "tagline", label: "Tagline", type: "text", hint: "Small words under the name." }] },
   header: { label: "Menu bar", about: "The bar at the top of every page.", summary: (st) => ((st.links || []).length + " links" + ((st.logos || []).length ? ", " + st.logos.length + ((st.logos || []).length === 1 ? " logo" : " logos") : "")), blocks: [{ field: "links", label: "Link", add: "Add a link", about: "A link on the left of the menu bar." }, LOGO_BLOCK], fields: [{ name: "name", label: "Site name", type: "text", hint: "Shown in the middle of the bar." }, LINK_ROWS, LOGO_ROWS] },
-  footer: { label: "Newsletter and footer", about: "The sign-up band and the links at the bottom of every page.", summary: (st) => ((st.columns || []).length + " columns"), blocks: { field: "columns", label: "Column", add: "Add a column", title: (b) => b.title }, fields: [
+  footer: { label: "Newsletter and footer", about: "The sign-up band and the links at the bottom of every page.", summary: (st) => ((st.columns || []).length + " columns"), blocks: { field: "columns", label: "Column", add: "Add a column", title: (b) => b.title, blocks: [{ field: "links", label: "Link", add: "Add a link", about: "One link in this column: its words and where it goes." }] }, fields: [
     EYEBROW, HEADING, { name: "button", label: "Button words", type: "text", hint: "The button opens the sign-up form." }, { name: "blurb", label: "Short description of the site", type: "long", hint: "Shown under the name, at the bottom left." },
     { name: "columns", label: "Link columns", type: "rows", fields: [{ name: "title", label: "Column title", type: "text", hint: "A short word or two, such as Read." }, { ...LINK_ROWS, label: "Links in this column" }] },
     { name: "copyright", label: "Copyright line", type: "text" }, { name: "elsewhere", label: "Links in the bottom bar", type: "rows", fields: LINK_ROWS.fields },
@@ -262,6 +262,12 @@ const VISIT_MAP = [{ name: "map_words", label: "Map link words", type: "text", h
 WAR_SECTIONS.signup = { label: "Email sign-up", about: SIGNUP_ABOUT, summary: (st) => (st.button || "Sign-up"), library: "Visitors ask to join the letter",
   starter: { eyebrow: "Get the review", heading: ["New portfolios,", "once a month."], text: "One short letter when there is something new to read. No spare emails.", button: "Ask to join", bg: "green", fg: "" },
   fields: [EYEBROW, HEADING, FORM_TEXT, FORM_BUTTON("Ask to join"), BG, FG] };
+// A sign-up box that pops up once a visit, after a few seconds, and opens the visitor's own email app. It lives in the Popups group only.
+const POPUP_DELAY = { name: "delay", label: "Seconds before it shows", type: "number", hint: "Between 3 and 60. It shows once a visit, and Close or Escape puts it away." };
+const SIGNUP_POPUP = { label: "Sign-up popup", about: "A small box that pops up once a visit, with an email box and one button." + FORM_HONEST, popup: true, summary: (st) => "After " + (st.delay || 8) + " seconds",
+  library: "A sign-up box that pops up", starter: { eyebrow: "", heading: "Join the mailing list", text: "Leave your email and we will add you.", button: "Ask to join", delay: 8 },
+  fields: [{ ...EYEBROW, label: "Small line above the heading" }, { name: "heading", label: "Heading", type: "text" }, FORM_TEXT, FORM_BUTTON("Ask to join"), POPUP_DELAY] };
+WAR_SECTIONS["signup-popup"] = SIGNUP_POPUP;
 WAR_SECTIONS.visit = { label: "Visit us", about: "The address, opening hours and how to get there, with an optional link to a map.", summary: VISIT_SUMMARY, library: "Address, hours and directions", blocks: [VISIT_BLOCK],
   starter: { eyebrow: "See the work", heading: ["Visit Grove Gallery"], ...VISIT_STARTER, bg: "paper", fg: "" }, fields: [EYEBROW, HEADING, VISIT_ROWS, ...VISIT_MAP, BG, FG] };
 WAR_SECTIONS["contact-form"] = { label: "Contact form", about: "Name, email, a topic and a message." + FORM_HONEST, summary: (st) => { const n = (st.topics || []).filter((x) => typeof x === "string").length; return n ? n + (n === 1 ? " topic" : " topics") : "No topics"; }, library: "Visitors write to the gallery",
@@ -448,6 +454,7 @@ GAM_SECTIONS.exhibitions = { ...WAR_SECTIONS.exhibitions, starter: { eyebrow: ""
 GAM_SECTIONS.career = { ...WAR_SECTIONS.career, about: "Dated moments in an artist's career, each with its source.", starter: { eyebrow: "", heading: "Career timeline", ...EVENT_STARTER }, fields: [...G_HEAD, EVENT_ROWS] };
 GAM_SECTIONS.press = { ...WAR_SECTIONS.press, starter: { eyebrow: "", heading: "In the press", ...QUOTE_STARTER }, fields: [...G_HEAD, QUOTE_ROWS] };
 // ----- new sections for any page: batch 4, sign-up and visiting (the contact form is already here) -----
+GAM_SECTIONS["signup-popup"] = SIGNUP_POPUP;
 GAM_SECTIONS.signup = { ...WAR_SECTIONS.signup, about: SIGNUP_ABOUT + " Shown in a dark panel.", starter: { eyebrow: "The market note", heading: "Sent when there is something to report.", text: "New documented results and new research, and nothing else.", button: "Ask to join" },
   fields: [...G_HEAD, FORM_TEXT, FORM_BUTTON("Ask to join")] };
 GAM_SECTIONS.visit = { ...WAR_SECTIONS.visit, about: "The address, opening hours and how to get there, each in a rounded card, with an optional link to a map.", starter: { eyebrow: "Visit", heading: "See the work at Grove Gallery", ...VISIT_STARTER },
@@ -694,6 +701,7 @@ const SAD_SECTIONS = {
   career: GAM_SECTIONS.career,
   press: GAM_SECTIONS.press,
   visit: GAM_SECTIONS.visit,
+  "signup-popup": SIGNUP_POPUP,
   "contact-form": { ...WAR_SECTIONS["contact-form"], starter: { eyebrow: "Contact", heading: "Write to us", text: "Pitches, tips, corrections and press all reach the same desk.", topics: ["A pitch or a tip", "A correction", "Press", "Something else"], button: "Write the email" },
     fields: [...G_HEAD, FORM_TEXT, WAR_SECTIONS["contact-form"].fields.find((f) => f.name === "topics"), FORM_BUTTON("Write the email")] },
 };
@@ -978,7 +986,7 @@ export function usageOf(name, pagesDoc, kinds, spots) {
   const has = (v) => (Array.isArray(v) ? v.some(has) : v && typeof v === "object" ? Object.values(v).some(has) : v === name);
   const used = [];
   for (const [key, part] of Object.entries((pagesDoc && pagesDoc.shared) || {})) if (part && has(part.settings)) used.push({ label: "Every page: " + ((kinds[part.type] || {}).label || key), page: "home", where: "shared", id: key });
-  for (const where of ["top", "bottom"]) for (const sec of ((pagesDoc && pagesDoc.groups) || {})[where] || []) if (has(sec.settings)) used.push({ label: "Every page: " + ((kinds[sec.type] || {}).label || sec.type) + (sec.visible === false ? " (hidden)" : ""), page: "home", where, id: sec.id });
+  for (const where of ["top", "popups", "bottom"]) for (const sec of ((pagesDoc && pagesDoc.groups) || {})[where] || []) if (has(sec.settings)) used.push({ label: "Every page: " + ((kinds[sec.type] || {}).label || sec.type) + (sec.visible === false ? " (hidden)" : ""), page: "home", where, id: sec.id });
   for (const [pk, pg] of Object.entries((pagesDoc && pagesDoc.pages) || {})) for (const sec of (pg && pg.sections) || []) {
     if (has(sec.settings)) used.push({ label: (pg.title || pk) + " page: " + ((kinds[sec.type] || {}).label || sec.type) + (sec.visible === false ? " (hidden)" : ""), page: pk, where: "page", id: sec.id });
   }
@@ -1101,6 +1109,7 @@ export function siteForEditor(data) {
 const GROUP_ID = /^every-[a-z0-9-]{1,40}$/;
 function cleanSection(spec, sec, id, site) {
   const out = { id, type: sec.type, visible: sec.visible !== false, settings: cleanSettings(spec[sec.type], sec.settings, site) };
+  if (spec[sec.type].popup) out.settings.delay = Math.max(3, Math.min(60, Math.round(Number(out.settings.delay) || 8)));
   const nm = cleanText(sec.name, 40); if (nm) out.name = nm;
   return out;
 }
@@ -1115,14 +1124,15 @@ export function cleanPages(site, given, current) {
     const nm = cleanText(g.name, 40); if (nm) out.shared[key].name = nm;
   }
   // sections shared by every page, above the page's own and below them
-  out.groups = { top: [], bottom: [] };
-  for (const where of ["top", "bottom"]) {
+  out.groups = { top: [], popups: [], bottom: [] };
+  for (const where of ["top", "popups", "bottom"]) {
     const list = Array.isArray(given.groups && given.groups[where]) ? given.groups[where] : ((current.groups || {})[where] || []);
-    if (list.length > 10) throw new Error("Up to 10 sections can be shared by every page, at the top and at the bottom.");
+    if (list.length > (where === "popups" ? 3 : 10)) throw new Error(where === "popups" ? "A site can have up to 3 popups." : "Up to 10 sections can be shared by every page, at the top and at the bottom.");
     for (const sec of list) {
       if (!sec || typeof sec !== "object" || !spec[sec.type]) throw new Error("One of the sections shared by every page is of a kind this site cannot draw.");
+      if (!!spec[sec.type].popup !== (where === "popups")) throw new Error(where === "popups" ? "Only popups go in the Popups group." : "A popup goes in the Popups group, not on a page.");
       const id = String(sec.id || "");
-      if (!GROUP_ID.test(id) || out.groups.top.concat(out.groups.bottom).some((x) => x.id === id)) throw new Error("Every shared section needs its own short name, starting every-.");
+      if (!GROUP_ID.test(id) || out.groups.top.concat(out.groups.popups, out.groups.bottom).some((x) => x.id === id)) throw new Error("Every shared section needs its own short name, starting every-.");
       out.groups[where].push(cleanSection(spec, sec, id, site));
     }
   }
@@ -1139,6 +1149,7 @@ export function cleanPages(site, given, current) {
     const seen = new Set(), sections = [];
     for (const sec of list) {
       if (!sec || typeof sec !== "object" || !spec[sec.type]) throw new Error("One of the sections is of a kind this site cannot draw.");
+      if (spec[sec.type].popup) throw new Error("A popup goes in the Popups group, not on a page.");
       const id = String(sec.id || "");
       if (!SECTION_ID.test(id) || seen.has(id)) throw new Error("Every section needs its own short name.");
       seen.add(id);
@@ -1148,10 +1159,13 @@ export function cleanPages(site, given, current) {
     if (main && !sections.some((x) => x.id === main)) throw new Error("The main section of a page can be hidden or moved, but not removed.");
     const title = cleanText(g && g.title, site.model ? 120 : 60) || (cur && cur.title) || "";
     if (!title) throw new Error("Every page needs a title.");
+    const built = site.builtIn || (site.model ? [] : ["standards"]);
+    const own = !!(g && g.own === true) && key !== "home" && !built.includes(key);
     if (site.model) {
       const base = cur || { path: key + "/index.html", title, description: "", current: "", intro: false };
       out.pages[key] = { ...base, title, description: cleanText(g && g.description != null ? g.description : base.description, 300), sections };
     } else out.pages[key] = { ...(cur || {}), title, sections };
+    if (own) out.pages[key].own = true; else delete out.pages[key].own;
   }
   // the heading and introduction of each list page
   if (site.lists) {
@@ -1179,6 +1193,7 @@ export function blockKinds(b) {
     if (x.one) { o.one = true; o.hide = x.hide || ""; o.fields = x.fields || []; }
     if (x.item) o.item = x.item;
     if (x.max) o.max = x.max;
+    if (x.blocks) o.blocks = blockKinds(x.blocks);
     return o;
   });
 }
@@ -1187,6 +1202,7 @@ function kindsFor(site) {
   const out = {};
   for (const [k, v] of Object.entries(site.sectionKinds || {})) {
     out[k] = { label: v.label, about: v.about || "", fields: v.fields, library: v.library || "", starter: v.starter || null };
+    if (v.popup) out[k].popup = true;
     if (v.blocks) out[k].blocks = blockKinds(v.blocks);
   }
   return out;
@@ -1195,7 +1211,7 @@ function summariesFor(site, pages) {
   const f = (sec) => { const k = site.sectionKinds[sec.type]; try { return k && k.summary ? String(k.summary(sec.settings || {})) : ""; } catch (_e) { return ""; } };
   const out = {};
   for (const [key, part] of Object.entries(pages.shared || {})) out["shared:" + key] = f(part);
-  for (const where of ["top", "bottom"]) for (const sec of ((pages.groups || {})[where] || [])) out["every:" + sec.id] = f(sec);
+  for (const where of ["top", "popups", "bottom"]) for (const sec of ((pages.groups || {})[where] || [])) out["every:" + sec.id] = f(sec);
   for (const [key, pg] of Object.entries(pages.pages || {})) for (const sec of pg.sections || []) out[key + ":" + sec.id] = f(sec);
   return out;
 }

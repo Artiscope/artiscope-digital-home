@@ -4,7 +4,7 @@ import fs from "node:fs";
 globalThis.Deno = { env: { get: () => "" }, serve() {} };
 const m = await import(new URL("../home.mjs", import.meta.url));
 const site = m.SITES[0], kinds = {};
-for (const [k, v] of Object.entries(site.sectionKinds)) { kinds[k] = { label: v.label, about: v.about || "", fields: v.fields, library: v.library || "", starter: v.starter || null }; if (v.blocks) kinds[k].blocks = m.blockKinds(v.blocks); }
+for (const [k, v] of Object.entries(site.sectionKinds)) { kinds[k] = { label: v.label, about: v.about || "", fields: v.fields, library: v.library || "", starter: v.starter || null }; if (v.blocks) kinds[k].blocks = m.blockKinds(v.blocks); if (v.popup) kinds[k].popup = true; }
 const war = JSON.parse(fs.readFileSync((W_DIR + "/content/site.json"), "utf8"));
 const spots = m.pictureSpots(war).map(m.publicSpot);
 const p = (C_DIR + "/assets/app.js"); let s = fs.readFileSync(p, "utf8");

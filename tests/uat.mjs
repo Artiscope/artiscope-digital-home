@@ -99,7 +99,7 @@ async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).cat
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all six sites, the Practice site among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 6, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 37"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 38"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await goTab(page, "home"); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -516,6 +516,45 @@ await check("A slideshow takes up to 10 slides: Add a slide then turns off and s
   const b = page.locator('.blocks[data-id^="slideshow"] .addl.blk').first(); must(await b.isDisabled() && (await b.innerText()).includes("10 of 10"), "button: " + await b.innerText());
   await page.click('[data-act="ed-discard"]'); await settle(500);
 });
+await check("Clicking the picked section again folds its blocks away, and once more opens them", async () => {
+  await page.click('#ed-sections .sec[data-id="hero"]:not(.blk)'); await settle(300); must(await page.locator('#ed-sections .sec.blk[data-id="hero"]').count() > 0, "blocks not shown");
+  await page.click('#ed-sections .sec[data-id="hero"]:not(.blk)'); await settle(300); must(await page.locator('#ed-sections .sec.blk[data-id="hero"]').count() === 0, "blocks did not fold away");
+  await page.click('#ed-sections .sec[data-id="hero"]:not(.blk)'); await settle(300); must(await page.locator('#ed-sections .sec.blk[data-id="hero"]').count() > 0, "blocks did not open again");
+  must((await page.locator('.addl[data-act="ed-secpicker"]').allInnerTexts()).every((t) => t === "Add a section" || t === "Add a popup"), "buttons: " + (await page.locator('.addl[data-act="ed-secpicker"]').allInnerTexts()).join(" | "));
+});
+await check("The footer's columns hold their links as blocks one level down", async () => {
+  await page.click('.sec[data-where="shared"][data-id="footer"]'); await settle(300); await page.click('.sec.blk[data-id="footer"][data-block="0"] .cnt'); await settle(300);
+  const kids = await page.locator('.sec.kid[data-id="footer"][data-block="0"] .nm').allInnerTexts(); must(kids.length >= 2 && kids.every((t) => t.startsWith("Link: ")), "links: " + kids.join(" | "));
+  await page.click('.sec.kid[data-id="footer"][data-block="0"][data-sub="0"]'); await settle(300); must((await text(".ed-right")).includes("Back to Column"), "panel: " + (await text(".ed-right")).slice(0, 80));
+  await page.fill('[data-pf="columns.0.links.0.0"]', "All the artists"); await settle(500);
+  must(await frame("worldartreview.com").evaluate(() => document.querySelector("footer").innerText.includes("All the artists")), "the page did not change");
+  await page.click('.addl.kid[data-id="footer"][data-block="0"]'); await settle(300); must((await text(".ed-right")).includes("Link " + (kids.length + 1) + " of " + (kids.length + 1)), "no new link");
+  await liveSave(); const col = read(WR, "content/pages.json").shared.footer.settings.columns[0];
+  must(col.links[0][0] === "All the artists" && col.links.length === kids.length + 1, "saved " + JSON.stringify(col.links));
+});
+await check("Add a popup offers only popups; the popup shows in the preview while picked, saves in its own group, and no page offers it", async () => {
+  await page.click('.addl[data-act="ed-secpicker"][data-g="popups"]'); const items = await page.$$eval(".pk-item", (b) => b.map((x) => x.dataset.key)); must(items.join() === "signup-popup", "offered " + items.join());
+  await page.click('.pk-item[data-key="signup-popup"]'); await settle(900);
+  must(await frame("worldartreview.com").evaluate(() => { const p = document.querySelector("[data-popup]"); return !!p && !p.hidden && getComputedStyle(p).position === "fixed"; }), "the popup is not shown"); await shot("15b-popup");
+  await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await settle(600); must(await frame("worldartreview.com").evaluate(() => document.querySelector("[data-popup]").hidden), "the popup stayed while something else was picked");
+  await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); must(!(await page.$('.pk-item[data-key="signup-popup"]')), "a page offers the popup"); await page.keyboard.press("Escape");
+  await liveSave(); const g = read(WR, "content/pages.json").groups; must(g.popups.length === 1 && g.popups[0].type === "signup-popup", "saved " + JSON.stringify(g));
+  await page.hover('.dl[data-g="popups"] .sec:not(.blk)'); await page.click('.dl[data-g="popups"] .sec:not(.blk) [data-act="ed-row-del"]'); await settle(300); await liveSave();
+});
+await check("Page not found is a fixed page: what is there is listed and nothing can be added to it", async () => {
+  await page.selectOption(".pagepick", "not-found"); await settle(1200);
+  must((await text(".ed-left")).includes("Drawn by the site itself"), "no fixed row"); must(!(await page.$('.addl[data-act="ed-secpicker"][data-g="page"]')), "Add a section on a fixed page");
+  must(await page.isVisible('.addl[data-act="ed-secpicker"][data-g="top"]'), "the shared groups went too");
+  must(/not find|not found/i.test(await frame("worldartreview.com").evaluate(() => document.body.innerText)), "the preview is not the page not found");
+  await page.selectOption(".pagepick", "home"); await settle(1000);
+});
+await check("A page of its own layout has no menu bar, footer or shared sections, and saves that way", async () => {
+  await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Coming soon"); await page.check('input[name="own"]');
+  await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1500);
+  must((await text(".ed-left")).includes("Page with its own layout") && !(await page.$('.addl[data-act="ed-secpicker"][data-g="top"]')), "the list still has the shared groups");
+  const f = frame("worldartreview.com"); must(await f.evaluate(() => !document.querySelector("#main header.hdr") && !document.querySelector("#main footer")), "the preview has a menu bar or footer"); await shot("15c-own-layout");
+  await liveSave(); const pg = read(WR, "content/pages.json").pages["coming-soon"]; must(pg && pg.own === true, "saved " + JSON.stringify(pg && pg.own));
+});
 await check("The main section of a page the site was built with has no Remove, and the server refuses to remove it", async () => {
   await page.selectOption(".pagepick", "page-standards"); await settle(1200);
   const first = await page.evaluate(() => window.__adh.pgOf().doc.pages.standards.sections.find((x) => x.type === "long-text").id); await page.hover('#ed-sections .sec[data-id="' + first + '"]:not(.blk)');
@@ -747,6 +786,12 @@ await check("The admin sees the editor's new version on All sites, with its note
 // =============== 7. Global Art Monitor ===============
 area = "Global Art Monitor";
 await check("The editor opens with the real page", async () => { await openSite("global-art-monitor"); must(!!frame("globalartmonitor.com"), "no preview"); });
+await check("Global Art Monitor draws a popup on an artist page and shows it while it is picked", async () => {
+  await page.selectOption(".pagepick", "artist-zara-muse"); await settle(1200);
+  await page.click('.addl[data-act="ed-secpicker"][data-g="popups"]'); await page.click('.pk-item[data-key="signup-popup"]'); await settle(1200);
+  must(await frame("globalartmonitor.com").evaluate(() => { const p = document.querySelector("[data-popup]"); return !!p && !p.hidden && getComputedStyle(p).position === "fixed"; }), "not shown");
+  await page.click('[data-act="ed-discard"]'); await settle(600); await page.selectOption(".pagepick", "home"); await settle(1000);
+});
 await check("An empty hammer price shows as To confirm and saves as empty", async () => {
   await page.selectOption(".pagepick", "artist-zara-muse"); await settle(1200); await page.click('.sec[data-where="item"][data-id="sales"]'); await page.click('.sec.blk[data-id="sales"] >> nth=1');
   await page.fill('[data-pf="sales.1.hammer"]', ""); await settle(500); await liveSave(); must(read(GR, "data/sales.json").sales[1].hammer === null, "saved as " + read(GR, "data/sales.json").sales[1].hammer);
@@ -819,6 +864,11 @@ const sadWide = async () => { await page.setViewportSize({ width: 390, height: 8
 await check("Opening Street Art Dispatch goes straight to the page editor with the real page", async () => {
   await page.evaluate(() => { window.__adh.state.leave = null; window.__adh.state.dirty = false; const p = window.__adh.pgOf(); if (p) p.dirty = false; });
   await openSite("street-art-dispatch"); must(!!SF(), "no preview"); await shot("40-sad-editor");
+});
+await check("Street Art Dispatch draws a popup and shows it while it is picked", async () => {
+  await page.click('.addl[data-act="ed-secpicker"][data-g="popups"]'); await page.click('.pk-item[data-key="signup-popup"]'); await settle(1200);
+  must(await SF().evaluate(() => { const p = document.querySelector("[data-popup]"); return !!p && !p.hidden && getComputedStyle(p).position === "fixed"; }), "not shown");
+  await page.click('[data-act="ed-discard"]'); await settle(600);
 });
 await check("Exit leads to the menu: Overview, Pages, Theme, Files, Versions and History, and no Content", async () => { await page.click(".ed-exit"); await page.waitForSelector(".rail"); const t = await text(".rail"); await page.click('.navb[data-tab="pages"]'); await page.waitForSelector("#ed-sections .sec"); await settle(2500); must(["Overview", "Pages", "Theme", "Files", "Versions", "History"].every((w) => t.includes(w)) && !t.includes("Content"), "menu: " + t.replace(/\n/g, " ")); });
 await check("Its own sections are listed, and clicking one on the page opens its settings", async () => {

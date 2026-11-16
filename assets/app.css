@@ -817,3 +817,12 @@ input[type="file"] { color: var(--muted); }
 .ctxm .pp-item .kbd { margin-left: auto; }
 .notice.putback { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; box-shadow: var(--shadow-small); background: var(--bg); border-radius: 14px; padding: 10px 14px; }
 .notice.putback .linklike { min-height: 0; }
+.pv-popwrap { display: flex; justify-content: flex-end; align-items: flex-end; min-height: 150px; padding: 8px; border-radius: 6px; background: #1E1F22; }
+.pv-popup { width: 62%; display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 8px; background: var(--bg); box-shadow: var(--shadow-small); }
+.pv-popup b { font-size: 15px; }
+/* blocks inside blocks, and fixed pages */
+.ed .sec.blk.kid, .ed .addl.blk.kid { padding-left: 48px; }
+.ed .sec.blk.kid { min-height: 28px; font-size: 12.5px; }
+.ed .sec.fixed { cursor: default; }
+.ed .sec.fixed .nm small { display: block; white-space: normal; }
+.ed .sec.fixed:hover { color: var(--text); }

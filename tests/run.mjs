@@ -135,17 +135,33 @@ globalThis.fetch = realFetch;
   assert.throws(() => cleanPages(ctx, { ...cur, pages: { ...cur.pages, standards: { title: "Standards", sections: [cur.pages.standards.sections[0]] } } }, cur), /main section/);
   const moved = cleanPages(ctx, { ...cur, pages: { ...cur.pages, standards: { title: "Standards", sections: [{ ...cur.pages.standards.sections[1], visible: false }, cur.pages.standards.sections[0]] } } }, cur);
   assert.equal(moved.pages.standards.sections[0].visible, false);
+  // popups live in their own group, and only there
+  const pop = { id: "every-signup-popup-1", type: "signup-popup", settings: { heading: "Join", delay: 900 } };
+  const withPop = cleanPages(ctx, { ...cur, groups: { top: [], popups: [pop], bottom: [] } }, cur);
+  assert.equal(withPop.groups.popups[0].settings.delay, 60, "the delay is kept between 3 and 60 seconds");
+  assert.throws(() => cleanPages(ctx, { ...cur, groups: { top: [pop], popups: [], bottom: [] } }, cur), /Popups group/);
+  assert.throws(() => cleanPages(ctx, { ...cur, groups: { top: [], popups: [quote], bottom: [] } }, cur), /Only popups/);
+  assert.throws(() => cleanPages(ctx, { ...cur, pages: { ...cur.pages, home: { title: "Home", sections: [{ ...pop, id: "p1" }] } } }, cur), /Popups group/);
+  // a page of its own layout keeps the mark; the home page and the site's own pages never take it
+  const ownDoc = cleanPages(ctx, { ...cur, pages: { ...cur.pages, home: { title: "Home", sections: [], own: true }, soon: { title: "Soon", sections: [], own: true } } }, cur);
+  assert.equal(ownDoc.pages.soon.own, true); assert.equal(ownDoc.pages.home.own, undefined);
+  // the footer's columns hold their links as blocks one level down
+  const fk = W.sectionKinds.footer; assert.ok(fk.blocks && fk.blocks.blocks && fk.blocks.blocks[0].field === "links", "footer links are not blocks inside the columns");
   // each site draws them, on its own pages and on articles and artists
   const { execFileSync } = await import("node:child_process"); const path = await import("node:path");
   for (const [dir, file, build] of [[G_DIR, "data/pages.json", ["tools/build.py"]], [sadDir(), "data/pages.json", ["tools/build.py", "/tmp/grp-sad-out"]]]) {
     const tmp = "/tmp/grp-" + path.basename(dir); fs.rmSync(tmp, { recursive: true, force: true }); fs.cpSync(dir, tmp, { recursive: true, filter: (x) => !/\/\.git(\/|$)/.test(x) });
-    const pj = JSON.parse(fs.readFileSync(tmp + "/" + file, "utf8")); pj.groups = { top: [], bottom: [{ id: "every-quote-1", type: "quote", visible: true, settings: { text: "Shared on every page", who: "" } }] };
+    const pj = JSON.parse(fs.readFileSync(tmp + "/" + file, "utf8")); pj.groups = { top: [], popups: [{ id: "every-signup-popup-1", type: "signup-popup", visible: true, settings: { heading: "Join the list", text: "", button: "Ask to join", delay: 8 } }], bottom: [{ id: "every-quote-1", type: "quote", visible: true, settings: { text: "Shared on every page", who: "" } }] };
+    pj.pages.soon = { path: "soon/index.html", title: "Coming soon", description: "", current: "", intro: false, own: true, sections: [{ id: "q", type: "quote", visible: true, settings: { text: "Opening in spring", who: "" } }] };
     fs.writeFileSync(tmp + "/" + file, JSON.stringify(pj)); execFileSync("python3", build, { cwd: tmp, stdio: "pipe" });
     const outDir = build[1] || tmp, pages = [];
     const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach((e) => { const f = d + "/" + e.name; if (e.isDirectory() && !/^(\.git|assets|data|tools|inbox|node_modules)$/.test(e.name)) walk(f); else if (e.name === "index.html") pages.push(f); });
     walk(outDir); assert.ok(pages.length > 5, dir + ": built " + pages.length + " pages");
-    const missing = pages.filter((f) => !fs.readFileSync(f, "utf8").includes("Shared on every page"));
+    const soon = pages.find((f) => /\/soon\/index\.html$/.test(f)), soonHtml = fs.readFileSync(soon, "utf8");
+    assert.ok(soonHtml.includes("Opening in spring") && !soonHtml.includes("Shared on every page") && !/site-head|id="nav"|site-foot|class="on-pine foot"/.test(soonHtml) && soonHtml.includes("data-popup"), dir + ": the page of its own layout");
+    const missing = pages.filter((f) => f !== soon && !fs.readFileSync(f, "utf8").includes("Shared on every page"));
     assert.deepEqual(missing, [], dir + ": pages without the shared section");
+    assert.deepEqual(pages.filter((f) => !fs.readFileSync(f, "utf8").includes("data-popup")), [], dir + ": pages without the popup");
   }
   const wtmp = "/tmp/grp-war"; fs.rmSync(wtmp, { recursive: true, force: true }); fs.cpSync(W_DIR, wtmp, { recursive: true, filter: (x) => !/\/\.git(\/|$)/.test(x) });
   const wp = JSON.parse(fs.readFileSync(wtmp + "/content/pages.json", "utf8")); wp.groups = { top: [], bottom: [{ id: "every-quote-1", type: "quote", visible: true, settings: { text: "Shared on every page", who: "" } }] };

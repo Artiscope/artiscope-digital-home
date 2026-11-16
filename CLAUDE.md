@@ -198,7 +198,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (16 November 2026, Version 37)
+## Where things stand (16 November 2026, Version 38)
 
 Done:
 
@@ -314,9 +314,24 @@ Done:
     page: the first section after its heading, `mainSectionOf` on the
     server, `mainId` in the console) has no Remove; the server refuses
     it too.
-  - Left out for now: a Popups group (no popup sections exist), blocks
-    inside blocks (no section uses them), fixed and own-layout pages
-    (with templates, step 7).
+  Version 38 finished step 2:
+  - Every Add button reads "Add a section" (or "Add a popup" in the
+    Popups group). Clicking a picked section's row again folds its
+    blocks away.
+  - Popups group (`groups.popups`, up to 3): only kinds with
+    `popup: true` go there, and they go nowhere else; the server refuses
+    both mistakes. The first is `signup-popup` (heading, text, button,
+    delay 3 to 60 seconds) on all three sites, class `supop`. It opens
+    the visitor's email app like the other forms, shows once a visit
+    after its delay, never in the editor, and only while picked there.
+  - Blocks inside blocks: a block kind may have its own `blocks`. The
+    first is World Art Review's footer, columns then links. A picked
+    child carries `sf` and `sub`; its parent stays drawn in the preview.
+  - Pages with their own layout (`own: true`, only on pages made in the
+    console): no menu bar, footer or shared Top and Bottom sections,
+    popups still shown. Set when making the page or under its settings.
+  - Pages the site draws itself (search, Page not found) show a fixed
+    row: only the shared groups can be changed for them.
   Steps 3 to 9 wait for the owner's go ahead, one at a time.
 
 Waiting for the owner:

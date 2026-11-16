@@ -5,7 +5,7 @@ globalThis.Deno = { env: { get: () => "" }, serve() {} };
 const m = await import(new URL("../home.mjs", import.meta.url));
 const G = (G_DIR + "/"), read = (p) => JSON.parse(fs.readFileSync(G + p, "utf8"));
 const S = m.SITES[1], kinds = {};
-for (const [k, v] of Object.entries(S.sectionKinds)) { kinds[k] = { label: v.label, about: v.about || "", fields: v.fields, library: v.library || "", starter: v.starter || null }; if (v.blocks) kinds[k].blocks = m.blockKinds(v.blocks); }
+for (const [k, v] of Object.entries(S.sectionKinds)) { kinds[k] = { label: v.label, about: v.about || "", fields: v.fields, library: v.library || "", starter: v.starter || null }; if (v.blocks) kinds[k].blocks = m.blockKinds(v.blocks); if (v.popup) kinds[k].popup = true; }
 const E = m.gamForEditor(read("data/content.json"), read("data/sales.json"), read("data/images.json"), fs.readdirSync(G + "assets/images"));
 const pages = read("data/pages.json"), ctx = { ...S, artists: E.artists.map((a) => ({ slug: a.slug })), articleSlugs: E.articles.map((a) => a.slug) };
 const doc = m.cleanPages(ctx, pages, pages);

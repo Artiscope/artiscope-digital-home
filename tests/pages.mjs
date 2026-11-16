@@ -57,7 +57,9 @@ try {
   await page.waitForSelector("text=Saved. Live in about two minutes");
   assert.ok(!(await page.innerText(".ed-top")).includes("Edited"));
   // blocks: the cards of How we research are listed under it and can be picked, hidden, moved and added
+  // a click on the picked row folds its blocks away, so click again if it was already picked
   await page.click('#ed-sections .sec[data-id="method"]:not(.blk)'); await page.waitForSelector(".blocknote");
+  if (!(await page.locator('.sec.blk[data-id="method"]').count())) await page.click('#ed-sections .sec[data-id="method"]:not(.blk)');
   assert.deepEqual(await page.locator('.sec.blk[data-id="method"] .nm').allInnerTexts(), ["Card: Start with the work", "Card: Every fact, sourced", "Card: Publicity, flagged"]);
   await page.click('.sec.blk[data-id="method"][data-block="1"]'); await page.waitForSelector(".ed-right h2:has-text('Every fact, sourced')");
   assert.ok((await page.innerText(".ed-right")).includes("Card 2 of 3") && (await page.innerText(".ed-right")).includes("Shown in bold at the foot of the card."));

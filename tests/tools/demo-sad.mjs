@@ -7,7 +7,7 @@ let dir = null; try { dir = sadDir(); } catch (e) { console.log("Street Art Disp
 if (dir) {
   const read = (p) => JSON.parse(fs.readFileSync(dir + "/" + p, "utf8"));
   const S = m.SITES.find((s) => s.id === "street-art-dispatch"), kinds = {};
-  for (const [k, v] of Object.entries(S.sectionKinds)) { kinds[k] = { label: v.label, about: v.about || "", fields: v.fields, library: v.library || "", starter: v.starter || null }; if (v.blocks) kinds[k].blocks = m.blockKinds(v.blocks); }
+  for (const [k, v] of Object.entries(S.sectionKinds)) { kinds[k] = { label: v.label, about: v.about || "", fields: v.fields, library: v.library || "", starter: v.starter || null }; if (v.blocks) kinds[k].blocks = m.blockKinds(v.blocks); if (v.popup) kinds[k].popup = true; }
   const E = m.sadForEditor(read("data/content.json")), pages = read("data/pages.json");
   const ctx = { ...S, artists: E.artists.map((a) => ({ slug: a.slug })), articleSlugs: E.articles.map((a) => a.slug) };
   const doc = m.cleanPages(ctx, pages, pages), summaries = {};
