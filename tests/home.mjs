@@ -881,6 +881,7 @@ function cleanField(f, v, site) {
   }
   if (t === "yesno") return v === true || v === "true";
   if (t === "range") { const lo = f.min ?? 0, hi = f.max ?? 100, st = f.step || 1, n = Number(v); const x = Number.isFinite(n) ? n : (f.dflt ?? lo); return Math.min(hi, Math.max(lo, Math.round(x / st) * st)); }
+  if (t === "menu") return ["main", "footer"].includes(String(v)) ? String(v) : "";
   if (t === "datetime") { const x = String(v == null ? "" : v); return /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):[0-5]\d$/.test(x) ? x : ""; }
   if (t === "font") { const m = /^([^:]{1,60}?)(?::(\d{3}i?))?$/.exec(String(v == null ? "" : v).trim()); if (!m) return ""; const ok = Object.keys(f.fonts || {}).concat(["system-sans", "system-serif", "system-mono"]); return ok.includes(m[1]) ? m[1] + (m[2] && m[2] !== "400" ? ":" + m[2] : "") : ""; }
   if (t === "video") { const x = String(v == null ? "" : v).trim(); if (/^https:\/\/[^\s<>"']+\.mp4(\?[^\s<>"']*)?$/i.test(x)) return x.slice(0, 300); return /^[A-Za-z0-9._-]{1,120}\.mp4$/i.test(x) ? x : ""; }
@@ -2332,14 +2333,15 @@ export async function handle(req) {
         gh("/repos/" + site.repo + "/contents/" + ps.images + "?ref=" + encodeURIComponent(ref)),
         ps.meta ? loadJson(ps.meta) : null,
       ]);
-      const images = Array.isArray(imgs.data) ? imgs.data.filter((x) => x.type === "file" && /\.(jpe?g|png|webp)$/i.test(x.name)).map((x) => x.name) : [];
+      const files = Array.isArray(imgs.data) ? imgs.data.filter((x) => x.type === "file" && /\.(jpe?g|png|webp|mp4)$/i.test(x.name)) : [];
+      const images = files.map((x) => x.name), imageSizes = Object.fromEntries(files.map((x) => [x.name, x.size || 0]));
       const preview = copy.kind === "trial" ? copy.preview : "https://" + site.domain + "/";
       const pictures = c ? pictureSpots(c.data).filter((x) => x.kind !== "work").map(publicSpot) : [];
       const imageMeta = meta && meta.data && meta.data.files && typeof meta.data.files === "object" ? meta.data.files : {};
       let doc = f.data; try { doc = cleanPages(pctx, f.data, f.data); } catch (_e) { /* shown as it is */ }
       const extra = editorNow ? { site: editorNow, itemKinds: site.items, lists: Object.fromEntries(Object.entries(site.lists || {}).map(([k, l]) => [k, { label: l.label, section: l.section || "" }])), listFields: LIST_FIELDS, gam: !!site.model, model: site.model ? site.model.id : "", builtIn: site.builtIn || null,
         pageFields: site.model ? [{ name: "title", label: "Title in the browser tab and search results", type: "text" }, { name: "description", label: "Description for search engines", type: "long", plain: true, hint: "One or two sentences. Not shown on the page." }] : null } : {};
-      return json({ pages: doc, kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, version, ...extra });
+      return json({ pages: doc, kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageSizes, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, version, ...extra });
     }
     // the page fields may refer to artists and articles added in this same save
     const sctx = body.content && typeof body.content === "object" ? pageCtx(body.content) : pctx;

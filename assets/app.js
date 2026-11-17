@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "39";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "40";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -37,7 +37,7 @@
     egroup: 0,             // which part of the open entry is on screen
     csearch: "", csort: "site", cmore: false,   // content list: search, order, show all
     theme: {},             // site id -> { spec, values, draft, mode, live }
-    customCss: false,      // the Custom CSS box, waiting for the owner's yes
+    customCss: true,       // the Custom CSS box at the end of a section's settings
     edPrefs: {},           // site id -> { mode, page, sel } kept while the editor reloads
     pg: {},                // site id -> the page editor: { doc, base, kinds, summaries, images, artists, preview, page, sel, mode, panel, dirty }
     photoFiles: [], photoSent: {}, photoDone: [],
@@ -131,7 +131,7 @@
         var pref = state.edPrefs[s.id] || {};
         var pics = {}; (pgd.pictures || []).forEach(function (p) { pics[p.key] = p; });
         if (pgd.pages) { pgd.pages.groups = pgd.pages.groups || {}; ["top", "popups", "bottom"].forEach(function (w) { if (!pgd.pages.groups[w]) pgd.pages.groups[w] = []; }); }
-        state.pg[s.id] = { version: pgd.version || "", pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false,
+        state.pg[s.id] = { version: pgd.version || "", pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageSizes: pgd.imageSizes || {}, imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false,
           site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, lists: pgd.lists || {}, listFields: pgd.listFields || [], at: pref.at || "", gam: !!pgd.gam, model: pgd.model || (pgd.gam ? "gam" : ""), builtIn: pgd.builtIn || null, pageFields: pgd.pageFields || null };
         var made = state.pg[s.id]; if (made.at && !atKnown(made)) made.at = "";
         render();
@@ -240,6 +240,8 @@
     keys: "M3.5 7h17v10h-17z M7 10.5h1 M10.5 10.5h1 M14 10.5h1 M17 10.5h.5 M7.5 14h9",
     help: "M12 3.5a8.5 8.5 0 1 1 0 17a8.5 8.5 0 1 1 0-17z M9.6 9.5a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8v.4 M12 17h.01",
     code: "M9 7l-5 5 5 5 M15 7l5 5-5 5",
+    swap: "M5 9h12.5 M14.5 6l3 3-3 3 M19 15H6.5 M9.5 12l-3 3 3 3",
+    pen: "M14.5 5.5l4 4L9 19H5v-4z M12.5 7.5l4 4",
     globe: "M12 3.5a8.5 8.5 0 1 1 0 17a8.5 8.5 0 1 1 0-17z M3.5 12h17 M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"
   };
   function ic(name, size) { var z = size || 16; return '<svg class="i" width="' + z + '" height="' + z + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + (IC[name] || IC.block) + '"></path></svg>'; }
@@ -1325,29 +1327,109 @@
         out.push({ key: k, group: SECTION_GROUP[k] || "Words", label: kd.label, note: blocks.length ? "Blocks: " + blocks.join(", ") : (kd.library || kd.about), about: kd.about + (n ? " Starts with the words of the one already on the site." : ""), blocks: blocks, shape: SHAPES[k] || "text" });
       });
       var order = ["Popups", "Top of the page", "Words", "Pictures", "Art and artists", "Reading and trust", "Contact and sign-up"];
-      return out.map(function (x, i) { return [x, i]; }).sort(function (x, y) { return (order.indexOf(x[0].group) - order.indexOf(y[0].group)) || (x[1] - y[1]); }).map(function (x) { return x[0]; });
+      var counts = usageCounts(pgd), most = out.filter(function (x) { return counts[x.key] > 1; }).sort(function (x, y) { return counts[y.key] - counts[x.key] || x.label.localeCompare(y.label); }).slice(0, 4)
+        .map(function (x) { return Object.assign({}, x, { group: "Most used on this site", most: true, note: "Used " + counts[x.key] + " times. " + x.note }); });
+      return most.concat(out.map(function (x, i) { return [x, i]; }).sort(function (x, y) { return (order.indexOf(x[0].group) - order.indexOf(y[0].group)) || (x[1] - y[1]); }).map(function (x) { return x[0]; }));
     }
     var ps = pgSel({ sel: { where: pk.where, id: pk.id, block: null }, doc: pgd.doc, page: pgd.page, kinds: pgd.kinds, pictures: pgd.pictures, itemKinds: pgd.itemKinds, at: pgd.at, site: pgd.site, lists: pgd.lists });
     if (!ps || !ps.kind) return [];
     return bkinds(ps.kind).map(function (bk) {
-      return { key: bk.field, group: "Blocks that belong in " + ps.kind.label, label: bk.label, note: bk.one ? "One per section, already in it" : bk.about || bk.add, off: !!bk.one, about: (bk.about || "") + (bk.one ? " One per section." : ""), blocks: [], shape: "block", kind: ps.kind.label };
+      var have = Array.isArray(ps.sec.settings[bk.field]) ? ps.sec.settings[bk.field].length : 0, full = bk.one || (bk.max && have >= bk.max);
+      return { key: bk.field, group: "Blocks that belong in " + ps.kind.label, label: bk.label, note: bk.about || bk.add, off: !!full, about: bk.about || "", blocks: [], shape: "block", kind: ps.kind.label };
+    }).filter(function (x) { return !x.off; });
+  }
+  // The image library: a large window opened from Select or Change on any picture or video setting.
+  function libFiles(pgd) {
+    var lib = pgd.lib, video = lib.kind === "video", out = [];
+    (pgd.images || []).forEach(function (n) { if (video === /\.mp4$/i.test(n)) out.push({ name: n, src: (pgd.imageBase || "") + n, size: (pgd.imageSizes || {})[n] || 0 }); });
+    if (!video) Object.keys(pgd.uploads || {}).forEach(function (k) { var u = pgd.uploads[k]; out.push({ name: k, label: u.name, src: u.dataUrl, size: Math.round((u.content || "").length * 0.75), fresh: true }); });
+    return out;
+  }
+  function libUsed(pgd) {
+    if (pgd.libUsedAt === pgd.what && pgd.libUsedMap) return pgd.libUsedMap;
+    var text = JSON.stringify(pgd.doc) + JSON.stringify(pgd.site || {}), map = {};
+    (pgd.images || []).forEach(function (n) { map[n] = text.split(n).length - 1; });
+    Object.keys(pgd.uploads || {}).forEach(function (k) { map[k] = text.split('"' + k + '"').length - 1; });
+    pgd.libUsedAt = pgd.what; pgd.libUsedMap = map; return map;
+  }
+  function kb(n) { return n ? Math.max(1, Math.round(n / 1024)) + " KB" : ""; }
+  function edLibrary(pgd) {
+    var lib = pgd.lib, used = libUsed(pgd), arts = (pgd.site && pgd.site.artists) || pgd.artists || [], video = lib.kind === "video";
+    var files = libFiles(pgd).filter(function (f) {
+      var meta = pgd.imageMeta[f.name] || {}, words = (f.name + " " + (f.label || "") + " " + (meta.alt || "") + " " + (meta.caption || "")).toLowerCase();
+      if (lib.size === "small" && !(f.size && f.size < 200 * 1024)) return false;
+      if (lib.size === "mid" && !(f.size >= 200 * 1024 && f.size <= 400 * 1024)) return false;
+      if (lib.size === "big" && !(f.size > 400 * 1024)) return false;
+      if (lib.used === "yes" && !used[f.name]) return false;
+      if (lib.used === "no" && used[f.name]) return false;
+      if (lib.artist) { var a = arts.find(function (x) { return x.slug === lib.artist; }); if (!a || (words.indexOf(a.slug) < 0 && words.indexOf(String(a.name).toLowerCase()) < 0)) return false; }
+      return true;
     });
+    files.sort(function (x, y) { var nx = (x.label || x.name).toLowerCase(), ny = (y.label || y.name).toLowerCase(); return lib.sort === "za" ? ny.localeCompare(nx) : lib.sort === "big" ? y.size - x.size : lib.sort === "small" ? x.size - y.size : x.fresh !== y.fresh ? (x.fresh ? -1 : 1) : nx.localeCompare(ny); });
+    var sel = function (name, cur, opts, label) { return '<label class="libsel"><span class="vh">' + label + '</span><select class="box" data-change="ed-lib-opt" data-o="' + name + '" aria-label="' + label + '">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === (cur || "") ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select></label>'; };
+    var tile = function (f) {
+      var meta = pgd.imageMeta[f.name] || {}, on = lib.tick === f.name, type = (/\.(\w+)$/.exec(f.label || f.name) || [, "jpg"])[1].toUpperCase().replace("JPEG", "JPG"), n = used[f.name] || 0;
+      return '<label class="libf' + (on ? " on" : "") + '" data-q="' + esc((f.name + " " + (f.label || "") + " " + (meta.alt || "")).toLowerCase()) + '"><input type="checkbox" data-lib-tick="' + esc(f.name) + '"' + (on ? " checked" : "") + ' aria-label="' + esc(f.label || f.name) + '">' +
+        (video ? '<video src="' + esc(f.src) + '" muted preload="metadata"></video>' : '<img src="' + esc(f.src) + '" alt="" loading="lazy">') +
+        '<span class="libn">' + esc(f.label || f.name) + '</span><span class="small">' + type + (f.size ? " · " + kb(f.size) : "") + (f.fresh ? " · new, saved with the page" : "") + '</span>' +
+        '<span class="small libu">' + (n ? "Used " + (n === 1 ? "once" : n + " times") : "Not used yet") + '</span></label>';
+    };
+    return '<div class="lib-veil" data-act="ed-lib-close"></div><div class="lib" role="dialog" aria-modal="true" aria-label="' + esc(lib.label) + '">' +
+      '<div class="lib-head"><h2>' + esc(lib.label) + '</h2><button type="button" class="tw" data-act="ed-lib-close">Close</button></div>' +
+      '<div class="lib-bar"><label class="pk-search"><span class="vh">Search</span>' + ic("search") + '<input type="text" data-lib-q="1" value="' + esc(lib.q || "") + '" placeholder="Search ' + (video ? "videos" : "files") + '" autocomplete="off"></label>' +
+        sel("sort", lib.sort, [["", "Newest uploads, then A to Z"], ["za", "Name, Z to A"], ["big", "Largest first"], ["small", "Smallest first"]], "Sort") +
+        '<div class="seg mini" role="group" aria-label="View">' + [["grid", "Grid"], ["list", "List"]].map(function (o) { return '<button type="button" class="' + ((lib.view || "grid") === o[0] ? "on" : "") + '" data-act="ed-lib-view" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join("") + '</div></div>' +
+      '<div class="lib-filters">' + sel("size", lib.size, [["", "Any file size"], ["small", "Under 200 KB"], ["mid", "200 to 400 KB"], ["big", "Over 400 KB"]], "File size") +
+        sel("used", lib.used, [["", "Used anywhere or not"], ["yes", "Used on the site"], ["no", "Not used yet"]], "Used in") +
+        sel("artist", lib.artist, [["", "Any artist"]].concat(arts.map(function (a) { return [a.slug, a.name]; })), "Artist") + '</div>' +
+      (video ? "" : '<div class="lib-drop" data-lib-drop="1"><label class="soft slim upl">Add files<input type="file" accept="image/jpeg,image/png" data-lib-add="1" multiple hidden></label><span class="small">or drag and drop images here. JPG or PNG, resized for the web and never cropped.</span></div>') +
+      '<div class="lib-files ' + (lib.view === "list" ? "list" : "grid") + '">' + (files.length ? files.map(tile).join("") : '<p class="small">' + (video ? "No videos on the site yet. Paste a link to your own MP4 file in the setting instead." : "No files match. Try another word or filter.") + '</p>') + '<p class="small lib-none" hidden>No files match that search.</p></div>' +
+      '<div class="lib-foot"><span class="small">' + (lib.tick ? "1 chosen" : "Tick a file to choose it.") + '</span><button type="button" class="tw" data-act="ed-lib-close">Cancel</button><button type="button" class="tw strong" data-act="ed-lib-done"' + (lib.tick ? "" : " disabled") + '>Done</button></div></div>';
+  }
+  function libPatch() { var pgd = pgOf(), box = app.querySelector("#ed-pick"); if (!pgd || !box) return; var q = box.querySelector("[data-lib-q]"), had = q && document.activeElement === q; box.innerHTML = edPicker(pgd); if (had) { q = box.querySelector("[data-lib-q]"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); } libFilter(); }
+  function libFilter() {
+    var pgd = pgOf(); if (!pgd || !pgd.lib) return; var q = String(pgd.lib.q || "").trim().toLowerCase(), any = false;
+    Array.prototype.forEach.call(app.querySelectorAll(".lib-files .libf"), function (x) { var hit = !q || x.dataset.q.indexOf(q) >= 0; x.hidden = !hit; if (hit) any = true; });
+    var none = app.querySelector(".lib-none"); if (none) none.hidden = any || !app.querySelector(".lib-files .libf");
+  }
+  async function libAdd(files) {
+    var pgd = pgOf(); if (!pgd || !pgd.lib) return; var last = "";
+    for (var i = 0; i < files.length; i++) {
+      var file = files[i];
+      if (!/^image\/(jpeg|png)$/.test(file.type)) { state.notice = { text: file.name + " is not a JPG or PNG photo, so it was left out.", problem: true }; continue; }
+      if (Object.keys(pgd.uploads || {}).length >= 12) { state.notice = { text: "Save the photos you have added first, then add more.", problem: true }; break; }
+      try { var img = await prepareImage(file); pgd.uploads = pgd.uploads || {}; pgd.upN = (pgd.upN || 0) + 1; last = "upload:" + pgd.upN; pgd.uploads[last] = { name: file.name, ext: img.ext, content: img.content, dataUrl: "data:image/" + (img.ext === "png" ? "png" : "jpeg") + ";base64," + img.content }; }
+      catch (e) { state.notice = { text: e.message, problem: true }; }
+    }
+    if (last) pgd.lib.tick = last;
+    pgd.libUsedAt = null; libPatch();
+  }
+  function usageCounts(pgd) {
+    var n = {}, add = function (x) { if (x && x.type) n[x.type] = (n[x.type] || 0) + 1; }, g = pgd.doc.groups || {};
+    Object.keys(pgd.doc.pages || {}).forEach(function (k) { (pgd.doc.pages[k].sections || []).forEach(add); });
+    ["top", "popups", "bottom"].forEach(function (k) { (g[k] || []).forEach(add); });
+    return n;
   }
   function edPicker(pgd) {
+    if (pgd.lib) return edLibrary(pgd);
     var pk = pgd.picker2; if (!pk) return "";
     var items = pickerItems(pgd), groups = [], first = null;
     items.forEach(function (it) { var g = groups.filter(function (x) { return x.label === it.group; })[0]; if (!g) { g = { label: it.group, items: [] }; groups.push(g); } g.items.push(it); if (!first && !it.off) first = it; });
-    var title = pk.mode === "section" ? "Add a section" : "Add a block";
-    return '<div class="pk-veil" data-act="ed-pick-close"></div><div class="pk" role="dialog" aria-label="' + title + '">' +
-      '<div class="pk-head"><b>' + title + '</b><button type="button" class="ib" data-act="ed-pick-close" aria-label="Close" title="Close">' + ic("close") + '</button></div>' +
+    var title = pk.mode === "section" ? "Add a section" : "Add a block", isB = pk.mode !== "section", tab = pk.tab || "types";
+    var tabs = '<div class="pk-tabs" role="tablist">' + [["types", isB ? "Blocks" : pk.g === "popups" ? "Popups" : "Sections"], ["addons", "Add-ons"]].map(function (t) { return '<button type="button" role="tab" aria-selected="' + (tab === t[0]) + '" class="' + (tab === t[0] ? "on" : "") + '" data-act="ed-pk-tab" data-t="' + t[0] + '">' + t[1] + '</button>'; }).join("") + '</div>';
+    var head = '<div class="pk-veil" data-act="ed-pick-close"></div><div class="pk' + (isB ? " short" : "") + '" role="dialog" aria-label="' + title + '">' +
+      '<div class="pk-head"><b>' + title + '</b><button type="button" class="ib" data-act="ed-pick-close" aria-label="Close" title="Close">' + ic("close") + '</button></div>';
+    if (tab === "addons") return head + tabs + '<div class="pk-list"><p class="small pk-addons">No add-ons yet. Add-ons made on our own code will be listed here once they are switched on in the Add-ons panel.</p></div></div>';
+    if (isB && !items.length) return head + tabs + '<div class="pk-list"><p class="small pk-addons">Every block this section takes is already in it.</p></div></div>';
+    return head + tabs +
       '<label class="pk-search"><span class="vh">Search</span>' + ic("search") + '<input type="text" data-pick-q="1" placeholder="' + (pk.mode === "section" ? "Search sections" : "Search blocks") + '" autocomplete="off"></label>' +
       '<div class="pk-list">' + groups.map(function (g) {
-        return '<div class="pk-grp" data-grp="1"><span class="pk-gl">' + esc(g.label) + '</span>' + g.items.map(function (it) {
+        return '<div class="pk-grp" data-grp="1"' + (g.items[0] && g.items[0].most ? " data-most=\"1\"" : "") + '><span class="pk-gl">' + esc(g.label) + '</span>' + g.items.map(function (it) {
           return '<button type="button" class="pk-item' + (it === first ? " on" : "") + '" data-act="ed-pick-add" data-key="' + esc(it.key) + '"' + (it.off ? " disabled" : "") + ' data-words="' + esc((it.label + " " + it.about + " " + it.note).toLowerCase()) + '">' +
             (pk.mode === "section" ? kindIc(it.key) : blockIc({ field: it.key })) + '<span class="pk-t"><b>' + esc(it.label) + '</b><small>' + esc(it.note) + '</small></span></button>';
         }).join("") + '</div>';
       }).join("") + '<p class="small pk-none" hidden>Nothing matches. Try another word.</p></div></div>' +
-      '<div class="pk-view" aria-hidden="true">' + (first ? pickView(pk, first) : "") + '</div>';
+      (isB ? "" : '<div class="pk-view" aria-hidden="true">' + (first ? pickView(pk, first) : "") + '</div>');
   }
   function pickView(pk, it) {
     return '<div class="pk-card"><div class="pk-draw">' + (pk.mode === "section" ? shapeHtml(it.shape) : '<div class="pv-block">' + ic(BLOCK_IC[it.key] || "block", 28) + '<b>' + esc(it.label) + '</b></div>') + '</div>' +
@@ -1551,6 +1633,32 @@
     pgMark(ph); edPatch(); pushPreview();
   }
   var FIELD_N = 0, FIELD_DEF = {};
+  // One artist, one article, or a menu: a rounded tag once chosen, with Replace, Edit, Connect stored data and Remove.
+  function resItems(pgd, f) {
+    if (f.type === "menu") return [{ v: "main", label: "Main menu", note: "The links in the menu bar" }, { v: "footer", label: "Footer menu", note: "The links at the bottom of every page" }];
+    if (f.type === "piece") return (((pgd.site || {}).articles) || []).map(function (a) { return { v: a.slug, label: a.title + (a.hidden ? " (hidden)" : ""), pic: a.image, hash: "a-" + a.slug }; });
+    var full = (pgd.site && pgd.site.artists) || [];
+    return (pgd.artists || []).map(function (a) { var x = full.find(function (y) { return y.slug === a.slug; }) || {}; return { v: a.slug, label: a.name, pic: x.image, hash: "artist-" + a.slug }; });
+  }
+  function resThumb(pgd, it) { var pic = it && it.pic, src = !pic ? "" : /^https?:/.test(pic) ? pic : /\//.test(pic) ? (pgd.preview || "") + pic : imageSrc(pgd, pic); return src ? '<img class="rthumb" src="' + esc(src) + '" alt="">' : '<span class="rthumb none" aria-hidden="true">' + esc(String((it && it.label) || "?").trim().charAt(0).toUpperCase()) + '</span>'; }
+  function resField(pgd, f, v, path, id) {
+    var items = resItems(pgd, f), cur = items.find(function (x) { return x.v === v; }), mode = pgd.res && pgd.res.path === path ? pgd.res.mode : "";
+    var word = f.type === "menu" ? "menu" : f.type === "piece" ? "article" : "artist";
+    var empty = f.type === "artists" ? (f.name == null ? "No artist chosen yet." : "None chosen, so the first published artist is shown.") : f.type === "menu" ? "No menu chosen yet." : "No article chosen yet.";
+    var out = cur ? '<button type="button" class="rtag" id="' + id + '" data-act="ed-res" data-path="' + esc(path) + '" data-mode="menu" aria-haspopup="menu" aria-expanded="' + (mode === "menu") + '">' + (f.type === "menu" ? "" : resThumb(pgd, cur)) + '<span>' + esc(cur.label) + '</span></button>'
+      : '<div class="rempty"><span class="small">' + esc(empty) + '</span><button type="button" class="soft slim" id="' + id + '" data-act="ed-res" data-path="' + esc(path) + '" data-mode="list">Select</button></div>';
+    if (mode === "menu" && cur) out += '<div class="ed-pop resmenu" role="menu">' +
+      '<button type="button" class="pp-item" role="menuitem" data-act="ed-res" data-path="' + esc(path) + '" data-mode="list">' + ic("swap") + '<span class="t">Replace</span></button>' +
+      (cur.hash ? '<button type="button" class="pp-item" role="menuitem" data-act="ed-goto-item" data-hash="' + esc(cur.hash) + '">' + ic("pen") + '<span class="t">Edit</span><span class="k">Opens its page</span></button>' : "") +
+      (f.type === "menu" ? "" : '<button type="button" class="pp-item" role="menuitem" disabled>' + ic("links") + '<span class="t">Connect stored data</span><span class="k">With templates</span></button>') +
+      '<button type="button" class="pp-item danger" role="menuitem" data-act="ed-res-set" data-path="' + esc(path) + '" data-v="">' + ic("bin") + '<span class="t">Remove</span></button></div>';
+    if (mode === "list") out += '<div class="ed-pop reslist" role="dialog" aria-label="Choose ' + (word === "article" ? "an" : "a") + " " + word + '"><input type="search" class="box" data-res-q="1" placeholder="Search ' + word + 's" aria-label="Search ' + word + 's"><div class="resitems">' +
+      items.map(function (it) { return '<button type="button" class="pp-item' + (it.v === v ? " on" : "") + '" data-act="ed-res-set" data-path="' + esc(path) + '" data-v="' + esc(it.v) + '" data-q="' + esc(it.label.toLowerCase()) + '">' + (f.type === "menu" ? ic("list") : resThumb(pgd, it)) + '<span class="t">' + esc(it.label) + '</span>' + (it.note ? '<span class="k">' + esc(it.note) + '</span>' : "") + '</button>'; }).join("") +
+      '<p class="small rnone" hidden>Nothing by that name.</p></div>' +
+      (f.type === "menu" ? '<button type="button" class="pp-item" disabled>' + ic("plus") + '<span class="t">Create menu</span><span class="k">Menus are the menu bar and footer for now</span></button>'
+        : '<button type="button" class="pp-item" data-act="ed-res-new" data-what="' + word + '">' + ic("plus") + '<span class="t">Create ' + word + '</span></button>') + '</div>';
+    return '<div class="resf">' + out + '</div>';
+  }
   function isPhoto(n) { return !/\.mp4$/i.test(n); }
   // Numbered groups instead of blocks: Slide 1, Slide 2, Slide 3, each with its own switch.
   function setField(pgd, f, v, path) {
@@ -1563,29 +1671,50 @@
     }
     return out;
   }
-  // Links: the site's own pages to choose from, or any address pasted in.
-  function linkOptions(pgd) {
-    var out = [];
+  // Links: the site's own kinds of page to choose from, or any address pasted in.
+  function linkGroups(pgd) {
+    var out = [], site2 = pgd.site || { articles: [], artists: [] };
+    var push = function (id, label, items) { if (items.length) out.push({ id: id, label: label, items: items }); };
     if (pgd.gam) {
-      Object.keys(pgd.doc.pages).forEach(function (k) { var pg = pgd.doc.pages[k], at = String(pg.path || "").replace(/index\.html$/, ""); if (k !== "home" && at) out.push({ label: shortTitle(pgd, pg.title) || k, href: at, kind: "Page" }); });
+      var pages = []; Object.keys(pgd.doc.pages).forEach(function (k) { var pg = pgd.doc.pages[k], at = String(pg.path || "").replace(/index\.html$/, ""); if (k !== "home" && at) pages.push({ label: shortTitle(pgd, pg.title) || k, href: at }); });
+      push("pages", "Pages", pages);
+      push("artists", artistsWord(pgd), (site2.artists || []).map(function (a) { return { label: a.name, href: "artists/" + a.slug + "/", pic: a.image }; }));
+      push("articles", "Articles", (site2.articles || []).filter(function (a) { return !a.hidden; }).map(function (a) { return { label: a.title, href: (pgd.model === "sad" ? (a.section || "dispatches") : "research") + "/" + a.slug + "/" }; }));
       return out;
     }
     pageGroups(pgd).forEach(function (g) {
       if (g.id === "site") return;
-      g.items.forEach(function (x) { if (x.v !== "not-found") out.push({ label: x.label, href: "#" + x.v, kind: g.label.replace(/s$/, "") }); });
+      push(g.id, g.label, g.items.filter(function (x) { return x.v !== "not-found" && !/\((hidden|not published)\)$/.test(x.label); }).map(function (x) { return { label: x.label, href: "#" + x.v }; }));
     });
     return out;
+  }
+  function linkOptions(pgd) {
+    var out = []; linkGroups(pgd).forEach(function (g) { g.items.forEach(function (x) { out.push({ label: x.label, href: x.href, kind: g.label.replace(/s$/, ""), g: g.id }); }); }); return out;
   }
   function linkTag(pgd, v) {
     v = String(v == null ? "" : v).trim(); if (!v) return '<span class="ltag" hidden></span>';
     var hit = linkOptions(pgd).find(function (o) { return o.href === v; }), full = /^(https?:|mailto:)/i.test(v) ? v : (pgd.preview || "") + v;
     return '<span class="ltag"><span class="lt-t">' + esc(hit ? hit.label : v) + '</span>' + (/^mailto:/i.test(v) ? "" : '<a href="' + esc(full) + '" target="_blank" rel="noopener">Open</a>') + '</span>';
   }
+  // The small list under a link field: the kinds of page first, then the pages of one kind, or everything that matches what is typed.
   function linkList(input) {
     var pgd = pgOf(); if (!pgd) return;
     var q = input.value.trim().toLowerCase(), box = input.parentNode, old = box.querySelector(".lopts"); if (old) old.remove();
-    var hits = linkOptions(pgd).filter(function (o) { return !q || /^(https?:|mailto:|#|\/)/.test(q) && o.href.toLowerCase().indexOf(q) === 0 || (o.label + " " + o.kind).toLowerCase().indexOf(q) >= 0; }).slice(0, 30);
-    box.insertAdjacentHTML("beforeend", '<div class="lopts" role="listbox">' + (hits.length ? hits.map(function (o) { return '<button type="button" class="lopt" data-href="' + esc(o.href) + '" role="option"><span class="t">' + esc(o.label) + '</span><em>' + esc(o.kind) + '</em></button>'; }).join("") : '<span class="small">No page by that name. A full address starting https:// works too.</span>') + '</div>');
+    var groups = linkGroups(pgd), kind = groups.find(function (g) { return g.id === input.dataset.lkind; }), body;
+    var opt = function (o, kindWord) { return '<button type="button" class="lopt" data-href="' + esc(o.href) + '" role="option"><span class="t">' + esc(o.label) + '</span>' + (kindWord ? '<em>' + esc(kindWord) + '</em>' : "") + '</button>'; };
+    var exact = /^(https?:|mailto:|#|\/)/.test(q) && q.length > 1 && groups.every(function (g) { return g.items.every(function (x) { return x.href.toLowerCase() !== q; }); });
+    if (kind) {
+      var hits = kind.items.filter(function (o) { return !q || exact || o.label.toLowerCase().indexOf(q) >= 0 || o.href.toLowerCase().indexOf(q) >= 0; });
+      body = '<button type="button" class="lopt lback" data-lback="1"><span class="t">All kinds of page</span></button><span class="cap">' + esc(kind.label) + '</span>' +
+        (hits.length ? hits.map(function (o) { return opt(o, ""); }).join("") : '<span class="small">Nothing by that name in ' + esc(kind.label) + '.</span>');
+    } else if (!q || exact) {
+      body = groups.map(function (g) { return '<button type="button" class="lopt lkind" data-lkind="' + esc(g.id) + '"><span class="t">' + esc(g.label) + '</span><em>' + g.items.length + '</em></button>'; }).join("") +
+        '<span class="small">Or paste a full address starting https://' + (exact ? ". This one is kept as you typed it." : "") + '</span>';
+    } else {
+      var all = []; groups.forEach(function (g) { g.items.forEach(function (o) { if (o.label.toLowerCase().indexOf(q) >= 0 || o.href.toLowerCase().indexOf(q) >= 0) all.push(opt(o, g.label.replace(/s$/, ""))); }); });
+      body = all.slice(0, 40).join("") || '<span class="small">No page by that name. A full address starting https:// works too.</span>';
+    }
+    box.insertAdjacentHTML("beforeend", '<div class="lopts" role="listbox" aria-label="Pages on this site">' + body + '</div>');
   }
   function linkPicked(input, href) {
     input.value = href; pgInput(input);
@@ -1692,7 +1821,7 @@
           '<select class="box" data-change="ed-pk-add" data-path="' + esc(path) + '"><option value="">Add an article</option>' + arts.filter(function (a) { return v.indexOf(a.slug) < 0; }).map(function (a) { return '<option value="' + esc(a.slug) + '">' + esc(a.title) + '</option>'; }).join("") + '</select></div>' : "");
     }
     else if (t === "choice" && (f.seg || (!f.select && f.options.length >= 2 && f.options.length <= 4 && f.options.every(function (o) { return String(o[1]).length <= 12; })))) input = '<div class="seg wide" role="radiogroup" aria-label="' + esc(f.label) + '">' + f.options.map(function (o, oi) { var on = String(v == null || v === "" ? (f.dflt || f.options[0][0]) : v) === o[0]; return '<label class="segr' + (on ? " on" : "") + '"><input type="radio" name="' + id + '" data-pf="' + esc(path) + '" value="' + esc(o[0]) + '"' + (on ? " checked" : "") + (oi === 0 ? ' id="' + id + '"' : "") + '>' + esc(o[1]) + '</label>'; }).join("") + '</div>';
-    else if (t === "piece") input = '<select class="box" id="' + id + '" data-pf="' + esc(path) + '"><option value="">Choose a piece</option>' + (((pgd.site || {}).articles) || []).map(function (a) { return '<option value="' + esc(a.slug) + '"' + (a.slug === v ? " selected" : "") + '>' + esc(a.title) + (a.hidden ? " (hidden)" : "") + '</option>'; }).join("") + '</select>';
+    else if (t === "piece" || t === "menu" || (t === "artists" && f.one)) input = resField(pgd, f, v, path, id);
     else if (t === "choice") input = '<select class="box" id="' + id + '" data-pf="' + esc(path) + '">' + f.options.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(v == null ? "" : v) === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select>';
     else if (t === "range") {
       var rmin = f.min == null ? 0 : f.min, rmax = f.max == null ? 100 : f.max, rstep = f.step || 1, rv = v == null || v === "" || isNaN(Number(v)) ? (f.dflt != null ? f.dflt : rmin) : Number(v);
@@ -1707,17 +1836,15 @@
     } else if (t === "image") {
       var src = imageSrc(pgd, v), open = pgd.picker === path, fname = !v ? "" : pgd.uploads && pgd.uploads[v] ? pgd.uploads[v].name : String(v).split("/").pop();
       var upl = '<label class="soft slim upl">Upload<input type="file" accept="image/jpeg,image/png" data-upload="' + esc(path) + '" hidden></label>';
-      input = (v ? '<div class="imgpick">' + (src ? '<img class="picthumb" src="' + esc(src) + '" alt="">' : '<span class="picthumb none"></span>') + '<div class="stack"><span class="fname">' + esc(fname) + '</span><div class="row"><button type="button" class="soft slim" data-act="ed-picker" data-path="' + esc(path) + '">' + (open ? "Close" : "Change") + '</button>' + upl + '<button type="button" class="linklike small danger" data-act="ed-pic-none" data-path="' + esc(path) + '">Remove</button></div></div></div>'
-        : '<div class="imgpick empty"><span class="small">No picture yet</span><div class="row"><button type="button" class="soft slim" data-act="ed-picker" data-path="' + esc(path) + '">' + (open ? "Close" : "Select") + '</button>' + upl + '</div></div>') +
-        (open ? '<div class="picgrid">' + (pgd.images.filter(isPhoto).length ? pgd.images.filter(isPhoto).map(function (im) { var about = (pgd.imageMeta[im] || {}).alt; return '<button type="button" class="pictile' + (im === v ? " on" : "") + '" data-act="ed-pic-choose" data-path="' + esc(path) + '" data-name="' + esc(im) + '" title="' + esc(about || im) + '"><img src="' + esc(pgd.imageBase + im) + '" alt="" loading="lazy"><span>' + esc(about || im) + '</span></button>'; }).join("") : '<span class="small">No photos on the site yet. Upload one.</span>') + '</div>' : "") +
+      input = (v ? '<div class="imgpick">' + (src ? '<img class="picthumb" src="' + esc(src) + '" alt="">' : '<span class="picthumb none"></span>') + '<div class="stack"><span class="fname">' + esc(fname) + '</span><div class="row"><button type="button" class="soft slim" data-act="ed-picker" data-path="' + esc(path) + '">Change</button>' + upl + '<button type="button" class="linklike small danger" data-act="ed-pic-none" data-path="' + esc(path) + '">Remove</button></div></div></div>'
+        : '<div class="imgpick empty"><span class="small">No picture yet</span><div class="row"><button type="button" class="soft slim" data-act="ed-picker" data-path="' + esc(path) + '">Select</button>' + upl + '</div></div>') +
         '<span class="small">JPG or PNG. Resized for the web, never cropped. Kept when you press Save.</span>';
       hint = "";
     } else if (t === "video") {
       var isUrl = /^https?:\/\//i.test(v || ""), vopen = pgd.picker === path, vids = (pgd.images || []).filter(function (n) { return /\.mp4$/i.test(n); });
       var vsrc = !v ? "" : isUrl ? v : (pgd.imageBase || "") + v;
-      input = (v ? '<div class="imgpick"><video class="picthumb" src="' + esc(vsrc) + '" muted preload="metadata"></video><div class="stack"><span class="fname">' + esc(String(v).split("/").pop()) + '</span><div class="row"><button type="button" class="soft slim" data-act="ed-picker" data-path="' + esc(path) + '">' + (vopen ? "Close" : "Change") + '</button><button type="button" class="linklike small danger" data-act="ed-pic-none" data-path="' + esc(path) + '">Remove</button></div></div></div>'
-        : '<div class="imgpick empty"><span class="small">No video yet</span><div class="row"><button type="button" class="soft slim" data-act="ed-picker" data-path="' + esc(path) + '">' + (vopen ? "Close" : "Select") + '</button></div></div>') +
-        (vopen ? '<div class="picgrid">' + (vids.length ? vids.map(function (n) { return '<button type="button" class="pictile' + (n === v ? " on" : "") + '" data-act="ed-pic-choose" data-path="' + esc(path) + '" data-name="' + esc(n) + '"><video src="' + esc((pgd.imageBase || "") + n) + '" muted preload="metadata"></video><span>' + esc(n) + '</span></button>'; }).join("") : '<span class="small">No videos on the site yet. Paste a link to your own MP4 file below.</span>') + '</div>' : "") +
+      input = (v ? '<div class="imgpick"><video class="picthumb" src="' + esc(vsrc) + '" muted preload="metadata"></video><div class="stack"><span class="fname">' + esc(String(v).split("/").pop()) + '</span><div class="row"><button type="button" class="soft slim" data-act="ed-picker" data-path="' + esc(path) + '">Change</button><button type="button" class="linklike small danger" data-act="ed-pic-none" data-path="' + esc(path) + '">Remove</button></div></div></div>'
+        : '<div class="imgpick empty"><span class="small">No video yet</span><div class="row"><button type="button" class="soft slim" data-act="ed-picker" data-path="' + esc(path) + '">Select</button></div></div>') +
         '<label class="small" for="' + id + 'l">Or a link to your own video</label><input type="text" id="' + id + 'l" data-pf="' + esc(path) + '" data-kind="vlink" value="' + esc(isUrl ? v : "") + '" placeholder="https://www.example.com/film.mp4" spellcheck="false">';
       hint = '<span class="small">MP4 only, your own files. It plays without sound, on a loop.' + more + '</span>';
     } else if (t === "font") {
@@ -1747,8 +1874,7 @@
         (t === "sources" ? '<option value="+new">A new source, not listed yet</option>' : "") + '</select></div>';
     }
     else if (t === "artists") {
-      if (f.one) input = '<select class="box" id="' + id + '" data-pf="' + esc(path) + '"><option value="">' + (f.name == null ? "Choose an artist" : "First published artist") + '</option>' + pgd.artists.map(function (a) { return '<option value="' + esc(a.slug) + '"' + (a.slug === v ? " selected" : "") + '>' + esc(a.name) + '</option>'; }).join("") + '</select>';
-      else input = '<div class="stack" style="gap:6px">' + pgd.artists.map(function (a) { return '<label class="chk"><input type="checkbox" data-pf="' + esc(path) + '" data-kind="artists" value="' + esc(a.slug) + '"' + ((v || []).indexOf(a.slug) >= 0 ? " checked" : "") + '> ' + esc(a.name) + '</label>'; }).join("") + '</div>';
+      input = '<div class="stack" style="gap:6px">' + pgd.artists.map(function (a) { return '<label class="chk"><input type="checkbox" data-pf="' + esc(path) + '" data-kind="artists" value="' + esc(a.slug) + '"' + ((v || []).indexOf(a.slug) >= 0 ? " checked" : "") + '> ' + esc(a.name) + '</label>'; }).join("") + '</div>';
     } else if (t === "rows") {
       var rows = Array.isArray(v) ? v : [];
       input = '<div class="rows" data-rows="' + esc(path) + '">' + rows.map(function (row, i) {
@@ -2063,7 +2189,7 @@
       for (var i = 0; i < list.length; i++) { if (!blockHidden(list[i])) seen++; if (seen === b) { pgd.sel.block = i; break; } }
     }
     pgd.open = pgd.open || {}; if (isSecList(pgd.sel.where) || pgd.sel.where === "shared") pgd.open[pgd.sel.where + ":" + pgd.sel.id] = true;
-    pgd.panel = ""; pgd.picker = ""; pgd.picker2 = null; pgd.fontPick = null; pgd.colourOpen = ""; state.confirm = null; state.renaming = null; pgd.scrollNext = !fromPage; edRemember(); edPatch(); pushPreview();
+    pgd.panel = ""; pgd.picker = ""; pgd.picker2 = null; pgd.fontPick = null; pgd.colourOpen = ""; pgd.res = null; pgd.lib = null; state.confirm = null; state.renaming = null; pgd.scrollNext = !fromPage; edRemember(); edPatch(); pushPreview();
   }
   function focusPicker() { try { var q = app.querySelector("[data-pick-q]"); if (q) q.focus(); } catch (e) { /* fine */ } }
   // Adds what was chosen in a picker: a section where the line was, or a block in its section.
@@ -3132,6 +3258,7 @@
       if (can.length === 1) { pickerAdd(pb, can[0].key); return; }
       edPatch(); focusPicker();
     }
+    else if (a === "ed-pk-tab") { var ptb = pgOf(); if (ptb && ptb.picker2) { ptb.picker2.tab = el.dataset.t; edPatch(); if (el.dataset.t === "types") focusPicker(); } }
     else if (a === "ed-pick-close") { var pz2 = pgOf(); if (pz2) { pz2.picker2 = null; edPatch(); } }
     else if (a === "ed-pick-add") { var pa2 = pgOf(); if (pa2 && pa2.picker2 && !el.disabled) pickerAdd(pa2, el.dataset.key); }
     else if (a === "ed-page") { var pp = pgOf(); if (pp) { pp.page = el.dataset.page; pp.sel = null; pp.panel = ""; edRemember(); edPatch(); pushPreview(); } }
@@ -3173,7 +3300,24 @@
       arr.push(blank); pk.sel.block = arr.length - 1; pk.sel.bf = kb.field; pk.what = kb.add + " in " + (ks.where === "item" ? itemName(pk) : ks.kind.label);
       pgMark(pk); pk.scrollNext = true; edPatch(); pushPreview();
     }
+    else if (a === "ed-picker" && FIELD_DEF[el.dataset.path] && /^(image|video)$/.test(FIELD_DEF[el.dataset.path].type)) {
+      var plo = pgOf(), slo = plo && pgSel(plo); if (!slo) return; var fd = FIELD_DEF[el.dataset.path], cur = pgGet(slo.sec.settings, el.dataset.path);
+      plo.lib = { path: el.dataset.path, label: fd.label || "Picture", kind: fd.type, tick: cur && !/^https?:/i.test(cur) ? cur : "", view: (plo.libView || "grid") }; edPatch();
+      var lq = app.querySelector("[data-lib-q]"); if (lq) lq.focus();
+    }
     else if (a === "ed-picker") { var pq2 = pgOf(); if (pq2) { pq2.picker = pq2.picker === el.dataset.path ? "" : el.dataset.path; edPatch(); } }
+    else if (a === "ed-res") { var prs = pgOf(); if (!prs) return; prs.res = prs.res && prs.res.path === el.dataset.path && prs.res.mode === el.dataset.mode ? null : { path: el.dataset.path, mode: el.dataset.mode }; edPatch(); var rq = app.querySelector("[data-res-q]"); if (rq) rq.focus(); }
+    else if (a === "ed-res-set") { var prs2 = pgOf(), srs = prs2 && pgSel(prs2); if (!srs) return; pgSet(srs.sec.settings, el.dataset.path, el.dataset.v); prs2.res = null; prs2.what = "Edit " + (srs.kind ? srs.kind.label : srs.id); pgMark(prs2); edPatch(); pushPreview(); }
+    else if (a === "ed-res-new") { var prn = pgOf(); if (!prn) return; prn.res = null; prn.panel = "new"; prn.newWhat = el.dataset.what; edPatch(); var nfr = app.querySelector('form[data-form="ednew"] input[type=text]'); if (nfr) nfr.focus(); }
+    else if (a === "ed-lib-close") { var plc = pgOf(); if (plc) { plc.lib = null; edPatch(); } }
+    else if (a === "ed-lib-view") { var plv = pgOf(); if (plv && plv.lib) { plv.lib.view = el.dataset.v; plv.libView = el.dataset.v; libPatch(); } }
+    else if (a === "ed-lib-done") {
+      var pld = pgOf(), sld = pld && pgSel(pld); if (!sld || !pld.lib || !pld.lib.tick) return;
+      var lp = pld.lib.path, ln = pld.lib.tick; pld.lib = null;
+      pgSet(sld.sec.settings, lp, ln);
+      var lk = pld.imageMeta[ln] || {}, lAlt = lp.replace(/[^.]+$/, "alt"); if (lk.alt && !String(pgGet(sld.sec.settings, lAlt) || "").trim()) pgSet(sld.sec.settings, lAlt, lk.alt);
+      pld.what = "Edit " + (sld.kind ? sld.kind.label : sld.id); pgMark(pld); edPatch(); pushPreview();
+    }
     else if (a === "ed-pic-choose" || a === "ed-pic-none") {
       var pc = pgOf(), cs = pc && pgSel(pc); if (!cs) return;
       pgSet(cs.sec.settings, el.dataset.path, a === "ed-pic-none" ? "" : el.dataset.name); pc.picker = "";
@@ -3285,6 +3429,9 @@
     var t = ev.target, kind = t.dataset.change;
     if (t.dataset && t.dataset.upload) { uploadInto(t); return; }
     if (t.dataset && t.dataset.dt) { dtChanged(t.dataset.dt); return; }
+    if (t.dataset && t.dataset.libTick) { var plt = pgOf(); if (plt && plt.lib) { plt.lib.tick = t.checked ? t.dataset.libTick : ""; libPatch(); } return; }
+    if (t.dataset && t.dataset.libAdd) { libAdd(Array.prototype.slice.call(t.files || [])); t.value = ""; return; }
+    if (kind === "ed-lib-opt") { var plo2 = pgOf(); if (plo2 && plo2.lib) { plo2.lib[t.dataset.o] = t.value; libPatch(); } return; }
     if (kind === "ed-font-style") { var pfs = pgOf(), sfs = pfs && pgSel(pfs); if (!sfs || !pfs.fontPick) return; var cfs = parseFont(pgGet(sfs.sec.settings, pfs.fontPick.path)); if (!cfs.family) return; pgSet(sfs.sec.settings, pfs.fontPick.path, cfs.family + (t.value === "400" ? "" : ":" + t.value)); pfs.what = "Edit " + (sfs.kind ? sfs.kind.label : sfs.id); pgMark(pfs); patchEdTop(); pushSoon(); return; }
     if (kind === "files-replace") { filesReplace(t); t.value = ""; return; }
     if (kind === "ed-goto") { var gt = t.value; guardless(function () { navTo(gt); }); return; }
@@ -3334,8 +3481,17 @@
     var box = ev.target.parentNode; setTimeout(function () { if (!box.contains(document.activeElement)) { var l = box.querySelector(".lopts"); if (l) l.remove(); } }, 120);
   });
   app.addEventListener("mousedown", function (ev) {
-    var lo = ev.target.closest && ev.target.closest(".lopt"); if (lo) { ev.preventDefault(); var inp = lo.closest(".linkf").querySelector("[data-linkq]"); linkPicked(inp, lo.dataset.href); }
+    var lo = ev.target.closest && ev.target.closest(".lopt");
+    if (lo) {
+      ev.preventDefault(); var inp = lo.closest(".linkf").querySelector("[data-linkq]");
+      if (lo.dataset.lkind) { inp.dataset.lkind = lo.dataset.lkind; linkList(inp); return; }
+      if (lo.dataset.lback) { delete inp.dataset.lkind; linkList(inp); return; }
+      delete inp.dataset.lkind; linkPicked(inp, lo.dataset.href);
+    }
   });
+  app.addEventListener("dragover", function (ev) { var d = ev.target.closest && ev.target.closest("[data-lib-drop]"); if (d) { ev.preventDefault(); d.classList.add("over"); } });
+  app.addEventListener("dragleave", function (ev) { var d = ev.target.closest && ev.target.closest("[data-lib-drop]"); if (d) d.classList.remove("over"); });
+  app.addEventListener("drop", function (ev) { var d = ev.target.closest && ev.target.closest("[data-lib-drop]"); if (!d) return; ev.preventDefault(); d.classList.remove("over"); libAdd(Array.prototype.slice.call((ev.dataTransfer && ev.dataTransfer.files) || [])); });
   app.addEventListener("pointerdown", function (ev) {
     var sv = ev.target.closest && ev.target.closest(".csv"); if (!sv) return;
     ev.preventDefault(); var path = sv.dataset.sv;
@@ -3343,12 +3499,15 @@
     var up = function () { document.removeEventListener("pointermove", at); document.removeEventListener("pointerup", up); };
     at(ev); document.addEventListener("pointermove", at); document.addEventListener("pointerup", up);
   });
-  app.addEventListener("keydown", function (ev) {
-    var pk = pgOf(); if (!pk) return;
+  (typeof document.addEventListener === "function" ? document : app).addEventListener("keydown", function (ev) {
+    var pk = state.tab === "pages" && pgOf(); if (!pk) return;
     var sv = ev.target.classList && ev.target.classList.contains("csv") ? ev.target : null;
     if (sv && pk.colourHsv && /^Arrow/.test(ev.key)) { ev.preventDefault(); var d = ev.shiftKey ? 10 : 2, h2 = pk.colourHsv; if (ev.key === "ArrowLeft") h2.s = Math.max(0, h2.s - d); if (ev.key === "ArrowRight") h2.s = Math.min(100, h2.s + d); if (ev.key === "ArrowUp") h2.v = Math.min(100, h2.v + d); if (ev.key === "ArrowDown") h2.v = Math.max(0, h2.v - d); setColour(sv.dataset.sv, hsvToHex(h2.h, h2.s, h2.v), true); return; }
     if (ev.key !== "Escape") return;
-    if (pk.colourOpen) { pk.colourOpen = ""; edPatch(); }
+    if (pk.lib) { pk.lib = null; edPatch(); }
+    else if (pk.picker2) { pk.picker2 = null; edPatch(); }
+    else if (pk.res) { pk.res = null; edPatch(); }
+    else if (pk.colourOpen) { pk.colourOpen = ""; edPatch(); }
     else if (pk.fontPick) { fontClose(pk, true); }
   });
   if (typeof document.addEventListener === "function") document.addEventListener("keydown", function (ev) {
@@ -3386,7 +3545,7 @@
     }
     if (ev.target.dataset && ev.target.dataset.pickQ) {
       var words = ev.target.value.trim().toLowerCase(), any = false;
-      Array.prototype.forEach.call(app.querySelectorAll(".pk-grp"), function (g) { var shown = 0; Array.prototype.forEach.call(g.querySelectorAll(".pk-item"), function (b) { var hit = !words || b.dataset.words.indexOf(words) >= 0; b.hidden = !hit; if (hit) shown++; }); g.hidden = !shown; if (shown) any = true; });
+      Array.prototype.forEach.call(app.querySelectorAll(".pk-grp"), function (g) { var shown = 0; Array.prototype.forEach.call(g.querySelectorAll(".pk-item"), function (b) { var hit = !words || b.dataset.words.indexOf(words) >= 0; b.hidden = !hit; if (hit) shown++; }); if (words && g.dataset.most) shown = 0; g.hidden = !shown; if (shown) any = true; });
       var none = app.querySelector(".pk-none"); if (none) none.hidden = any;
       var firstHit = app.querySelector(".pk-item:not([hidden]):not([disabled])"); if (firstHit) pickerHover(firstHit);
       return;
@@ -3401,6 +3560,12 @@
       ev.target.rows = Math.max(6, ev.target.value.split("\n").length + 1);
       pc3.what = "Custom CSS: " + secName(pc3, sc3.sec); pgMark(pc3); patchEdTop(); pushSoon(); return;
     }
+    if (ev.target.dataset && ev.target.dataset.resQ) {
+      var rq2 = ev.target.value.trim().toLowerCase(), rany = false;
+      Array.prototype.forEach.call(app.querySelectorAll(".resitems .pp-item"), function (b) { var hit = !rq2 || b.dataset.q.indexOf(rq2) >= 0; b.hidden = !hit; if (hit) rany = true; });
+      var rn = app.querySelector(".rnone"); if (rn) rn.hidden = rany; return;
+    }
+    if (ev.target.dataset && ev.target.dataset.libQ) { var plq = pgOf(); if (plq && plq.lib) { plq.lib.q = ev.target.value; libFilter(); } return; }
     if (ev.target.dataset && ev.target.dataset.hue) { var ph3 = pgOf(); if (!ph3 || !ph3.colourHsv) return; ph3.colourHsv.h = Number(ev.target.value); setColour(ev.target.dataset.hue, hsvToHex(ph3.colourHsv.h, ph3.colourHsv.s, ph3.colourHsv.v), true); return; }
     if (ev.target.dataset && ev.target.dataset.input === "fontq") {
       var fq = ev.target.value.trim().toLowerCase(), fany = false;

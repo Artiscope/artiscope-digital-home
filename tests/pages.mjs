@@ -82,7 +82,7 @@ try {
   await page.setInputFiles('[data-upload="image"]', (FIX + "/studio.jpg")); await page.waitForSelector(".picthumb[src^='data:image']");
   await page.waitForTimeout(400);
   assert.ok(await frame().evaluate(() => (document.querySelector("#picture-1 img") || {}).src.startsWith("data:image/jpeg")), "the new photo shows on the page before saving");
-  await page.click('[data-act="ed-picker"]'); assert.ok(await page.isVisible(".picgrid .pictile")); await page.click('[data-act="ed-picker"]');
+  await page.click('[data-act="ed-picker"]'); assert.ok(await page.isVisible(".lib .libf")); await page.click('.lib-foot [data-act="ed-lib-close"]');
   await page.screenshot({ path: "/tmp/editor-blocks.png" });
   await page.click('[data-act="ed-save"]'); await page.waitForSelector("text=Please describe the picture");
   await page.fill('[data-pf="alt"]', "A studio wall"); await page.click('[data-act="ed-save"]');

@@ -40,7 +40,7 @@ try {
 
   // the banner's own picture, chosen from the site: its saved description comes with it
   await page.click('.sec.blk[data-id="hero"][data-bf="picture"]'); await page.waitForSelector('[data-act="ed-picker"][data-path="image"]');
-  await page.click('[data-act="ed-picker"][data-path="image"]'); await page.click('[data-act="ed-pic-choose"][data-name="zara-muse-portrait.jpg"]'); await page.waitForTimeout(400);
+  await page.click('[data-act="ed-picker"][data-path="image"]'); await page.check('[data-lib-tick="zara-muse-portrait.jpg"]'); await page.click('[data-act="ed-lib-done"]'); await page.waitForTimeout(400);
   assert.equal(await page.inputValue('[data-pf="alt"]'), "Zara Muse's portrait, painted with a palette knife in warm reds and gold");
   assert.ok(!(await page.locator(".sec.pic .nm").allInnerTexts()).some((t) => t.startsWith("Banner:")), "the artist's picture is no longer in the banner");
   await page.fill('[data-pf="credit"]', "Zara Muse, studio wall"); await page.waitForTimeout(400);

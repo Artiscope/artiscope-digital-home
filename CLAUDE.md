@@ -198,7 +198,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (16 November 2026, Version 39)
+## Where things stand (17 November 2026, Version 40)
 
 Done:
 
@@ -361,15 +361,36 @@ Done:
     in the page and group lists): the server cleans it (`cleanCss`: no
     imports, no url(), no code); each site limits every rule to that
     section (`scopeCss`, `cssMark`, the root gets `data-css="<id>"`).
-    `:scope` or `&` means the section itself. The box in the console is
-    off (`state.customCss: false`) until the owner says yes; the sites and
-    the server already handle it. World Art Review puts it
+    `:scope` or `&` means the section itself. The owner said yes on
+    17 November, so the box is on (`state.customCss: true`). World Art Review puts it
     in `style#sec-css`, the other two in `style[data-sec-css]` in the head.
   - The address keeps `?ed=<site>~<page or at>~<where.id.block.bf.sf.sub>`
     (`edAddress`), and opening such a link goes straight there.
   - Checks: the "Settings panel" area of `tests/uat.mjs`, and the step 3
     lines in `tests/run.mjs`.
-  Steps 4 to 9 wait for the owner's go ahead, one at a time.
+  Step 4, the pickers (Version 40):
+  - Add a section and Add a block have two tabs (Sections or Blocks, and
+    Add-ons, empty until step 9). "Most used on this site" lists up to
+    four kinds used more than once (`usageCounts`); searching hides it.
+    Add a block is the short picker with no preview side, and blocks that
+    are one per section, or whose list is full, drop out. Escape closes
+    any picker. The plus lines between rows were already there (step 2).
+  - Link fields open the site's kinds of page (`linkGroups`: pages, lists,
+    articles, artists; site paths on Global Art Monitor and Street Art
+    Dispatch), each with its own list, or match what is typed.
+  - The image library (`edLibrary`, `pgd.lib`) opens from Select or Change
+    on any picture or video setting: search, sort, grid or list, filters
+    (file size from `imageSizes` sent by the server, used or not, artist),
+    Add files or drag and drop (kept as uploads, saved with the page), a
+    tick per file, Cancel and Done (off until a file is ticked).
+  - One artist (`artists` with `one`), one article (`piece`) and `menu`
+    settings use `resField`: Select, then a rounded tag with a thumbnail.
+    The tag's menu: Replace (search, list, Create artist or article),
+    Edit (opens that page in the editor), Connect stored data (shown, off
+    until templates in step 7) and Remove. Menus are Main menu and Footer
+    menu; Create menu is shown off. No section uses `menu` yet.
+  - Checks: the "Pickers" area of `tests/uat.mjs`.
+  Steps 5 to 9 wait for the owner's go ahead, one at a time.
 
 Waiting for the owner:
 
