@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "42";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "43";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -881,6 +881,11 @@
   function fillWords(pgd, t) {
     var d = pgd.gam && pgd.site && pgd.site.site; if (!d || typeof t !== "string" || t.indexOf("{") < 0) return t;
     return t.replace(/\{(tagline|headline|intro|disclosure|email|published)\}/g, function (m, w) { var v = w === "published" ? pgd.site.published_text : d[w]; return v ? String(v) : m; });
+  }
+  // A setting that holds only {tagline}, {headline}, {intro}, {disclosure} or {email} is one of the site's shared phrases.
+  function sharedWord(pgd, v) {
+    var d = pgd && pgd.gam && pgd.site && pgd.site.site, m = d && typeof v === "string" && /^\s*\{(tagline|headline|intro|disclosure|email)\}\s*$/.exec(v);
+    return m ? { word: m[1], value: d[m[1]] == null ? "" : String(d[m[1]]) } : null;
   }
   function pgMark(pgd) { pgd.dirty = canon(pgd.doc) !== pgd.base || JSON.stringify(pgd.pictures || {}) !== (pgd.picBase || "{}") || siteChanged(pgd) || themeDirty(); state.dirty = pgd.dirty; }
   function themeDirty() { var t = themeOf(); return !!t && themeChanges(t) > 0; }
@@ -1915,6 +1920,12 @@
     var t = f.type, v = value;
     if (path) FIELD_DEF[path] = f;
     // a short grey note between settings, sometimes with a way to the screen where something is changed
+    var shared = sharedWord(pgd, v);
+    if (shared && (t === "text" || t === "long")) {
+      var real = shared.value, attrs = ' id="' + id + '" data-site-word="' + shared.word + '"';
+      return '<div class="field">' + label + (t === "long" ? '<textarea class="box"' + attrs + ' rows="' + Math.max(3, Math.ceil(String(real).length / 38)) + '">' + esc(real) + '</textarea>' : '<input type="text" class="box"' + attrs + ' value="' + esc(real) + '">') +
+        '<span class="small">Shared with Site details, so a change here shows everywhere these words are used. <button type="button" class="linklike small" data-act="ed-unshare" data-path="' + esc(path) + '" data-word="' + shared.word + '">Use different words here only</button></span></div>';
+    }
     if (t === "info") return '<p class="info">' + esc(f.text || f.label || "") + (f.go ? ' <button type="button" class="linklike small" data-tab="' + esc(f.go) + '">' + esc(f.goLabel || "Open") + '</button>' : "") + '</p>';
     if (t === "set") return setField(pgd, f, value, path);
     if (t === "yesno") return '<div class="field swfield"><div class="swline">' + label + '<label class="switch"><input type="checkbox" role="switch" id="' + id + '" data-pf="' + esc(path) + '" data-kind="yesno"' + (v === true ? " checked" : "") + '><span class="knob" aria-hidden="true"></span></label></div>' + hint + '</div>';
@@ -2071,12 +2082,23 @@
       (t.canHide ? '<button type="button" data-act="ed-hide">' + ic(t.hid ? "eye" : "eyeoff", 16) + (t.hid ? "Show" : "Hide") + '</button>' : "") +
       (t.canDel ? '<button type="button" class="danger" data-act="ed-remove">' + ic("bin", 16) + 'Remove</button>' : "") + '</div>';
   }
+  var DESK_WIDTH = 1280;
+  function edFit() {
+    var box = app.querySelector && app.querySelector(".ed-frame"), fr = box && box.querySelector("iframe"); if (!box || !fr) return;
+    var w = box.clientWidth, h = box.clientHeight;
+    if (!box.classList.contains("computer") || !w || !h || w >= DESK_WIDTH || w < 600) { fr.style.width = ""; fr.style.height = ""; fr.style.transform = ""; return; }
+    var k = w / DESK_WIDTH; fr.style.width = DESK_WIDTH + "px"; fr.style.height = Math.ceil(h / k) + "px"; fr.style.transformOrigin = "0 0"; fr.style.transform = "scale(" + k + ")";
+  }
+  function edFitWatch() {
+    var box = app.querySelector && app.querySelector(".ed-frame"); if (!box) return; edFit();
+    if (typeof ResizeObserver === "function" && box.adhWatched !== true) { box.adhWatched = true; new ResizeObserver(function () { edFit(); }).observe(box); }
+  }
   function pushSoon() { clearTimeout(pushTimer); pushTimer = setTimeout(function () { pushPreview(); }, 150); }
   function mountPages() {
     var pgd = pgOf(), frame = app.querySelector && app.querySelector("#ed-frame"); if (!pgd || !frame) return;
     frame.addEventListener("load", function () { pgd.sent = true; pushPreview(); });
     if (pgd.sent) pushPreview();
-    mountDrag();
+    mountDrag(); edFitWatch();
   }
   // Drag a section within its group, or a block within its section. A line shows where it will land.
   function mountDrag() {
@@ -2296,7 +2318,7 @@
     mid.insertAdjacentHTML("afterbegin", viewLeave() + viewAsk() + viewRemoved(pgd) + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : ""));
     var pkb = ed.querySelector("#ed-pick"); if (pkb) pkb.innerHTML = edPicker(pgd);
     var fb = ed.querySelector("#ed-fbar"); if (fb) fb.innerHTML = edFloatBar(pgd);
-    mountRich(); mountDrag();
+    mountRich(); mountDrag(); edFitWatch();
     var onRow = ed.querySelector(".ed-left .sec.on"); if (onRow && right && typeof onRow.scrollIntoView === "function") onRow.scrollIntoView({ block: "nearest" });
   }
   function edRemember() { var s = site(), p = pgOf(); if (s && p) { state.edPrefs[s.id] = { mode: p.mode, page: p.page, sel: p.sel, at: p.at, leftPanel: p.leftPanel }; edAddress(s, p); } }
@@ -3422,7 +3444,7 @@
     else if (a === "ed-pick-close") { var pz2 = pgOf(); if (pz2) { pz2.picker2 = null; edPatch(); } }
     else if (a === "ed-pick-add") { var pa2 = pgOf(); if (pa2 && pa2.picker2 && !el.disabled) pickerAdd(pa2, el.dataset.key); }
     else if (a === "ed-page") { var pp = pgOf(); if (pp) { pp.page = el.dataset.page; pp.sel = null; pp.panel = ""; edRemember(); edPatch(); pushPreview(); } }
-    else if (a === "ed-mode") { var pm = pgOf(); if (pm) { pm.mode = el.dataset.mode; edRemember(); var fr = app.querySelector(".ed-frame"); if (fr) fr.className = "ed-frame " + pm.mode; patchEdTop(); } }
+    else if (a === "ed-mode") { var pm = pgOf(); if (pm) { pm.mode = el.dataset.mode; edRemember(); var fr = app.querySelector(".ed-frame"); if (fr) fr.className = "ed-frame " + pm.mode; edFit(); patchEdTop(); } }
     else if (a === "ed-hide") { var ph0 = pgOf(); if (ph0) toggleHidden(ph0); }
     else if (a === "ed-row-hide") {
       // hide or show a row without moving away from what is picked
@@ -3481,6 +3503,7 @@
       pld.what = "Edit " + (sld.kind ? sld.kind.label : sld.id); pgMark(pld); edPatch(); pushPreview();
     }
     else if (a === "ed-pic-none" && isThemePath(el.dataset.path)) { themeSet(el.dataset.path, ""); edPatch(); }
+    else if (a === "ed-unshare") { var pun = pgOf(), sun = pun && pgSel(pun); if (!sun) return; var sw3 = sharedWord(pun, "{" + el.dataset.word + "}"); pgSet(sun.sec.settings, el.dataset.path, sw3 ? sw3.value : ""); pun.what = "Edit " + (sun.kind ? sun.kind.label : sun.id); pgMark(pun); edPatch(); pushPreview(); var fe = app.querySelector('[data-pf="' + cssq(el.dataset.path) + '"]'); if (fe) fe.focus(); }
     else if (a === "ed-range-reset") { var prr = pgOf(); if (prr && fSet(prr, el.dataset.path, null)) { edPatch(); pushSoon(); } }
     else if (a === "ed-tgroup") { state.themeGroup = state.themeGroup === el.dataset.g ? "" : el.dataset.g; edPatch(); var ps9 = site(), pg9 = pgOf(); if (ps9 && pg9) edAddress(ps9, pg9); }
     else if (a === "ed-theme-open") { var pto = pgOf(); if (pto) { pto.leftPanel = "theme"; pto.leftHidden = false; pto.tboxOpen = false; if (state.themeGroup == null || state.themeGroup === "") state.themeGroup = "colours"; edPatch(); } }
@@ -3745,6 +3768,10 @@
       Array.prototype.forEach.call(app.querySelectorAll(".fontpick .fontopt"), function (b) { var hit = !fq || b.dataset.q.indexOf(fq) >= 0; b.hidden = !hit; if (hit) fany = true; });
       Array.prototype.forEach.call(app.querySelectorAll(".fontpick .sub"), function (h) { h.hidden = !!fq; });
       var fno = app.querySelector(".fontpick .fnone"); if (fno) fno.hidden = fany; return;
+    }
+    if (ev.target.dataset && ev.target.dataset.siteWord) {
+      var pw = pgOf(); if (!pw || !pw.site || !pw.site.site) return;
+      pw.site.site[ev.target.dataset.siteWord] = ev.target.value; pw.what = "Edit site details"; pgMark(pw); patchEdTop(); pushSoon(); return;
     }
     if (ev.target.dataset && ev.target.dataset.linkq) { pgInput(ev.target); linkList(ev.target); var lt3 = ev.target.parentNode.parentNode.querySelector(".ltag"), pl3 = pgOf(); if (lt3 && pl3) lt3.outerHTML = linkTag(pl3, ev.target.value); return; }
     if (ev.target.dataset && ev.target.dataset.pf) { pgInput(ev.target); return; }

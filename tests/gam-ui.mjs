@@ -25,7 +25,7 @@ try {
   assert.deepEqual(await page.locator("#ed-sections .sec:not(.blk) .nm").evaluateAll((l) => l.map((x) => x.firstChild.textContent)), ["Opening banner", "Status line", "Artist auction timeline", "Words explained", "Article cards", "Artist profile cards", "Where to start", "How we report a price"]);
   // the home page's banner, edited in place
   await frame().click("[data-adh=hero] .h1"); await page.waitForSelector(".ed-right h2:has-text('Opening banner')");
-  await page.fill('[data-pf="headline"]', "Auction records, kept straight."); await settle();
+  await page.fill('[data-site-word="headline"]', "Auction records, kept straight."); await settle();
   assert.equal(await frame().evaluate(() => document.querySelector(".hero .h1").textContent), "Auction records, kept straight.");
   await page.screenshot({ path: shots + "home.png" });
   // a link in the menu bar goes to that page

@@ -198,7 +198,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (17 November 2026, Version 42)
+## Where things stand (17 November 2026, Version 43)
 
 Done:
 
@@ -445,6 +445,19 @@ Done:
   - Checks: the "Theme settings" area of `tests/uat.mjs`, the settings in
     `tests/content.mjs`, the console and server sums agreeing in
     `tests/theme.mjs`, and each site's build in `tests/run.mjs`.
+  Fixes after step 6 (Version 43):
+  - Global Art Monitor's opening banner keeps `{tagline}`, `{headline}`
+    and `{intro}` in its settings, words shared with Site details. The
+    panel shows the real words (`sharedWord`), and typing changes Site
+    details (`data-site-word`). "Use different words here only"
+    (`ed-unshare`) copies the words into that section's own setting.
+  - The computer preview always lays the page out 1280 pixels wide and
+    scales it down to fit (`edFit`, `edFitWatch`), so the menu bars stay
+    whole when the settings panel is open. Tests clicking small things in
+    the preview use a real mouse (`mouseIn` in `tests/uat.mjs`), since
+    Playwright's own click lands off target in a scaled frame.
+  - The name tag on a picked block sits above everything on the page,
+    sticky menu bars included, in all four sites.
   Steps 7 to 9 wait for the owner's go ahead, one at a time.
 
 Waiting for the owner:

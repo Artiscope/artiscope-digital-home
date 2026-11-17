@@ -99,7 +99,7 @@ async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).cat
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all six sites, the Practice site among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 6, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 42"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 43"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await goTab(page, "home"); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -749,6 +749,11 @@ await check("Choosing one artist shows a tag with Replace, Edit, Connect stored 
 
 // =============== 6b4. The preview inspector (step 5) ===============
 area = "Inspector";
+// a real mouse click on something in the preview, which is scaled down to fit when the window is narrow
+const mouseIn = async (host, sel) => { const f = frame(host), el = await f.frameElement(), b = await el.boundingBox();
+  await f.evaluate((q) => document.querySelector(q).scrollIntoView({ block: "nearest" }), sel); await settle(300);
+  const r = await f.evaluate((q) => { const x = document.querySelector(q).getBoundingClientRect(); return { x: x.x + x.width / 2, y: x.y + x.height / 2, w: innerWidth }; }, sel);
+  const k = b.width / r.w; await page.mouse.click(b.x + r.x * k, b.y + r.y * k); };
 const hoverOn = async (host, sel) => { const f = frame(host); await f.evaluate((q) => document.querySelector(q).scrollIntoView({ block: "center" }), sel); await settle(400); await f.evaluate((q) => document.querySelector(q).dispatchEvent(new MouseEvent("mousemove", { bubbles: true })), sel); await settle(300);
   return f.evaluate(() => { const h = document.getElementById("adh-hover"); return h ? { cls: h.className, tag: h.querySelector(".adh-tag").textContent } : { cls: "", tag: "" }; }); };
 await check("Hovering a section on the page outlines it with its name; a block gets its own dashed outline", async () => {
@@ -760,7 +765,7 @@ await check("Hovering a section on the page outlines it with its name; a block g
   await shot("18a-hover");
 });
 await check("The plus under a section opens Add a section for exactly that spot", async () => {
-  await hoverOn("worldartreview.com", "#numbers h2"); await frame("worldartreview.com").click("#adh-hover .adh-plus.bottom"); await settle(500);
+  await hoverOn("worldartreview.com", "#numbers h2"); await mouseIn("worldartreview.com", "#adh-hover .adh-plus.bottom"); await settle(500);
   const pk = await page.evaluate(() => window.__adh.pgOf().picker2), at = (await homeSecs()).findIndex((x) => x.startsWith("numbers:")) + 1;
   must(pk && pk.mode === "section" && pk.at === at && pk.g === "page", "picker " + JSON.stringify(pk));
   await page.click('.pk-item[data-key="quote"]'); await settle(500); must((await homeSecs())[at].endsWith(":quote"), "added at " + (await homeSecs()).join(","));
@@ -768,7 +773,7 @@ await check("The plus under a section opens Add a section for exactly that spot"
 });
 await check("The plus above a block adds a block just there", async () => {
   const n = await page.evaluate(() => window.__adh.pgOf().doc.pages.home.sections.find((x) => x.id === "hero").settings.headline.length);
-  await hoverOn("worldartreview.com", '#hero [data-adh-b="headline.0"]'); await frame("worldartreview.com").click("#adh-hover .adh-plus.top"); await settle(500);
+  await hoverOn("worldartreview.com", '#hero [data-adh-b="headline.0"]'); await mouseIn("worldartreview.com", "#adh-hover .adh-plus.top"); await settle(500);
   const pk = await page.evaluate(() => window.__adh.pgOf().picker2); must(pk && pk.mode === "block" && pk.bf === "headline" && pk.at === 0, "picker " + JSON.stringify(pk));
   await page.click('.pk-item[data-key="headline"]'); await settle(500);
   const after = await page.evaluate(() => { const p = window.__adh.pgOf(); return [p.doc.pages.home.sections.find((x) => x.id === "hero").settings.headline.length, p.sel.block]; });
@@ -799,7 +804,7 @@ await check("Global Art Monitor and Street Art Dispatch outline and add the same
     const first = await page.evaluate(() => window.__adh.pgOf().doc.pages.home.sections.filter((x) => x.visible !== false)[1].id);
     const h = await hoverOn(host, '[data-adh="' + first + '"]'); const nm = (await text('#ed-sections .sec[data-id="' + first + '"] .nm')).split("\n")[0].trim();
     must(/\bon\b/.test(h.cls) && h.tag === nm, id + ": " + JSON.stringify(h) + " vs " + nm);
-    await frame(host).click("#adh-hover .adh-plus.bottom"); await settle(500);
+    await mouseIn(host, "#adh-hover .adh-plus.bottom"); await settle(500);
     const pk = await page.evaluate(() => window.__adh.pgOf().picker2); must(pk && pk.mode === "section" && pk.g === "page", id + " picker " + JSON.stringify(pk));
     await page.keyboard.press("Escape"); await settle(300);
     await frame(host).click('[data-adh="' + first + '"]', { position: { x: 20, y: 20 } }); await settle(500); must(await page.isVisible(".fbar"), id + ": no floating bar");
