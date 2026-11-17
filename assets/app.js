@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "40";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "41";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -691,6 +691,7 @@
     window.addEventListener("message", function (ev) {
       if (!ev.data) return;
       if (ev.data.type === "adh-click") { var pgd = pgOf(); if (!pgd) return; try { if (ev.origin !== new URL(pgd.preview).origin) return; } catch (e) { return; } var vw = String(ev.data.view || ""), kk = atKind(pgd); if (vw && vw !== "every" && vw !== (kk === "other" ? "page" : kk)) return; pickSection(String(ev.data.id || ""), ev.data.block, true, undefined, String(ev.data.bf || "")); return; }
+      if (ev.data.type === "adh-add") { var pa = pgOf(); if (!pa) return; try { if (ev.origin !== new URL(pa.preview).origin) return; } catch (e) { return; } var va = String(ev.data.view || ""), ka = atKind(pa); if (va && va !== "every" && va !== (ka === "other" ? "page" : ka)) return; previewAdd(pa, ev.data); return; }
       if (ev.data.type === "adh-nav") { var pn = pgOf(); if (!pn) return; try { if (ev.origin !== new URL(pn.preview).origin) return; } catch (e) { return; } navTo(pn.gam && ev.data.path != null ? gamWhere(pn, ev.data.path) : String(ev.data.hash || "home")); return; }
       var t = themeOf(); if (!t || ev.data.type !== "adh-ready") return;
       try { if (ev.origin !== new URL(t.spec.url).origin) return; } catch (e) { return; }
@@ -980,7 +981,7 @@
       '<div class="ed-top">' + edTop(s, pgd) + '</div>' +
       '<div class="ed-left">' + edLeft(pgd) + '</div>' +
       '<div class="ed-mid">' + viewLeave() + viewAsk() + viewRemoved(pgd) + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
-        '<div class="ed-frame ' + esc(pgd.mode) + '"><iframe id="ed-frame" title="The page being edited" src="' + esc(edFrameSrc(pgd)) + '"></iframe></div><div id="ed-pick">' + edPicker(pgd) + '</div></div>' +
+        '<div class="ed-frame ' + esc(pgd.mode) + '"><iframe id="ed-frame" title="The page being edited" src="' + esc(edFrameSrc(pgd)) + '"></iframe></div><div id="ed-pick">' + edPicker(pgd) + '</div><div id="ed-fbar">' + edFloatBar(pgd) + '</div></div>' +
       (right ? '<div class="ed-right">' + right + '</div>' : "") + '</div>';
   }
 
@@ -1916,8 +1917,41 @@
     var pictures = Object.keys(pgd.pictures || {}).map(function (k) { var p = pgd.pictures[k]; return { key: k, image: p.image, alt: p.alt, credit: p.credit }; });
     if (sel && sel.pic) label = sel.kind.label;
     var gamAt = pgd.gam ? { kind: atKind(pgd), key: atKey(pgd) } : null;
-    try { frame.contentWindow.postMessage({ type: "adh-pages", at: gamAt || atHash(pgd), data: pgd.gam ? pgd.site : undefined, content: pgd.gam ? undefined : pgd.site || undefined, show: atKind(pgd) === "article" ? atKey(pgd) : "", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages, lists: pgd.doc.lists, groups: pgd.doc.groups || { top: [], popups: [], bottom: [] } }, images: images, pictures: pictures, pick: id, block: id ? block : -1, bf: id ? bf : "", bi: id ? bi : -1, label: id ? label : "", scroll: !!pgd.scrollNext }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
+    try { frame.contentWindow.postMessage({ type: "adh-pages", names: previewNames(pgd), at: gamAt || atHash(pgd), data: pgd.gam ? pgd.site : undefined, content: pgd.gam ? undefined : pgd.site || undefined, show: atKind(pgd) === "article" ? atKey(pgd) : "", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages, lists: pgd.doc.lists, groups: pgd.doc.groups || { top: [], popups: [], bottom: [] } }, images: images, pictures: pictures, pick: id, block: id ? block : -1, bf: id ? bf : "", bi: id ? bi : -1, label: id ? label : "", scroll: !!pgd.scrollNext }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
     pgd.scrollNext = false;
+  }
+  // The names the preview shows on its outlines: each section's name, and each kind of block's.
+  function previewNames(pgd) {
+    var out = {}, g = pgd.doc.groups || {}, add = function (x) {
+      var kd = pgd.kinds[x.type]; if (!kd) return; out[x.id] = secName(pgd, x);
+      bkinds(kd).forEach(function (b) { out[x.id + ":" + b.field] = b.label; (b.blocks || []).forEach(function (c) { out[x.id + ":" + c.field] = c.label; }); });
+    };
+    pgSections(pgd).forEach(add); ["top", "popups", "bottom"].forEach(function (k) { (g[k] || []).forEach(add); });
+    Object.keys(pgd.doc.shared || {}).forEach(function (k) { var x = pgd.doc.shared[k], kd = pgd.kinds[x.type]; if (!kd) return; out[k] = x.name || kd.label; bkinds(kd).forEach(function (b) { out[k + ":" + b.field] = b.label; }); });
+    return out;
+  }
+  // A plus on the edge of an outline in the preview: add a section, or a block, just above or below what it is on.
+  function previewAdd(pgd, d) {
+    pickSection(String(d.id || ""), d.block, true, undefined, String(d.bf || ""));
+    var sel = pgd.sel, below = d.edge === "bottom"; if (!sel) return;
+    if (sel.block != null && sel.bf) {
+      pgd.picker2 = { mode: "block", where: sel.where, id: sel.id, bf: sel.bf, at: sel.block + (below ? 1 : 0) };
+      var can = pickerItems(pgd); if (can.length === 1) { pickerAdd(pgd, can[0].key); return; }
+    } else if (isSecList(sel.where)) {
+      var at = secList(pgd, sel.where).findIndex(function (x) { return x.id === sel.id; });
+      pgd.picker2 = { mode: "section", at: at < 0 ? 0 : at + (below ? 1 : 0), g: sel.where };
+    } else return;
+    pgd.panel = ""; edPatch(); focusPicker();
+  }
+  // The small bar at the bottom of the preview for whatever is picked: Duplicate, Hide and Remove.
+  function edFloatBar(pgd) {
+    if (pgd.inspector === false || pgd.picker2 || pgd.lib) return "";
+    var sel = pgSel(pgd), t = toolsFor(pgd, sel); if (!t || (!t.movable && !t.canHide)) return "";
+    var name = t.isBlock ? (sel.single ? sel.bk.label : sel.bk.label) : secName(pgd, sel.sec);
+    return '<div class="fbar" role="toolbar" aria-label="' + esc(name) + '"><span class="fb-name">' + esc(name) + '</span>' +
+      (t.movable ? '<button type="button" data-act="ed-dup">' + ic("copy", 16) + 'Duplicate</button>' : "") +
+      (t.canHide ? '<button type="button" data-act="ed-hide">' + ic(t.hid ? "eye" : "eyeoff", 16) + (t.hid ? "Show" : "Hide") + '</button>' : "") +
+      (t.canDel ? '<button type="button" class="danger" data-act="ed-remove">' + ic("bin", 16) + 'Remove</button>' : "") + '</div>';
   }
   function pushSoon() { clearTimeout(pushTimer); pushTimer = setTimeout(function () { pushPreview(); }, 150); }
   function mountPages() {
@@ -2143,6 +2177,7 @@
     var mid = ed.querySelector(".ed-mid"), notes = mid.querySelectorAll(".ask, .notice"); Array.prototype.forEach.call(notes, function (x) { x.remove(); });
     mid.insertAdjacentHTML("afterbegin", viewLeave() + viewAsk() + viewRemoved(pgd) + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : ""));
     var pkb = ed.querySelector("#ed-pick"); if (pkb) pkb.innerHTML = edPicker(pgd);
+    var fb = ed.querySelector("#ed-fbar"); if (fb) fb.innerHTML = edFloatBar(pgd);
     mountRich(); mountDrag();
     var onRow = ed.querySelector(".ed-left .sec.on"); if (onRow && right && typeof onRow.scrollIntoView === "function") onRow.scrollIntoView({ block: "nearest" });
   }

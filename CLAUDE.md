@@ -198,7 +198,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (17 November 2026, Version 40)
+## Where things stand (17 November 2026, Version 41)
 
 Done:
 
@@ -390,7 +390,25 @@ Done:
     until templates in step 7) and Remove. Menus are Main menu and Footer
     menu; Create menu is shown off. No section uses `menu` yet.
   - Checks: the "Pickers" area of `tests/uat.mjs`.
-  Steps 5 to 9 wait for the owner's go ahead, one at a time.
+  Step 5, the preview inspector (Version 41):
+  - Each site's editor link draws `#adh-hover` (on the html element, so
+    redraws of the page keep it): an outline and a name tag on whatever
+    the pointer is over, dashed for a block, with a plus in the middle of
+    its top and bottom edges. The names come from the console in
+    `adh-pages` (`names`, from `previewNames`: section names and
+    "<id>:<block field>" labels). `whatAt` finds the section or block.
+    The menu bar, footer and parts of article and artist pages show no
+    plus; their blocks do.
+  - A plus sends `adh-add` (id, block, bf, view, edge). The console
+    (`previewAdd`) picks it, then opens Add a section at that place in
+    its list, or Add a block at that place in its section (straight in
+    when only one kind fits).
+  - The floating bar (`edFloatBar`, `#ed-fbar` at the bottom of the
+    preview) shows the picked item's name with Duplicate, Hide or Show and
+    Remove, as each is allowed. It hides with the inspector off, and
+    while a picker or the library is open.
+  - Checks: the "Inspector" area of `tests/uat.mjs`.
+  Steps 6 to 9 wait for the owner's go ahead, one at a time.
 
 Waiting for the owner:
 

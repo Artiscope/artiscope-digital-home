@@ -1000,3 +1000,13 @@ button.rname:hover { box-shadow: var(--pressed-small); }
 .resf .pp-item.danger { color: var(--problem); }
 .libf[hidden], .resf .pp-item[hidden], .fontopt[hidden] { display: none; }
 .libf { min-width: 0; }
+
+/* ----- Step 5: the inspector's floating bar ----- */
+#ed-fbar { position: absolute; left: 0; right: 0; bottom: 26px; z-index: 5; display: flex; justify-content: center; pointer-events: none; }
+.fbar { pointer-events: auto; display: inline-flex; align-items: center; gap: 4px; padding: 6px; border-radius: 16px; background: var(--bg); box-shadow: var(--shadow-pop); max-width: calc(100% - 24px); }
+.fbar .fb-name { padding: 0 10px 0 8px; font-size: 12.5px; color: var(--muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fbar button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 12px; border: 0; border-radius: 11px; background: transparent; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.fbar button:hover { color: var(--bright); box-shadow: var(--shadow-small); }
+.fbar button:active { box-shadow: var(--pressed-small); transform: translateY(1px); }
+.fbar button.danger { color: var(--problem); }
+@media (max-width: 700px) { .fbar .fb-name { display: none; } #ed-fbar { bottom: 16px; } }
