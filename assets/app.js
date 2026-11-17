@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "46";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "47";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -446,23 +446,40 @@
     if (trials) bits.push(trials + (trials === 1 ? " trial copy" : " trial copies"));
     return bits.join(". ");
   }
+  // All sites: live sites first, three to a row, each with a small picture of its home page.
+  // The Practice site and the sites still to build sit below on quieter cards.
+  function siteAddr(x) { return x.domain ? "https://" + String(x.domain).replace(/^https?:\/\//, "").replace(/\/+$/, "") + "/" : ""; }
+  function siteLamp(x) { var list = copiesOf(x), live = list[0]; return x.practice ? "q" : live && live.ahead ? "a" : "g"; }
   function viewHome() {
-    var cards = sites().map(function (x) {
-      var c = colours(x.live ? x.id : "");
-      return '<button type="button" class="card lift sitecard" data-act="open-site" data-site="' + esc(x.id) + '">' +
-        '<span class="banner" aria-hidden="true" style="background:' + c[0] + ";color:" + c[1] + '">' + esc(x.practice ? "Practice" : x.live ? initials(x.name) : x.name.replace(/\D/g, "")) + '</span>' +
-        '<span class="info"><b>' + esc(x.name) + '</b><span class="small">' + esc(x.practice ? "Not public. A copy of World Art Review to try things on" : x.live ? x.domain : "Domain owned") + '</span>' +
-        '<span class="small" style="margin-top:8px">' + esc(statusLine(x)) + '</span>' +
-        '<span class="small" style="color:var(--accent);margin-top:8px">' + (x.live ? "Open" : "Not built yet") + '</span></span></button>';
-    }).join("");
-    return '<div class="page-head"><span class="small">' + esc(today()) + '</span><h1>' + greeting() + '</h1>' +
-      (isAdmin() ? '<p>Your sites. Open one to work on its words, colours and photos. On the live site, Save goes straight to visitors. On a trial copy, nothing is seen until you make it live. Every step can be undone.</p></div>'
-        : '<p>' + (sites().length === 1 ? "Your site." : "Your sites.") + ' Open one to work on your own copy of it. Nothing you save is seen until you publish it, and every step can be undone.</p></div>') +
-      viewNewVersions() + '<div class="sites">' + cards + '</div>';
+    var all = sites(), live = all.filter(function (x) { return x.live && !x.practice; }), rest = all.filter(function (x) { return !x.live || x.practice; }).sort(function (a, b) { return (b.practice ? 1 : 0) - (a.practice ? 1 : 0); });
+    var nLive = live.length, nBuild = all.filter(function (x) { return !x.live; }).length, nPrac = all.filter(function (x) { return x.practice; }).length;
+    var badge = function (x) { var c = colours(x.live ? x.id : ""); return '<span class="hbadge" aria-hidden="true" style="background:' + c[0] + ";color:" + c[1] + '">' + esc(x.practice ? "P" : x.live ? initials(x.name) : x.name.replace(/\D/g, "")) + '</span>'; };
+    var card = function (x) {
+      var addr = siteAddr(x), pic = demo && x.id === "world-art-review" && params.get("preview") ? params.get("preview") : demo && x.id === "global-art-monitor" && params.get("gampreview") ? params.get("gampreview") : demo && x.id === "street-art-dispatch" && params.get("sadpreview") ? params.get("sadpreview") : addr;
+      return '<div class="card hcard">' +
+        '<span class="hpic" aria-hidden="true">' + (pic ? '<iframe src="' + esc(pic) + '" tabindex="-1" loading="lazy" title="" scrolling="no"></iframe>' : "") + '</span>' +
+        '<span class="hname">' + badge(x) + '<span><b>' + esc(x.name) + '</b><span class="small">' + esc(x.domain) + '</span></span></span>' +
+        '<span class="hfoot"><span class="hstate"><i class="lamp ' + siteLamp(x) + '" aria-hidden="true"></i>' + esc(statusLine(x)) + '</span>' +
+          (addr ? '<a href="' + esc(addr) + '" target="_blank" rel="noopener">View site</a>' : "") +
+          '<button type="button" class="btn slim" data-act="open-site" data-site="' + esc(x.id) + '">Open</button></span></div>';
+    };
+    var quiet = function (x) {
+      return '<div class="card hquiet">' +
+        '<span class="hname">' + badge(x) + '<span><b>' + esc(x.name) + '</b><span class="small">' + esc(x.practice ? "Private copy of World Art Review" : x.live ? x.domain : "Domain owned") + '</span></span></span>' +
+        '<span class="small hnote">' + esc(x.practice ? "Try anything here. Nobody outside the team can see it, and nothing you do reaches the real site." : x.live ? statusLine(x) : "Not built yet. The domain is ready when you are.") + '</span>' +
+        '<span class="hfoot">' + (x.practice ? '<span class="hstate"><i class="lamp q" aria-hidden="true"></i>Private</span>' : "") +
+          '<button type="button" class="btn slim" data-act="open-site" data-site="' + esc(x.id) + '">' + (x.live ? "Open" : "Start building") + '</button></span></div>';
+    };
+    return '<div class="page-head hhead"><div><span class="cap">' + esc(today()) + '</span><h1>' + greeting() + '</h1>' +
+      (isAdmin() ? '<p>Pick a site to work on. On a live site, Save goes straight to visitors. On a trial copy nothing is seen until you make it live, and every step can be undone.</p>'
+        : '<p>' + (all.length === 1 ? "Your site." : "Your sites.") + ' Open one to work on your own copy of it. Nothing you save is seen until you publish it, and every step can be undone.</p>') + '</div>' +
+      (isAdmin() ? '<span class="hcounts"><span><i class="lamp g" aria-hidden="true"></i><b>' + nLive + '</b> live</span>' + (nBuild ? '<span><b>' + nBuild + '</b> to build</span>' : "") + (nPrac ? '<span><b>' + nPrac + '</b> practice</span>' : "") + '</span>' : "") + '</div>' +
+      (live.length ? '<p class="cap hcap">Live sites</p><div class="sites hgrid">' + live.map(card).join("") + '</div>' : "") +
+      (rest.length ? '<p class="cap hcap">' + (nBuild ? "Practice and still to build" : "Practice") + '</p><div class="sites hgrid">' + rest.map(quiet).join("") + '</div>' : "") + viewNewVersions();
   }
   function viewUnbuilt(x) {
     return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><h1>' + esc(x.name) + '</h1>' +
-      '<p>Not built yet. Creating a new site from a template arrives in a later stage. Until then there is nothing to do here.</p></div>';
+      '<p>Not built yet. The domain is ready when you are. Building a new site from here, with every section, block and look the other sites have, is the next step.</p></div>';
   }
   function viewOverview() {
     var s = site(); if (!s) return viewHome();
@@ -2947,7 +2964,18 @@
     return parts.join("\n");
   }
 
+  // Sliders fill with ice blue up to the knob.
+  function rangeFill(el) { var mn = Number(el.min || 0), mx = Number(el.max || 100), v = Number(el.value); el.style.setProperty("--pct", (mx > mn ? Math.max(0, Math.min(100, (v - mn) / (mx - mn) * 100)) : 0) + "%"); }
+  function rangesFill() { if (!app.querySelectorAll) return; Array.prototype.forEach.call(app.querySelectorAll('.slider input[type="range"]'), rangeFill); }
+  // The small pictures of each site's home page on All sites: the page laid out 1280 wide, scaled to fit.
+  function homeFit() {
+    if (!app.querySelectorAll) return;
+    Array.prototype.forEach.call(app.querySelectorAll(".hpic"), function (h) { var w = h.clientWidth || 340, k = w / 1280, f = h.querySelector("iframe"); h.style.setProperty("--hs", k); if (f) f.style.height = Math.ceil(h.clientHeight / k) + "px"; });
+  }
+  if (typeof window.addEventListener === "function") window.addEventListener("resize", homeFit);
+  app.addEventListener("input", function (ev) { var t = ev.target; if (t && t.type === "range" && t.closest && t.closest(".slider")) rangeFill(t); });
   function mountRich() {
+    rangesFill();
     rich = {};
     if (typeof DOMParser === "undefined" || !app.querySelectorAll) return;
     Array.prototype.forEach.call(app.querySelectorAll("[data-rich]"), function (ed) {
@@ -3265,7 +3293,7 @@
         (!live && c.ahead ? '<button type="button" class="soft slim" data-act="ask-big" data-kind="makelive" data-copy="' + esc(c.id) + '">Make this the live site</button>' : "") +
         (!live && c.behind ? '<button type="button" class="linklike small" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Refresh from live</button>' : "") +
         (!live ? '<button type="button" class="linklike small" data-act="ask-big" data-kind="deletecopy" data-copy="' + esc(c.id) + '">Delete</button>' : "");
-      return '<div class="card copycard' + (on ? " on" : "") + '"><div class="copytop" style="background:' + (live ? tone[0] : "#1E1F22") + ';color:' + (live ? tone[1] : "#F2B33D") + '"><span>' + (live ? "Live site" : "Trial copy") + '</span></div>' +
+      return '<div class="card copycard' + (on ? " on" : "") + '"><div class="copytop"><i class="lamp ' + (live ? "g" : "a") + '" aria-hidden="true"></i><span>' + (live ? "Live site" : "Trial copy") + '</span></div>' +
         '<div class="stack copybody"><b class="copyname">' + esc(live ? "What visitors see" : c.name) + '</b>' +
         '<span class="small">' + esc(live ? (s ? s.domain : "") : (c.since ? "Copied from live on " + when(c.since).split(",")[0] : "A copy of the live site")) + '</span>' +
         lines.map(function (l) { return '<span>' + esc(l) + '</span>'; }).join("") + '<div class="row">' + acts + '</div></div></div>';
@@ -3328,7 +3356,7 @@
   }
   function viewNewVersions() {
     var list = newVersions(); if (!list.length) return "";
-    return '<div class="stack" style="margin-bottom:22px">' + list.map(function (n) {
+    return '<p class="cap hcap">New versions</p><div class="stack" style="margin-bottom:22px">' + list.map(function (n) {
       return '<div class="card stack newv"><div class="row between"><b class="cardh">' + esc(n.site.name + " " + n.v.number) + '</b><span class="chip live">Live</span></div>' +
         '<span class="small">Published by ' + esc(n.v.by) + (when(n.v.when) ? ", " + esc(when(n.v.when)) : "") + '. GitHub also emails these notes to anyone watching the site\'s releases.</span>' +
         '<pre class="vnotes">' + esc(n.v.notes) + '</pre>' +
@@ -3796,7 +3824,7 @@
     if (state.inSite && s && state.tab === "pages") { app.innerHTML = viewPagesEditor(s); mountRich(); mountPages(); return; }
     var inner = unbuilt ? viewUnbuilt(sites().find(function (x) { return x.id === state.site; }) || { name: "Site" }) : (views[state.inSite ? state.tab : (state.tab === "people" && isAdmin() ? "people" : "home")] || viewHome)();
     app.innerHTML = viewShell(inner);
-    mountRich(); mountTheme(); filterList();
+    mountRich(); mountTheme(); filterList(); homeFit();
     settle();
   }
 

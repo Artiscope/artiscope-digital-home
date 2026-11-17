@@ -1173,3 +1173,168 @@ input[type="date"]:focus, input[type="time"]:focus { outline: none; box-shadow: 
   .code-gut { min-width: 40px; padding-left: 6px; padding-right: 8px; font-size: 12px; }
   .code-ta { font-size: 12px; }
 }
+
+/* =====================================================================
+   Flat and crisp (design guide, 17 November 2026). Everything is flat:
+   shapes are told apart by a small step in charcoal and a crisp 1.5px
+   edge, never by shadows. Ice blue means "you are here" or "do this";
+   Save is the only solid blue. Status colours only as dots or words.
+   The edges are drawn inside each shape, so nothing moves or grows.
+   ===================================================================== */
+:root {
+  --bg: #26272B; --rail: #26272B; --tint: #1F2024;
+  --btn: #2C2E33; --field: #1C1D21; --hover: #2C2E33; --well: #1F2024;
+  --edge: #3A3C42; --btn-edge: #44474E; --btn-edge-hover: #6E727A; --field-edge: #34363C;
+  --text: #D4D7DC; --bright: #F2F3F5; --muted: #9A9EA6; --dim: #6E727A;
+  --ice: #8EC5FF; --ice-press: #7CB9F7; --on-ice: #0E1A26; --chosen: #1E2834;
+  --accent: #8EC5FF; --accent-deep: #B9DBFF; --violet: #8EC5FF; --select: #1E2834; --select-text: #F2F3F5;
+  --live: #4CC38A; --warn: #E8B44C; --problem: #F07A7A;
+  --silver: #8EC5FF; --silver-text: #0E1A26; --knob: #F4F5F7;
+  --shadow: inset 0 0 0 1.5px var(--edge);
+  --shadow-small: inset 0 0 0 1.5px var(--btn-edge);
+  --shadow-pop: inset 0 0 0 1.5px var(--btn-edge);
+  --pressed: inset 0 0 0 1.5px var(--field-edge);
+  --pressed-small: inset 0 0 0 1.5px var(--field-edge);
+  --lift: var(--shadow); --lift-small: var(--shadow-small); --sink: var(--pressed); --sink-small: var(--pressed-small);
+  --chosen-edge: inset 0 0 0 1.5px var(--ice);
+}
+a { color: var(--ice); }
+a:hover { color: var(--accent-deep); }
+
+/* panels and cards: charcoal, 16px corners, an edge all round */
+.card, .notice, .sitecard, .copycard, .filecard, .addrow, .look, .rt-lock, .pk-card, .pv-card, .ask, .ed-left, .ed-right, .ed-pop, .acct-menu, .pk, .lib, .fbar, .tpl-pop, .tpl-dlg, .lopts, .code-files, .code-outline, .code-main { border-radius: 16px; background: var(--bg); box-shadow: var(--shadow); }
+.card.lift:hover, .look:hover, .prow:hover { box-shadow: var(--shadow); transform: none; }
+.rail { background: var(--bg); box-shadow: inset -1.5px 0 0 var(--edge); }
+.ed-mid { border-radius: 16px; background: var(--well); box-shadow: var(--shadow); }
+.ed-frame.phone iframe { box-shadow: 0 0 0 10px var(--well), 0 0 0 11.5px var(--edge); }
+.notice.problem { background: var(--bg); color: var(--problem); }
+/* quiet cards and wells: one step darker */
+.sunk, .rowcard, .blocknote, .picgrid, .pnote, .vnotes, .pstep, .vrow.old, .frame.empty, .picklist li, .kind, .ptools, .rt-bar, .rt-page, .frame.full, .rt-page div[class]:not(.rt-lock), .shared-note, .rt-chip, .tabs, .island .tick, .sw.aa, .ptools.ask, .tgrp.open, .ao-row.open, .tpl-ex, .lib-drop, .cssbox, .code-box, .pask, .hquiet { background: var(--field); box-shadow: var(--pressed-small); }
+.pk-draw { background: var(--field); }
+
+/* ordinary buttons: one step lighter, 10px corners, 34px tall */
+.btn, .soft, .tb, .rbtns .tw, .cfoot .tw, .lib .tw, .tpanel .tw, .tbox .tw, .fontbtn, .rtag, .libf, .code-tab, .blob, .brand-mark, .acct summary, .pav, .pv-popup, .notice.putback, .ed .sec .rb:hover, .ptools .tb:hover, .ptools .tw:hover, .rt-b:hover, .fbar button:hover, .tghead:hover, .kind:hover, .ed .addl:hover, .ed .sec .cnt:hover { background: var(--btn); box-shadow: var(--shadow-small); color: var(--text); border-radius: 10px; }
+.btn, .soft, .tb { min-height: 34px; }
+.tb { height: 34px; }
+.btn { color: var(--bright); font-weight: 600; }
+.btn:hover, .soft:hover, .tb:hover, .rbtns .tw:hover, .cfoot .tw:hover, .lib .tw:hover, .tpanel .tw:hover, .tbox .tw:hover, .fontbtn:hover, .rtag:hover, .libf:hover, .code-tab:hover { background: var(--btn); box-shadow: inset 0 0 0 1.5px var(--btn-edge-hover); color: var(--bright); }
+.soft:active, .btn:active, .tb:active, .pp-item:active, .navb:active, .rbtns .tw:active, .cfoot .tw:active, .lib .tw:active, .tpanel .tw:active, .tbox .tw:active, .fontbtn:active, .rtag:active, .rt-b:active, .fbar button:active { background: var(--field); box-shadow: inset 0 0 0 1.5px var(--btn-edge-hover); transform: none; }
+.btn[disabled], .soft[disabled], .tb[disabled], .btn[disabled]:hover, .soft[disabled]:hover, .tb[disabled]:hover { background: var(--field); box-shadow: inset 0 0 0 1.5px var(--field-edge); color: var(--dim); }
+/* Save and Publish: the one solid ice blue */
+.btn.key, .btn[data-act="ed-save"], .btn[data-act="ed-save-publish"], .btn[data-act="livesave"], .btn[data-act="makelive"], .btn[data-act="ask-makelive"], .btn[data-act="publish-replace"], .btn[data-act="leave-save"], .btn[data-act="stale-replace"], .btn[data-act="theme-publish"], .split .btn.sm { background: var(--ice); color: var(--on-ice); box-shadow: none; font-weight: 700; }
+.btn.key:hover, .btn[data-act="ed-save"]:hover, .btn[data-act="ed-save-publish"]:hover, .btn[data-act="livesave"]:hover, .btn[data-act="makelive"]:hover, .btn[data-act="ask-makelive"]:hover, .btn[data-act="publish-replace"]:hover, .btn[data-act="leave-save"]:hover, .btn[data-act="stale-replace"]:hover, .btn[data-act="theme-publish"]:hover, .split .btn.sm:hover { background: var(--ice); color: var(--on-ice); box-shadow: none; filter: none; }
+.btn.key:active, .btn[data-act="ed-save"]:active, .btn[data-act="livesave"]:active, .split .btn.sm:active { background: var(--ice-press); box-shadow: none; }
+.btn.key[disabled], .btn[data-act="ed-save"][disabled], .btn[data-act="ed-save-publish"][disabled], .btn[data-act="theme-publish"][disabled] { background: var(--field); color: var(--dim); box-shadow: inset 0 0 0 1.5px var(--field-edge); font-weight: 600; }
+.split { border-radius: 10px; box-shadow: none; gap: 2px; }
+.split .btn { min-height: 40px; border-radius: 10px 0 0 10px; }
+.split .btn.sm { border-radius: 0 10px 10px 0; }
+.split .btn[disabled] + .btn.sm { background: var(--btn); color: var(--text); box-shadow: var(--shadow-small); }
+.ed-top .tb, .code-top .tb { height: 36px; }
+/* Remove: red words on an ordinary button, never a red button */
+.btn.danger, .btn.danger:hover, .btn[data-act="discard"], .btn[data-act="ed-remove"], .btn[data-act^="ed-del"], .btn[data-act="entry-delete"] { background: var(--btn); color: var(--problem); box-shadow: var(--shadow-small); }
+
+/* chosen always looks the same: a faint blue fill, an ice blue edge and icon, bright semi-bold words */
+.tb.on, .seg button.on, .seg.tbs .tb.on, .seg.wide .segr.on, .pp-item.on, .ed .sec.on, .pk-item.on, .navb.on, .tabs.many .tabb.on, .pk-tabs button.on, .fontopt.on, .libf.on, .code-tab.on, .look.on, .copycard.on, .sitecard.current, .prow.on, .ed-sitebtn.on, .ed-pagebtn.on { background: var(--chosen); box-shadow: var(--chosen-edge); color: var(--bright); font-weight: 600; }
+.tb.on svg, .pp-item.on svg, .ed .sec.on .kic, .ed .sec.on .kic svg, .pk-item.on svg, .navb.on svg, .libf.on svg, .seg button.on svg, .seg.tbs .tb.on svg { color: var(--ice); }
+.ed .sec.on .rb, .ed .sec.on .nm small { color: var(--text); }
+.ed .sec:hover:not(.on), .pp-item:hover:not(.on):not([disabled]), .pk-item:hover:not(.on) { background: var(--hover); }
+.ed .sec { border-radius: 10px; }
+.ed .sec.off { color: var(--dim); }
+.ed .sec.over { box-shadow: inset 0 2px 0 var(--ice); }
+.ins::before { background: var(--ice); }
+.navb { color: var(--muted); }
+.navb:hover { color: var(--text); background: transparent; }
+/* segmented choices: a panel track with an edge */
+.seg { background: var(--bg); box-shadow: var(--shadow); border-radius: 10px; }
+.seg button, .seg.tbs .tb { color: var(--muted); border-radius: 8px; }
+.seg button:hover, .seg.tbs .tb:hover { color: var(--text); background: transparent; box-shadow: none; }
+.seg.tbs .tb { height: 30px; }
+.ed-pagebtn { background: var(--field); box-shadow: inset 0 0 0 1.5px var(--field-edge); }
+.ed-pagebtn:hover { background: var(--field); box-shadow: inset 0 0 0 1.5px var(--btn-edge-hover); }
+
+/* counts: a small dark chip; on a chosen row, just bright words */
+.pp-item .count, .ed .sec .cnt, .chip, .cnt { background: var(--field); box-shadow: var(--pressed-small); border-radius: 8px; color: var(--text); }
+.pp-item.on .count, .ed .sec.on .cnt { background: transparent; box-shadow: none; color: var(--bright); }
+
+/* boxes you type in: one step darker; focus turns the edge ice blue */
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="search"], input[type="date"], input[type="time"], select.box, textarea, .fontpick input[type="search"], .ed-right .numbox input[type="number"], .ed-right .colour input.hex, .ed-right .cfoot input.hex { background-color: var(--field); box-shadow: inset 0 0 0 1.5px var(--field-edge); color: var(--bright); border-radius: 10px; }
+input::placeholder, textarea::placeholder { color: var(--muted); }
+input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, input[type="number"]:focus, input[type="search"]:focus, input[type="date"]:focus, input[type="time"]:focus, select.box:focus, textarea:focus, .rt-page:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--ice); }
+.code-box .code-ta, .code-box .code-ta:focus { box-shadow: none; }
+:focus-visible { outline-color: var(--ice); }
+
+/* switches: 54 by 30, an ice blue track when on */
+.switch { width: 54px; height: 30px; }
+.switch .knob { background: var(--field); box-shadow: inset 0 0 0 1.5px var(--field-edge); }
+.switch .knob::after { top: 3px; left: 3px; width: 24px; height: 24px; background: var(--dim); box-shadow: none; }
+.switch input:checked + .knob { background: var(--ice); box-shadow: none; }
+.switch input:checked + .knob::after { transform: translateX(24px); background: var(--knob); }
+.switch input:focus-visible + .knob { box-shadow: inset 0 0 0 1.5px var(--field-edge), 0 0 0 2px var(--ice); }
+.switch input:disabled + .knob { background: var(--field); }
+.switch input:disabled + .knob::after { background: #3A3C41; }
+.sw2 { width: 46px; height: 26px; border-radius: 999px; background: var(--ice); box-shadow: none; }
+.sw2 i { top: 3px; left: 23px; width: 20px; height: 20px; background: var(--knob); box-shadow: none; }
+.sw2.off { background: var(--field); box-shadow: inset 0 0 0 1.5px var(--field-edge); }
+.sw2.off i { left: 3px; background: var(--dim); }
+/* sliders: ice blue up to the knob */
+.slider input[type="range"] { height: 6px; border-radius: 999px; box-shadow: none; background: linear-gradient(to right, var(--ice) var(--pct, 0%), var(--field-edge) var(--pct, 0%)); }
+.slider input[type="range"]::-webkit-slider-thumb { width: 18px; height: 18px; background: var(--knob); box-shadow: none; }
+.slider input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; background: var(--knob); box-shadow: none; }
+.slider input[type="range"]:disabled { background: var(--field-edge); }
+.slider input[type="range"]:disabled::-webkit-slider-thumb { background: var(--dim); }
+.cpop .chue::-webkit-slider-thumb { background: var(--knob); box-shadow: 0 0 0 1.5px var(--on-ice); }
+.pchk input, .chk input, input[type="checkbox"], input[type="radio"] { accent-color: var(--ice); }
+
+/* status: small flat dots beside a word, no glow */
+.lamp, .sdot { width: 9px; height: 9px; box-shadow: none; }
+.lamp.g, .sdot { background: var(--live); box-shadow: none; }
+.lamp.a, .sdot.warn, .sdot.trial { background: var(--warn); box-shadow: none; }
+.lamp.r { background: var(--problem); box-shadow: none; }
+.lamp.q { background: var(--muted); box-shadow: none; }
+.ed-top .righty .state .lamp, .chg-count .lamp { margin-right: 8px; }
+
+/* labels: small capitals, semi-bold, muted */
+.cap, .ed .grp, .pk-gl, .ed-right .sub { font-size: 13.5px; font-variant-caps: all-small-caps; text-transform: none; letter-spacing: .08em; font-weight: 600; color: var(--muted); }
+.cap { margin: 8px 10px 6px; }
+.page-head h1 { font-size: 40px; }
+.tb[data-tip]:hover::after, .tb[data-tip]:focus-visible::after { background: var(--btn); box-shadow: var(--shadow-small); }
+
+/* small leftovers that used depth */
+.pictile.on img, .pictile.waiting.on { box-shadow: 0 0 0 2px var(--ice); }
+.cswatch, .tbox .ti i, .tile .swatches i { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .14); }
+.ed .sec.blk .mini { box-shadow: inset 0 0 0 1.5px var(--edge); }
+.libf.on, .lib-drop.over { box-shadow: var(--chosen-edge); }
+.code-ta::selection { background: var(--chosen); }
+
+/* All sites: live sites three to a row, with a small picture of the home page; quieter cards below */
+.hhead { flex-direction: row; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.hhead > div { display: flex; flex-direction: column; gap: 4px; }
+.hhead .cap { margin: 0 0 4px; }
+.hcounts { display: inline-flex; gap: 18px; align-items: center; padding: 9px 16px; border-radius: 10px; background: var(--field); box-shadow: var(--pressed-small); font-size: 13px; color: var(--muted); }
+.hcounts span { display: inline-flex; align-items: center; gap: 6px; }
+.hcounts b { color: var(--bright); }
+.hcap { margin: 26px 0 10px; }
+.sites.hgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.hcard, .hquiet { display: flex; flex-direction: column; gap: 14px; padding: 16px; }
+.hpic { position: relative; display: block; height: 150px; border-radius: 10px; overflow: hidden; background: var(--well); box-shadow: inset 0 0 0 1.5px var(--edge); }
+.hpic iframe { position: absolute; top: 0; left: 0; width: 1280px; height: 800px; border: 0; transform: scale(var(--hs, .26)); transform-origin: 0 0; pointer-events: none; }
+.hname { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.hname > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.hname b { font-family: var(--serif); font-weight: 400; font-size: 19px; color: var(--bright); line-height: 1.2; }
+.hname .small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbadge { flex: none; width: 38px; height: 38px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--serif); font-size: 13px; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .12); }
+.hfoot { display: flex; align-items: center; gap: 14px; margin-top: auto; }
+.hstate { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); }
+.hfoot a { font-size: 13px; color: var(--ice); text-underline-offset: 3px; }
+.hfoot .btn { margin-left: auto; }
+.hquiet .hnote { color: var(--muted); }
+.hquiet .hfoot .btn { margin-left: 0; }
+.hquiet .hstate + .btn { margin-left: auto; }
+@media (max-width: 1200px) { .sites.hgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .sites.hgrid { grid-template-columns: minmax(0, 1fr); gap: 14px; } .page-head h1 { font-size: 30px; } .hhead { align-items: flex-start; } }
+.ed-right .rhead { border-radius: 16px 16px 0 0; box-shadow: inset 1.5px 1.5px 0 var(--edge), inset -1.5px 0 0 var(--edge); }
+.linklike, .pp-back { color: var(--ice); text-decoration-color: currentColor; }
+.linklike:hover, .pp-back:hover { color: var(--accent-deep); }
+.linklike.danger { color: var(--problem); }
+.copytop { background: var(--field); color: var(--text); display: flex; align-items: center; gap: 8px; box-shadow: inset 1.5px 1.5px 0 var(--edge), inset -1.5px 0 0 var(--edge); }
+.copycard.on .copytop { box-shadow: inset 1.5px 1.5px 0 var(--ice), inset -1.5px 0 0 var(--ice); }

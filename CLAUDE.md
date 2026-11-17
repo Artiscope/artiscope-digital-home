@@ -34,18 +34,39 @@ How they like to work. Follow this every time:
 - No boxed arrow icons or arrow buttons. Use words and spacing
   ("Previous", "Next", "Close", "Open").
 - Reuse the patterns already there before inventing new ones.
-- Console look (since Version 35): charcoal and silver. Everything is cut
-  from one charcoal surface #26272B, raised with a soft shadow
-  (#18191C dark, #35373C light) or pressed in with an inner one. Text
-  #D4D7DC, headings #F2F3F5, muted #9A9EA6. Silver (#F4F5F7 to #B9BDC3,
-  text #1C1D20) only for Save and Publish (Save, Save and publish, Make
-  live, Publish: `.btn.key` or the save actions listed in `app.css`);
-  every other button is raised charcoal and sinks 1px when pressed.
-  Group headings are small capitals. Outline icons only. Lamps: green
-  #3DDC84 live, amber #F2B33D unsaved or trial; problems in red #FF7A7A.
-  The colours are the variables at the top of `assets/app.css`. Fonts:
-  Castoro and Libre Franklin. Icons are line icons in the `IC` set in
-  `assets/app.js`.
+- Console look (since Version 47): "Flat and crisp", from the owner's
+  design guide (`Digital Home design guide`, 17 November 2026). Read the
+  last block of `assets/app.css` before changing any style.
+  - Everything flat: no shadows, glows, gradients or pressed-in shapes.
+    Shapes are told apart by a step in charcoal and a 1.5px edge, drawn
+    inside the shape (`inset 0 0 0 1.5px`, the `--shadow`,
+    `--shadow-small` and `--pressed-small` variables now hold edges).
+    No lines between rows.
+  - Surfaces: panels and cards #26272B with edge #3A3C42, 16px corners;
+    buttons one step lighter #2C2E33 with edge #44474E (hover edge
+    #6E727A, pressed fill #1C1D21), 10px corners, 34px tall; boxes you
+    type in, counts and quiet cards one step darker #1C1D21 with edge
+    #34363C; the preview well #1F2024.
+  - One accent, ice blue #8EC5FF: Save and Publish are the only solid
+    colour (words #0E1A26, bold, 40px tall, pressed #7CB9F7; `.btn.key`
+    or the save actions listed in `app.css`). Chosen always looks the
+    same: fill #1E2834, ice blue edge and icon, words #F2F3F5 semi-bold.
+    Links, switches when on (54 by 30), slider fill (`--pct`, set by
+    `rangeFill`) and the preview outline and name tag are ice blue.
+  - Words #D4D7DC, headings #F2F3F5, muted #9A9EA6, turned off #6E727A.
+    Status only as 9px dots or words: green #4CC38A, amber #E8B44C, red
+    #F07A7A. Remove is red words on an ordinary button. No colour on
+    panels or large areas (the copy cards carry a dot, not a band).
+  - Labels are 11px capitals, 0.08em spacing, semi-bold, muted. Fonts:
+    Castoro for headings (40px greeting), Libre Franklin 14px for words.
+    Outline icons only, from the `IC` set in `assets/app.js`.
+  - A new control uses an existing surface and state, never a new colour.
+  - All sites (`viewHome`): live sites three to a row, each with a small
+    picture of its home page (an iframe laid out 1280 wide and scaled,
+    `homeFit`), then the Practice site and the sites still to build on
+    quieter cards with Start building; new versions below.
+  - The owner chose (17 November) to keep the editor's full-screen layout
+    and every control; only the look changed.
 
 ## The repositories
 
@@ -198,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (17 November 2026, Version 46)
+## Where things stand (17 November 2026, Version 47)
 
 Done:
 
@@ -584,6 +605,21 @@ Done:
     step 9 block in `tests/run.mjs`.
   Edit default text stays shown but switched off; the owner chose to
   leave it for later.
+- Version 47: the Flat and crisp look (see Design rules), and the
+  picked outline, name tag and plus in all four sites' editor link turned
+  ice blue (#8EC5FF, words #0E1A26), with no halo.
+- Next, agreed on 17 November: building a new site from the console.
+  Step 2 is a sample of the Start building screens, then step 3 a starter
+  site (Artiscope/site-starter) drawing every shared section and block,
+  with the list of sites kept where the console can add to it; step 4 the
+  Start building screens (name, tagline, web address, contact email,
+  starting look from the ready-made looks or an existing site, starting
+  pages blank or copied with placeholder words), Create making the
+  repository, switching on GitHub Pages and opening the editor, and the
+  DNS records shown for the owner to add; step 5 articles and artist
+  pages with templates. The owner chose that the tool makes the
+  repository: the GitHub key will need permission to create repositories
+  and manage Pages in the Artiscope organisation (the owner sets it).
 
 Waiting for the owner:
 
@@ -616,8 +652,9 @@ Notes for checking:
   confirm" on the Venice entry stay until the owner gives confirmed
   facts. Only one session changes its repository at a time.
 
-Later, in this order unless the owner says otherwise: payments
-(Stripe), building the three new sites, Edit default text, extras. A comparison
+Later, in this order unless the owner says otherwise: building new
+sites from the console (above), payments (Stripe), Edit default text,
+extras. A comparison
 with Shopify is paused until the owner sends screenshots or code.
 
 Earlier samples and reports, for reference:
