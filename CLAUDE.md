@@ -620,6 +620,24 @@ Done:
   pages with templates. The owner chose that the tool makes the
   repository: the GitHub key will need permission to create repositories
   and manage Pages in the Artiscope organisation (the owner sets it).
+  Sample of the screens, approved 17 November:
+  https://claude.ai/artifact/Be2WCf55vjt2Wj6zR6DkXh
+  Owner's decisions (17 November): new sites get the shared 20 sections
+  only (the 19 of the standard plus the sign-up popup). A shared
+  "Practice build" (repository Artiscope/practice-build) gets its own
+  card on All sites: any test user given it in People can run Start
+  building and do everything there an admin can (Save, publish,
+  Versions, Theme, Edit code), and Start again, after one question,
+  wipes it back to empty. It never gets a web address and stays hidden
+  from search engines. Step 3 (the starter, the list of sites in a list
+  file instead of the code, the practice build, the People fix below)
+  waits for the owner's go ahead, planned for 18 November.
+- People screen: "permission denied for table people" (42501) means the
+  table lacks grants. The owner runs, in Supabase's SQL Editor:
+  `grant usage on schema public to service_role;` and
+  `grant select, insert, update, delete on table public.people to
+  service_role;`. Step 3 adds these lines to `PEOPLE_SQL` and makes the
+  console say so plainly when Supabase refuses.
 
 Waiting for the owner:
 
