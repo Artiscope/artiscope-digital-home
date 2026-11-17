@@ -1302,6 +1302,8 @@ export function cleanPages(site, given, current) {
     } else out.pages[key] = { ...(cur || {}), title, sections };
     if (own) out.pages[key].own = true; else delete out.pages[key].own;
   }
+  // the site's add-ons
+  out.addons = cleanAddons(site, given.addons, current.addons);
   // the heading and introduction of each list page
   if (site.lists) {
     out.lists = {};
@@ -1321,6 +1323,33 @@ export function mainSectionOf(site, key, sections) {
 }
 const PAGE_KEY = /^[a-z][a-z0-9-]{0,40}$/;
 const TEMPLATE_KINDS = ["article", "artist"];
+// Add-ons: our own small extras for every page of a site, each switched on or off, kept in the page list file.
+export const ADDONS = [
+  { id: "top", label: "Back to top button", about: "A small Top button on long pages.", icon: "arrowup",
+    fields: [{ name: "label", label: "Words on the button", type: "text" }, { name: "side", label: "Where it sits", type: "choice", options: [["right", "Right"], ["left", "Left"]] },
+      { name: "after", label: "Shows after scrolling", type: "range", min: 200, max: 2000, step: 100, unit: "px", dflt: 600, hint: "How far down the page before it appears." }],
+    start: { on: false, label: "Top", side: "right", after: 600 } },
+  { id: "progress", label: "Reading progress", about: "How far through an article the reader is.", icon: "progress",
+    fields: [{ name: "style", label: "How it shows", type: "choice", options: [["bar", "A thin bar at the top"], ["percent", "A percentage in the corner"]], select: true },
+      { name: "where", label: "On which pages", type: "choice", options: [["articles", "Articles"], ["items", "Articles and artist pages"], ["all", "Every page"]], select: true }],
+    start: { on: false, style: "bar", where: "articles" } },
+  { id: "share", label: "Share links", about: "Email, X, LinkedIn and Facebook, as plain links.", icon: "share",
+    fields: [{ name: "heading", label: "Words before the links", type: "text" }, { name: "networks", label: "Ways to share", type: "checks", options: [["email", "Email"], ["x", "X"], ["linkedin", "LinkedIn"], ["facebook", "Facebook"]] },
+      { name: "where", label: "On which pages", type: "choice", options: [["articles", "Articles"], ["items", "Articles and artist pages"]], select: true }],
+    start: { on: false, heading: "Share this page", networks: ["email", "x", "linkedin", "facebook"], where: "articles" } },
+  { id: "privacy", label: "Privacy notice", about: "Says the site uses no tracking, with a Close button.", icon: "shield",
+    fields: [{ name: "text", label: "The notice", type: "text" }, { name: "link_label", label: "Link words", type: "text", hint: "Leave empty for no link." }, { name: "link", label: "Link to", type: "text", addr: true },
+      { name: "button", label: "Close button words", type: "text" }],
+    start: { on: false, text: "This site uses no tracking and no adverts.", link_label: "", link: "", button: "Close" } },
+];
+export function cleanAddons(site, given, current) {
+  const out = {};
+  for (const a of ADDONS) {
+    const g = (given && typeof given === "object" && given[a.id] && typeof given[a.id] === "object") ? given[a.id] : (current && current[a.id]) || a.start;
+    out[a.id] = { on: g.on === true, ...cleanSettings({ fields: a.fields }, { ...a.start, ...g }, site) };
+  }
+  return out;
+}
 const TPL_ID = /^[a-z0-9][a-z0-9-]{0,30}$/;
 const TPL_SEC = /^t-[a-z0-9-]{1,40}$/;
 // The default template's name: "Default article", "Default artist portfolio" and so on, in 25 characters at most.
@@ -1373,6 +1402,7 @@ export const SITES = [
       { slug: "zen-xander", name: "Zen Xander" },
     ],
     pages: { file: "content/pages.json", images: "images", meta: "content/files.json", content: "content/site.json" },
+    code: { edit: ["src/index.html", "tools/build_site.py"], read: ["content/pages.json", "content/theme.json", "content/site.json"] },
     sectionKinds: WAR_SECTIONS,
     items: WAR_ITEMS,
     lists: WAR_LISTS,
@@ -1418,6 +1448,7 @@ export const SITES = [
       { slug: "konn-artiss", name: "Konn Artiss" },
     ],
     pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
+    code: { edit: ["assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs"], read: ["data/pages.json", "data/theme.json", "data/content.json", "data/sales.json"] },
     sectionKinds: GAM_SECTIONS,
     items: GAM_ITEMS,
     gam: true,
@@ -1467,6 +1498,7 @@ export const SITES = [
       { slug: "shepard-fairey", name: "Shepard Fairey" },
     ],
     pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
+    code: { edit: ["assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs"], read: ["data/pages.json", "data/theme.json", "data/content.json"] },
     sectionKinds: SAD_SECTIONS,
     items: SAD_ITEMS,
     model: SAD_MODEL,
@@ -1924,6 +1956,8 @@ const UNDOABLE = /^(Edit|Hide |Show |Delete |Remove photo|Mark spot |Add |Photo 
 // new commit that puts the earlier words back.
 
 const MAX_TRIALS = 2;
+// Edit code saves to this copy only. It can be made live once it builds without errors.
+export const CODE_COPY = "trial-code-changes";
 const COPY_ID = /^(live|trial)-[a-z0-9-]{1,60}$/;
 
 function randomTail() {
@@ -1954,6 +1988,7 @@ export function copyName(id) {
   if (ownerOfCopy(id)) return "An editor's copy";
   const later = laterOf(id); if (later) return "Publish later: " + londonWhen(later);
   if (/^trial-held-/.test(String(id))) return "Could not publish later";
+  if (id === CODE_COPY) return "Code changes";
   const words = String(id).replace(/^trial-/, "").replace(/-[0-9a-f]{6}$/, "").replace(/-/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -2286,6 +2321,14 @@ function isAllowed(email) {
 
 // ---------- the actions the console can ask for ----------
 
+// Whether the Code changes copy builds: the site's "Check a working copy" job runs on every save to it.
+async function codeCheck(site, sha) {
+  const r = await gh("/repos/" + site.repo + "/actions/workflows/check-copy.yml/runs?branch=" + encodeURIComponent("adh/" + CODE_COPY) + "&per_page=10");
+  if (!r.ok) return { status: "unknown", why: r.status === 403 ? "The GitHub key cannot read the build checks. On GitHub, give the key Actions: Read access to this repository." : "The build check could not be read (GitHub code " + r.status + ")." };
+  const run = (Array.isArray(r.data && r.data.workflow_runs) ? r.data.workflow_runs : []).find((x) => x.head_sha === sha);
+  if (!run || run.status !== "completed") return { status: "checking", url: run ? run.html_url : "" };
+  return { status: run.conclusion === "success" ? "passed" : "failed", url: run.html_url || "" };
+}
 function sameText(a, b) {
   a = String(a); b = String(b); let d = a.length ^ b.length;
   for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
@@ -2403,7 +2446,7 @@ export async function handle(req) {
 
   // Which copy of the site this request is about, and the branch that goes with it.
   const WRITES = ["saveTheme", "saveEntry", "setHidden", "deleteEntry", "removePhoto", "undo", "uploadPhoto", "savePages", "saveFiles"];
-  const COPY_ACTIONS = ["makeCopy", "scheduleCopy", "deleteCopy", "refreshCopy", "publish", "discard", "undoStep", "redoStep", "restoreVersion"];
+  const COPY_ACTIONS = ["codeOpen", "codeSave", "codeStatus", "makeCopy", "scheduleCopy", "deleteCopy", "refreshCopy", "publish", "discard", "undoStep", "redoStep", "restoreVersion"];
   const DRAFT_ACTIONS = ["answerTopic", "publishDraft", "returnDraft", "rejectDraft", "history"];
   if (!me.admin && DRAFT_ACTIONS.includes(action)) return json({ error: "Only the admin can do that." }, 403);
   let copies = [], copy = null, ref = "main";
@@ -2530,7 +2573,7 @@ export async function handle(req) {
       let doc = f.data; try { doc = cleanPages(pctx, f.data, f.data); } catch (_e) { /* shown as it is */ }
       const extra = editorNow ? { site: editorNow, itemKinds: site.items, lists: Object.fromEntries(Object.entries(site.lists || {}).map(([k, l]) => [k, { label: l.label, section: l.section || "" }])), listFields: LIST_FIELDS, gam: !!site.model, model: site.model ? site.model.id : "", builtIn: site.builtIn || null,
         pageFields: site.model ? [{ name: "title", label: "Title in the browser tab and search results", type: "text" }, { name: "description", label: "Description for search engines", type: "long", plain: true, hint: "One or two sentences. Not shown on the page." }] : null } : {};
-      return json({ pages: doc, kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageSizes, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, version, ...extra });
+      return json({ pages: doc, addonSpec: ADDONS.map((a) => ({ id: a.id, label: a.label, about: a.about, icon: a.icon, fields: a.fields })), kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageSizes, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, version, ...extra });
     }
     // the page fields may refer to artists and articles added in this same save
     const sctx = body.content && typeof body.content === "object" ? pageCtx(body.content) : pctx;
@@ -2879,6 +2922,43 @@ export async function handle(req) {
 
   if (COPY_ACTIONS.includes(action)) {
     const repo = "/repos/" + site.repo;
+    // ----- Edit code: the admin reads the site's own code and saves changes to the Code changes copy only -----
+    if (action === "codeOpen" || action === "codeSave" || action === "codeStatus") {
+      if (!me.admin) return json({ error: "Only the admin can edit code." }, 403);
+      if (!site.code) return json({ error: "This site's code cannot be edited here yet." }, 400);
+      const codeCopy = copies.find((c) => c.id === CODE_COPY) || null;
+      if (action === "codeStatus") return json({ copy: !!codeCopy, ahead: codeCopy ? codeCopy.ahead : 0, preview: codeCopy ? codeCopy.preview : "", ...(codeCopy ? await codeCheck(site, codeCopy.sha) : { status: "none" }) });
+      const at = codeCopy ? codeCopy.branch : "main";
+      if (action === "codeOpen") {
+        const files = [];
+        for (const path of site.code.edit.concat(site.code.read)) {
+          const f = await getText(site.repo, path, at);
+          if (f) files.push({ path, edit: site.code.edit.includes(path), text: f.text });
+        }
+        return json({ files, copy: !!codeCopy, ahead: codeCopy ? codeCopy.ahead : 0, preview: codeCopy ? codeCopy.preview : "", ...(codeCopy ? await codeCheck(site, codeCopy.sha) : { status: "none" }) });
+      }
+      // codeSave: only the files that may be edited, each as plain text
+      const given = Array.isArray(body.files) ? body.files.slice(0, 8) : [];
+      if (!given.length) return json({ error: "Nothing to save." }, 400);
+      for (const g of given) {
+        if (!site.code.edit.includes(String(g && g.path))) return json({ error: "That file cannot be changed here." }, 400);
+        if (typeof g.text !== "string" || g.text.length > 900000) return json({ error: "That file is too large to save here." }, 400);
+      }
+      if (!codeCopy) {
+        const sha = await mainSha(site);
+        const made = await gh(repo + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/adh/" + CODE_COPY, sha }) });
+        if (!sha || !made.ok) return json({ error: writeProblem(made, "GitHub did not make the Code changes copy. Please try again.") }, 502);
+      }
+      let last = "";
+      for (const g of given) {
+        const cur = await getText(site.repo, g.path, "adh/" + CODE_COPY);
+        if (cur && cur.text === g.text) continue;
+        const put = await gh(repo + "/contents/" + g.path, { method: "PUT", body: JSON.stringify({ message: "Code: " + g.path + who, content: encodeBase64Utf8(g.text), sha: cur ? cur.sha : undefined, branch: "adh/" + CODE_COPY }) });
+        if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save " + g.path + ".") }, 502);
+        last = put.data && put.data.commit ? put.data.commit.sha : last;
+      }
+      return json({ ok: true, status: last ? "checking" : "unchanged" });
+    }
     // Publish later: a copy of the live site to save the changes on, published by the clock at that time.
     if (action === "scheduleCopy") {
       if (!me.admin) return json({ error: "Only the admin can publish later." }, 403);
@@ -2895,7 +2975,7 @@ export async function handle(req) {
     if (action === "makeCopy") {
       const slug = copySlug(body.name);
       if (!slug) return json({ error: "Give the trial copy a short name, for example Winter look." }, 400);
-      if (copies.filter((c) => c.kind === "trial" && !ownerOfCopy(c.id) && !laterOf(c.id) && !/^trial-held-/.test(c.id)).length >= MAX_TRIALS) return json({ error: "This site already has " + MAX_TRIALS + " trial copies. Delete one to make another." }, 400);
+      if (copies.filter((c) => c.kind === "trial" && !ownerOfCopy(c.id) && !laterOf(c.id) && !/^trial-held-/.test(c.id) && c.id !== CODE_COPY).length >= MAX_TRIALS) return json({ error: "This site already has " + MAX_TRIALS + " trial copies. Delete one to make another." }, 400);
       const sha = await mainSha(site);
       const id = "trial-" + slug + "-" + randomTail();
       const made = await gh(repo + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/adh/" + id, sha }) });
@@ -2930,6 +3010,10 @@ export async function handle(req) {
 
     if (action === "publish") {
       if (copy.kind !== "trial") return json({ ok: true, unchanged: true });
+      if (copy.id === CODE_COPY) {
+        const chk = await codeCheck(site, copy.sha);
+        if (chk.status !== "passed") return json({ error: chk.status === "failed" ? "The code changes do not build yet, so they cannot be made live. Open Edit code to see what went wrong." : chk.status === "unknown" ? chk.why : "The code changes are still being checked. Try again in a minute or two." }, 400);
+      }
       if (copy.ahead === 0) return json({ ok: true, unchanged: true });
       const before = await mainSha(site);
       const message = (copy.kind === "live" ? "Publish: " + copy.ahead + (copy.ahead === 1 ? " change" : " changes") : "Make live: " + copy.name) + who;
@@ -2937,7 +3021,7 @@ export async function handle(req) {
       const m = await gh(repo + "/merges", { method: "POST", body: JSON.stringify({ base: "main", head: copy.branch, commit_message: message }) });
       if (m.ok && m.data && m.data.sha) newSha = m.data.sha;
       else if (m.status === 409) {
-        if (!body.replace) {
+        if (!body.replace || copy.id === CODE_COPY) {   // code is never forced over live: it is joined by hand
           const since = await gh(repo + "/compare/" + copy.branch + "...main");
           const theirs = since.ok && Array.isArray(since.data.commits) ? since.data.commits.slice(-8).reverse().map((c) => stepOf(c).what) : [];
           return json({ conflict: true, live: theirs });
@@ -2958,7 +3042,8 @@ export async function handle(req) {
         newSha = commit.data.sha;
       } else return json({ error: writeProblem(m, "GitHub did not publish. Please try again.") }, 502);
       await dropRedo(site, copy);
-      await moveBranch(site, copy.branch, newSha, true);   // the copy now matches live exactly
+      if (copy.id === CODE_COPY) await gh(repo + "/git/refs/heads/" + copy.branch, { method: "DELETE" });   // the next code change starts again from live
+      else await moveBranch(site, copy.branch, newSha, true);   // the copy now matches live exactly
       const steps = copy.steps.map((x) => x.what).filter((w) => !/^(Merge|Bring in the latest)/.test(w)).slice(0, 20);
       return json({ ok: true, ...(await makeVersion(site, me, { before, sha: newSha, steps, note: body.note, big: body.big, title: "" })) });
     }

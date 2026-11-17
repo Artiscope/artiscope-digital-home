@@ -198,7 +198,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (17 November 2026, Version 45)
+## Where things stand (17 November 2026, Version 46)
 
 Done:
 
@@ -268,8 +268,8 @@ Done:
   With the inspector off the preview loads without the editor link, so
   links work and nothing is picked; turning it on loads it again with the
   unsaved changes. Under 1800 pixels wide the settings sit under the list
-  in the left column. Theme settings and Add-ons in the left column, Edit
-  code and Edit default text are placeholders until their steps (6, 9).
+  in the left column. Theme settings, Add-ons and Edit code came in
+  steps 6 and 9; Edit default text is still a placeholder.
   Version 36 finished step 1 against the updated brief
   ("Digital Home page editor: build prompt, Shopify reference and chosen
   look", 16 November 2026, 49 pages): silver only on Save and Publish,
@@ -539,8 +539,51 @@ Done:
     refused with a plain message.
   - Checks: the "Stored data" and "Undo and changes" areas of
     `tests/uat.mjs`, and the step 8 block in `tests/run.mjs`.
-  Step 9 (add-ons, Edit code, Edit default text) waits for the owner's
-  go ahead.
+  Step 9, add-ons and Edit code (Version 46). Sample:
+  https://claude.ai/artifact/VJXnrCx1P8Fom3vEvie7Rz
+  - Add-ons, all our own code, nothing sent to other companies: Back to
+    top button, Reading progress, Share links (email, X, LinkedIn,
+    Facebook as plain links) and Privacy notice. Defined in `ADDONS` on
+    the server (fields and start values), cleaned by `cleanAddons`, kept
+    in the page list file under `addons`, and sent to the console as
+    `addonSpec`. Each site draws them with `aoHtml` (share links before
+    the shared Bottom group, the rest at the very end) and wires them with
+    `aoWire` (Top shows after the scroll distance and sits above World Art
+    Review's dock; the privacy notice remembers Close in the visitor's
+    browser; nothing moves or remembers in the editor). Reading progress
+    and Share links choose their pages: articles, articles and artist
+    pages, or every page (progress only). Classes start `ao-`.
+  - Console: the Add-ons switch opens `addonsPanel` (search, a switch
+    per add-on with `data-pf="addon:<id>.on"`, Settings opens its fields
+    through `edField` with `addon:<id>.<field>` paths). The Add-ons tab
+    in Add a section lists them On or Off and points to the panel.
+  - Edit code (admin only), from More, a row's right-click menu or the
+    settings panel's More (which open at that section's drawing,
+    `codeFind`). `viewCode` is its own full screen: Back to the editor,
+    the site with its lamp (Live site or Code changes), Search all
+    files, Go to file (Ctrl/Cmd+P), Commands (Ctrl/Cmd+Shift+P, with Go
+    to line, Ctrl/Cmd+G), the changed count, and Save to the trial copy
+    (Ctrl/Cmd+S). Files are grouped by what they do; the settings and
+    words files are read only here. Tabs with Close, a line gutter, an
+    outline (`codeOutline`) and the build status line.
+  - Each site lists its files in `code: {edit, read}` on the server.
+    `codeOpen`, `codeSave` and `codeStatus` read from and save to the
+    trial copy `adh/trial-code-changes` only (`CODE_COPY`, named "Code
+    changes", not counted in the two trial copies), made from live on the
+    first save. Every push to an `adh/` branch runs the site's
+    `.github/workflows/check-copy.yml`, which builds the copy the way
+    publishing does and publishes nothing. `codeCheck` reads that run;
+    `publish` refuses the code copy until it has passed, never forces it
+    over live on a clash, and deletes the copy once it is live, so the
+    next code change starts again from live. The console asks for the
+    status every 15 seconds while checking.
+  - The GitHub key needs Actions: Read on each site repository for the
+    check to be read; without it the status line says so plainly.
+  - Checks: the "Add-ons" and "Edit code" areas of `tests/uat.mjs`
+    (`hub.setRun` in `tests/fakegit.mjs` sets a check's result), and the
+    step 9 block in `tests/run.mjs`.
+  Edit default text stays shown but switched off; the owner chose to
+  leave it for later.
 
 Waiting for the owner:
 
@@ -549,6 +592,9 @@ Waiting for the owner:
   and in GitHub (artiscope-digital-home, Settings, Secrets and
   variables, Actions). Never take the key in the conversation.
 
+- Edit code's build check needs the GitHub key to have Actions: Read on
+  each site repository (GitHub, the key's settings). The owner sets it;
+  never take the key in the conversation.
 - To get release emails: on each site repository, Watch, Custom, tick
   Releases.
 - Real address, opening hours and travel details for Visit us. The
@@ -570,8 +616,8 @@ Notes for checking:
   confirm" on the Venice entry stay until the owner gives confirmed
   facts. Only one session changes its repository at a time.
 
-Later, in this order unless the owner says otherwise: a Code screen,
-payments (Stripe), building the three new sites, extras. A comparison
+Later, in this order unless the owner says otherwise: payments
+(Stripe), building the three new sites, Edit default text, extras. A comparison
 with Shopify is paused until the owner sends screenshots or code.
 
 Earlier samples and reports, for reference:

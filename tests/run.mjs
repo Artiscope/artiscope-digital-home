@@ -268,4 +268,29 @@ globalThis.fetch = realFetch;
   const onPage = cleanPages(ctx, { ...cur, pages: { home: { title: "Home", sections: [cards("cards", "{page.artist}")] } } }, cur);
   assert.deepEqual(onPage.pages.home.sections[0].settings.artists, [], "a page outside a template has no page of its own to take from");
 }
+// step 9: add-ons and Edit code
+{
+  const h = await import("./home.mjs"); const { execFileSync } = await import("node:child_process"); const path = await import("node:path");
+  const W = SITES.find((x) => x.repo === "Artiscope/World-art-review");
+  const ao = h.cleanAddons(W, { top: { on: true, label: "Up<script>x</script>", side: "middle", after: 99999 }, share: { on: "yes", networks: ["email", "myspace"] }, spy: { on: true } }, {});
+  assert.deepEqual(Object.keys(ao).sort(), ["privacy", "progress", "share", "top"], "only our own add-ons");
+  assert.equal(ao.top.on, true); assert.equal(typeof ao.top.label, "string");
+  assert.equal(ao.top.side, "right", "an unknown side falls back"); assert.ok(ao.top.after <= 2000, "the distance stays in range");
+  assert.equal(ao.share.on, false, "only true switches an add-on on"); assert.deepEqual(ao.share.networks, ["email"], "only the four ways to share");
+  assert.equal(ao.progress.on, false, "add-ons start off");
+  assert.equal(h.copyName(h.CODE_COPY), "Code changes");
+  for (const x of SITES.filter((y) => y.repo && y.live)) assert.ok(x.code && x.code.edit.length && x.code.edit.every((f) => !/\.json$/.test(f)), x.id + ": its code files, with the settings files read only");
+  for (const dir of [W_DIR, G_DIR, sadDir()]) {
+    const wf = fs.readFileSync(dir + "/.github/workflows/check-copy.yml", "utf8");
+    assert.ok(/adh\/\*\*/.test(wf) && !/deploy-pages|upload-pages-artifact/.test(wf), dir + ": the check builds working copies and publishes nothing");
+  }
+  assert.ok(fs.readFileSync(W_DIR + "/src/index.html", "utf8").includes("function aoHtml"), "World Art Review draws add-ons");
+  for (const [dir, build, out] of [[G_DIR, ["tools/build.py"], ""], [sadDir(), ["tools/build.py", "/tmp/ao-sad-out"], "/tmp/ao-sad-out"]]) {
+    const tmp = "/tmp/ao-" + path.basename(dir); fs.rmSync(tmp, { recursive: true, force: true }); fs.cpSync(dir, tmp, { recursive: true, filter: (x) => !/\/\.git(\/|$)/.test(x) });
+    const pj = JSON.parse(fs.readFileSync(tmp + "/data/pages.json", "utf8")); pj.addons = { top: { on: true, label: "Up again <b>", side: "left", after: 600 }, privacy: { on: true, text: "No tracking here." } };
+    fs.writeFileSync(tmp + "/data/pages.json", JSON.stringify(pj)); execFileSync("python3", build, { cwd: tmp, stdio: "pipe" });
+    const home = fs.readFileSync((out || tmp) + "/index.html", "utf8");
+    assert.ok(home.includes("Up again &lt;b&gt;") && /ao-top[^"]*left/.test(home) && home.includes("No tracking here."), dir + ": add-ons built into the pages");
+  }
+}
 console.log("ALL TESTS PASSED");

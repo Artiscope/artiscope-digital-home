@@ -31,7 +31,7 @@ const pics = (dir, sub) => Object.fromEntries(fs.readdirSync(dir + sub).map((f) 
 const WR = "Artiscope/World-art-review", GR = "Artiscope/global-art-monitor", SR = "Artiscope/street-art-dispatch";
 const SADDIR = sadDir() + "/", sad0 = JSON.parse(fs.readFileSync(SADDIR + "data/content.json", "utf8"));
 const hub = makeGitHub({
-  [WR]: { ...files(WARDIR, ["content/site.json", "content/pages.json", "content/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(WARDIR, "images") },
+  [WR]: { ...files(WARDIR, ["src/index.html", "tools/build_site.py", "content/site.json", "content/pages.json", "content/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(WARDIR, "images") },
   [SR]: files(SADDIR, ["data/content.json", "data/pages.json", "data/theme.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]),
   [GR]: { ...files(GAMDIR, ["data/content.json", "data/sales.json", "data/images.json", "data/pages.json", "data/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(GAMDIR, "assets/images") },
 });
@@ -101,7 +101,7 @@ async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).cat
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all six sites, the Practice site among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 6, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 45"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 46"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await goTab(page, "home"); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -154,9 +154,9 @@ await check("With the inspector off the page is shown as a visitor sees it, and 
   await page.click(".insp"); await settle(1500); must(await frame("worldartreview.com").evaluate(() => !window.ADH_EDIT), "still in editing mode");
   await page.click(".insp"); await settle(2000); must(await frame("worldartreview.com").evaluate(() => !!window.ADH_EDIT), "editing did not come back");
 });
-await check("More has View the live page, and Edit code waits for a later step", async () => {
+await check("More has View the live page, and Edit code for the admin", async () => {
   await page.click('[data-act="ed-pop"][data-menu="more"]'); const t = await text(".ed-pop"); await shot("02c-more");
-  must(t.includes("View the live page") && t.includes("Edit code") && t.includes("Keyboard shortcuts"), "menu: " + t); must(await page.isDisabled('.ed-pop .pp-item:has-text("Edit code")'), "Edit code works already");
+  must(t.includes("View the live page") && t.includes("Edit code") && t.includes("Keyboard shortcuts"), "menu: " + t); must(!(await page.isDisabled('.ed-pop .pp-item:has-text("Edit code")')), "Edit code is off for the admin");
   await page.keyboard.press("Escape"); must(!(await page.isVisible(".ed-pop")), "Escape did not close it");
 });
 await check("The site button says Live, the save state sits beside Save, and Save's dropdown starts with Publish later", async () => {
@@ -466,7 +466,7 @@ await check("The block count opens and closes a section's blocks without picking
 await check("A right click opens Copy, Paste, Duplicate, Rename, Hide, Add before and after, Edit code and Remove; Paste waits for a Copy", async () => {
   await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)', { button: "right" }); const t = await text(".ctxm"); await shot("15-right-click");
   must(["Copy", "Paste", "Duplicate", "Rename", "Hide", "Add section before", "Add section after", "Edit code", "Remove"].every((w) => t.includes(w)), "menu: " + t);
-  must(await page.isDisabled('.ctxm [data-op="paste"]') && await page.isDisabled('.ctxm [data-op="code"]'), "Paste or Edit code is on");
+  must(await page.isDisabled('.ctxm [data-op="paste"]') && !(await page.isDisabled('.ctxm [data-op="code"]')), "Paste is on, or Edit code is off");
   await page.keyboard.press("Escape"); must(!(await page.isVisible(".ctxm")), "Escape did not close it");
 });
 await check("Copy then Paste puts a copy straight after the row it was pasted on", async () => {
@@ -686,7 +686,7 @@ await check("Add a section has Sections and Add-ons tabs, the most used kinds fi
   const gl = await page.locator(".pk-gl").allInnerTexts(); must(gl[0] === "Most used on this site", "groups: " + gl.join(", "));
   must((await page.locator('.pk-grp[data-most] .pk-item b').allInnerTexts()).includes("Quote"), "Quote not among the most used");
   must((await page.locator(".pk-tabs button").allInnerTexts()).join() === "Sections,Add-ons", "tabs");
-  await page.click('[data-act="ed-pk-tab"][data-t="addons"]'); must(/No add-ons yet/.test(await text(".pk")), "add-ons tab");
+  await page.click('[data-act="ed-pk-tab"][data-t="addons"]'); must(/Add-ons work across the whole site/.test(await text(".pk")) && (await text(".pk")).includes("Back to top button"), "add-ons tab: " + (await text(".pk")).slice(0, 200));
   await page.click('[data-act="ed-pk-tab"][data-t="types"]'); const before = (await homeSecs()).length;
   await page.keyboard.press("Escape"); await settle(300); must(!(await page.isVisible(".pk")) && (await homeSecs()).length === before, "Escape left it open or added something");
   await shot("17a-picker");
@@ -1063,6 +1063,87 @@ await check("Publish later keeps the changes on a copy of their own, and the clo
   must(JSON.stringify(read(WR, "content/pages.json")).includes("Out on Monday") && hub.read(WR, "adh/" + id, "content/pages.json") == null, "not published");
   // the clock changed the live site behind the console's back, so start afresh as a person would after it ran
   await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); await settle(600);
+});
+
+// =============== 9. Add-ons and Edit code ===============
+area = "Add-ons";
+await check("The Add-ons panel lists the four add-ons, each with a switch and its own settings", async () => {
+  await openSite("world-art-review"); await page.click('[data-act="ed-panel"][data-panel="addons"]'); await settle(400);
+  const t = await text(".aopanel"); for (const w of ["Back to top button", "Reading progress", "Share links", "Privacy notice"]) must(t.includes(w), "missing " + w);
+  await page.click('.ao-row[data-id="top"] [data-act="ed-addon-open"]'); await settle(300);
+  must(await page.isVisible('[data-pf="addon:top.label"]'), "no settings for the Top button"); await shot("45-addons");
+  await page.fill("#ao-q", "privacy"); await settle(200); must(await page.isVisible('.ao-row[data-id="privacy"]') && !(await page.isVisible('.ao-row[data-id="top"]')), "search"); await page.fill("#ao-q", "");
+});
+await check("Switching the Top button and Share links on shows them in the preview, and Save puts them on the live site", async () => {
+  await page.selectOption(".pagepick", "home"); await settle(1000);
+  await page.click('.ao-row[data-id="top"] .switch'); await page.fill('[data-pf="addon:top.label"]', "Back up"); await settle(900);
+  must((await frame("worldartreview.com").innerText(".ao-top")).includes("Back up"), "no Top button in the preview");
+  await page.click('.ao-row[data-id="share"] .switch'); await settle(600);
+  const slug = await page.evaluate(() => window.__adh.pgOf().site.articles.find((a) => !a.hidden).slug);
+  await page.selectOption(".pagepick", "a-" + slug); await settle(1500);
+  const sh = await frame("worldartreview.com").innerText(".ao-share"); must(/Share this page/.test(sh) && /LinkedIn/.test(sh), "no share links: " + sh);
+  await liveSave(); const ao = read(WR, "content/pages.json").addons || {};
+  must(ao.top && ao.top.on === true && ao.top.label === "Back up" && ao.share && ao.share.on === true, "not saved: " + JSON.stringify(ao));
+});
+await check("On a phone the add-ons keep out of the way of the page", async () => {
+  await page.click('[data-act="ed-mode"][data-mode="phone"]'); await settle(1500);
+  const box = await frame("worldartreview.com").evaluate(() => { const b = document.querySelector(".ao-top"), r = b && b.getBoundingClientRect(); return r ? { r: r.right, w: innerWidth, h: r.height } : null; });
+  must(box && box.r <= box.w && box.h < 60, "Top button: " + JSON.stringify(box)); await shot("46-addons-phone");
+  await page.click('[data-act="ed-mode"][data-mode="computer"]'); await settle(800);
+});
+
+area = "Edit code";
+const codeAt = (s) => page.evaluate(() => { const t = document.querySelector("#code-ta"); return t ? t.value.slice(0, t.selectionStart).split("\n").length : 0; });
+await check("Edit code opens the site's own code, with read-only settings files and an outline", async () => {
+  if (!(await page.isVisible(".ed-top"))) await openSite("world-art-review");
+  await page.click('[data-act="ed-pop"][data-menu="more"]'); await page.click('[data-act="code-open"]'); await page.waitForSelector("#code-ta", { timeout: 9000 });
+  const tree = await text(".code-files"); must(tree.includes("src/index.html") && tree.includes("tools/build_site.py") && /read only/i.test(tree) && tree.includes("content/pages.json"), "files: " + tree.replace(/\n/g, " | "));
+  must((await page.inputValue("#code-ta")) === fs.readFileSync(WARDIR + "src/index.html", "utf8"), "not the live code");
+  must((await page.locator(".code-ol .pp-item").count()) > 20, "the outline is nearly empty");
+  await page.click('.code-files [data-path="content/pages.json"]'); must(await page.getAttribute("#code-ta", "readonly") !== null, "settings file can be typed in");
+  must((await text(".code-site")).includes("Live site"), "says " + await text(".code-site")); await shot("47-code");
+});
+await check("Search, Go to file, Commands and Go to line find their way round the code", async () => {
+  await page.fill("#code-q", "groupHTML"); await settle(300); must(/\d+ match/.test(await text(".code-found")), "search: " + await text(".code-found"));
+  await page.click(".code-found .pp-item >> nth=0"); await settle(400); must(await page.inputValue("#code-ta") === fs.readFileSync(WARDIR + "src/index.html", "utf8") && (await codeAt()) > 1, "search did not go there");
+  await page.locator("#code-ta").click(); await page.keyboard.press("Control+p"); await page.fill("#code-goq", "build_site"); await page.keyboard.press("Enter"); await settle(300);
+  must((await text(".code-tab.on")).includes("build_site.py"), "Go to file: " + await text(".code-tabs"));
+  await page.keyboard.press("Control+Shift+P"); must((await text(".code-pop")).includes("Go to line"), "commands"); await page.click('[data-cmd="line"]');
+  await page.fill("#code-lq", "12"); await page.keyboard.press("Enter"); await settle(300); must((await codeAt()) === 12, "line " + await codeAt());
+  await page.click('.code-tab:has-text("build_site.py") .ct-close'); await settle(200); must(!(await text(".code-tabs")).includes("build_site.py"), "Close");
+});
+await check("A section's Edit code opens the file where that section is drawn", async () => {
+  await page.click('[data-act="code-back"]'); await page.waitForSelector(".ed-top"); await settle(400); if (!(await page.isVisible("#ed-sections"))) await page.click('[data-act="ed-panel"][data-panel="sections"]'); await page.selectOption(".pagepick", "home"); await page.waitForSelector('#ed-sections .sec[data-id="numbers"]'); await settle(600);
+  await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)', { button: "right" }); await page.click('.ctxm [data-op="code"]'); await page.waitForSelector("#code-ta"); await settle(300);
+  const line = (await page.inputValue("#code-ta")).split("\n")[(await codeAt()) - 1]; must(/^\s*'?numbers'?\(st/.test(line), "opened at: " + line);
+});
+await check("Saving puts the code on the Code changes trial copy only, and Make live waits until it builds", async () => {
+  const live = hub.read(WR, "main", "src/index.html");
+  await page.locator("#code-ta").click(); await page.keyboard.press("Control+End"); await page.keyboard.type("\n<!-- checked by the acceptance test -->");
+  must(/1 file changed/.test(await text("#code-count")), "count: " + await text("#code-count"));
+  await page.keyboard.press("Control+s"); await page.waitForSelector("text=Saved to the trial copy", { timeout: 9000 }); await settle(600);
+  must(hub.read(WR, "main", "src/index.html") === live, "the live code changed");
+  must((hub.read(WR, "adh/trial-code-changes", "src/index.html") || "").includes("checked by the acceptance test"), "not on the copy");
+  must(/Checking/.test(await text("#code-status")) && !(await page.isVisible('[data-act="code-live-ask"]')), "Make live is on while checking");
+  hub.setRun(WR, "adh/trial-code-changes", "failure"); await page.keyboard.press("Control+Shift+P"); await page.click('[data-cmd="check"]'); await page.waitForSelector("#code-status .bad", { timeout: 20000 });
+  must(!(await page.isVisible('[data-act="code-live-ask"]')), "Make live on a copy that does not build");
+  const res = await handle(new Request("https://x/", { method: "POST", headers: { Authorization: "Bearer t" }, body: JSON.stringify({ action: "publish", site: "world-art-review", copy: "trial-code-changes" }) }));
+  must(res.status === 400 && /do not build/.test((await res.json()).error), "the server let a failing copy go live"); await shot("48-code-failed");
+});
+await check("Once the copy builds, Make live puts the code on the live site", async () => {
+  hub.setRun(WR, "adh/trial-code-changes", "success"); await page.keyboard.press("Control+Shift+P"); await page.click('[data-cmd="check"]');
+  await page.waitForSelector('[data-act="code-live-ask"]', { timeout: 20000 }); await shot("49-code-passed");
+  await page.click('[data-act="code-live-ask"]'); await page.click('[data-act="code-live"]'); await page.waitForSelector("text=Visitors see the changes", { timeout: 9000 });
+  must((hub.read(WR, "main", "src/index.html") || "").includes("checked by the acceptance test"), "not live");
+  must(hub.read(WR, "adh/trial-code-changes", "src/index.html") == null, "the copy was kept");
+  must((await text(".code-site")).includes("Live site"), "still on the copy");
+});
+await check("Edit code is the admin's only: an editor sees it switched off", async () => {
+  await page.click('[data-act="code-back"]'); await page.waitForSelector(".ed-top");
+  await page.evaluate(() => { const w = window.__adh; w.state.data.user.admin = false; });
+  await page.click('[data-act="ed-pop"][data-menu="more"]'); const m = await text(".ed-pop");
+  await page.evaluate(() => { const w = window.__adh; w.state.data.user.admin = true; w.state.edMenu = ""; w.render(); });
+  must(/Edit code\s*Admin only/.test(m) && !(await page.isVisible('[data-act="code-open"]')), "menu: " + m.replace(/\n/g, " | "));
 });
 
 // =============== 6c. New sections, batch 1 ===============

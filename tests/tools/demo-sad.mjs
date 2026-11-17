@@ -14,6 +14,6 @@ if (dir) {
   for (const [k, part] of Object.entries(doc.shared)) summaries["shared:" + k] = S.sectionKinds[part.type].summary ? String(S.sectionKinds[part.type].summary(part.settings)) : "";
   for (const [k, pg] of Object.entries(doc.pages)) for (const sec of pg.sections) summaries[k + ":" + sec.id] = S.sectionKinds[sec.type].summary ? String(S.sectionKinds[sec.type].summary(sec.settings || {})) : "";
   const images = fs.existsSync(dir + "/assets/images") ? fs.readdirSync(dir + "/assets/images") : [];
-  fs.writeFileSync(C_DIR + "/assets/demo-sad.json", JSON.stringify({ pages: doc, kinds, summaries, images, imageMeta: {}, pictures: [], artists: E.artists.map((a) => ({ slug: a.slug, name: a.name })), site: E, itemKinds: S.items, lists: {}, listFields: [], gam: true, model: "sad", builtIn: S.builtIn,
+  fs.writeFileSync(C_DIR + "/assets/demo-sad.json", JSON.stringify({ addonSpec: m.ADDONS.map((a) => ({ id: a.id, label: a.label, about: a.about, icon: a.icon, fields: a.fields })), pages: doc, kinds, summaries, images, imageMeta: {}, pictures: [], artists: E.artists.map((a) => ({ slug: a.slug, name: a.name })), site: E, itemKinds: S.items, lists: {}, listFields: [], gam: true, model: "sad", builtIn: S.builtIn,
     pageFields: [{ name: "title", label: "Title in the browser tab and search results", type: "text" }, { name: "description", label: "Description for search engines", type: "long", plain: true, hint: "One or two sentences. Not shown on the page." }] }));
 }

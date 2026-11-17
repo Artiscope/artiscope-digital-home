@@ -8,7 +8,7 @@ const W = m.SITES[0];
 const lists = Object.fromEntries(Object.entries(W.lists).map(([k, l]) => [k, { label: l.label, section: l.section || "" }]));
 const pages0 = JSON.parse(fs.readFileSync((W_DIR + "/content/pages.json"), "utf8"));
 const LF = m.SITES[0].sectionKinds.text.fields.slice(0, 2);
-fs.writeFileSync((C_DIR + "/assets/demo-site.json"), JSON.stringify({ site: m.siteForEditor(war), itemKinds: W.items, lists, pageLists: m.cleanPages(W, pages0, pages0).lists, listFields: m.LIST_FIELDS }));
+fs.writeFileSync((C_DIR + "/assets/demo-site.json"), JSON.stringify({ addonSpec: m.ADDONS.map((a) => ({ id: a.id, label: a.label, about: a.about, icon: a.icon, fields: a.fields })), site: m.siteForEditor(war), itemKinds: W.items, lists, pageLists: m.cleanPages(W, pages0, pages0).lists, listFields: m.LIST_FIELDS }));
 // kinds and spots in app.js, as before
 const kinds = {};
 for (const [k, v] of Object.entries(W.sectionKinds)) { kinds[k] = { label: v.label, about: v.about || "", fields: v.fields, library: v.library || "", starter: v.starter || null }; if (v.blocks) kinds[k].blocks = m.blockKinds(v.blocks); if (v.popup) kinds[k].popup = true; }

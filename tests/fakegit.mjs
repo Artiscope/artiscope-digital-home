@@ -121,10 +121,13 @@ export function makeGitHub(seed) {   // seed: { "Owner/repo": { "path": "text" }
       const head = r.refs[pr.head.ref], files = filesAt(r, head);
       r.refs.main = commit(r, tree(r, files), [r.refs.main], pr.title + " (#" + pr.number + ")"); pr.state = "closed"; return res(200, { sha: r.refs.main, merged: true });
     }
+    // the "Check a working copy" job's runs, as a test sets them with setRun
+    if ((x = path.match(/^actions\/workflows\/([^/]+)\/runs$/))) return res(200, { workflow_runs: (r.runs || []).filter((u) => u.workflow === x[1] && (!q.get("branch") || u.head_branch === q.get("branch"))).slice().reverse() });
     if (path.startsWith("pulls")) return res(200, Object.values(r.pulls || {}).filter((p) => p.state === "open"));
     throw new Error("unexpected " + method + " " + url);
   }
   return {
+    setRun(repo, branch, conclusion) { const r = repoOf(repo); r.runs = r.runs || []; r.runs.push({ workflow: "check-copy.yml", head_branch: branch, head_sha: r.refs[branch], status: conclusion ? "completed" : "in_progress", conclusion: conclusion || null, html_url: "https://github.com/" + repo + "/actions/runs/" + (r.runs.length + 1) }); },
     fetch, log,
     read(repo, ref, file) { const r = repoOf(repo), s = resolve(r, ref), f = s && filesAt(r, s)[file]; return f ? Buffer.from(r.blobs[f], "base64").toString("utf8") : null; },
     refs(repo) { return { ...repoOf(repo).refs }; },
