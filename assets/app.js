@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "41";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "42";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -122,9 +122,10 @@
       if ((state.tab === "content" || state.tab === "overview") && (force || !state.content[s.id])) {
         var c = await api("content", { site: s.id }); state.content[s.id] = c.collections || []; render();
       }
-      if ((state.tab === "theme" || state.tab === "overview") && !state.theme[s.id] && hasScreen(s, "theme")) {
+      if ((state.tab === "theme" || state.tab === "overview" || state.tab === "pages") && !state.theme[s.id] && hasScreen(s, "theme")) {
         var t = await api("theme", { site: s.id });
-        state.theme[s.id] = { spec: t.spec, values: t.values, draft: JSON.parse(JSON.stringify(t.values)), mode: "computer", live: null }; render();
+        t.values.settings = t.values.settings || {};
+        state.theme[s.id] = { spec: t.spec, values: t.values, draft: JSON.parse(JSON.stringify(t.values)), mode: "computer", live: null }; if (state.tab === "pages" && pgOf()) edPatch(); else render();
       }
       if (state.tab === "pages" && !state.pg[s.id]) {
         var pgd = await api("pages", { site: s.id });
@@ -132,7 +133,7 @@
         var pics = {}; (pgd.pictures || []).forEach(function (p) { pics[p.key] = p; });
         if (pgd.pages) { pgd.pages.groups = pgd.pages.groups || {}; ["top", "popups", "bottom"].forEach(function (w) { if (!pgd.pages.groups[w]) pgd.pages.groups[w] = []; }); }
         state.pg[s.id] = { version: pgd.version || "", pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageSizes: pgd.imageSizes || {}, imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false,
-          site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, lists: pgd.lists || {}, listFields: pgd.listFields || [], at: pref.at || "", gam: !!pgd.gam, model: pgd.model || (pgd.gam ? "gam" : ""), builtIn: pgd.builtIn || null, pageFields: pgd.pageFields || null };
+          site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, lists: pgd.lists || {}, listFields: pgd.listFields || [], at: pref.at || "", gam: !!pgd.gam, model: pgd.model || (pgd.gam ? "gam" : ""), builtIn: pgd.builtIn || null, pageFields: pgd.pageFields || null, leftPanel: pref.leftPanel || undefined };
         var made = state.pg[s.id]; if (made.at && !atKnown(made)) made.at = "";
         render();
       }
@@ -544,6 +545,8 @@
   function themeChanges(t) {
     var n = 0;
     ["colours", "fonts"].forEach(function (g) { Object.keys(t.values[g]).forEach(function (k) { if (String(t.draft[g][k]).toUpperCase() !== String(t.values[g][k]).toUpperCase()) n++; }); });
+    var a = t.values.settings || {}, b = t.draft.settings || {};
+    Object.keys(Object.assign({}, a, b)).forEach(function (k) { var x = a[k] == null ? "" : a[k], y = b[k] == null ? "" : b[k]; if (JSON.stringify(x) !== JSON.stringify(y)) n++; });
     return n;
   }
   function anyThemeChanges() { return Object.keys(state.theme).some(function (k) { return themeChanges(state.theme[k]) > 0; }); }
@@ -563,7 +566,26 @@
       var link = fontLink(spec, name);
       if (links.indexOf(link) < 0) links.push(link);
     });
+    [["h_size", "--h-scale"], ["b_size", "--b-scale"], ["nav_size", "--nav-scale"]].forEach(function (x) { var v = (values.settings || {})[x[0]]; if (v != null && v !== "" && Number(v) !== 100) decl.push(x[1] + ":" + Number(v) / 100); });
     return { css: decl.length ? ":root{" + decl.join(";") + "}" : "", font_links: links };
+  }
+  function themeRules(spec, st) {
+    var L = spec.look || {}, out = [], has = function (k) { return st && st[k] != null && st[k] !== ""; };
+    var head = L.head || "h1, h2, h3, h4", body = L.body || "p, li, dd", nav = L.nav || "nav a";
+    if (has("h_track")) out.push(head + "{letter-spacing:" + st.h_track / 100 + "em !important}");
+    if (has("h_lh")) out.push(head + "{line-height:" + st.h_lh / 100 + " !important}");
+    if (st && st.h_caps) out.push(head + "{text-transform:uppercase !important}");
+    if (has("b_track")) out.push(body + "{letter-spacing:" + st.b_track / 100 + "em !important}");
+    if (has("b_lh")) out.push(body + "{line-height:" + st.b_lh / 100 + " !important}");
+    var nf = { body: L.bodyFont, heading: L.headFont }[st && st.nav_font];
+    if (nf) out.push(nav + "{font-family:" + nf + " !important}");
+    if (st && st.nav_caps) out.push(nav + "{text-transform:uppercase !important;letter-spacing:.06em !important}");
+    if (st && st.dir === "rtl") out.push("html, body{direction:rtl}");
+    if (has("corners") && L.round) out.push(L.round + "{border-radius:" + (st.corners === "round" ? "10px" : "0") + " !important}");
+    if (st && st.buttons === "outline" && L.buttons) out.push(L.buttons + "{background:transparent !important;color:" + (L.band || "currentColor") + " !important;box-shadow:inset 0 0 0 2px currentColor !important}");
+    if (st && st.crumbs === false && L.crumbs) out.push(L.crumbs + "{display:none !important}");
+    var own = st && st.css ? String(st.css) : "";
+    return out.join("\n") + (own ? (out.length ? "\n" : "") + own : "");
   }
   function fontLink(spec, name) { return "https://fonts.googleapis.com/css2?family=" + spec.fontRequests[name] + "&display=swap"; }
   function validHex(v) { return /^#[0-9a-fA-F]{6}$/.test(String(v)); }
@@ -860,7 +882,8 @@
     var d = pgd.gam && pgd.site && pgd.site.site; if (!d || typeof t !== "string" || t.indexOf("{") < 0) return t;
     return t.replace(/\{(tagline|headline|intro|disclosure|email|published)\}/g, function (m, w) { var v = w === "published" ? pgd.site.published_text : d[w]; return v ? String(v) : m; });
   }
-  function pgMark(pgd) { pgd.dirty = canon(pgd.doc) !== pgd.base || JSON.stringify(pgd.pictures || {}) !== (pgd.picBase || "{}") || siteChanged(pgd); state.dirty = pgd.dirty; }
+  function pgMark(pgd) { pgd.dirty = canon(pgd.doc) !== pgd.base || JSON.stringify(pgd.pictures || {}) !== (pgd.picBase || "{}") || siteChanged(pgd) || themeDirty(); state.dirty = pgd.dirty; }
+  function themeDirty() { var t = themeOf(); return !!t && themeChanges(t) > 0; }
   function siteChanged(pgd) { return !!pgd.site && JSON.stringify(pgd.site) !== pgd.siteBase; }
   function pgReset(pgd) { pgd.doc = JSON.parse(pgd.base); pgd.pictures = JSON.parse(pgd.picBase || "{}"); if (pgd.site) pgd.site = JSON.parse(pgd.siteBase); if (!atKnown(pgd)) pgd.at = ""; pgd.dirty = false; state.dirty = false; }
   // Pictures that belong to an artist or an article but show in a section of this page.
@@ -964,7 +987,8 @@
   // The editor's left column: the sections of the page, the theme settings or the add-ons.
   function edLeft(pgd) {
     var p = pgd.leftPanel || "sections";
-    if (p === "theme") return '<div class="lpanel"><h2 class="lt">Theme settings</h2><p class="small">Colours and typefaces for the whole site. They move into this panel in a later step. Until then they are on the Theme screen.</p><button type="button" class="soft" data-tab="theme">Open the Theme screen</button></div>';
+    if (p === "theme") return themePanel(pgd);
+    if (p === "themeold") return '<div class="lpanel"><h2 class="lt">Theme settings</h2><p class="small">Colours and typefaces for the whole site. They move into this panel in a later step. Until then they are on the Theme screen.</p><button type="button" class="soft" data-tab="theme">Open the Theme screen</button></div>';
     if (p === "addons") return '<div class="lpanel"><h2 class="lt">Add-ons</h2><p class="small">Extra pieces for the pages of the site will be listed here. They come in a later step.</p></div>';
     return edList(pgd);
   }
@@ -1267,7 +1291,96 @@
       (own ? "" : '<div class="grp">Bottom of every page</div>' + secRows(pgd, "bottom") + edShared(pgd, ["footer"]) + addSecBtn(pgd, "bottom")) +
       '';
   }
-  function edRight(pgd) { var sel = pgSel(pgd); return pgd.panel === "new" ? edNew(pgd) : sel && pgd.fontPick ? fontPanel(pgd) : sel ? edSettings(pgd, sel) : ""; }
+  function edRight(pgd) { var sel = pgSel(pgd); return pgd.panel === "new" ? edNew(pgd) : pgd.fontPick ? fontPanel(pgd) : themeOpen(pgd) ? "" : sel ? edSettings(pgd, sel) : ""; }
+  // ---------- Theme settings in the editor's left column ----------
+  function isThemePath(p) { return String(p || "").indexOf("theme:") === 0; }
+  function themeGet(path) { var t = themeOf(); if (!t) return undefined; var b = path.slice(6).split("."); return (t.draft[b[0]] || {})[b[1]]; }
+  function themeSet(path, v) {
+    var t = themeOf(); if (!t) return; var b = path.slice(6).split(".");
+    t.draft[b[0]] = t.draft[b[0]] || {}; t.draft[b[0]][b[1]] = v;
+    var pgd = pgOf(); if (pgd) { pgd.what = "Theme"; pgMark(pgd); patchEdTop(); }
+    themePush(); if (/^social_/.test(b[1])) pushSoon();
+  }
+  function fGet(pgd, path) { if (isThemePath(path)) return themeGet(path); var sel = pgSel(pgd); return sel ? pgGet(sel.sec.settings, path) : undefined; }
+  function fSet(pgd, path, v) {
+    if (isThemePath(path)) { themeSet(path, v); return true; }
+    var sel = pgSel(pgd); if (!sel) return false;
+    pgSet(sel.sec.settings, path, v); pgd.what = "Edit " + (sel.kind ? sel.kind.label : sel.id); pgMark(pgd); patchEdTop(); return true;
+  }
+  function themeSocial() {
+    var t = themeOf(); if (!t) return undefined; var st = t.draft.settings || {}, out = {};
+    (t.spec.settings || []).forEach(function (f) { var v = st[f.name]; if (f.social && /^https:\/\/\S+$/.test(v || "")) out[f.name.slice(7)] = { label: f.label, href: v }; });
+    return out;
+  }
+  // The theme's colours, typefaces and rules, shown in the page while they are being changed.
+  function themePush() {
+    var t = themeOf(), pgd = pgOf(), fr = app.querySelector && app.querySelector("#ed-frame"); if (!t || !pgd || !fr || !fr.contentWindow) return;
+    var out = themeCss(t.spec, t.draft), rules = themeRules(t.spec, t.draft.settings || {});
+    out.font_links.forEach(function () {}); Object.keys(t.draft.fonts || {}).forEach(function (k) { loadFont(t.spec, t.draft.fonts[k]); });
+    try { fr.contentWindow.postMessage({ type: "adh-theme", css: out.css + (rules ? "\n" + rules : ""), fonts: out.font_links }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
+  }
+  var THEME_GROUPS = [["colours", "Colours"], ["type", "Typography"], ["design", "Design"], ["artworks", "Artworks", 1], ["cards", "Artwork cards", 1], ["collections", "Collection cards", 1], ["enquiries", "Enquiries", 1],
+    ["social", "Social media"], ["favicon", "Favicon"], ["search", "Search", 1], ["extras", "Extras"], ["css", "Custom CSS"], ["style", "Theme style"]];
+  function tDef(t, name) { return (t.spec.settings || []).find(function (x) { return x.name === name; }); }
+  function tField(pgd, t, name) { var f = tDef(t, name); if (!f) return ""; var ff = Object.assign({}, f); if (f.type === "image") ff.lib = "noadd"; return edField(pgd, ff, (t.draft.settings || {})[name], "theme:settings." + name); }
+  function tFont(pgd, t, role, label) {
+    var f = t.spec.fonts.find(function (x) { return x.role === role; }); if (!f) return ""; var map = {};
+    f.options.forEach(function (o) { map[o] = t.spec.fontRequests[o] || ""; });
+    return edField(pgd, { type: "font", label: label || "Typeface", fonts: map, noStyle: true, hint: f.use }, t.draft.fonts[f.id], "theme:fonts." + f.id);
+  }
+  function themePanel(pgd) {
+    var t = themeOf(); if (!t) return '<div class="lpanel"><h2 class="lt">Theme settings</h2><p class="small">Reading the theme.</p></div>';
+    t.draft.settings = t.draft.settings || {};
+    var open = state.themeGroup == null ? "colours" : state.themeGroup, crumbs = !!tDef(t, "crumbs");
+    var notUsed = function (why) { return '<p class="info">' + esc(why) + '</p>'; }, sub = function (x) { return '<div class="sub">' + esc(x) + '</div>'; };
+    var bodies = {
+      colours: function () { return sub("General") + t.spec.colours.map(function (c) { var w = themeWarning(t, c); return edField(pgd, { type: "colour", label: c.label, hint: c.use + "." + (w ? " " + w + "." : "") }, t.draft.colours[c.id], "theme:colours." + c.id); }).join("") +
+        '<p class="info">Sections choose from these colours in their own settings, so a change here reaches every section that uses it. The sites have no separate header, footer or numbered colour schemes.</p>'; },
+      type: function () { return sub("Headings") + tFont(pgd, t, "display") + ["h_size", "h_track", "h_lh", "h_caps"].map(function (n) { return tField(pgd, t, n); }).join("") +
+        sub("Body text") + tFont(pgd, t, "body") + ["b_size", "b_track", "b_lh"].map(function (n) { return tField(pgd, t, n); }).join("") +
+        sub("Navigation") + tFont(pgd, t, "small", "Small text and labels") + ["nav_font", "nav_size", "nav_caps"].map(function (n) { return tField(pgd, t, n); }).join("") +
+        sub("Language") + tField(pgd, t, "dir"); },
+      design: function () { return sub("General") + tField(pgd, t, "corners") + tField(pgd, t, "buttons") + sub("Icons") + notUsed("Not used on this site. The sites use words rather than icons."); },
+      social: function () { return (t.spec.settings || []).filter(function (f) { return f.social; }).map(function (f) { return tField(pgd, t, f.name); }).join("") + '<p class="info">Only the networks with an address are shown, at the foot of every page.</p>'; },
+      favicon: function () { return tField(pgd, t, "favicon") + '<p class="info">Choose a picture from the site\'s own files. To add a new one, upload it in Files first. <button type="button" class="linklike small" data-tab="files">Open Files</button></p>'; },
+      extras: function () { return crumbs ? tField(pgd, t, "crumbs") : notUsed("Not used on this site. It has no breadcrumbs."); },
+      css: function () { return tField(pgd, t, "css"); },
+      style: function () {
+        var looks = [{ name: "The site's own", colours: Object.fromEntries(t.spec.colours.map(function (c) { return [c.id, c.default]; })) }].concat(t.spec.looks || []);
+        return '<p class="small">A ready-made look. Changing style puts back the colours of that look and the site\'s own typography and design settings. Words, pictures and pages are never touched.</p>' +
+          '<div class="looks tlooks">' + looks.map(function (l, i) { return '<button type="button" class="look' + (pgd.tlook === i - 1 ? " on" : "") + '" data-act="ed-tlook" data-i="' + (i - 1) + '"><i>' + t.spec.colours.slice(0, 3).map(function (c) { return '<span style="background:' + esc(l.colours[c.id] || c.default) + '"></span>'; }).join("") + '</i>' + esc(l.name) + '</button>'; }).join("") + '</div>' +
+          (pgd.tlook != null ? '<div class="row tlook-go"><button type="button" class="tw" data-act="ed-tlook-cancel">Cancel</button><button type="button" class="tw strong" data-act="ed-tlook-go">Change style</button></div>' : "");
+      },
+    };
+    var off = { artworks: 1, cards: 1, collections: 1, enquiries: 1, search: 1 }; if (!crumbs) off.extras = 1;
+    var sellWhy = "These settings are for a site that sells art: prices, artwork and collection cards, and enquiries. None of our sites sells online yet, so there is nothing to change here.";
+    return '<div class="lpanel tpanel"><h2 class="lt">Theme settings</h2><p class="small">These apply to every page of the site and show in the preview straight away. Save keeps them.</p>' +
+      THEME_GROUPS.map(function (g) {
+        var on = open === g[0], o = !!off[g[0]];
+        var body = on ? (bodies[g[0]] ? bodies[g[0]]() : notUsed(g[0] === "search" ? "Not used on this site. None of the sites suggests results while you type a search." : sellWhy)) : "";
+        return '<div class="tgrp' + (on ? " open" : "") + '"><button type="button" class="tghead" data-act="ed-tgroup" data-g="' + g[0] + '" aria-expanded="' + on + '"><span>' + esc(g[1]) + '</span>' + (o ? '<em>Not used on this site</em>' : '<em>' + (on ? "Close" : "Open") + '</em>') + '</button>' +
+          (on ? '<div class="tgbody stack">' + body + '</div>' : "") + '</div>';
+      }).join("") + '</div>';
+  }
+  // Theme style: the colours of a ready-made look, and the site's own typography and design.
+  function themeStyle(i) {
+    var t = themeOf(); if (!t || i == null) return;
+    var look = i < 0 ? null : (t.spec.looks || [])[i];
+    t.spec.colours.forEach(function (c) { t.draft.colours[c.id] = look ? look.colours[c.id] || c.default : c.default; });
+    ["h_size", "h_track", "h_lh", "h_caps", "b_size", "b_track", "b_lh", "nav_font", "nav_size", "nav_caps", "corners", "buttons"].forEach(function (k) { t.draft.settings[k] = /_caps$/.test(k) ? null : /^(nav_font|corners|buttons)$/.test(k) ? "" : null; });
+    var pgd = pgOf(); if (pgd) { pgd.what = "Theme style"; pgMark(pgd); patchEdTop(); } themePush();
+  }
+  // A section's own panel: the site-wide colours and typefaces it uses, and a way to them.
+  function themeBox(pgd, sel) {
+    var t = themeOf(); if (!t || !sel.kind) return "";
+    var open = !!pgd.tboxOpen;
+    return '<div class="cssbox tbox' + (open ? " open" : "") + '"><button type="button" class="csshead" data-act="ed-tbox" aria-expanded="' + open + '"><span>Theme settings</span><em>' + (open ? "Close" : "Open") + '</em></button>' +
+      (open ? '<p class="small">This section uses the site-wide colours and typefaces below. Changing them changes them across the whole site, not just here.</p><div class="tlist">' +
+        t.spec.colours.map(function (c) { return '<span class="ti"><i style="background:' + esc(t.draft.colours[c.id]) + '"></i>' + esc(c.label) + '</span>'; }).join("") +
+        t.spec.fonts.map(function (f) { return '<span class="ti"><b style="font-family:\'' + esc(t.draft.fonts[f.id]) + '\', ' + esc(f.fallback) + '">Aa</b>' + esc(f.label) + ': ' + esc(t.draft.fonts[f.id]) + '</span>'; }).join("") +
+        '</div><button type="button" class="tw tgo" data-act="ed-theme-open">Open theme settings</button>' : "") + '</div>';
+  }
+  function themeOpen(pgd) { return pgd.leftPanel === "theme" && !pgd.leftHidden; }
   // What a section looks like, drawn small for the picker's preview.
   var SHAPES = { "signup-popup": "popup", signup: "form", visit: "rows", hero: "banner", "picture-banner": "banner", text: "text", prose: "text", "long-text": "text", "text-picture": "textpic", picture: "picture", quote: "quote", articles: "cards", features: "cards", profiles: "cards", featured: "cards", method: "cards", faq: "rows", words: "rows", glossary: "rows", "page-links": "rows", "section-list": "rows", button: "button", status: "bar", timeline: "table", "results-table": "table", panel: "panel", "contact-form": "form", "page-head": "heading", "page-heading": "heading", "latest-result": "card", numbers: "cards", explained: "text", announcement: "ann", columns: "columns", space: "space", slideshow: "slides", gallery: "gallery", "logo-row": "logos", artworks: "gallery", exhibitions: "rows", career: "rows", press: "quote", "artist-cards": "cards", archive: "cards", "exhibition-list": "cards", collecting: "panel", "text-page": "text" };
   function shapeHtml(shape) {
@@ -1383,7 +1496,7 @@
       '<div class="lib-filters">' + sel("size", lib.size, [["", "Any file size"], ["small", "Under 200 KB"], ["mid", "200 to 400 KB"], ["big", "Over 400 KB"]], "File size") +
         sel("used", lib.used, [["", "Used anywhere or not"], ["yes", "Used on the site"], ["no", "Not used yet"]], "Used in") +
         sel("artist", lib.artist, [["", "Any artist"]].concat(arts.map(function (a) { return [a.slug, a.name]; })), "Artist") + '</div>' +
-      (video ? "" : '<div class="lib-drop" data-lib-drop="1"><label class="soft slim upl">Add files<input type="file" accept="image/jpeg,image/png" data-lib-add="1" multiple hidden></label><span class="small">or drag and drop images here. JPG or PNG, resized for the web and never cropped.</span></div>') +
+      (video || lib.noAdd ? (lib.noAdd ? '<p class="small">Choose from the site\'s own files. To add a new picture, upload it in Files first.</p>' : "") : '<div class="lib-drop" data-lib-drop="1"><label class="soft slim upl">Add files<input type="file" accept="image/jpeg,image/png" data-lib-add="1" multiple hidden></label><span class="small">or drag and drop images here. JPG or PNG, resized for the web and never cropped.</span></div>') +
       '<div class="lib-files ' + (lib.view === "list" ? "list" : "grid") + '">' + (files.length ? files.map(tile).join("") : '<p class="small">' + (video ? "No videos on the site yet. Paste a link to your own MP4 file in the setting instead." : "No files match. Try another word or filter.") + '</p>') + '<p class="small lib-none" hidden>No files match that search.</p></div>' +
       '<div class="lib-foot"><span class="small">' + (lib.tick ? "1 chosen" : "Tick a file to choose it.") + '</span><button type="button" class="tw" data-act="ed-lib-close">Cancel</button><button type="button" class="tw strong" data-act="ed-lib-done"' + (lib.tick ? "" : " disabled") + '>Done</button></div></div>';
   }
@@ -1498,7 +1611,7 @@
     var secLike = isSecList(sel.where) || sel.where === "shared";
     return pHead(pgd, sel, { icon: secLike ? kindIc(sel.sec.type) : '<span class="kic">' + ic("doc") + '</span>', title: secLike ? secName(pgd, sel.sec) : kind.label, about: kind.about, hidden: sel.sec.visible === false }) +
       '<form class="stack" data-form="section">' + (parts.top || (bk || parts.rest ? "" : '<span class="small" style="margin:0 6px">Nothing to set here.</span>')) + blockNote +
-      parts.rest + '</form>' + (isSecList(sel.where) ? picsHere(pgd, sel) : "") + edExtras(pgd, sel) + (state.customCss && isSecList(sel.where) ? cssBox(pgd, sel) : "") + pRemove(pgd);
+      parts.rest + '</form>' + (isSecList(sel.where) ? picsHere(pgd, sel) : "") + edExtras(pgd, sel) + (secLike ? themeBox(pgd, sel) : "") + (state.customCss && isSecList(sel.where) ? cssBox(pgd, sel) : "") + pRemove(pgd);
   }
   // Settings in the order the schema gives: those without a group first, then each group under its own small heading.
   function grouped(items) {
@@ -1531,8 +1644,8 @@
     pgd.what = "Edit " + (sel.kind ? sel.kind.label : sel.id); pgMark(pgd); edPatch(); pushSoon();
   }
   function fontClose(pgd, putBack) {
-    var fp = pgd.fontPick, sel = pgSel(pgd); pgd.fontPick = null;
-    if (putBack && fp && sel) { pgSet(sel.sec.settings, fp.path, fp.was); pgMark(pgd); pushSoon(); }
+    var fp = pgd.fontPick; pgd.fontPick = null;
+    if (putBack && fp) { fSet(pgd, fp.path, fp.was); pushSoon(); }
     edPatch();
   }
   // Custom CSS for one section: a folding box with line numbers. The site keeps it inside that section.
@@ -1747,14 +1860,15 @@
   }
   // Puts a colour in place as it moves, without drawing the panel again.
   function setColour(path, hex, fromHsv) {
-    var pgd = pgOf(), sel = pgd && pgSel(pgd); if (!sel) return;
-    pgSet(sel.sec.settings, path, hex);
+    var pgd = pgOf(), sel = pgd && pgSel(pgd); if (!pgd || (!sel && !isThemePath(path))) return;
+    if (isThemePath(path)) themeSet(path, hex); else pgSet(sel.sec.settings, path, hex);
     if (!fromHsv) pgd.colourHsv = Object.assign({ path: path }, hexToHsv(hex));
     var q = '[data-pf="' + cssq(path) + '"]';
     Array.prototype.forEach.call(app.querySelectorAll(q + '[data-kind="hex"]'), function (x) { if (x !== document.activeElement) x.value = hex; });
     var sw = app.querySelector('.cswatch[data-path="' + cssq(path) + '"]'); if (sw) { sw.style.background = hex; sw.classList.remove("themed"); }
     var hv = pgd.colourHsv, pop = app.querySelector('.cpop[data-cpop="' + cssq(path) + '"]');
     if (pop && hv) { var sv = pop.querySelector(".csv"), dot = pop.querySelector(".cdot"), hue = pop.querySelector(".chue"); sv.style.backgroundColor = "hsl(" + hv.h + ",100%,50%)"; dot.style.left = hv.s + "%"; dot.style.top = (100 - hv.v) + "%"; if (hue !== document.activeElement) hue.value = hv.h; Array.prototype.forEach.call(pop.querySelectorAll(".cthemes .chip"), function (c) { c.classList.remove("on"); c.classList.add("quiet"); }); }
+    if (!sel) return;
     pgd.what = "Edit " + (sel.kind ? sel.kind.label : sel.id); pgMark(pgd); patchEdTop(); pushSoon();
   }
   // Fonts: "Family", or "Family:700" or "Family:400i" with a style. Empty means the theme's font.
@@ -1781,14 +1895,14 @@
   }
   // The font picker opens in the right-hand panel: search, system fonts, the other fonts in their own typeface, the styles, then Done.
   function fontPanel(pgd) {
-    var fp = pgd.fontPick, sel = pgSel(pgd); if (!sel) return "";
-    var cur = parseFont(pgGet(sel.sec.settings, fp.path)), fonts = fp.fonts;
+    var fp = pgd.fontPick;
+    var cur = parseFont(fGet(pgd, fp.path)), fonts = fp.fonts;
     var opt = function (fam, label, stack) { return '<button type="button" class="fontopt' + (cur.family === fam ? " on" : "") + '" data-act="ed-font-set" data-v="' + esc(fam) + '" data-q="' + esc(label.toLowerCase()) + '" style="font-family:' + esc(stack) + '">' + esc(label) + '</button>'; };
-    var styles = cur.family ? fontStyles(fonts[cur.family], cur.family) : [];
+    var styles = cur.family && !fp.noStyle ? fontStyles(fonts[cur.family], cur.family) : [];
     return '<div class="rhead"><div class="rtop"><span class="rkind">Font</span><span class="rbtns"><button type="button" class="tw" data-act="ed-font-close">Close</button></span></div><h2 class="rtitle">' + esc(fp.label) + '</h2><span class="small">A font shows on the page as soon as you click it. Done keeps it; Close puts the old one back.</span></div>' +
       '<div class="fontpick"><input type="search" class="box" data-input="fontq" placeholder="Search fonts" aria-label="Search fonts">' +
-      '<button type="button" class="fontopt' + (cur.family ? "" : " on") + '" data-act="ed-font-set" data-v="" data-q="theme font">Theme font</button>' +
-      '<div class="sub">System fonts</div>' + SYS_FONTS.map(function (x) { return opt(x[0], x[1], x[2]); }).join("") +
+      (fp.noStyle ? "" : '<button type="button" class="fontopt' + (cur.family ? "" : " on") + '" data-act="ed-font-set" data-v="" data-q="theme font">Theme font</button>' +
+      '<div class="sub">System fonts</div>' + SYS_FONTS.map(function (x) { return opt(x[0], x[1], x[2]); }).join("")) +
       '<div class="sub">Other fonts</div>' + Object.keys(fonts).sort().map(function (k) { return opt(k, k, "'" + k + "', serif"); }).join("") +
       '<p class="small fnone" hidden>No font by that name.</p></div>' +
       (styles.length ? '<div class="field"><label for="font-style">Style</label><select class="box" id="font-style" data-change="ed-font-style">' + styles.map(function (st) { return '<option value="' + st + '"' + (st === cur.style ? " selected" : "") + '>' + esc(styleName(st)) + '</option>'; }).join("") + '</select></div>' : "") +
@@ -1827,7 +1941,8 @@
     else if (t === "range") {
       var rmin = f.min == null ? 0 : f.min, rmax = f.max == null ? 100 : f.max, rstep = f.step || 1, rv = v == null || v === "" || isNaN(Number(v)) ? (f.dflt != null ? f.dflt : rmin) : Number(v);
       var rat = ' min="' + rmin + '" max="' + rmax + '" step="' + rstep + '" data-pf="' + esc(path) + '" data-kind="number" data-twin="1" value="' + esc(rv) + '"';
-      input = '<div class="slider"><input type="range" id="' + id + '"' + rat + ' style="--at:' + Math.round((rv - rmin) / ((rmax - rmin) || 1) * 100) + '%"><span class="numbox"><input type="number"' + rat + ' aria-label="' + esc(f.label) + ', as a number">' + (f.unit ? '<em>' + esc(f.unit) + '</em>' : "") + '</span></div>';
+      input = '<div class="slider"><input type="range" id="' + id + '"' + rat + ' style="--at:' + Math.round((rv - rmin) / ((rmax - rmin) || 1) * 100) + '%"><span class="numbox"><input type="number"' + rat + ' aria-label="' + esc(f.label) + ', as a number">' + (f.unit ? '<em>' + esc(f.unit) + '</em>' : "") + '</span></div>' +
+        (f.reset ? (v == null || v === "" ? '<span class="small own">The site\'s own. Move it to change.</span>' : '<button type="button" class="linklike small own" data-act="ed-range-reset" data-path="' + esc(path) + '">Use the site\'s own</button>') : "");
     }
     else if (t === "colour") {
       var theme = f.theme || [], cv = String(v == null ? "" : v), th = theme.find(function (o) { return o[0] === cv; }), hex = /^#[0-9a-f]{6}$/i.test(cv) ? cv.toUpperCase() : "", copen = pgd.colourOpen === path;
@@ -1848,6 +1963,9 @@
         : '<div class="imgpick empty"><span class="small">No video yet</span><div class="row"><button type="button" class="soft slim" data-act="ed-picker" data-path="' + esc(path) + '">Select</button></div></div>') +
         '<label class="small" for="' + id + 'l">Or a link to your own video</label><input type="text" id="' + id + 'l" data-pf="' + esc(path) + '" data-kind="vlink" value="' + esc(isUrl ? v : "") + '" placeholder="https://www.example.com/film.mp4" spellcheck="false">';
       hint = '<span class="small">MP4 only, your own files. It plays without sound, on a loop.' + more + '</span>';
+    } else if (t === "code") {
+      input = '<div class="cssbox open plain"><div class="code"><pre class="gut" aria-hidden="true">' + gutter(v) + '</pre><textarea class="ctext" id="' + id + '" data-pf="' + esc(path) + '" data-kind="code" spellcheck="false" wrap="off" rows="' + Math.max(6, String(v || "").split("\n").length + 1) + '" placeholder="h1 { letter-spacing: 0.01em; }">' + esc(v || "") + '</textarea></div></div>';
+      hint = '<span class="small">Styles every page of the site. Styles for one section live in that section\'s own Custom CSS. Anything that would load from another website is taken out. <a href="https://developer.mozilla.org/en-GB/docs/Learn_web_development/Core/Styling_basics" target="_blank" rel="noopener">Learn more</a></span>';
     } else if (t === "font") {
       var fv = parseFont(v);
       input = '<button type="button" class="fontbtn" id="' + id + '" data-act="ed-font" data-path="' + esc(path) + '"' + (fv.family ? ' style="' + esc(fontCss(fv)) + '"' : "") + '><span>' + esc(fv.family ? fontName(fv.family) : "Theme font") + '</span><em>' + esc(fv.family ? styleName(fv.style) : "Change") + '</em></button>';
@@ -1917,8 +2035,8 @@
     var pictures = Object.keys(pgd.pictures || {}).map(function (k) { var p = pgd.pictures[k]; return { key: k, image: p.image, alt: p.alt, credit: p.credit }; });
     if (sel && sel.pic) label = sel.kind.label;
     var gamAt = pgd.gam ? { kind: atKind(pgd), key: atKey(pgd) } : null;
-    try { frame.contentWindow.postMessage({ type: "adh-pages", names: previewNames(pgd), at: gamAt || atHash(pgd), data: pgd.gam ? pgd.site : undefined, content: pgd.gam ? undefined : pgd.site || undefined, show: atKind(pgd) === "article" ? atKey(pgd) : "", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages, lists: pgd.doc.lists, groups: pgd.doc.groups || { top: [], popups: [], bottom: [] } }, images: images, pictures: pictures, pick: id, block: id ? block : -1, bf: id ? bf : "", bi: id ? bi : -1, label: id ? label : "", scroll: !!pgd.scrollNext }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
-    pgd.scrollNext = false;
+    try { frame.contentWindow.postMessage({ type: "adh-pages", names: previewNames(pgd), social: themeSocial(), at: gamAt || atHash(pgd), data: pgd.gam ? pgd.site : undefined, content: pgd.gam ? undefined : pgd.site || undefined, show: atKind(pgd) === "article" ? atKey(pgd) : "", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages, lists: pgd.doc.lists, groups: pgd.doc.groups || { top: [], popups: [], bottom: [] } }, images: images, pictures: pictures, pick: id, block: id ? block : -1, bf: id ? bf : "", bi: id ? bi : -1, label: id ? label : "", scroll: !!pgd.scrollNext }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
+    pgd.scrollNext = false; themePush();
   }
   // The names the preview shows on its outlines: each section's name, and each kind of block's.
   function previewNames(pgd) {
@@ -1945,7 +2063,7 @@
   }
   // The small bar at the bottom of the preview for whatever is picked: Duplicate, Hide and Remove.
   function edFloatBar(pgd) {
-    if (pgd.inspector === false || pgd.picker2 || pgd.lib) return "";
+    if (pgd.inspector === false || pgd.picker2 || pgd.lib || themeOpen(pgd)) return "";
     var sel = pgSel(pgd), t = toolsFor(pgd, sel); if (!t || (!t.movable && !t.canHide)) return "";
     var name = t.isBlock ? (sel.single ? sel.bk.label : sel.bk.label) : secName(pgd, sel.sec);
     return '<div class="fbar" role="toolbar" aria-label="' + esc(name) + '"><span class="fb-name">' + esc(name) + '</span>' +
@@ -2151,7 +2269,7 @@
     var pgd = pgOf(); if (!pgd || !p) return;
     if ((pgd.leftPanel || "sections") === p && !pgd.leftHidden) pgd.leftHidden = true;
     else { pgd.leftPanel = p; pgd.leftHidden = false; }
-    edPatch();
+    pgd.fontPick = null; edPatch(); edAddress(site(), pgd);
   }
   // With the inspector off, the page is shown as a visitor sees it: links work and clicks pick nothing.
   // Turning it back on loads the page again with the changes not yet saved.
@@ -2181,12 +2299,13 @@
     mountRich(); mountDrag();
     var onRow = ed.querySelector(".ed-left .sec.on"); if (onRow && right && typeof onRow.scrollIntoView === "function") onRow.scrollIntoView({ block: "nearest" });
   }
-  function edRemember() { var s = site(), p = pgOf(); if (s && p) { state.edPrefs[s.id] = { mode: p.mode, page: p.page, sel: p.sel, at: p.at }; edAddress(s, p); } }
+  function edRemember() { var s = site(), p = pgOf(); if (s && p) { state.edPrefs[s.id] = { mode: p.mode, page: p.page, sel: p.sel, at: p.at, leftPanel: p.leftPanel }; edAddress(s, p); } }
   // The page address records the site, the page and what is picked, so a link can open the editor right there.
   function edAddress(s, p) {
     try {
       if (!window.history || !history.replaceState) return;
       var u = new URL(window.location.href), sel = p && p.sel;
+      if (s && p && state.tab === "pages" && themeOpen(p)) u.searchParams.set("tg", state.themeGroup == null ? "colours" : state.themeGroup || "none"); else u.searchParams.delete("tg");
       if (s && p && state.tab === "pages") u.searchParams.set("ed", [s.id, p.at || "page:" + (p.page || "home"), sel ? [sel.where, sel.id, sel.block == null ? "" : sel.block, sel.bf || "", sel.sf || "", sel.sub == null ? "" : sel.sub].join(".") : ""].join("~"));
       else if (u.searchParams.has("ed")) u.searchParams.delete("ed"); else return;
       history.replaceState(null, "", u.toString());
@@ -2200,6 +2319,7 @@
     var pref = { page: "home", at: "", sel: null };
     if (at.indexOf("page:") === 0) pref.page = at.slice(5) || "home"; else pref.at = at;
     if (sp[0] && sp[1]) { pref.sel = { where: sp[0], id: sp[1], block: sp[2] === "" || sp[2] == null ? null : Number(sp[2]) }; if (sp[3]) pref.sel.bf = sp[3]; if (sp[4] && sp[5] !== "" && sp[5] != null) { pref.sel.sf = sp[4]; pref.sel.sub = Number(sp[5]); } }
+    if (params.get("tg")) { pref.leftPanel = "theme"; state.themeGroup = params.get("tg") === "none" ? "" : params.get("tg"); }
     state.edPrefs[sid] = pref; openSite(sid); if (state.site === sid && state.tab !== "pages") go("pages");
     return state.site === sid;
   }
@@ -2324,8 +2444,14 @@
     if (canon(doc) === pgd.base && !picNames.length && contentNow) what = pgd.what || "Edit " + (itemName(pgd) || "content");
     var used = canon(doc) + canon(pics) + (contentNow ? canon(contentNow) : ""), uploads = Object.keys(pgd.uploads || {}).filter(function (k) { return used.indexOf(JSON.stringify(k)) >= 0; }).map(function (k) { var u = pgd.uploads[k]; return { key: k, name: u.name, ext: u.ext, content: u.content }; });
     edRemember(); state.notice = null;
+    var th = themeOf(), thSend = th && themeChanges(th) > 0 ? JSON.parse(JSON.stringify(th.draft)) : null;
+    var saveTheme = function (r) { return thSend ? api("saveTheme", { site: s.id, values: thSend }).then(function () { th.values = JSON.parse(JSON.stringify(thSend)); return r; }) : r; };
+    if (thSend && canon(doc) === pgd.base && !picNames.length && !contentNow && !uploads.length) {
+      onLive(function () { change(key("pages", s.id), function () { return saveTheme({ ok: true }); }, function () { pgMark(pgd); state.dirty = false; if (after) setTimeout(after, 0); }, curCopy().kind === "trial" ? "Theme saved on this copy" : "Theme saved. Live in about two minutes"); }, "This theme change");
+      return;
+    }
     onLive(function () {
-      change(key("pages", s.id), function () { return api("savePages", { site: s.id, pages: doc, what: what, uploads: uploads, pictures: pics, content: contentNow, version: pgd.version, replace: !!pgd.replaceNext }).catch(function (e) {
+      change(key("pages", s.id), function () { return api("savePages", { site: s.id, pages: doc, what: what, uploads: uploads, pictures: pics, content: contentNow, version: pgd.version, replace: !!pgd.replaceNext }).then(saveTheme).catch(function (e) {
           pgd.replaceNext = false;
           if (e.stale) state.ask = { kind: "stale" };
           throw e;
@@ -3269,12 +3395,11 @@
     else if (a === "ed-colour") { var pco = pgOf(); if (!pco) return; pco.colourOpen = pco.colourOpen === el.dataset.path ? "" : el.dataset.path; pco.colourHsv = null; edPatch(); var csv = app.querySelector(".csv"); if (csv) csv.focus(); }
     else if (a === "ed-colour-set") { var pcs2 = pgOf(), scs2 = pcs2 && pgSel(pcs2); if (!scs2) return; pgSet(scs2.sec.settings, el.dataset.path, el.dataset.v); pcs2.colourHsv = null; pcs2.what = "Edit " + (scs2.kind ? scs2.kind.label : scs2.id); pgMark(pcs2); edPatch(); pushSoon(); }
     else if (a === "ed-eyedrop") { var edp = el.dataset.path; try { new window.EyeDropper().open().then(function (r) { var hx2 = String(r.sRGBHex || ""); if (/^#[0-9a-f]{6}$/i.test(hx2)) setColour(edp, hx2.toUpperCase()); }, function () {}); } catch (e) { /* not offered by this browser */ } }
-    else if (a === "ed-font") { var pfo = pgOf(), sfo = pfo && pgSel(pfo); if (!sfo) return; var fdef = FIELD_DEF[el.dataset.path] || {}; pfo.fontPick = { path: el.dataset.path, label: fdef.label || "Font", was: pgGet(sfo.sec.settings, el.dataset.path) || "", fonts: fontList(pfo, fdef) }; loadFontList(pfo.fontPick.fonts); pfo.colourOpen = ""; edPatch(); var fq2 = app.querySelector('[data-input="fontq"]'); if (fq2) fq2.focus(); }
+    else if (a === "ed-font") { var pfo = pgOf(); if (!pfo || (!pgSel(pfo) && !isThemePath(el.dataset.path))) return; var fdef = FIELD_DEF[el.dataset.path] || {}; pfo.fontPick = { path: el.dataset.path, label: fdef.label || "Font", was: fGet(pfo, el.dataset.path) || "", fonts: fontList(pfo, fdef), noStyle: !!fdef.noStyle }; loadFontList(pfo.fontPick.fonts); pfo.colourOpen = ""; edPatch(); var fq2 = app.querySelector('[data-input="fontq"]'); if (fq2) fq2.focus(); }
     else if (a === "ed-font-set") {
-      var pfs2 = pgOf(), sfs2 = pfs2 && pgSel(pfs2); if (!sfs2 || !pfs2.fontPick) return;
-      var fam = el.dataset.v, was2 = parseFont(pgGet(sfs2.sec.settings, pfs2.fontPick.path)), sts = fam ? fontStyles(pfs2.fontPick.fonts[fam], fam) : [], st2 = sts.indexOf(was2.style) >= 0 ? was2.style : (sts.indexOf("400") >= 0 ? "400" : sts[0]);
-      pgSet(sfs2.sec.settings, pfs2.fontPick.path, fam ? fam + (st2 && st2 !== "400" ? ":" + st2 : "") : "");
-      pfs2.what = "Edit " + (sfs2.kind ? sfs2.kind.label : sfs2.id); pgMark(pfs2);
+      var pfs2 = pgOf(); if (!pfs2 || !pfs2.fontPick) return;
+      var fam = el.dataset.v, was2 = parseFont(fGet(pfs2, pfs2.fontPick.path)), sts = fam && !pfs2.fontPick.noStyle ? fontStyles(pfs2.fontPick.fonts[fam], fam) : [], st2 = sts.indexOf(was2.style) >= 0 ? was2.style : (sts.indexOf("400") >= 0 ? "400" : sts[0]);
+      fSet(pfs2, pfs2.fontPick.path, fam ? fam + (st2 && st2 !== "400" ? ":" + st2 : "") : (pfs2.fontPick.noStyle ? pfs2.fontPick.was : ""));
       var rp2 = app.querySelector(".ed-right"), top2 = rp2 ? rp2.scrollTop : 0; edPatch(); rp2 = app.querySelector(".ed-right"); if (rp2) rp2.scrollTop = top2; pushSoon();
     }
     else if (a === "ed-font-done") { var pfd = pgOf(); if (pfd) fontClose(pfd, false); }
@@ -3336,8 +3461,8 @@
       pgMark(pk); pk.scrollNext = true; edPatch(); pushPreview();
     }
     else if (a === "ed-picker" && FIELD_DEF[el.dataset.path] && /^(image|video)$/.test(FIELD_DEF[el.dataset.path].type)) {
-      var plo = pgOf(), slo = plo && pgSel(plo); if (!slo) return; var fd = FIELD_DEF[el.dataset.path], cur = pgGet(slo.sec.settings, el.dataset.path);
-      plo.lib = { path: el.dataset.path, label: fd.label || "Picture", kind: fd.type, tick: cur && !/^https?:/i.test(cur) ? cur : "", view: (plo.libView || "grid") }; edPatch();
+      var plo = pgOf(); if (!plo || (!pgSel(plo) && !isThemePath(el.dataset.path))) return; var fd = FIELD_DEF[el.dataset.path], cur = fGet(plo, el.dataset.path);
+      plo.lib = { path: el.dataset.path, label: fd.label || "Picture", kind: fd.type, tick: cur && !/^https?:/i.test(cur) ? cur : "", view: (plo.libView || "grid"), noAdd: fd.lib === "noadd" }; edPatch();
       var lq = app.querySelector("[data-lib-q]"); if (lq) lq.focus();
     }
     else if (a === "ed-picker") { var pq2 = pgOf(); if (pq2) { pq2.picker = pq2.picker === el.dataset.path ? "" : el.dataset.path; edPatch(); } }
@@ -3347,12 +3472,22 @@
     else if (a === "ed-lib-close") { var plc = pgOf(); if (plc) { plc.lib = null; edPatch(); } }
     else if (a === "ed-lib-view") { var plv = pgOf(); if (plv && plv.lib) { plv.lib.view = el.dataset.v; plv.libView = el.dataset.v; libPatch(); } }
     else if (a === "ed-lib-done") {
-      var pld = pgOf(), sld = pld && pgSel(pld); if (!sld || !pld.lib || !pld.lib.tick) return;
+      var pld = pgOf(), sld = pld && pgSel(pld); if (!pld || !pld.lib || !pld.lib.tick) return;
       var lp = pld.lib.path, ln = pld.lib.tick; pld.lib = null;
+      if (isThemePath(lp)) { themeSet(lp, ln); edPatch(); return; }
+      if (!sld) return;
       pgSet(sld.sec.settings, lp, ln);
       var lk = pld.imageMeta[ln] || {}, lAlt = lp.replace(/[^.]+$/, "alt"); if (lk.alt && !String(pgGet(sld.sec.settings, lAlt) || "").trim()) pgSet(sld.sec.settings, lAlt, lk.alt);
       pld.what = "Edit " + (sld.kind ? sld.kind.label : sld.id); pgMark(pld); edPatch(); pushPreview();
     }
+    else if (a === "ed-pic-none" && isThemePath(el.dataset.path)) { themeSet(el.dataset.path, ""); edPatch(); }
+    else if (a === "ed-range-reset") { var prr = pgOf(); if (prr && fSet(prr, el.dataset.path, null)) { edPatch(); pushSoon(); } }
+    else if (a === "ed-tgroup") { state.themeGroup = state.themeGroup === el.dataset.g ? "" : el.dataset.g; edPatch(); var ps9 = site(), pg9 = pgOf(); if (ps9 && pg9) edAddress(ps9, pg9); }
+    else if (a === "ed-theme-open") { var pto = pgOf(); if (pto) { pto.leftPanel = "theme"; pto.leftHidden = false; pto.tboxOpen = false; if (state.themeGroup == null || state.themeGroup === "") state.themeGroup = "colours"; edPatch(); } }
+    else if (a === "ed-tbox") { var ptb2 = pgOf(); if (ptb2) { ptb2.tboxOpen = !ptb2.tboxOpen; edPatch(); } }
+    else if (a === "ed-tlook") { var ptl = pgOf(); if (ptl) { ptl.tlook = Number(el.dataset.i); edPatch(); } }
+    else if (a === "ed-tlook-cancel") { var ptc = pgOf(); if (ptc) { ptc.tlook = null; edPatch(); } }
+    else if (a === "ed-tlook-go") { var ptg = pgOf(); if (ptg) { themeStyle(ptg.tlook); ptg.tlook = null; edPatch(); } }
     else if (a === "ed-pic-choose" || a === "ed-pic-none") {
       var pc = pgOf(), cs = pc && pgSel(pc); if (!cs) return;
       pgSet(cs.sec.settings, el.dataset.path, a === "ed-pic-none" ? "" : el.dataset.name); pc.picker = "";
@@ -3370,7 +3505,7 @@
     }
     else if (a === "ed-save") savePages();
     else if (a === "ed-save-publish") { var cp = curCopy().id; savePages(function () { state.ask = { kind: "makelive", copy: cp }; if (pgOf()) edPatch(); else render(); var q = app.querySelector(".ask"); if (q && q.scrollIntoView) q.scrollIntoView({ block: "start" }); var nb = app.querySelector("#pub-note"); if (nb) nb.focus({ preventScroll: true }); }); }
-    else if (a === "ed-discard") { var pz = pgOf(); if (pz) { pgReset(pz); pz.removed = null; state.renaming = null; pz.sel = null; pz.panel = ""; pz.uploads = {}; pz.picker = ""; edPatch(); pushPreview(""); } }
+    else if (a === "ed-discard") { var pz = pgOf(); if (pz) { var tdd = themeOf(); if (tdd) { tdd.draft = JSON.parse(JSON.stringify(tdd.values)); themePush(); } pgReset(pz); pz.removed = null; state.renaming = null; pz.sel = null; pz.panel = ""; pz.uploads = {}; pz.picker = ""; edPatch(); pushPreview(""); } }
     else if (a === "look") { var t = themeOf(), i = Number(el.dataset.i); if (t) { Object.assign(t.draft.colours, i < 0 ? t.values.colours : t.spec.looks[i].colours); themeUpdate(); } }
     else if (a === "theme-discard") { var t2 = themeOf(); if (t2) { t2.draft = JSON.parse(JSON.stringify(t2.values)); themeUpdate(); } }
     else if (a === "theme-publish") onLive(publishTheme, "This theme change");
@@ -3411,12 +3546,13 @@
 
   // One setting in the page editor changed: keep it, redraw the page in the middle, nothing else.
   function pgInput(t) {
-    var pgd = pgOf(), sel = pgd && pgSel(pgd); if (!sel) return;
+    var pgd = pgOf(), sel = pgd && pgSel(pgd), isT = isThemePath(t.dataset.pf); if (!pgd || (!sel && !isT)) return;
     var path = t.dataset.pf, kind = t.dataset.kind, v;
     if (kind === "lines") v = t.value.split("\n").map(function (x) { return x.trim(); }).filter(Boolean);
     else if (kind === "number") {
       v = t.value === "" ? 0 : Number(t.value);
       if (t.dataset.twin) {
+        var ownEl = t.closest && t.closest(".field") && t.closest(".field").querySelector("span.own"); if (ownEl) ownEl.outerHTML = '<button type="button" class="linklike small own" data-act="ed-range-reset" data-path="' + esc(path) + '">Use the site\'s own</button>';
         var lo = Number(t.min), hi = Number(t.max); if (t.type === "number" && t.value !== "" && !isNaN(lo) && !isNaN(hi)) v = Math.min(hi, Math.max(lo, v));
         Array.prototype.forEach.call(app.querySelectorAll('[data-pf="' + cssq(path) + '"][data-twin]'), function (x) { if (x !== t) x.value = v; if (x.type === "range") x.style.setProperty("--at", Math.round((v - lo) / ((hi - lo) || 1) * 100) + "%"); });
       }
@@ -3433,7 +3569,9 @@
       var sw = app.querySelector('[data-swatch="' + path + '"]'); if (sw) sw.hidden = t.value !== "custom";
     }
     else if (kind === "colour") { v = t.value.toUpperCase(); var sw2 = app.querySelector('[data-swatch="' + path + '"]'); if (sw2) sw2.style.background = v; }
+    else if (kind === "code") { v = t.value; var gu = t.parentNode.querySelector(".gut"); if (gu) gu.textContent = gutter(v); t.rows = Math.max(6, v.split("\n").length + 1); }
     else v = t.value;
+    if (isT) { themeSet(path, v); return; }
     pgSet(sel.sec.settings, path, v);
     pgd.what = sel.where === "item" ? "Edit " + itemName(pgd) : sel.where === "source" ? "Edit source: " + (sel.sec.settings.title || sel.id) : "Edit " + (sel.kind ? sel.kind.label : sel.id); pgMark(pgd); patchEdTop(); pushSoon();
     if (sel.where === "item" && (path === "title" || path === "name")) { var lt = app.querySelector(".ed-left .lt"); if (lt) lt.textContent = v; }
@@ -3467,7 +3605,7 @@
     if (t.dataset && t.dataset.libTick) { var plt = pgOf(); if (plt && plt.lib) { plt.lib.tick = t.checked ? t.dataset.libTick : ""; libPatch(); } return; }
     if (t.dataset && t.dataset.libAdd) { libAdd(Array.prototype.slice.call(t.files || [])); t.value = ""; return; }
     if (kind === "ed-lib-opt") { var plo2 = pgOf(); if (plo2 && plo2.lib) { plo2.lib[t.dataset.o] = t.value; libPatch(); } return; }
-    if (kind === "ed-font-style") { var pfs = pgOf(), sfs = pfs && pgSel(pfs); if (!sfs || !pfs.fontPick) return; var cfs = parseFont(pgGet(sfs.sec.settings, pfs.fontPick.path)); if (!cfs.family) return; pgSet(sfs.sec.settings, pfs.fontPick.path, cfs.family + (t.value === "400" ? "" : ":" + t.value)); pfs.what = "Edit " + (sfs.kind ? sfs.kind.label : sfs.id); pgMark(pfs); patchEdTop(); pushSoon(); return; }
+    if (kind === "ed-font-style") { var pfs = pgOf(); if (!pfs || !pfs.fontPick) return; var cfs = parseFont(fGet(pfs, pfs.fontPick.path)); if (!cfs.family) return; fSet(pfs, pfs.fontPick.path, cfs.family + (t.value === "400" ? "" : ":" + t.value)); pushSoon(); return; }
     if (kind === "files-replace") { filesReplace(t); t.value = ""; return; }
     if (kind === "ed-goto") { var gt = t.value; guardless(function () { navTo(gt); }); return; }
     if (kind === "ed-pk-add") {
@@ -3721,6 +3859,7 @@
     { sha: "a".repeat(40), what: "Edit article: [Sample] How to look at a painting", when: new Date().toISOString(), by: "you", canUndo: true },
     { sha: "b".repeat(40), what: "[Sample] An earlier change made outside the console", when: new Date(Date.now() - 86400000).toISOString(), by: "", canUndo: false },
   ];
+  var demoThemeExtra = {"settings":[{"name":"h_size","group":"Headings","label":"Size","type":"range","min":70,"max":140,"step":5,"unit":"%","dflt":100,"reset":true},{"name":"h_track","group":"Headings","label":"Letter spacing","type":"range","min":-5,"max":20,"step":1,"unit":"%","dflt":0,"reset":true,"hint":"Space between letters, as a share of the letter size."},{"name":"h_lh","group":"Headings","label":"Line height","type":"range","min":85,"max":180,"step":5,"unit":"%","dflt":110,"reset":true},{"name":"h_caps","group":"Headings","label":"Capital letters","type":"yesno"},{"name":"b_size","group":"Body text","label":"Size","type":"range","min":80,"max":130,"step":5,"unit":"%","dflt":100,"reset":true},{"name":"b_track","group":"Body text","label":"Letter spacing","type":"range","min":-3,"max":10,"step":1,"unit":"%","dflt":0,"reset":true},{"name":"b_lh","group":"Body text","label":"Line height","type":"range","min":120,"max":210,"step":5,"unit":"%","dflt":160,"reset":true},{"name":"nav_font","group":"Navigation","label":"Typeface of the menu","type":"choice","options":[["","Site's own"],["body","Body text"],["heading","Headings"]]},{"name":"nav_size","group":"Navigation","label":"Size","type":"range","min":80,"max":130,"step":5,"unit":"%","dflt":100,"reset":true},{"name":"nav_caps","group":"Navigation","label":"Capital letters","type":"yesno"},{"name":"dir","group":"Language","label":"Text direction","type":"choice","options":[["ltr","Left to right"],["rtl","Right to left"]],"hint":"Right to left is for languages such as Arabic and Hebrew."},{"name":"corners","group":"Design","label":"Corners","type":"choice","options":[["","Site's own"],["square","Square"],["round","Round"]],"hint":"Buttons, boxes and pictures."},{"name":"buttons","group":"Design","label":"Button style","type":"choice","options":[["","Filled"],["outline","Outline"]]},{"name":"social_instagram","group":"Social media","label":"Instagram","type":"text","social":true,"hint":"For example https://www.instagram.com/yourname"},{"name":"social_x","group":"Social media","label":"X","type":"text","social":true,"hint":"For example https://x.com/yourname"},{"name":"social_linkedin","group":"Social media","label":"LinkedIn","type":"text","social":true,"hint":"For example https://www.linkedin.com/company/yourname"},{"name":"social_facebook","group":"Social media","label":"Facebook","type":"text","social":true,"hint":"For example https://www.facebook.com/yourname"},{"name":"social_pinterest","group":"Social media","label":"Pinterest","type":"text","social":true,"hint":"For example https://www.pinterest.com/yourname"},{"name":"social_youtube","group":"Social media","label":"YouTube","type":"text","social":true,"hint":"For example https://www.youtube.com/@yourname"},{"name":"social_tiktok","group":"Social media","label":"TikTok","type":"text","social":true,"hint":"For example https://www.tiktok.com/@yourname"},{"name":"favicon","group":"Favicon","label":"Favicon","type":"image","hint":"Shown at 32 by 32 pixels in the browser tab. A square picture works best."},{"name":"crumbs","group":"Extras","label":"Show breadcrumbs","type":"yesno","only":"crumbs","hint":"The trail of links at the top of an article, such as Home, Art Explained."},{"name":"css","group":"Custom CSS","label":"Custom CSS","type":"code"}],"look":{"head":"#main h1, #main h2, #main h3, #main h4","body":"#main p, #main li, #main dd, #main blockquote","nav":".hdr .left a, .hdr .right a, .hdr .right button","bodyFont":"var(--text)","headFont":"var(--display)","buttons":".btn","band":"var(--green)","round":".btn, .mf input, .mf select, .mf textarea, #main img","crumbs":".crumbs"}};
   var demoTheme = {
     spec: {
       url: "https://worldartreview.com/",
@@ -3831,7 +3970,7 @@
           else if (body.op === "assign") { var sq = demoSpots.find(function (x) { return x.key === body.spot; }); if (sq) { sq.image = body.name; sq.alt = body.alt; } demoStep(body, "Edit picture: " + (sq ? sq.label : "")); }
           resolve({ ok: true });
         }
-        else if (a === "theme") { if (params.has("preview")) demoTheme.spec.url = params.get("preview"); resolve(JSON.parse(JSON.stringify(demoTheme))); }
+        else if (a === "theme") { if (params.has("preview")) demoTheme.spec.url = params.get("preview"); var dt = JSON.parse(JSON.stringify(demoTheme)); Object.assign(dt.spec, JSON.parse(JSON.stringify(demoThemeExtra)), { imageBase: (params.get("preview") || "https://worldartreview.com/") + "images/" }); dt.values.settings = dt.values.settings || {}; resolve(dt); }
         else if (a === "saveTheme") { demoTheme.values = JSON.parse(JSON.stringify(body.values)); resolve({ ok: true, values: body.values }); }
         else if (a === "uploadPhoto") resolve({ ok: true, name: (body.slot ? "slot--" + body.slot : "note--" + String(body.description).toLowerCase().replace(/[^a-z0-9]+/g, "-")) + "." + body.ext });
         else if (a === "undoStep") { var n = Math.min(Number(body.steps) || 1, c.steps.length); if (!n) return reject(new Error("There is nothing more to undo.")); while (n--) c.redo.push(c.steps.shift()); c.ahead = c.kind === "live" ? 0 : c.steps.length; c.canRedo = true; resolve({ ok: true }); }
@@ -3876,6 +4015,6 @@
   }
 
   // Exposed for the automated checks only.
-  window.__adh = { state: state, render: render, esc: esc, go: go, openSite: openSite, pgOf: pgOf, themeCss: themeCss, richIn: richIn, richOut: richOut, richInline: richInline };
+  window.__adh = { state: state, render: render, esc: esc, go: go, openSite: openSite, pgOf: pgOf, themeCss: themeCss, themeRules: themeRules, richIn: richIn, richOut: richOut, richInline: richInline };
   start();
 })();

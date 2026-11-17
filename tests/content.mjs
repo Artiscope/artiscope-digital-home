@@ -105,6 +105,16 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   r2 = await handle(post({ action: "saveTheme", site: "world-art-review", values: { colours: { green: "url(x)" } } })); assert.equal(r2.status, 400);
   fs.writeFileSync("/tmp/theme-saved.json", JSON.stringify(saved, null, 2));
   for (const st of SITES.filter((x) => x.theme)) for (const l of st.theme.looks) cleanTheme(st.theme, { colours: l.colours });
+  // the site-wide settings of step 6
+  const c3 = cleanTheme(spec, { settings: { h_size: 133, h_caps: "true", b_lh: 999, nav_font: "comic", corners: "round", social_instagram: "https://www.instagram.com/worldartreview", favicon: "mark.png", css: "@import url(x); h2 { color: red }", crumbs: false } });
+  assert.equal(c3.settings.h_size, 135, "sliders keep to their steps"); assert.equal(c3.settings.b_lh, 210, "and their ends"); assert.equal(c3.settings.h_caps, true); assert.equal(c3.settings.nav_font, ""); assert.equal(c3.settings.h_track, null, "untouched means the site's own");
+  assert.equal(c3.settings.css.includes("@import"), false); assert.equal(c3.settings.crumbs, false);
+  assert.throws(() => cleanTheme(spec, { settings: { social_x: "javascript:alert(1)" } }), /https/);
+  const s3 = (await import("./home.mjs")).themeFile(SITES[0], spec, { colours: saved.colours, fonts: saved.fonts, settings: c3.settings });
+  assert.ok(s3.css.includes("--h-scale:1.35") && /^:root\{[^<>{}]*\}$/.test(s3.css), "sizes go in as variables");
+  assert.ok(s3.rules.includes("#main h1, #main h2, #main h3, #main h4{text-transform:uppercase !important}") && s3.rules.includes(".crumbs{display:none !important}") && s3.rules.includes("h2 { color: red }") && !s3.rules.includes("<"), "rules " + s3.rules);
+  assert.deepEqual(s3.social, { instagram: { label: "Instagram", href: "https://www.instagram.com/worldartreview" } }); assert.equal(s3.favicon, "images/mark.png");
+  r2 = await handle(post({ action: "theme", site: "global-art-monitor" })); d2 = await r2.json(); assert.ok(!d2.spec.settings.some((x) => x.name === "crumbs"), "breadcrumbs only where a site has them");
 }
 
 // live saves go straight to the live site; undo and redo add steps; trial copies wait for Make live

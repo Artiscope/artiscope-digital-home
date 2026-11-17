@@ -198,7 +198,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (17 November 2026, Version 41)
+## Where things stand (17 November 2026, Version 42)
 
 Done:
 
@@ -408,7 +408,44 @@ Done:
     Remove, as each is allowed. It hides with the inspector off, and
     while a picker or the library is open.
   - Checks: the "Inspector" area of `tests/uat.mjs`.
-  Steps 6 to 9 wait for the owner's go ahead, one at a time.
+  Step 6, theme settings (Version 42):
+  - The Theme settings switch opens `themePanel` in the left column: the
+    groups of the brief in order (`THEME_GROUPS`), one open at a time
+    (`state.themeGroup`, kept in the address as `tg=`). The right panel
+    closes while it is open, except for the font picker.
+  - The owner chose (17 November) to rework all three sites so heading,
+    body and menu sizes can be set: every font size in each site's styles
+    is multiplied by `var(--h-scale, 1)`, `var(--b-scale, 1)` or
+    `var(--nav-scale, 1)` (done once by a script; keep it so when adding
+    styles). Untouched, nothing changes.
+  - Settings (`THEME_SETTINGS` on the server, kept in the theme file under
+    `settings`): heading and body size, letter spacing and line height
+    (sliders with "the site's own", stored as null), heading capitals,
+    menu typeface, size and capitals, text direction, corners, button
+    style, seven social networks (https only), favicon (a file already in
+    the site's pictures), breadcrumbs (World Art Review only, via
+    `look.crumbs`), and site-wide Custom CSS (`cleanCss`).
+  - Sizes become variables in the theme's `:root{}` (`themeCss`); the rest
+    become `rules` (`themeRules`, using each site's `theme.look`
+    selectors), which every site's build writes as `style#theme-rules`.
+    `themeFile` also writes `social` (shown at the foot of every page:
+    on World Art Review in place of the dead network links in the footer
+    and menu, on the other two as `.foot-social`; nothing until an address
+    is filled in) and `favicon` (replaces the site's own icon link).
+  - Artworks, Artwork cards, Collection cards, Enquiries, Search and
+    Icons say "Not used on this site", as agreed.
+  - Theme style: the ready-made looks (and the site's own), Cancel and
+    Change style, which puts back the look's colours and the site's own
+    typography and design, never content.
+  - The editor's Save also saves the theme (`saveTheme`), and Discard puts
+    it back. The preview gets the theme through `adh-theme` (`themePush`)
+    and the social links through `adh-pages`.
+  - Every section's panel has a folding Theme settings box (`themeBox`)
+    with the site's colours and typefaces and "Open theme settings".
+  - Checks: the "Theme settings" area of `tests/uat.mjs`, the settings in
+    `tests/content.mjs`, the console and server sums agreeing in
+    `tests/theme.mjs`, and each site's build in `tests/run.mjs`.
+  Steps 7 to 9 wait for the owner's go ahead, one at a time.
 
 Waiting for the owner:
 

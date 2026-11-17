@@ -56,10 +56,74 @@ export function themeCss(spec, values) {
     const link = "https://fonts.googleapis.com/css2?family=" + FONTS[name] + "&display=swap";
     if (!links.includes(link)) links.push(link);
   }
+  decl.push(...themeVars(values.settings));
   return { css: decl.length ? ":root{" + decl.join(";") + "}" : "", font_links: links };
 }
 
+// The site-wide settings in the editor's Theme settings, the same for every site.
+// A slider left at "the site's own" is kept as null, and then changes nothing.
+const SOCIAL = [["instagram", "Instagram", "https://www.instagram.com/yourname"], ["x", "X", "https://x.com/yourname"], ["linkedin", "LinkedIn", "https://www.linkedin.com/company/yourname"],
+  ["facebook", "Facebook", "https://www.facebook.com/yourname"], ["pinterest", "Pinterest", "https://www.pinterest.com/yourname"], ["youtube", "YouTube", "https://www.youtube.com/@yourname"], ["tiktok", "TikTok", "https://www.tiktok.com/@yourname"]];
+export const THEME_SETTINGS = [
+  { name: "h_size", group: "Headings", label: "Size", type: "range", min: 70, max: 140, step: 5, unit: "%", dflt: 100, reset: true },
+  { name: "h_track", group: "Headings", label: "Letter spacing", type: "range", min: -5, max: 20, step: 1, unit: "%", dflt: 0, reset: true, hint: "Space between letters, as a share of the letter size." },
+  { name: "h_lh", group: "Headings", label: "Line height", type: "range", min: 85, max: 180, step: 5, unit: "%", dflt: 110, reset: true },
+  { name: "h_caps", group: "Headings", label: "Capital letters", type: "yesno" },
+  { name: "b_size", group: "Body text", label: "Size", type: "range", min: 80, max: 130, step: 5, unit: "%", dflt: 100, reset: true },
+  { name: "b_track", group: "Body text", label: "Letter spacing", type: "range", min: -3, max: 10, step: 1, unit: "%", dflt: 0, reset: true },
+  { name: "b_lh", group: "Body text", label: "Line height", type: "range", min: 120, max: 210, step: 5, unit: "%", dflt: 160, reset: true },
+  { name: "nav_font", group: "Navigation", label: "Typeface of the menu", type: "choice", options: [["", "Site's own"], ["body", "Body text"], ["heading", "Headings"]] },
+  { name: "nav_size", group: "Navigation", label: "Size", type: "range", min: 80, max: 130, step: 5, unit: "%", dflt: 100, reset: true },
+  { name: "nav_caps", group: "Navigation", label: "Capital letters", type: "yesno" },
+  { name: "dir", group: "Language", label: "Text direction", type: "choice", options: [["ltr", "Left to right"], ["rtl", "Right to left"]], hint: "Right to left is for languages such as Arabic and Hebrew." },
+  { name: "corners", group: "Design", label: "Corners", type: "choice", options: [["", "Site's own"], ["square", "Square"], ["round", "Round"]], hint: "Buttons, boxes and pictures." },
+  { name: "buttons", group: "Design", label: "Button style", type: "choice", options: [["", "Filled"], ["outline", "Outline"]] },
+  ...SOCIAL.map((x) => ({ name: "social_" + x[0], group: "Social media", label: x[1], type: "text", social: true, hint: "For example " + x[2] })),
+  { name: "favicon", group: "Favicon", label: "Favicon", type: "image", hint: "Shown at 32 by 32 pixels in the browser tab. A square picture works best." },
+  { name: "crumbs", group: "Extras", label: "Show breadcrumbs", type: "yesno", only: "crumbs", hint: "The trail of links at the top of an article, such as Home, Art Explained." },
+  { name: "css", group: "Custom CSS", label: "Custom CSS", type: "code" },
+];
+function cleanThemeSetting(f, v) {
+  if (v == null || v === "") return f.type === "yesno" ? null : f.type === "range" ? null : "";
+  if (f.type === "range") { const n = Number(v); if (!Number.isFinite(n)) return null; return Math.min(f.max, Math.max(f.min, Math.round(n / f.step) * f.step)); }
+  if (f.type === "yesno") return v === true || v === "true";
+  if (f.type === "choice") return f.options.some((o) => o[0] === String(v)) ? String(v) : "";
+  if (f.type === "image") { const x = String(v); return /^[A-Za-z0-9._-]{1,120}\.(png|jpe?g|svg|ico)$/i.test(x) ? x : ""; }
+  if (f.type === "code") return cleanCss(v);
+  if (f.social) { const x = String(v).trim().slice(0, 200); if (!/^https:\/\/[^\s<>"'`]+$/.test(x)) throw new Error(f.label + " needs a full address starting https://"); return x; }
+  return cleanText(v, 200);
+}
+// The rules a theme adds on top of a site's own styling. Only what was changed is written.
+export function themeRules(spec, st) {
+  const L = spec.look || {}, out = [], has = (k) => st && st[k] != null && st[k] !== "";
+  const head = L.head || "h1, h2, h3, h4", body = L.body || "p, li, dd", nav = L.nav || "nav a";
+  if (has("h_track")) out.push(head + "{letter-spacing:" + st.h_track / 100 + "em !important}");
+  if (has("h_lh")) out.push(head + "{line-height:" + st.h_lh / 100 + " !important}");
+  if (st && st.h_caps) out.push(head + "{text-transform:uppercase !important}");
+  if (has("b_track")) out.push(body + "{letter-spacing:" + st.b_track / 100 + "em !important}");
+  if (has("b_lh")) out.push(body + "{line-height:" + st.b_lh / 100 + " !important}");
+  const nf = { body: L.bodyFont, heading: L.headFont }[st && st.nav_font];
+  if (nf) out.push(nav + "{font-family:" + nf + " !important}");
+  if (st && st.nav_caps) out.push(nav + "{text-transform:uppercase !important;letter-spacing:.06em !important}");
+  if (st && st.dir === "rtl") out.push("html, body{direction:rtl}");
+  if (has("corners") && L.round) out.push(L.round + "{border-radius:" + (st.corners === "round" ? "10px" : "0") + " !important}");
+  if (st && st.buttons === "outline" && L.buttons) out.push(L.buttons + "{background:transparent !important;color:" + (L.band || "currentColor") + " !important;box-shadow:inset 0 0 0 2px currentColor !important}");
+  if (st && st.crumbs === false && L.crumbs) out.push(L.crumbs + "{display:none !important}");
+  const own = st && st.css ? cleanCss(st.css) : "";
+  return out.join("\n") + (own ? (out.length ? "\n" : "") + own : "");
+}
+function themeVars(st) {
+  const v = [];
+  for (const [k, n] of [["h_size", "--h-scale"], ["b_size", "--b-scale"], ["nav_size", "--nav-scale"]]) if (st && st[k] != null && st[k] !== "" && Number(st[k]) !== 100) v.push(n + ":" + Number(st[k]) / 100);
+  return v;
+}
 // Keeps only what the theme allows: six-figure colour codes and listed typefaces.
+// What a site's theme file holds: the choices, and what the site's build turns into its page head.
+export function themeFile(site, spec, v) {
+  const st = v.settings || {}, social = {};
+  for (const x of SOCIAL) if (st["social_" + x[0]]) social[x[0]] = { label: x[1], href: st["social_" + x[0]] };
+  return Object.assign({}, v, themeCss(spec, v), { rules: themeRules(spec, st), social, favicon: st.favicon ? site.pages.images + "/" + st.favicon : "" });
+}
 export function cleanTheme(spec, given) {
   const out = { colours: {}, fonts: {} };
   for (const c of spec.colours) {
@@ -72,6 +136,9 @@ export function cleanTheme(spec, given) {
     if (!f.options.includes(v)) throw new Error(f.label + " must be one of the listed typefaces.");
     out.fonts[f.id] = v;
   }
+  out.settings = {};
+  const st = (given || {}).settings || {};
+  for (const f of THEME_SETTINGS) { if (f.only && !(spec.look || {})[f.only]) continue; out.settings[f.name] = cleanThemeSetting(f, st[f.name]); }
   return out;
 }
 
@@ -1254,6 +1321,7 @@ export const SITES = [
     lists: WAR_LISTS,
     theme: {
       file: "content/theme.json",
+      look: { head: "#main h1, #main h2, #main h3, #main h4", body: "#main p, #main li, #main dd, #main blockquote", nav: ".hdr .left a, .hdr .right a, .hdr .right button", bodyFont: "var(--text)", headFont: "var(--display)", buttons: ".btn", band: "var(--green)", round: ".btn, .mf input, .mf select, .mf textarea, #main img", crumbs: ".crumbs" },
       colours: [
         { id: "paper", role: "bg", label: "Page background", use: "Pages and cards", var: "--paper", default: "#EEE5D4",
           derived: [["--paper-deep", 94, "black"], ["--line", 89, "black"], ["--ghost", 86, "black"], ["--page", 55, "white"], ["--card", 70, "white"], ["--p85", 85, "transparent"], ["--p65", 65, "transparent"], ["--p50", 50, "transparent"]] },
@@ -1300,6 +1368,7 @@ export const SITES = [
     builtIn: ["home", "auction-results", "artists", "research", "market-intelligence", "collecting-valuation", "about", "contact"],
     theme: {
       file: "data/theme.json",
+      look: { head: "h1, h2, h3, h4", body: "p, li, dd", nav: ".nav a", bodyFont: "var(--sans)", headFont: "var(--serif)", buttons: ".pill", band: "var(--ink)", round: ".pill, .chip, .card, .site-head, .nav a, main img" },
       colours: [
         { id: "blush", role: "bg", label: "Page background", use: "Pages and cards", var: "--blush", default: "#F3C3C8",
           derived: [["--blush-light", 40, "white"], ["--blush-deep", 94, "black"], ["--paper", 30, "white"]] },
@@ -1347,6 +1416,7 @@ export const SITES = [
     builtIn: ["home", "dispatches", "urban-culture", "artists", "interventions", "exhibitions", "collecting", "about", "contact"],
     theme: {
       file: "data/theme.json",
+      look: { head: "h1, h2, h3, h4", body: "p, li, dd", nav: ".nav-links a", bodyFont: "var(--serif)", headFont: "var(--display)", buttons: ".btn", band: "var(--pine)", round: ".btn, .ph-img, .field input, .field select, main img" },
       colours: [
         { id: "linen", role: "bg", label: "Page background", use: "Pages and cards", var: "--linen", default: "#EFE6D3",
           derived: [["--linen-2", 95, "black"], ["--linen-3", 90, "black"]] },
@@ -2511,7 +2581,7 @@ export async function handle(req) {
     let current;
     try { current = cleanTheme(spec, f ? f.data : {}); } catch (_e) { current = cleanTheme(spec, {}); }
     if (action === "theme") {
-      return json({ spec: { colours: spec.colours, fonts: spec.fonts, looks: spec.looks || [], fontRequests: FONTS, url: "https://" + site.domain + "/" }, values: current });
+      return json({ spec: { colours: spec.colours, fonts: spec.fonts, looks: spec.looks || [], fontRequests: FONTS, url: "https://" + site.domain + "/", settings: THEME_SETTINGS.filter((x) => !x.only || (spec.look || {})[x.only]), look: spec.look || {}, imageBase: "https://" + site.domain + "/" + site.pages.images + "/" }, values: current });
     }
     let next;
     try { next = cleanTheme(spec, body.values); } catch (e) { return json({ error: e.message }, 400); }
@@ -2519,7 +2589,8 @@ export async function handle(req) {
     const changed = [];
     for (const c of spec.colours) if (next.colours[c.id] !== current.colours[c.id]) changed.push(c.label.toLowerCase());
     for (const x of spec.fonts) if (next.fonts[x.id] !== current.fonts[x.id]) changed.push(x.label.toLowerCase() + " typeface");
-    const put = await saveJson(spec.file, Object.assign({}, next, themeCss(spec, next)), f ? f.sha : undefined, "Theme: " + changed.join(", ").slice(0, 120));
+    for (const x of THEME_SETTINGS) if (JSON.stringify(next.settings[x.name]) !== JSON.stringify(current.settings[x.name])) changed.push((x.group === x.label ? x.label : x.group + " " + x.label).toLowerCase());
+    const put = await saveJson(spec.file, themeFile(site, spec, next), f ? f.sha : undefined, "Theme: " + changed.join(", ").slice(0, 120));
     if (put.status === 409) return json({ error: "Someone else changed the theme at the same moment. Refresh and try again." }, 409);
     if (!put.ok) return json({ error: writeProblem(put, "GitHub did not save the theme. Please try again.") }, 502);
     return json({ ok: true, values: next });

@@ -99,7 +99,7 @@ async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).cat
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all six sites, the Practice site among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 6, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 41"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 42"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await goTab(page, "home"); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -804,6 +804,82 @@ await check("Global Art Monitor and Street Art Dispatch outline and add the same
     await page.keyboard.press("Escape"); await settle(300);
     await frame(host).click('[data-adh="' + first + '"]', { position: { x: 20, y: 20 } }); await settle(500); must(await page.isVisible(".fbar"), id + ": no floating bar");
     await shot("18c-" + id);
+  }
+  await openSite("world-art-review");
+});
+
+// =============== 6b5. Theme settings (step 6) ===============
+area = "Theme settings";
+const draftT = (id) => page.evaluate((x) => window.__adh.state.theme[x].draft, id);
+const openTheme = async () => { if (!(await page.isVisible(".tpanel"))) { await page.click('[data-act="ed-panel"][data-panel="theme"]'); await settle(600); } };
+const toSections = async () => { if (await page.isVisible(".tpanel")) { await page.click('[data-act="ed-panel"][data-panel="sections"]'); await settle(300); } };
+const openGroup = async (g) => { if (!(await page.isVisible('.tgrp.open [data-g="' + g + '"]'))) { await page.click('[data-act="ed-tgroup"][data-g="' + g + '"]'); await settle(300); } };
+await check("Theme settings open in the left column: every group in order, one open at a time, the right panel closed, the group in the address", async () => {
+  await openSite("world-art-review"); await page.selectOption(".pagepick", "home"); await settle(1500);
+  await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await settle(300); await openTheme();
+  const names = await page.locator(".tghead span").allInnerTexts();
+  must(names.join(",") === "Colours,Typography,Design,Artworks,Artwork cards,Collection cards,Enquiries,Social media,Favicon,Search,Extras,Custom CSS,Theme style", names.join(","));
+  must(!(await page.locator(".ed-right").count()), "the right panel is still open");
+  await openGroup("type"); must((await page.locator(".tgrp.open").count()) === 1, "more than one open");
+  must(decodeURIComponent(page.url()).includes("tg=type"), "address " + page.url());
+  for (const g of ["artworks", "cards", "collections", "enquiries", "search"]) must((await text('[data-g="' + g + '"] em')) === "Not used on this site", g);
+  await shot("19a-theme-type");
+});
+await check("The heading size slider and the capitals switch change every heading on the page straight away", async () => {
+  const f = frame("worldartreview.com"), before = await f.evaluate(() => parseFloat(getComputedStyle(document.querySelector("#numbers h2")).fontSize));
+  await page.fill('.numbox [data-pf="theme:settings.h_size"]', "130"); await settle(400);
+  await page.click('.swfield:has([data-pf="theme:settings.h_caps"]) .switch'); await settle(500);
+  const after = await f.evaluate(() => { const c = getComputedStyle(document.querySelector("#numbers h2")); return [parseFloat(c.fontSize), c.textTransform]; });
+  must(Math.abs(after[0] / before - 1.3) < 0.02 && after[1] === "uppercase", "before " + before + ", after " + after.join(" "));
+  must(await page.isVisible('[data-act="ed-range-reset"][data-path="theme:settings.h_size"]'), "no way back to the site's own");
+  must(!(await page.isDisabled('[data-act="ed-save"]')), "Save is still off");
+});
+await check("A theme colour changes through the colour picker and shows on the page at once", async () => {
+  await openGroup("colours"); await page.fill('.colour [data-pf="theme:colours.green"]', "#22304A"); await settle(500);
+  const v = await frame("worldartreview.com").evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--green").trim().toUpperCase());
+  must(v === "#22304A", "the page has " + v);
+});
+await check("A social media address shows at the foot of every page, and an address that is not https is refused", async () => {
+  await openGroup("social"); await page.fill('[data-pf="theme:settings.social_instagram"]', "https://www.instagram.com/worldartreview"); await settle(900);
+  const links = await frame("worldartreview.com").evaluate(() => [...document.querySelectorAll('footer nav[aria-label="Elsewhere"] a')].map((a) => a.textContent + "=" + a.getAttribute("href")).join(","));
+  must(links.startsWith("Instagram=https://www.instagram.com/worldartreview") && !links.includes("X=#"), "footer: " + links);
+  await page.fill('[data-pf="theme:settings.social_x"]', "x.com/worldartreview"); await settle(300);
+  await page.click('[data-act="ed-save"]'); await page.click('[data-act="livesave"]').catch(() => {}); await settle(1500);
+  must(/https/.test(await notice()), "notice: " + await notice());
+  await page.fill('[data-pf="theme:settings.social_x"]', ""); await settle(300);
+});
+await check("Save keeps the theme: sizes as variables, the rules, the social links and Custom CSS in the site's theme file", async () => {
+  await openGroup("css"); await page.fill('[data-pf="theme:settings.css"]', "h2 { word-spacing: 1px; }"); await settle(300);
+  await liveSave();
+  const th = read(WR, "content/theme.json");
+  must(th.css.includes("--h-scale:1.3") && th.css.includes("--green:#22304A"), "css " + th.css);
+  must(th.rules.includes("text-transform:uppercase") && th.rules.includes("h2 { word-spacing: 1px; }"), "rules " + th.rules);
+  must(th.social.instagram && th.social.instagram.href === "https://www.instagram.com/worldartreview" && !th.social.x, "social " + JSON.stringify(th.social));
+  must(/^Theme: /.test(hub.lastMessage(WR, "main")), "message " + hub.lastMessage(WR, "main"));
+});
+await check("Theme style asks first: Cancel changes nothing, Change style puts back that look and the site's own type", async () => {
+  await openGroup("style"); await page.click('[data-act="ed-tlook"][data-i="0"]'); await settle(200);
+  must(await page.isVisible('[data-act="ed-tlook-go"]') && await page.isVisible('[data-act="ed-tlook-cancel"]'), "no Cancel and Change style");
+  await page.click('[data-act="ed-tlook-cancel"]'); await settle(200); must((await draftT("world-art-review")).colours.green === "#22304A", "Cancel changed it");
+  await page.click('[data-act="ed-tlook"][data-i="-1"]'); await page.click('[data-act="ed-tlook-go"]'); await settle(400);
+  const d = await draftT("world-art-review"); must(d.colours.green === "#1D4A35" && d.settings.h_size == null && !d.settings.h_caps, "after " + JSON.stringify([d.colours.green, d.settings.h_size, d.settings.h_caps]));
+  await openGroup("social"); await page.fill('[data-pf="theme:settings.social_instagram"]', ""); await openGroup("css"); await page.fill('[data-pf="theme:settings.css"]', ""); await settle(300);
+  await liveSave(); const th = read(WR, "content/theme.json"); must(!th.rules && !th.css, "not back to the site's own: " + th.css + " " + th.rules);
+});
+await check("A section's panel has a Theme settings box that leads to the theme", async () => {
+  await toSections(); await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await settle(300);
+  await page.click('.tbox [data-act="ed-tbox"]'); await settle(200); must(/across the whole site/.test(await text(".tbox")), "no warning");
+  await page.click('.tbox [data-act="ed-theme-open"]'); await settle(400); must(await page.isVisible(".tpanel"), "did not open the theme");
+  await toSections();
+});
+await check("Global Art Monitor and Street Art Dispatch size their headings from the theme too", async () => {
+  for (const [id, host] of [["global-art-monitor", "globalartmonitor.com"], ["street-art-dispatch", "streetartdispatch.com"]]) {
+    await openSite(id); await page.selectOption(".pagepick", "home"); await settle(1500); await openTheme(); await openGroup("type");
+    const f = frame(host), q = "main h2, h2", before = await f.evaluate((x) => parseFloat(getComputedStyle(document.querySelector(x)).fontSize), q);
+    await page.fill('.numbox [data-pf="theme:settings.h_size"]', "120"); await settle(600);
+    const after = await f.evaluate((x) => parseFloat(getComputedStyle(document.querySelector(x)).fontSize), q);
+    must(Math.abs(after / before - 1.2) < 0.03, id + ": " + before + " to " + after);
+    await shot("19b-" + id); await page.click('[data-act="ed-discard"]'); await settle(600); await toSections();
   }
   await openSite("world-art-review");
 });

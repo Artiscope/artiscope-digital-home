@@ -11,5 +11,7 @@ const p = (C_DIR + "/assets/app.js"); let s = fs.readFileSync(p, "utf8");
 s = s.replace(/  var demoKinds = .*;\n/, () => "  var demoKinds = " + JSON.stringify(kinds) + ";\n");
 s = s.replace(/  var demoSpots = .*;\n/, "");
 s = s.replace("  var demoSummaries = ", () => "  var demoSpots = " + JSON.stringify(spots) + ";\n  var demoSummaries = ");
+s = s.replace(/  var demoThemeExtra = .*;\n/, "");
+s = s.replace("  var demoTheme = {", () => "  var demoThemeExtra = " + JSON.stringify({ settings: m.THEME_SETTINGS.filter((x) => !x.only || (site.theme.look || {})[x.only]), look: site.theme.look }) + ";\n  var demoTheme = {");
 fs.writeFileSync(p, s);
 console.log("demo kinds", Object.keys(kinds).length, "spots", spots.length);

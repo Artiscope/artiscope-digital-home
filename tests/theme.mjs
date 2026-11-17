@@ -3,7 +3,7 @@ import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, goTab } from "./where.mjs";
 // Run: PLAYWRIGHT=<path to playwright> node tests/theme.mjs
 import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict"; import { spawn, execFileSync } from "node:child_process";
 import { createRequire } from "node:module"; const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT || "playwright");
-import { SITES, FONTS, themeCss } from "./home.mjs";
+import { SITES, FONTS, themeCss, themeRules } from "./home.mjs";
 const A = 8731, B = 8732, consoleAt = "http://localhost:" + B, siteAt = "http://localhost:" + A + "/";
 // a built copy of World Art Review that trusts this test console instead of the real one
 fs.rmSync("/tmp/site-a", { recursive: true, force: true });
@@ -26,6 +26,9 @@ try {
     const spec = Object.assign({}, s.theme, { fontRequests: FONTS });
     const vals = { colours: Object.assign({}, ...s.theme.colours.map((c) => ({ [c.id]: c.default })), s.theme.looks[0].colours), fonts: Object.assign({}, ...s.theme.fonts.map((f) => ({ [f.id]: f.options[1] }))) };
     assert.deepEqual(await page.evaluate(([a, b]) => window.__adh.themeCss(a, b), [spec, vals]), themeCss(s.theme, vals), s.id);
+    vals.settings = { h_size: 120, h_track: 2, h_lh: 95, h_caps: true, b_size: 110, b_track: 1, b_lh: 170, nav_font: "heading", nav_size: 90, nav_caps: true, dir: "rtl", corners: "round", buttons: "outline", crumbs: false, css: "h2 { color: red; }" };
+    assert.deepEqual(await page.evaluate(([a, b]) => window.__adh.themeCss(a, b), [spec, vals]), themeCss(s.theme, vals), s.id + " with settings");
+    assert.equal(await page.evaluate(([a, b]) => window.__adh.themeRules(a, b), [spec, vals.settings]), themeRules(s.theme, vals.settings), s.id + " rules");
   }
 
   await goTab(page, "theme"); await page.waitForSelector("#pv-live:not([hidden])", { timeout: 9000 });

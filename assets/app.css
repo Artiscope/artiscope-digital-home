@@ -764,7 +764,7 @@ input[type="file"] { color: var(--muted); }
   .ed.with-right .ed-mid { grid-column: 2; grid-row: 2 / 4; }
   .ed.noleft.with-right { grid-template-rows: 64px minmax(0, 1fr); }
   .ed.noleft.with-right .ed-right { grid-row: 2; }
-  .ed.noleft.with-right .ed-mid { grid-row: 2; }
+  .ed.noleft.with-right .ed-mid { grid-column: 1; grid-row: 2; }
 }
 @media (max-width: 1500px) {
   .ed-top { gap: 10px; }
@@ -1010,3 +1010,33 @@ button.rname:hover { box-shadow: var(--pressed-small); }
 .fbar button:active { box-shadow: var(--pressed-small); transform: translateY(1px); }
 .fbar button.danger { color: var(--problem); }
 @media (max-width: 700px) { .fbar .fb-name { display: none; } #ed-fbar { bottom: 16px; } }
+
+/* ----- Step 6: theme settings ----- */
+.tpanel { gap: 6px; }
+.tgrp { border-radius: 14px; }
+.tgrp.open { box-shadow: var(--pressed-small); padding-bottom: 8px; }
+.tghead { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--bright); font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
+.tghead:hover { box-shadow: var(--shadow-small); }
+.tgrp.open .tghead:hover { box-shadow: none; }
+.tghead em { font-style: normal; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.tgbody { padding: 2px 10px 6px; gap: 2px; }
+.tgbody .sub { margin: 12px 2px 4px; }
+.tgbody .field { margin: 6px 0; }
+.ed-left .info { margin: 4px 2px 8px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.ed-left .info .linklike { min-height: 0; font-size: 12.5px; }
+.small.own { display: block; margin-top: 4px; }
+.linklike.small.own { align-self: flex-start; min-height: 0; }
+.cssbox.plain { margin: 0; box-shadow: none; }
+.cssbox.plain .code { margin: 0; }
+.tlooks { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.tlook-go { gap: 8px; margin-top: 6px; }
+.tpanel .tw, .tbox .tw { border: 0; min-height: 32px; padding: 0 12px; border-radius: 10px; font: inherit; font-size: 12.5px; color: var(--text); background: var(--bg); box-shadow: var(--shadow-small); cursor: pointer; }
+.tpanel .tw.strong { color: var(--bright); font-weight: 600; }
+.tpanel .tw:active, .tbox .tw:active { box-shadow: var(--pressed-small); transform: translateY(1px); }
+.tbox .tlist { display: flex; flex-direction: column; gap: 6px; margin: 0 14px 10px; }
+.tbox .ti { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); }
+.tbox .ti i { width: 18px; height: 18px; border-radius: 6px; box-shadow: var(--shadow-small); flex: none; }
+.tbox .ti b { width: 22px; font-weight: 400; color: var(--bright); }
+.tbox .tgo { margin: 0 14px 12px; }
+.tpanel .tghead { display: flex; justify-content: space-between; }
+.tpanel .tghead span { flex: 1; }
