@@ -99,7 +99,7 @@ async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).cat
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all six sites, the Practice site among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 6, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 43"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 44"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await goTab(page, "home"); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -750,9 +750,9 @@ await check("Choosing one artist shows a tag with Replace, Edit, Connect stored 
 // =============== 6b4. The preview inspector (step 5) ===============
 area = "Inspector";
 // a real mouse click on something in the preview, which is scaled down to fit when the window is narrow
-const mouseIn = async (host, sel) => { const f = frame(host), el = await f.frameElement(), b = await el.boundingBox();
+const mouseIn = async (host, sel, at) => { const f = frame(host), el = await f.frameElement(), b = await el.boundingBox();
   await f.evaluate((q) => document.querySelector(q).scrollIntoView({ block: "nearest" }), sel); await settle(300);
-  const r = await f.evaluate((q) => { const x = document.querySelector(q).getBoundingClientRect(); return { x: x.x + x.width / 2, y: x.y + x.height / 2, w: innerWidth }; }, sel);
+  const r = await f.evaluate((a) => { const x = document.querySelector(a[0]).getBoundingClientRect(); return { x: x.x + (a[1] ? a[1].x : x.width / 2), y: x.y + (a[1] ? a[1].y : x.height / 2), w: innerWidth }; }, [sel, at || null]);
   const k = b.width / r.w; await page.mouse.click(b.x + r.x * k, b.y + r.y * k); };
 const hoverOn = async (host, sel) => { const f = frame(host); await f.evaluate((q) => document.querySelector(q).scrollIntoView({ block: "center" }), sel); await settle(400); await f.evaluate((q) => document.querySelector(q).dispatchEvent(new MouseEvent("mousemove", { bubbles: true })), sel); await settle(300);
   return f.evaluate(() => { const h = document.getElementById("adh-hover"); return h ? { cls: h.className, tag: h.querySelector(".adh-tag").textContent } : { cls: "", tag: "" }; }); };
@@ -781,12 +781,12 @@ await check("The plus above a block adds a block just there", async () => {
   await page.click('[data-act="ed-discard"]', { timeout: 1500 }).catch(() => {}); await settle(800);
 });
 await check("Clicking picks it, and a floating bar under the page offers Duplicate, Hide and Remove", async () => {
-  await frame("worldartreview.com").click("#numbers h2"); await settle(500);
+  await mouseIn("worldartreview.com", "#numbers h2", { x: 10, y: 10 }); await settle(500);
   must((await page.evaluate(() => window.__adh.pgOf().sel.id)) === "numbers", "not picked");
   const bar = await page.locator(".fbar button").allInnerTexts(); must(bar.map((x) => x.trim()).join() === "Duplicate,Hide,Remove", "bar: " + bar.join(","));
   const n = (await homeSecs()).length; await page.click('.fbar [data-act="ed-dup"]'); await settle(400); must((await homeSecs()).length === n + 1, "Duplicate");
   await page.click('[data-act="ed-discard"]', { timeout: 1500 }).catch(() => {}); await settle(800);
-  await frame("worldartreview.com").click("#numbers h2"); await settle(400); await page.click('.fbar [data-act="ed-hide"]'); await settle(400);
+  await mouseIn("worldartreview.com", "#numbers h2", { x: 10, y: 10 }); await settle(400); await page.click('.fbar [data-act="ed-hide"]'); await settle(400);
   must((await page.evaluate(() => window.__adh.pgOf().doc.pages.home.sections.find((x) => x.id === "numbers").visible)) === false, "Hide");
   await shot("18b-floating-bar");
   await page.click('[data-act="ed-discard"]', { timeout: 1500 }).catch(() => {}); await settle(800);
@@ -807,7 +807,7 @@ await check("Global Art Monitor and Street Art Dispatch outline and add the same
     await mouseIn(host, "#adh-hover .adh-plus.bottom"); await settle(500);
     const pk = await page.evaluate(() => window.__adh.pgOf().picker2); must(pk && pk.mode === "section" && pk.g === "page", id + " picker " + JSON.stringify(pk));
     await page.keyboard.press("Escape"); await settle(300);
-    await frame(host).click('[data-adh="' + first + '"]', { position: { x: 20, y: 20 } }); await settle(500); must(await page.isVisible(".fbar"), id + ": no floating bar");
+    await mouseIn(host, '[data-adh="' + first + '"]', { x: 20, y: 20 }); await settle(500); must(await page.isVisible(".fbar"), id + ": no floating bar");
     await shot("18c-" + id);
   }
   await openSite("world-art-review");
@@ -885,6 +885,92 @@ await check("Global Art Monitor and Street Art Dispatch size their headings from
     const after = await f.evaluate((x) => parseFloat(getComputedStyle(document.querySelector(x)).fontSize), q);
     must(Math.abs(after / before - 1.2) < 0.03, id + ": " + before + " to " + after);
     await shot("19b-" + id); await page.click('[data-act="ed-discard"]'); await settle(600); await toSections();
+  }
+  await openSite("world-art-review");
+});
+
+// =============== 7. Templates ===============
+area = "Templates";
+const tplOf = (kind, id) => page.evaluate((a) => (window.__adh.pgOf().doc.templates[a[0]] || {})[a[1]] || null, [kind, id]);
+const openTpl = async (g, kind, id) => { if (!(await page.isVisible(".pp"))) await page.click(".ed-pagebtn"); await page.click('[data-act="ed-ppgroup"][data-g="' + g + '"]'); await page.click('[data-act="ed-tpl-open"][data-kind="' + kind + '"][data-id="' + id + '"]'); await settle(1500); };
+await check("The page picker counts templates, and kinds of page not built yet are greyed with Used by 0", async () => {
+  await openSite("world-art-review"); await page.selectOption(".pagepick", "home"); await settle(1200);
+  await page.click(".ed-pagebtn"); const t = await text(".pp-lvl");
+  const nArt = await page.evaluate(() => window.__adh.pgOf().site.articles.length);
+  must(new RegExp("Articles\\s*" + nArt + ", 1 template").test(t) && /Artist portfolios\s*\d+, 1 template/.test(t), "counts: " + t.replace(/\n/g, " "));
+  must(t.includes("Not on this site yet") && /Exhibitions\s*Used by 0/.test(t) && await page.isDisabled('.pp-lvl .pp-item:has-text("Exhibitions")'), "greyed kinds");
+  await page.click('[data-act="ed-ppgroup"][data-g="ct"]'); const ct = await text(".pp-lvl");
+  must(ct.includes("Content type templates") && ct.includes("Comes later") && await page.isDisabled('.pp-lvl .pp-item:has-text("Artworks")'), "content types: " + ct.replace(/\n/g, " "));
+  await page.click('[data-act="ed-ppgroup"][data-g=""]'); await page.click('[data-act="ed-ppgroup"][data-g="articles"]'); const at = await text(".pp-lvl");
+  must(new RegExp("Article templates[\\s\\S]*Default article[\\s\\S]*Used by " + nArt + " articles[\\s\\S]*Create template").test(at) && await page.locator('.pp-lvl .tpl-line .tpl-star').count() === 1, "articles: " + at.slice(0, 200).replace(/\n/g, " "));
+  await shot("41a-picker"); await page.keyboard.press("Escape");
+});
+await check("Opening a template shows its name, how many use it, which article fills the preview, and the article as its main section", async () => {
+  await openTpl("articles", "article", "default");
+  const l = await text(".ed-left"), nA = await page.evaluate(() => window.__adh.pgOf().site.articles.length);
+  must(l.includes("Default article") && l.includes("Article template, used by " + nA + " articles") && l.includes("Preview:") && /Template[\s\S]*Article[\s\S]*Title and summary[\s\S]*Settings/.test(l), "left: " + l.slice(0, 300).replace(/\n/g, " "));
+  must((await text(".ed-pagebtn")).includes("Default article"), "page button");
+  must(!(await page.locator('.sec.tplmain .rb.del').count()), "the main section has a bin");
+  await page.click(".sec.tplmain", { button: "right" }); await settle(200); must(!(await page.isVisible(".ctxm")), "the main section has a right-click menu");
+  must(!(await page.locator('.ed-left .tpl-tools [data-act="ed-tpl-del"]').count()), "the default can be removed");
+});
+await check("A section added to a template shows on every article using it, not on other pages, and saves", async () => {
+  await addHere("quote", "tpl"); await settle(600);
+  const t = await tplOf("article", "default"); must(t.sections.length === 2 && t.sections[0].type === "main" && /^t-quote-/.test(t.sections[1].id), "template " + JSON.stringify(t.sections.map((x) => x.id)));
+  await page.fill('[data-pf="text"]', "On every article"); await settle(700);
+  must((await frame("worldartreview.com").innerText("#main")).includes("On every article"), "not in the preview");
+  const first = await page.evaluate(() => window.__adh.pgOf().at);
+  await page.click('[data-act="ed-tpl-ex"]'); must(await page.isVisible(".tpl-pop"), "no example picker");
+  await page.fill("#tpl-ex-q", "palette"); await settle(200); must(await page.locator(".tpl-pop .pp-item:not([hidden])").count() >= 1, "search");
+  await page.click(".tpl-pop .pp-item:not([hidden]) >> nth=0"); await settle(1500);
+  must((await page.evaluate(() => window.__adh.pgOf().at)) !== first && (await frame("worldartreview.com").innerText("#main")).includes("On every article"), "another article");
+  await shot("41b-template");
+  await liveSave(); const saved = read(WR, "content/pages.json");
+  must(saved.templates.article.default.sections[1].settings.text.join(" ").includes("On every article"), "not saved: " + JSON.stringify(saved.templates));
+  await page.selectOption(".pagepick", "home"); await settle(1500); must(!(await frame("worldartreview.com").innerText("#main")).includes("On every article"), "on the home page");
+});
+await check("Create template asks for a name of up to 25 characters and a template to copy, then opens it", async () => {
+  await page.click(".ed-pagebtn"); await page.click('[data-act="ed-ppgroup"][data-g="articles"]'); await page.click('[data-act="ed-tpl-new"][data-kind="article"]'); await settle(300);
+  must(await page.isVisible(".tpl-dlg") && await page.isDisabled("#tpl-new-go") && (await text("#tpl-new-count")) === "0 of 25", "dialog");
+  must((await page.inputValue("#tpl-new-base")) === "default", "based on");
+  await page.fill("#tpl-new-name", "Default article"); must(await page.isDisabled("#tpl-new-go") && await page.isVisible("#tpl-new-clash"), "a name already used");
+  await page.fill("#tpl-new-name", "Long read"); must(!(await page.isDisabled("#tpl-new-go")) && (await text("#tpl-new-count")) === "9 of 25", "count");
+  await shot("41c-create"); await page.click("#tpl-new-go"); await settle(1500);
+  const l = await text(".ed-left"); must(l.includes("Long read") && l.includes("used by 0 articles") && l.includes("Remove template"), "left: " + l.slice(0, 200).replace(/\n/g, " "));
+  const t = await tplOf("article", "long-read"); must(t && t.sections.length === 2, "copy " + JSON.stringify(t));
+});
+await check("An article's own Settings choose its template, and the page changes with it", async () => {
+  await page.click('.sec[data-where="item"][data-id="settings"]'); await settle(400);
+  must(await page.isVisible("#tpl-assign") && (await page.inputValue("#tpl-assign")) === "default", "the choice");
+  // the copy gets its own words, so the two can be told apart
+  await page.click('.sec[data-where="tpl"]:not(.tplmain)'); await page.fill('[data-pf="text"]', "Only on long reads"); await settle(600);
+  await page.click('.sec[data-where="item"][data-id="settings"]'); await settle(300);
+  await page.selectOption("#tpl-assign", "long-read"); await settle(1200);
+  const slug = await page.evaluate(() => window.__adh.pgOf().at.split(":")[1]);
+  must((await page.evaluate(() => window.__adh.pgOf().doc.assign.article)) [slug] === "long-read", "not chosen");
+  must((await text(".ed-left")).includes("used by 1 article") && (await frame("worldartreview.com").innerText("#main")).includes("Only on long reads"), "the page");
+  await shot("41d-assign"); await liveSave();
+  const saved = read(WR, "content/pages.json"); must(saved.assign.article[slug] === "long-read" && saved.templates.article["long-read"].name === "Long read", "saved " + JSON.stringify(saved.assign));
+  // a template in use cannot be removed; back to the default, then it can
+  must(!(await page.locator('[data-act="ed-tpl-del"]').count()), "Remove offered while in use");
+  await page.click('.sec[data-where="item"][data-id="settings"]'); await page.selectOption("#tpl-assign", "default"); await settle(800);
+  await openTpl("articles", "article", "long-read"); await page.click('[data-act="ed-tpl-del"]'); await settle(800);
+  must(!(await tplOf("article", "long-read")), "not removed"); await liveSave();
+  must(!read(WR, "content/pages.json").templates.article["long-read"], "still saved");
+});
+await check("Renaming a template keeps it to 25 characters", async () => {
+  await openTpl("artists", "artist", "default"); await page.click('[data-act="ed-tpl-rename"]'); await page.fill("#tpl-rename", "Portfolio with notes"); await page.keyboard.press("Enter"); await settle(500);
+  must((await tplOf("artist", "default")).name === "Portfolio with notes" && (await text(".ed-left .lt")).includes("Portfolio with notes"), "renamed");
+  await page.click('[data-act="ed-discard"]'); await settle(800);
+});
+await check("Global Art Monitor and Street Art Dispatch draw template sections, and a click picks them", async () => {
+  for (const [id, host] of [["global-art-monitor", "globalartmonitor.com"], ["street-art-dispatch", "streetartdispatch.com"]]) {
+    await openSite(id); await openTpl("artists", "artist", "default");
+    await addHere("quote", "tpl"); await page.fill('[data-pf="text"]', "On every artist page"); await settle(900);
+    const f = frame(host); must((await f.innerText("main")).includes("On every artist page"), id + ": not drawn");
+    await mouseIn(host, '[data-adh^="t-quote"]'); await settle(500);
+    must((await page.evaluate(() => window.__adh.pgOf().sel || {})).where === "tpl", id + ": not picked");
+    await shot("41e-" + id); await page.click('[data-act="ed-discard"]'); await settle(800);
   }
   await openSite("world-art-review");
 });

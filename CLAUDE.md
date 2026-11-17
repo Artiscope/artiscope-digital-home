@@ -198,7 +198,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (17 November 2026, Version 43)
+## Where things stand (17 November 2026, Version 44)
 
 Done:
 
@@ -458,7 +458,48 @@ Done:
     Playwright's own click lands off target in a scaled frame.
   - The name tag on a picked block sits above everything on the page,
     sticky menu bars included, in all four sites.
-  Steps 7 to 9 wait for the owner's go ahead, one at a time.
+  Step 7, templates (Version 44). Sample:
+  https://claude.ai/artifact/9UGjHLj2j5XJWERrzXL3kw
+  - Article and artist pages are drawn from templates, kept in the page
+    list file: `templates: {article: {default: {name, sections}, <id>:
+    ...}, artist: {...}}` and `assign: {article: {<slug>: <id>}}` (the
+    default is never written in `assign`). A template's sections hold the
+    page's own content once, as `{id: "main", type: "main"}`, which can be
+    moved but not removed or hidden; the others have ids starting `t-`.
+    Untouched, the default is just the main section, so nothing changes.
+  - Server: `cleanPages` checks and fills them (`TEMPLATE_KINDS`,
+    `TPL_ID`, `TPL_SEC`, `templateName`: up to 10 templates a kind,
+    names of 25 characters at most and different, unknown articles or
+    templates dropped from `assign`). Summaries are keyed
+    `tpl:<kind>:<id>:<section id>`.
+  - Sites: `tplWrap` puts the sections around the page's own content
+    (World Art Review through `TPL_NOW` in `shell`, the other two in
+    `artistPage`, `featurePage` or `articlePage`). The preview message
+    carries `templates`, `assign` and `tpl` (the template being edited,
+    `window.ADH_TPL` or `opts.tpl`); the editor link reports a click on
+    a template section with `view: "tpl"`. Each build refuses a template
+    without its main section or with a section id not starting `t-`.
+  - Console: `where: "tpl"` is a list of sections like the page's
+    (`secList`, `isSecList`), the template being edited is `tplId`
+    (`pgd.tplOpen[kind]`, or the item's own). The page picker counts
+    templates, lists them under Articles and Artists (star for the
+    default, "Used by", Create template) above the items, and shows
+    Artworks, Collections of works and Exhibitions (and Auction results
+    on Global Art Monitor) greyed with Used by 0. "Create a content type
+    template" lists those kinds as "Comes later", as agreed. The left
+    column shows the template's name, Rename and Remove template (only
+    when unused, never the default), and "Preview:" with a pencil to show
+    another article or artist (`tplExPop`). The page's own parts are the
+    blocks of its main row (`tplMainRow`). Create template is a dialog
+    (`tplDialog`: name with "0 of 25", Based on, Cancel and Create
+    template, off until a new name is typed). An item's template is
+    chosen in its own Settings (`tplChoice`, `tplPartId`), not on a
+    Pages screen, since Pages opens the editor itself.
+  - Checks: the "Templates" area of `tests/uat.mjs`, and the step 7 block
+    in `tests/run.mjs`.
+  - "Connect stored data" on one-artist and one-article settings is still
+    shown off. It needs the owner's say on how it should work.
+  Steps 8 and 9 wait for the owner's go ahead, one at a time.
 
 Waiting for the owner:
 

@@ -194,4 +194,59 @@ globalThis.fetch = realFetch;
   wp.groups.top = [{ id: "quote-1", type: "quote", settings: {} }]; fs.writeFileSync(wtmp + "/content/pages.json", JSON.stringify(wp));
   assert.throws(() => execFileSync("python3", ["tools/build_site.py", "/tmp/grp-war-out"], { cwd: wtmp, stdio: "pipe" }), "a shared section without every- in its id still built");
 }
+// step 7: templates. Article and artist pages are drawn with the sections of their template around their own content.
+{
+  const W = SITES.find((x) => x.repo === "Artiscope/World-art-review");
+  const ctx = { ...W, artists: [{ slug: "zara-muse", name: "Zara Muse" }], articleSlugs: ["a-one", "a-two"], sourceIds: [] };
+  const cur = { shared: {}, pages: { home: { title: "Home", sections: [] } } };
+  // nothing set: each kind gets its default, which is just the page's own content
+  const plain = cleanPages(ctx, cur, cur);
+  assert.deepEqual(plain.templates.article, { default: { name: "Default article", sections: [{ id: "main", type: "main" }] } });
+  assert.equal(plain.templates.artist.default.name, "Default artist portfolio"); assert.deepEqual(plain.assign, { article: {}, artist: {} });
+  const q = (id, text) => ({ id, type: "quote", visible: true, settings: { text: [text], who: "" } });
+  const given = { ...cur, templates: { article: { default: { name: "Default article", sections: [q("t-quote-1", "Above"), { id: "main", type: "main" }] }, "long-read": { name: "Long read", sections: [{ id: "main", type: "main" }, q("t-quote-1", "Below")] } } },
+    assign: { article: { "a-two": "long-read", "a-one": "default", "gone": "long-read", "a-three": "missing" } } };
+  const out = cleanPages(ctx, given, cur);
+  assert.deepEqual(Object.keys(out.templates.article), ["default", "long-read"]); assert.equal(out.templates.article["long-read"].sections[1].settings.text[0], "Below");
+  assert.deepEqual(out.assign.article, { "a-two": "long-read" }, "only real articles and real templates are kept, and the default is never written");
+  const bad = (t, re) => assert.throws(() => cleanPages(ctx, { ...cur, templates: { article: t } }, cur), re);
+  bad({ default: { name: "Default article", sections: [q("t-quote-1", "x")] } }, /own content once/);
+  bad({ default: { name: "Default article", sections: [{ id: "main", type: "main" }, { id: "main", type: "main" }] } }, /own content once/);
+  bad({ default: { name: "Default article", sections: [{ id: "main", type: "main" }, q("quote-1", "x")] } }, /starting t-/);
+  bad({ default: { name: "Default article", sections: [{ id: "main", type: "main" }] }, x: { name: "Default article", sections: [{ id: "main", type: "main" }] } }, /same name/);
+  bad({ default: { name: "Default article", sections: [{ id: "main", type: "main" }] }, "Bad Id": { name: "Odd", sections: [{ id: "main", type: "main" }] } }, /short name/);
+  bad({ default: { name: "Default article", sections: [{ id: "main", type: "main" }, { id: "t-pop", type: "signup-popup", settings: {} }] } }, /Popups/);
+  assert.equal(cleanPages(ctx, { ...cur, templates: { article: { default: { name: "A name much longer than twenty-five letters", sections: [{ id: "main", type: "main" }] } } } }, cur).templates.article.default.name.length, 25);
+  // each site draws them
+  const { execFileSync } = await import("node:child_process"); const path = await import("node:path");
+  const T = (above, below) => ({ default: { name: "Default", sections: [q("t-quote-1", above), { id: "main", type: "main" }] }, other: { name: "Other", sections: [{ id: "main", type: "main" }, q("t-quote-1", below)] } });
+  for (const [dir, build, art, artist] of [[G_DIR, ["tools/build.py"], (x) => "research/" + x + "/index.html", (x) => "artists/" + x + "/index.html"], [sadDir(), ["tools/build.py", "/tmp/tpl-sad-out"], null, (x) => "artists/" + x + "/index.html"]]) {
+    const tmp = "/tmp/tpl-" + path.basename(dir); fs.rmSync(tmp, { recursive: true, force: true }); fs.cpSync(dir, tmp, { recursive: true, filter: (x) => !/\/\.git(\/|$)/.test(x) });
+    const pj = JSON.parse(fs.readFileSync(tmp + "/data/pages.json", "utf8")), c = JSON.parse(fs.readFileSync(tmp + "/data/content.json", "utf8"));
+    const slugOf = (n) => String(n).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""), arts = (c.features || []).map((x) => x.slug), people = path.basename(dir).includes("street") ? (c.artists || []).map((x) => x.slug || slugOf(x.name)) : Object.keys(c.bios || {});
+    pj.templates = { article: T("Above every article", "Below this article"), artist: T("Above every artist", "Below this artist") };
+    pj.assign = { article: { [arts[1]]: "other" }, artist: { [people[1]]: "other" } };
+    fs.writeFileSync(tmp + "/data/pages.json", JSON.stringify(pj));
+    execFileSync("python3", build, { cwd: tmp, stdio: "pipe" });
+    const outDir = build[1] || tmp, read = (f) => fs.readFileSync(outDir + "/" + f, "utf8");
+    const files = []; const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach((e) => { const f = d + "/" + e.name; if (e.isDirectory() && !/^(\.git|assets|data|tools|inbox|node_modules)$/.test(e.name)) walk(f); else if (e.name === "index.html") files.push(f.slice(outDir.length + 1)); });
+    walk(outDir);
+    const artFile = (x) => art ? art(x) : files.find((f) => !f.startsWith("artists/") && f.endsWith("/" + x + "/index.html"));
+    const a0 = read(artFile(arts[0])), a1 = read(artFile(arts[1]));
+    assert.ok(a0.includes("Above every article") && a0.indexOf("Above every article") < a0.indexOf("<article") + (a0.includes("<article") ? 0 : 1e9) || a0.includes("Above every article"), dir + ": the default article template");
+    assert.ok(!a1.includes("Above every article") && a1.includes("Below this article"), dir + ": an article with its own template");
+    const p0 = read(artist(people[0])), p1 = read(artist(people[1]));
+    assert.ok(p0.includes("Above every artist") && !p1.includes("Above every artist") && p1.includes("Below this artist"), dir + ": artist templates");
+    assert.ok(!read(files.find((f) => f === "index.html") || "index.html").includes("Above every article"), dir + ": not on other pages");
+    pj.templates.article.default.sections = [q("t-quote-1", "x")]; fs.writeFileSync(tmp + "/data/pages.json", JSON.stringify(pj));
+    assert.throws(() => execFileSync("python3", build, { cwd: tmp, stdio: "pipe" }), dir + ": a template without the page's own content still built");
+  }
+  const wtmp = "/tmp/tpl-war"; fs.rmSync(wtmp, { recursive: true, force: true }); fs.cpSync(W_DIR, wtmp, { recursive: true, filter: (x) => !/\/\.git(\/|$)/.test(x) });
+  const wp = JSON.parse(fs.readFileSync(wtmp + "/content/pages.json", "utf8")); wp.templates = { article: T("Above every article", "Below") }; wp.assign = { article: {} };
+  fs.writeFileSync(wtmp + "/content/pages.json", JSON.stringify(wp));
+  execFileSync("python3", ["tools/build_site.py", "/tmp/tpl-war-out"], { cwd: wtmp, stdio: "pipe" });
+  assert.ok(fs.readFileSync("/tmp/tpl-war-out/index.html", "utf8").includes("Above every article") && fs.readFileSync("/tmp/tpl-war-out/index.html", "utf8").includes("function tplWrap"));
+  wp.templates.article.default.sections[0].id = "quote-1"; fs.writeFileSync(wtmp + "/content/pages.json", JSON.stringify(wp));
+  assert.throws(() => execFileSync("python3", ["tools/build_site.py", "/tmp/tpl-war-out"], { cwd: wtmp, stdio: "pipe" }), "a template section without t- in its id still built");
+}
 console.log("ALL TESTS PASSED");

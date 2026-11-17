@@ -1067,6 +1067,9 @@ export function usageOf(name, pagesDoc, kinds, spots) {
   for (const [pk, pg] of Object.entries((pagesDoc && pagesDoc.pages) || {})) for (const sec of (pg && pg.sections) || []) {
     if (has(sec.settings)) used.push({ label: (pg.title || pk) + " page: " + ((kinds[sec.type] || {}).label || sec.type) + (sec.visible === false ? " (hidden)" : ""), page: pk, where: "page", id: sec.id });
   }
+  for (const [kind, all] of Object.entries((pagesDoc && pagesDoc.templates) || {})) for (const [tid, t] of Object.entries(all || {})) for (const sec of (t && t.sections) || []) {
+    if (sec.type !== "main" && has(sec.settings)) used.push({ label: "Template " + (t.name || tid) + ": " + ((kinds[sec.type] || {}).label || sec.type) + (sec.visible === false ? " (hidden)" : ""), page: "home", where: "tpl", id: "", kind, tpl: tid });
+  }
   const word = { artist: "Artist: ", work: "Artwork: ", article: "Article: " };
   for (const sp of spots) if (sp.image === name) used.push({ label: word[sp.kind] + sp.label, spot: sp.key });
   return used;
@@ -1223,6 +1226,48 @@ export function cleanPages(site, given, current) {
       out.groups[where].push(cleanSection(spec, sec, id, site));
     }
   }
+  // templates: the sections an article or artist page is drawn with, around the page's own content ("main")
+  const tkinds = TEMPLATE_KINDS.filter((k) => site.items && site.items[k]);
+  if (tkinds.length) {
+    out.templates = {}; out.assign = {};
+    const gt = given.templates && typeof given.templates === "object" ? given.templates : current.templates || {};
+    const gas = given.assign && typeof given.assign === "object" ? given.assign : current.assign || {};
+    for (const kind of tkinds) {
+      const src = gt[kind] && typeof gt[kind] === "object" && !Array.isArray(gt[kind]) ? gt[kind] : {};
+      const ids = Object.keys(src); if (!ids.includes("default")) ids.unshift("default");
+      if (ids.length > 10) throw new Error("Each kind of page can have up to 10 templates.");
+      const names = new Set(); out.templates[kind] = {};
+      for (const id of ids) {
+        if (!TPL_ID.test(id)) throw new Error("A template needs a short name of letters, digits and hyphens.");
+        const t = src[id] && typeof src[id] === "object" ? src[id] : {};
+        const name = cleanText(t.name, 25) || (id === "default" ? templateName(site, kind) : "");
+        if (!name) throw new Error("Every template needs a name.");
+        if (names.has(name.toLowerCase())) throw new Error("Two templates have the same name: " + name + ".");
+        names.add(name.toLowerCase());
+        const list = Array.isArray(t.sections) ? t.sections : [{ id: "main", type: "main" }];
+        if (list.length > 21) throw new Error("A template can hold up to 20 sections around the page's own content.");
+        const seen = new Set(), sections = []; let mains = 0;
+        for (const sec of list) {
+          if (sec && sec.type === "main") { mains++; sections.push({ id: "main", type: "main" }); continue; }
+          if (!sec || typeof sec !== "object" || !spec[sec.type]) throw new Error("One of the sections in a template is of a kind this site cannot draw.");
+          if (spec[sec.type].popup) throw new Error("A popup goes in the Popups group, not in a template.");
+          const sid = String(sec.id || "");
+          if (!TPL_SEC.test(sid) || seen.has(sid)) throw new Error("Every section in a template needs its own short name, starting t-.");
+          seen.add(sid); sections.push(cleanSection(spec, sec, sid, site));
+        }
+        if (mains !== 1) throw new Error("A template keeps the page's own content once. It can be moved, not removed.");
+        out.templates[kind][id] = { name, sections };
+      }
+      out.assign[kind] = {};
+      const known = kind === "artist" ? (site.artists || []).map((a) => a.slug) : site.articleSlugs || null;
+      const ga = gas[kind] && typeof gas[kind] === "object" && !Array.isArray(gas[kind]) ? gas[kind] : {};
+      for (const slug of Object.keys(ga).sort()) {
+        const id = String(ga[slug] || "");
+        if (!SLUG.test(slug) || id === "default" || !out.templates[kind][id] || (known && !known.includes(slug))) continue;
+        out.assign[kind][slug] = id;
+      }
+    }
+  }
   // the home page is always there; other pages can be added and removed
   const gp = given.pages && typeof given.pages === "object" ? given.pages : current.pages || {};
   const keys = Object.keys(gp);
@@ -1272,6 +1317,14 @@ export function mainSectionOf(site, key, sections) {
   return s ? s.id : "";
 }
 const PAGE_KEY = /^[a-z][a-z0-9-]{0,40}$/;
+const TEMPLATE_KINDS = ["article", "artist"];
+const TPL_ID = /^[a-z0-9][a-z0-9-]{0,30}$/;
+const TPL_SEC = /^t-[a-z0-9-]{1,40}$/;
+// The default template's name: "Default article", "Default artist portfolio" and so on, in 25 characters at most.
+export function templateName(site, kind) {
+  const l = String(((site.items || {})[kind] || {}).label || kind).toLowerCase();
+  return ("Default " + l).length <= 25 ? "Default " + l : ("Default " + l.replace(/^artist /, "")).slice(0, 25);
+}
 const RESERVED = ["home", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search", "assets", "data", "tools", "inbox", "preview", "auction-results", "market-intelligence", "collecting-valuation", "about", "contact", "dispatches", "urban-culture", "interventions", "exhibitions", "collecting", "images"];
 // A section's kinds of block, as a list. A kind is a list of rows, a list of names, or one block made of some of the section's own fields.
 export function blockKinds(b) {
@@ -1300,6 +1353,7 @@ function summariesFor(site, pages) {
   for (const [key, part] of Object.entries(pages.shared || {})) out["shared:" + key] = f(part);
   for (const where of ["top", "popups", "bottom"]) for (const sec of ((pages.groups || {})[where] || [])) out["every:" + sec.id] = f(sec);
   for (const [key, pg] of Object.entries(pages.pages || {})) for (const sec of pg.sections || []) out[key + ":" + sec.id] = f(sec);
+  for (const [kind, all] of Object.entries(pages.templates || {})) for (const [id, t] of Object.entries(all || {})) for (const sec of (t && t.sections) || []) if (sec.type !== "main") out["tpl:" + kind + ":" + id + ":" + sec.id] = f(sec);
   return out;
 }
 
@@ -2528,7 +2582,7 @@ export async function handle(req) {
           await textBlob(tree, ps.meta, metaDoc);
           // places that show this photo without a description get this one
           if (alt) {
-            if (pf && fillDescriptions(pagesDoc.pages, name, alt) + fillDescriptions(pagesDoc.shared, name, alt) + fillDescriptions(pagesDoc.groups || {}, name, alt)) await textBlob(tree, ps.file, pagesDoc);
+            if (pf && fillDescriptions(pagesDoc.pages, name, alt) + fillDescriptions(pagesDoc.shared, name, alt) + fillDescriptions(pagesDoc.groups || {}, name, alt) + fillDescriptions(pagesDoc.templates || {}, name, alt)) await textBlob(tree, ps.file, pagesDoc);
             if (cf && spots.some((sp) => sp.image === name && !String(sp.alt || "").trim())) {
               const ch = {}; spots.forEach((sp) => { if (sp.image === name && !String(sp.alt || "").trim()) ch[sp.key] = { alt }; });
               if (applyPictures(cf.data, ch, null).done.length) await textBlob(tree, ps.content, cf.data);
