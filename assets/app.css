@@ -1067,3 +1067,29 @@ button.rname:hover { box-shadow: var(--pressed-small); }
 .tpl-dlg .tpl-count { align-self: flex-end; }
 .tpl-dlg .row.end { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
 .problem-text { color: var(--problem); }
+/* Stored data: a template's setting taken from the page it is drawn on */
+.rtag.stored { gap: 8px; padding-left: 12px; }
+.rtag.stored svg { color: var(--live); }
+.storedl { display: inline-flex; margin-top: 4px; }
+.storedl .linklike { display: inline-flex; align-items: center; gap: 6px; }
+.resf .resmenu .cap { margin: 4px 10px 2px; }
+.resf .resmenu .small { margin: 4px 10px; }
+.rempty .linklike { margin-left: 8px; }
+.resf.storedv { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px; }
+.resf.storedv .resmenu { flex-basis: 100%; }
+/* Step 8: the Changes list beside Save */
+.chg-count { font-size: 12.5px; }
+.ed-pop.chg { right: 0; left: auto; width: 380px; max-width: calc(100vw - 24px); }
+.chg-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; }
+.chg-row:hover { background: var(--hover); }
+.chg-row .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--text); }
+.chg-row .t > span:first-child { overflow-wrap: anywhere; }
+.ed-pop.later { width: 330px; gap: 8px; padding: 14px; }
+.ed-pop.later .small { margin: 0 4px 4px; }
+.ed-pop.later .row.end { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+input[type="date"], input[type="time"] { width: 100%; min-height: 38px; border: 0; border-radius: 12px; background-color: var(--bg); box-shadow: var(--pressed-small); color: var(--bright); padding: 8px 12px; font: inherit; color-scheme: dark; }
+input[type="date"]:focus, input[type="time"]:focus { outline: none; box-shadow: var(--pressed-small), 0 0 0 2px var(--violet); }
+.ed-pop.later { width: 310px; right: 0; }
+.laterbtns { display: flex; justify-content: flex-end; gap: 10px; margin: 6px 2px 2px; }
+.ed-pop.later .btn, .ed-pop.later .soft { border-radius: 12px; width: auto; }
+.chg-count .lamp { margin-right: 7px; }

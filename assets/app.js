@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "44";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "45";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -134,7 +134,7 @@
         if (pgd.pages) { pgd.pages.groups = pgd.pages.groups || {}; ["top", "popups", "bottom"].forEach(function (w) { if (!pgd.pages.groups[w]) pgd.pages.groups[w] = []; }); tplNormal(pgd.pages, pgd.itemKinds); }
         state.pg[s.id] = { version: pgd.version || "", pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageSizes: pgd.imageSizes || {}, imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false,
           site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, lists: pgd.lists || {}, listFields: pgd.listFields || [], at: pref.at || "", gam: !!pgd.gam, model: pgd.model || (pgd.gam ? "gam" : ""), builtIn: pgd.builtIn || null, pageFields: pgd.pageFields || null, leftPanel: pref.leftPanel || undefined };
-        var made = state.pg[s.id]; if (made.at && !atKnown(made)) made.at = "";
+        var made = state.pg[s.id]; if (made.at && !atKnown(made)) made.at = ""; histBase(made);
         render();
       }
       if (state.tab === "files" && (force || !state.files[s.id])) {
@@ -852,7 +852,8 @@
   function bTitle(pgd, bk, item, i) {
     if (bk && bk.one) return bk.label;
     if (bk && bk.item) {
-      var v = nameOf(item), t = bk.item.type;
+      var v = nameOf(item), t = bk.item.type, stb = typeof v === "string" && v.indexOf("{page.") === 0 ? storedOptions(Object.assign({}, pgd, { sel: { where: "tpl" } }), bk.item).filter(function (o) { return o.v === v; })[0] : null;
+      if (stb) return stb.label;
       if (t === "artists") { var a = (pgd.artists || []).filter(function (x) { return x.slug === v; })[0]; return a ? a.name : v || "Choose an artist"; }
       if (t === "piece") { var ar = ((pgd.site || {}).articles || []).filter(function (x) { return x.slug === v; })[0]; return ar ? ar.title : v || "Choose a piece"; }
       return v || "Empty";
@@ -889,7 +890,102 @@
     var d = pgd && pgd.gam && pgd.site && pgd.site.site, m = d && typeof v === "string" && /^\s*\{(tagline|headline|intro|disclosure|email)\}\s*$/.exec(v);
     return m ? { word: m[1], value: d[m[1]] == null ? "" : String(d[m[1]]) } : null;
   }
-  function pgMark(pgd) { pgd.dirty = canon(pgd.doc) !== pgd.base || JSON.stringify(pgd.pictures || {}) !== (pgd.picBase || "{}") || siteChanged(pgd) || themeDirty(); state.dirty = pgd.dirty; }
+  // ----- step 8: undo and redo of unsaved changes, kept per page or template, and the Changes list -----
+  // Every change is noted as the places it touched, with their words before and after, so one page's
+  // Undo never takes back another page's change. Typing in one box with short pauses counts as one step.
+  function histRoot(pgd) { var t = themeOf(); return { doc: pgd.doc, pictures: pgd.pictures || {}, site: pgd.site || null, theme: t ? t.draft : null }; }
+  function dclone(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+  function histBase(pgd) { pgd.hist = {}; pgd.redo = {}; pgd.histPrev = dclone(histRoot(pgd)); }
+  function locKey(pgd) { return tplHere(pgd) ? "tpl:" + tplHere(pgd) + ":" + tplId(pgd) : pgd.at || "page:" + pgd.page; }
+  function diffInto(a, b, path, out) {
+    if (a === b) return;
+    var ao = !!a && typeof a === "object", bo = !!b && typeof b === "object";
+    if (ao && bo && Array.isArray(a) === Array.isArray(b)) {
+      if (Array.isArray(a)) { if (a.length === b.length) { for (var i = 0; i < a.length; i++) diffInto(a[i], b[i], path.concat(i), out); return; } }
+      else { var keys = {}; Object.keys(a).forEach(function (k) { keys[k] = 1; }); Object.keys(b).forEach(function (k) { keys[k] = 1; }); Object.keys(keys).forEach(function (k) { diffInto(a[k], b[k], path.concat(k), out); }); return; }
+    }
+    if (!ao && !bo && a === b) return;
+    out.push({ p: path, before: dclone(a), after: dclone(b) });
+  }
+  function setIn(obj, path, val) {
+    var cur = obj; for (var i = 0; i < path.length - 1; i++) { if (cur[path[i]] == null || typeof cur[path[i]] !== "object") cur[path[i]] = typeof path[i + 1] === "number" ? [] : {}; cur = cur[path[i]]; }
+    var last = path[path.length - 1]; if (val === undefined && !Array.isArray(cur)) delete cur[last]; else cur[last] = val;
+  }
+  // Puts each place back to the words it had before (or after, for Redo), in the live editor and in the note of the last state.
+  function histApply(pgd, d, which) {
+    d.forEach(function (x) {
+      var v = dclone(x[which]);
+      if (x.p.length === 1) { if (x.p[0] === "theme") { var t = themeOf(); if (t) t.draft = v; } else pgd[x.p[0]] = v; }
+      else { var root = histRoot(pgd); setIn(root[x.p[0]], x.p.slice(1), v); }
+      setIn(pgd.histPrev, x.p, dclone(x[which]));
+    });
+  }
+  function histNote(pgd) {
+    var hs = pgd.histSel; pgd.histSel = null;
+    if (pgd.histQuiet || !pgd.histPrev) return;
+    pgd.histSel = hs;
+    var cur = histRoot(pgd), out = [];
+    if (pgd.histPrev.theme == null && cur.theme) pgd.histPrev.theme = dclone(cur.theme);
+    diffInto(pgd.histPrev, cur, [], out);
+    if (!out.length) { pgd.histSel = null; return; }
+    out.forEach(function (x) { setIn(pgd.histPrev, x.p, dclone(x.after)); });
+    var key = locKey(pgd), stack = pgd.hist[key] = pgd.hist[key] || [], last = stack[stack.length - 1], now = Date.now();
+    pgd.redo[key] = [];
+    if (last && last.d.length === 1 && out.length === 1 && last.d[0].p.join(".") === out[0].p.join(".") && now - last.t < 1500) { last.d[0].after = out[0].after; last.t = now; last.label = histLabel(pgd, last.d, pgd.what); pgd.histSel = null; return; }
+    stack.push({ key: key, d: out, t: now, label: histLabel(pgd, out, pgd.what), place: tplHere(pgd) ? "Template: " + tplCur(pgd).name : pageLabel(pgd),
+      sel: pgd.histSel || (pgd.sel ? dclone(pgd.sel) : null), loc: { page: pgd.page, at: pgd.at || "", tpl: dclone(pgd.tplOpen || {}) } });
+    pgd.histSel = null;
+  }
+  // A change in plain words: "Numbers band: Small line above the heading changed to "The review in numbers"".
+  function histLabel(pgd, d, what) {
+    var x = d.length === 1 ? d[0] : null, sv = function (v) { var w = Array.isArray(v) && v.length === 1 ? v[0] : v; if (typeof w === "string" && w.indexOf("{page.") === 0) return "connected to the page's own data"; return v === true ? "turned on" : v === false ? "turned off" : typeof v === "string" && v.length && v.length <= 40 && v.indexOf("<") < 0 ? 'changed to "' + v + '"' : "changed"; };
+    if (x && x.p[0] === "theme" && x.p.length >= 3) { var t = themeOf(), f = t && x.p[1] === "settings" ? (t.spec.settings || []).find(function (y) { return y.name === x.p[2]; }) : null; return "Theme: " + (f ? f.label : String(x.p[2]).replace(/_/g, " ")) + " " + sv(x.after); }
+    var sec = null, rest = null;
+    if (x && x.p[0] === "doc") {
+      var p = x.p, i;
+      if (p[1] === "pages" && p[3] === "sections" && typeof p[4] === "number") { sec = ((pgd.doc.pages[p[2]] || {}).sections || [])[p[4]]; rest = p.slice(5); }
+      else if (p[1] === "groups" && typeof p[3] === "number") { sec = ((pgd.doc.groups || {})[p[2]] || [])[p[3]]; rest = p.slice(4); }
+      else if (p[1] === "shared") { sec = (pgd.doc.shared || {})[p[2]]; rest = p.slice(3); }
+      else if (p[1] === "templates" && p[4] === "sections" && typeof p[5] === "number") { sec = (((pgd.doc.templates || {})[p[2]] || {})[p[3]] || { sections: [] }).sections[p[5]]; rest = p.slice(6); }
+      if (sec && rest && rest[0] === "settings" && rest.length >= 2) {
+        var kd = pgd.kinds[sec.type] || { fields: [] }, fd = (kd.fields || []).find(function (y) { return y.name === rest[1]; });
+        var lab = fd ? fd.label : String(rest[1]).replace(/_/g, " ");
+        if (fd && fd.type === "rows" && typeof rest[2] === "number") { var bk = bkinds(kd).filter(function (b) { return b.field === rest[1]; })[0], sub = (fd.fields || []).find(function (y) { return y.name === rest[3]; }); lab = (bk ? bk.label : lab) + " " + (rest[2] + 1) + (sub ? ", " + sub.label.toLowerCase() : ""); }
+        else if (fd && (fd.type === "lines" || fd.type === "long")) return secName(pgd, sec) + ": " + lab + " changed";
+        return secName(pgd, sec) + ": " + lab + " " + sv(x.after);
+      }
+      if (sec && rest && rest[0] === "visible") return secName(pgd, sec) + (x.after === false ? " hidden" : " shown");
+      if (sec && rest && rest[0] === "name") return "Renamed to " + (x.after || secName(pgd, sec));
+    }
+    return what || "Change";
+  }
+  function histCount(pgd) { var n = 0; Object.keys(pgd.hist || {}).forEach(function (k) { n += pgd.hist[k].length; }); return n; }
+  // Goes back to where a change was made and picks what it changed.
+  function histGo(pgd, e) {
+    pgd.page = e.loc.page; pgd.at = e.loc.at; pgd.tplOpen = dclone(e.loc.tpl || {});
+    pgd.sel = e.sel ? dclone(e.sel) : null; if (pgd.sel && !pgSel(pgd)) pgd.sel = pgd.sel.block != null ? Object.assign({}, pgd.sel, { block: null, bf: undefined }) : null; if (pgd.sel && !pgSel(pgd)) pgd.sel = null;
+  }
+  function histStep(pgd, back, e) {
+    var key = locKey(pgd), from = back ? pgd.hist : pgd.redo, to = back ? pgd.redo : pgd.hist;
+    if (!e) { var st = from[key] || []; e = st.pop(); if (!e) return; }
+    histApply(pgd, e.d, back ? "before" : "after");
+    (to[e.key] = to[e.key] || []).push(e);
+    pgd.histQuiet = true; pgd.what = (back ? "Undo: " : "Redo: ") + e.label; histGo(pgd, e); pgMark(pgd); pgd.histQuiet = false;
+    pgd.removed = null; pgd.scrollNext = true; state.edMenu = state.edMenu === "changes" ? "changes" : ""; edRemember(); edPatch(); pushPreview(); themePush();
+  }
+  // Undo one change from the Changes list, wherever it was made.
+  function histUndoOne(pgd, key, i) {
+    var st = pgd.hist[key] || [], e = st[i]; if (!e) return;
+    st.splice(i, 1); histStep(pgd, true, e);
+  }
+  function changesPop(pgd) {
+    var all = []; Object.keys(pgd.hist || {}).forEach(function (k) { pgd.hist[k].forEach(function (e, i) { all.push({ e: e, k: k, i: i }); }); });
+    all.sort(function (a, b) { return b.e.t - a.e.t; });
+    return '<div class="ed-pop chg" role="dialog" aria-label="Changes not saved yet"><p class="cap">Not saved yet</p>' + (all.length ? all.map(function (x) {
+      return '<div class="chg-row"><span class="t"><span>' + esc(x.e.label) + '</span><span class="small">' + esc(x.e.place) + '</span></span><button type="button" class="soft slim" data-act="ed-chg-undo" data-k="' + esc(x.k) + '" data-i="' + x.i + '">Undo</button></div>'; }).join("")
+      : '<p class="small">Nothing left to save. Redo brings back what was undone.</p>') + '</div>';
+  }
+  function pgMark(pgd) { histNote(pgd); pgd.dirty = canon(pgd.doc) !== pgd.base || JSON.stringify(pgd.pictures || {}) !== (pgd.picBase || "{}") || siteChanged(pgd) || themeDirty(); state.dirty = pgd.dirty; }
   function themeDirty() { var t = themeOf(); return !!t && themeChanges(t) > 0; }
   function siteChanged(pgd) { return !!pgd.site && JSON.stringify(pgd.site) !== pgd.siteBase; }
   function pgReset(pgd) { pgd.doc = JSON.parse(pgd.base); pgd.pictures = JSON.parse(pgd.picBase || "{}"); if (pgd.site) pgd.site = JSON.parse(pgd.siteBase); if (!atKnown(pgd)) pgd.at = ""; pgd.dirty = false; state.dirty = false; }
@@ -1094,7 +1190,7 @@
   }
   var ED_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
   var ED_CTRL = ED_MAC ? "Cmd" : "Ctrl";
-  var ED_KEYS = [[ED_CTRL + "+Alt+1", "Sections"], [ED_CTRL + "+Alt+2", "Theme settings"], [ED_CTRL + "+Alt+3", "Add-ons"], [ED_CTRL + "+Shift+I, or Alt+Shift+I", "Inspector on or off"], ["Escape", "Close a menu"]];
+  var ED_KEYS = [[ED_CTRL + "+Z", "Undo"], [ED_CTRL + "+Y, or " + ED_CTRL + "+Shift+Z", "Redo"], [ED_CTRL + "+S", "Save"], [ED_CTRL + "+/", "Show all shortcuts"], [ED_CTRL + "+Shift+H, or Alt+Shift+H", "Hide or show the picked item"], ["Shift+Delete", "Remove the picked item"], [ED_CTRL + "+Alt+1", "Sections"], [ED_CTRL + "+Alt+2", "Theme settings"], [ED_CTRL + "+Alt+3", "Add-ons"], [ED_CTRL + "+Shift+I, or Alt+Shift+I", "Inspector on or off"], ["Escape", "Close a menu"]];
   function sitePop(s) {
     var c = curCopy(), list = isAdmin() ? copiesOf(s) : [c];
     return '<div class="ed-pop sp" role="dialog" aria-label="Which copy you are working on"><p class="cap">Working on</p>' +
@@ -1117,14 +1213,37 @@
       '<p class="pop-foot"><span>' + esc(s.name) + ' theme</span><span>Version ' + VERSION + '</span></p></div>';
   }
   function savePop(s, pgd, c) {
-    var dirty = pgd && pgd.dirty, trial = c.kind === "trial", out = '<button type="button" class="pp-item" disabled>' + ic("calendar") + '<span class="t">Publish later</span><em>Later step</em></button>';
+    var dirty = pgd && pgd.dirty, trial = c.kind === "trial", canLater = isAdmin() && !trial && dirty;
+    var out = '<button type="button" class="pp-item"' + (canLater ? ' data-act="ed-pop" data-menu="later"' : " disabled") + '>' + ic("calendar") + '<span class="t">Publish later</span>' + (canLater ? "" : '<em>' + (!isAdmin() ? "The admin schedules" : trial ? "From the live site" : "Change something first") + '</em>') + '</button>';
     if (dirty) out += '<button type="button" class="pp-item" data-act="ed-save">' + ic("doc") + '<span class="t">Save</span></button>';
     if (dirty && !isAdmin()) out += '<button type="button" class="pp-item" data-act="ed-save-publish">' + ic("globe") + '<span class="t">Save and publish</span></button>';
     if (!dirty && trial && c.ahead) out += '<button type="button" class="pp-item" data-act="ask-makelive">' + ic("globe") + '<span class="t">' + (isAdmin() ? "Make live" : "Publish") + '</span></button>';
     if (!isAdmin() && c.behind) out += '<button type="button" class="pp-item" data-act="refresh-copy" data-copy="' + esc(c.id) + '">' + ic("copy") + '<span class="t">Bring my copy up to date</span></button>';
     if (dirty) out += '<button type="button" class="pp-item danger" data-act="ed-discard">' + ic("bin") + '<span class="t">Discard changes</span></button>';
+    var savedUndo = trial ? c.ahead > 0 : (c.steps || []).length > 0;
+    if (!dirty && savedUndo) out += '<button type="button" class="pp-item" data-act="undo-step">' + ic("undo") + '<span class="t">Undo the last save</span></button>';
+    if (!dirty && c.canRedo) out += '<button type="button" class="pp-item" data-act="redo-step">' + ic("redo") + '<span class="t">Redo the last save</span></button>';
     out += '<button type="button" class="pp-item" data-tab="versions">' + ic("clock") + '<span class="t">See the versions</span></button>';
     return '<div class="ed-pop svp" role="dialog" aria-label="Other ways to save">' + out + '</div>';
+  }
+  // Publish later: a date and a time, London time. The changes wait on a copy of their own until then.
+  function londonDay(ms) { try { return new Date(ms).toLocaleDateString("en-CA", { timeZone: "Europe/London" }); } catch (e) { return new Date(ms).toISOString().slice(0, 10); } }
+  function laterPop() {
+    var today = londonDay(Date.now()); if (!state.later) state.later = { date: londonDay(Date.now() + 86400000), time: "09:00" };
+    var day = state.later.date;
+    return '<div class="ed-pop svp later" role="dialog" aria-label="Publish later"><p class="cap">Publish later</p>' +
+      '<p class="small">Your changes are kept on a copy of their own and published by themselves at the time you choose, London time. GitHub keeps the clock, so it can be up to about 15 minutes late.</p>' +
+      '<div class="field"><label for="later-date">Date</label><input type="date" class="box" id="later-date" min="' + today + '" value="' + day + '"></div>' +
+      '<div class="field"><label for="later-time">Time</label><input type="time" class="box" id="later-time" step="900" value="' + esc(state.later.time) + '"></div>' +
+      '<div class="laterbtns"><button type="button" class="soft" data-act="ed-pop" data-menu="save">Back</button><button type="button" class="btn key" data-act="ed-later-go">Publish later</button></div></div>';
+  }
+  async function laterGo() {
+    var s = site(), pgd = pgOf(); if (!s || !pgd || !pgd.dirty) return;
+    var d = app.querySelector("#later-date"), t = app.querySelector("#later-time"), lv = state.later || {}, at = ((d && d.value) || lv.date || "") + "T" + ((t && t.value) || lv.time || "");
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(at)) { state.notice = { text: "Choose a date and a time first.", problem: true }; edPatch(); return; }
+    state.edMenu = ""; state.status = "saving"; patchEdTop();
+    try { var out = await api("scheduleCopy", { site: s.id, at: at }); state.status = "live"; savePages(null, { copy: out.copy, when: out.when }); }
+    catch (e) { state.status = "live"; state.notice = { text: e.message, problem: true }; edPatch(); }
   }
   // The top bar of the page editor.
   function edTop(s, pgd) {
@@ -1143,14 +1262,15 @@
       '<div class="righty">' +
         '<button type="button" class="tb word insp" data-act="ed-inspector" role="switch" aria-checked="' + insp + '" title="Inspector: pick parts of the page by clicking them (' + ED_CTRL + '+Shift+I)">' + ic("cursor", 16) + '<span class="lbl">Inspector</span><span class="sw2' + (insp ? "" : " off") + '" aria-hidden="true"><i></i></span></button>' +
         '<div class="seg tbs" role="group" aria-label="Screen size"><button type="button" class="tb word' + (!pgd || pgd.mode === "computer" ? " on" : "") + '" data-act="ed-mode" data-mode="computer" aria-label="Computer view" title="Computer view">' + ic("monitor", 17) + '<span class="lbl">Computer</span></button><button type="button" class="tb word' + (pgd && pgd.mode === "phone" ? " on" : "") + '" data-act="ed-mode" data-mode="phone" aria-label="Phone view" title="Phone view">' + ic("phone", 17) + '<span class="lbl">Phone</span></button></div>' +
-        '<button type="button" class="tb word" data-act="undo-step" aria-label="Undo" title="Undo"' + ((trial ? c.ahead > 0 : (c.steps || []).length > 0) && !saving ? "" : " disabled") + '>' + ic("undo", 16) + '<span class="lbl">Undo</span></button>' +
-        '<button type="button" class="tb word" data-act="redo-step" aria-label="Redo" title="Redo"' + (c.canRedo && !saving ? "" : " disabled") + '>' + ic("redo", 16) + '<span class="lbl">Redo</span></button>' +
+        '<button type="button" class="tb word" data-act="ed-undo" aria-label="Undo" title="Undo the last change on this page (' + ED_CTRL + '+Z)"' + (pgd && (pgd.hist[locKey(pgd)] || []).length && !saving ? "" : " disabled") + '>' + ic("undo", 16) + '<span class="lbl">Undo</span></button>' +
+        '<button type="button" class="tb word" data-act="ed-redo" aria-label="Redo" title="Redo (' + ED_CTRL + '+Y)"' + (pgd && (pgd.redo[locKey(pgd)] || []).length && !saving ? "" : " disabled") + '>' + ic("redo", 16) + '<span class="lbl">Redo</span></button>' +
         '<span class="popat"><button type="button" class="tb word' + (m === "more" || m === "keys" || m === "help" ? " on" : "") + '" data-act="ed-pop" data-menu="more" aria-haspopup="dialog" aria-label="More" title="More">' + ic("dots", 17) + '<span class="lbl">More</span></button>' + (m === "more" || m === "keys" || m === "help" ? morePop(s, pgd) : "") + '</span>' +
         (dirty ? '<button type="button" class="tb word" data-act="ed-discard">Discard</button>' + (!isAdmin() ? '<button type="button" class="tb word" data-act="ed-save-publish"' + (saving ? " disabled" : "") + '>Save and publish</button>' : "")
           : !isAdmin() && c.behind ? '<button type="button" class="tb word" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Bring my copy up to date</button>' + (c.ahead ? '<button type="button" class="tb word" data-act="ask-makelive">Publish</button>' : "")
           : trial && c.ahead ? '<button type="button" class="tb word" data-act="ask-makelive">' + (isAdmin() ? "Make live" : "Publish") + '</button>' : "") +
-        '<span class="state" id="island-text" title="' + esc(said) + '">' + (dirty || saving ? '<i class="lamp a" aria-hidden="true"></i>' : "") + esc(said) + '</span>' +
-        '<span class="popat split"><button type="button" class="btn" data-act="ed-save"' + (dirty && !saving ? "" : " disabled") + '>Save</button><button type="button" class="btn sm" data-act="ed-pop" data-menu="save" aria-haspopup="dialog" aria-label="Other ways to save" title="Other ways to save">' + ic("dots", 16) + '</button>' + (m === "save" ? savePop(s, pgd, c) : "") + '</span>' +
+        (pgd && histCount(pgd) && !saving ? '<span class="popat"><button type="button" class="tb word chg-count' + (m === "changes" ? " on" : "") + '" id="island-text" data-act="ed-pop" data-menu="changes" aria-haspopup="dialog" aria-expanded="' + (m === "changes") + '" title="' + esc(said) + '. See every change not saved yet"><i class="lamp a" aria-hidden="true"></i><span class="vh">' + esc(said) + ': </span>' + histCount(pgd) + (histCount(pgd) === 1 ? " change" : " changes") + '</button>' + (m === "changes" ? changesPop(pgd) : "") + '</span>'
+          : '<span class="state" id="island-text" title="' + esc(said) + '">' + (dirty || saving ? '<i class="lamp a" aria-hidden="true"></i>' : "") + esc(said) + '</span>') +
+        '<span class="popat split"><button type="button" class="btn" data-act="ed-save"' + (dirty && !saving ? "" : " disabled") + '>Save</button><button type="button" class="btn sm" data-act="ed-pop" data-menu="save" aria-haspopup="dialog" aria-label="Other ways to save" title="Other ways to save">' + ic("dots", 16) + '</button>' + (m === "save" ? savePop(s, pgd, c) : m === "later" ? laterPop() : "") + '</span>' +
       '</div>';
   }
   // The eye and the bin on a row of the list. The bin only on what can be removed.
@@ -1873,6 +1993,33 @@
   }
   var FIELD_N = 0, FIELD_DEF = {};
   // One artist, one article, or a menu: a rounded tag once chosen, with Replace, Edit, Connect stored data and Remove.
+  // Stored data: in a template, a setting can take its value from the page it is drawn on, such as the article's title.
+  function storedOptions(pgd, f) {
+    var k = tplHere(pgd), sel = pgd.sel; if (!k || !sel || sel.where !== "tpl" || !f) return [];
+    var one = tplOne(pgd, k);
+    if (f.type === "artists" && f.one) return k === "artist" ? [{ v: "{page.artist}", label: "This " + one }] : ((pgd.site && pgd.site.articles) || []).some(function (a) { return Array.isArray(a.artists); }) ? [{ v: "{page.artist}", label: "This article's first artist" }] : [];
+    if (f.type === "piece") return k === "article" ? [{ v: "{page.article}", label: "This article" }] : [];
+    if (f.type === "text" && !(f.addr || /^(href|url|map)$/.test(String(f.name))) || f.type === "long" || f.type === "lines") return [{ v: "{page.title}", label: k === "article" ? "This article's title" : "This " + one + "'s name" }, { v: "{page.summary}", label: k === "article" ? "This article's summary" : "This " + one + "'s short description" }];
+    return [];
+  }
+  function storedOf(pgd, f, v) { var x = Array.isArray(v) && v.length === 1 ? v[0] : v; return typeof x === "string" ? storedOptions(pgd, f).filter(function (o) { return o.v === x; })[0] || null : null; }
+  // The small menu of what a setting can be connected to.
+  function storedMenu(pgd, f, path) {
+    return '<div class="ed-pop resmenu" role="menu" aria-label="Connect stored data"><p class="cap">Take it from the page</p>' + storedOptions(pgd, f).map(function (o) {
+      return '<button type="button" class="pp-item" role="menuitem" data-act="ed-res-set" data-path="' + esc(path) + '" data-v="' + esc(o.v) + '"' + (f.type === "lines" ? ' data-lines="1"' : "") + '>' + ic("links") + '<span class="t">' + esc(o.label) + '</span></button>'; }).join("") +
+      '<p class="small">Each page using this template shows its own.</p></div>';
+  }
+  // A text setting connected to stored data shows as a tag, with a way to type words again.
+  function storedTag(pgd, f, path, id, st) {
+    var open = pgd.res && pgd.res.path === path && pgd.res.mode === "connect";
+    return '<div class="resf storedv"><button type="button" class="rtag stored" id="' + id + '" data-act="ed-res" data-path="' + esc(path) + '" data-mode="connect" aria-haspopup="menu" aria-expanded="' + open + '">' + ic("links", 14) + '<span>' + esc(st.label) + '</span></button>' +
+      '<button type="button" class="linklike small" data-act="ed-res-set" data-path="' + esc(path) + '" data-v=""' + (f.type === "lines" ? ' data-lines="1"' : "") + '>Disconnect</button>' + (open ? storedMenu(pgd, f, path) : "") + '</div>';
+  }
+  function storedLink(pgd, f, path) {
+    if (!storedOptions(pgd, f).length) return "";
+    var open = pgd.res && pgd.res.path === path && pgd.res.mode === "connect";
+    return '<span class="resf storedl"><button type="button" class="linklike small" data-act="ed-res" data-path="' + esc(path) + '" data-mode="connect" aria-haspopup="menu" aria-expanded="' + open + '">' + ic("links", 13) + 'Connect stored data</button>' + (open ? storedMenu(pgd, f, path) : "") + '</span>';
+  }
   function resItems(pgd, f) {
     if (f.type === "menu") return [{ v: "main", label: "Main menu", note: "The links in the menu bar" }, { v: "footer", label: "Footer menu", note: "The links at the bottom of every page" }];
     if (f.type === "piece") return (((pgd.site || {}).articles) || []).map(function (a) { return { v: a.slug, label: a.title + (a.hidden ? " (hidden)" : ""), pic: a.image, hash: "a-" + a.slug }; });
@@ -1881,16 +2028,18 @@
   }
   function resThumb(pgd, it) { var pic = it && it.pic, src = !pic ? "" : /^https?:/.test(pic) ? pic : /\//.test(pic) ? (pgd.preview || "") + pic : imageSrc(pgd, pic); return src ? '<img class="rthumb" src="' + esc(src) + '" alt="">' : '<span class="rthumb none" aria-hidden="true">' + esc(String((it && it.label) || "?").trim().charAt(0).toUpperCase()) + '</span>'; }
   function resField(pgd, f, v, path, id) {
-    var items = resItems(pgd, f), cur = items.find(function (x) { return x.v === v; }), mode = pgd.res && pgd.res.path === path ? pgd.res.mode : "";
+    var items = resItems(pgd, f), st = storedOf(pgd, f, v), cur = st ? { v: v, label: st.label, stored: true } : items.find(function (x) { return x.v === v; }), mode = pgd.res && pgd.res.path === path ? pgd.res.mode : "", canConnect = storedOptions(pgd, f).length > 0;
     var word = f.type === "menu" ? "menu" : f.type === "piece" ? "article" : "artist";
     var empty = f.type === "artists" ? (f.name == null ? "No artist chosen yet." : "None chosen, so the first published artist is shown.") : f.type === "menu" ? "No menu chosen yet." : "No article chosen yet.";
-    var out = cur ? '<button type="button" class="rtag" id="' + id + '" data-act="ed-res" data-path="' + esc(path) + '" data-mode="menu" aria-haspopup="menu" aria-expanded="' + (mode === "menu") + '">' + (f.type === "menu" ? "" : resThumb(pgd, cur)) + '<span>' + esc(cur.label) + '</span></button>'
-      : '<div class="rempty"><span class="small">' + esc(empty) + '</span><button type="button" class="soft slim" id="' + id + '" data-act="ed-res" data-path="' + esc(path) + '" data-mode="list">Select</button></div>';
+    var out = cur ? '<button type="button" class="rtag' + (cur.stored ? " stored" : "") + '" id="' + id + '" data-act="ed-res" data-path="' + esc(path) + '" data-mode="menu" aria-haspopup="menu" aria-expanded="' + (mode === "menu") + '">' + (cur.stored ? ic("links", 14) : f.type === "menu" ? "" : resThumb(pgd, cur)) + '<span>' + esc(cur.label) + '</span></button>'
+      : '<div class="rempty"><span class="small">' + esc(empty) + '</span><button type="button" class="soft slim" id="' + id + '" data-act="ed-res" data-path="' + esc(path) + '" data-mode="list">Select</button>' + (canConnect ? '<button type="button" class="linklike small" data-act="ed-res" data-path="' + esc(path) + '" data-mode="connect">Connect stored data</button>' : "") + '</div>';
+    if (mode === "connect") out += storedMenu(pgd, f, path);
     if (mode === "menu" && cur) out += '<div class="ed-pop resmenu" role="menu">' +
       '<button type="button" class="pp-item" role="menuitem" data-act="ed-res" data-path="' + esc(path) + '" data-mode="list">' + ic("swap") + '<span class="t">Replace</span></button>' +
-      (cur.hash ? '<button type="button" class="pp-item" role="menuitem" data-act="ed-goto-item" data-hash="' + esc(cur.hash) + '">' + ic("pen") + '<span class="t">Edit</span><span class="k">Opens its page</span></button>' : "") +
-      (f.type === "menu" ? "" : '<button type="button" class="pp-item" role="menuitem" disabled>' + ic("links") + '<span class="t">Connect stored data</span><span class="k">With templates</span></button>') +
-      '<button type="button" class="pp-item danger" role="menuitem" data-act="ed-res-set" data-path="' + esc(path) + '" data-v="">' + ic("bin") + '<span class="t">Remove</span></button></div>';
+      (cur.hash && !cur.stored ? '<button type="button" class="pp-item" role="menuitem" data-act="ed-goto-item" data-hash="' + esc(cur.hash) + '">' + ic("pen") + '<span class="t">Edit</span><span class="k">Opens its page</span></button>' : "") +
+      (f.type === "menu" ? "" : canConnect ? '<button type="button" class="pp-item" role="menuitem" data-act="ed-res" data-path="' + esc(path) + '" data-mode="connect">' + ic("links") + '<span class="t">Connect stored data</span><span class="k">From this page</span></button>'
+        : '<button type="button" class="pp-item" role="menuitem" disabled>' + ic("links") + '<span class="t">Connect stored data</span><span class="k">In templates</span></button>') +
+      '<button type="button" class="pp-item danger" role="menuitem" data-act="ed-res-set" data-path="' + esc(path) + '" data-v="">' + ic("bin") + '<span class="t">' + (cur.stored ? "Disconnect" : "Remove") + '</span></button></div>';
     if (mode === "list") out += '<div class="ed-pop reslist" role="dialog" aria-label="Choose ' + (word === "article" ? "an" : "a") + " " + word + '"><input type="search" class="box" data-res-q="1" placeholder="Search ' + word + 's" aria-label="Search ' + word + 's"><div class="resitems">' +
       items.map(function (it) { return '<button type="button" class="pp-item' + (it.v === v ? " on" : "") + '" data-act="ed-res-set" data-path="' + esc(path) + '" data-v="' + esc(it.v) + '" data-q="' + esc(it.label.toLowerCase()) + '">' + (f.type === "menu" ? ic("list") : resThumb(pgd, it)) + '<span class="t">' + esc(it.label) + '</span>' + (it.note ? '<span class="k">' + esc(it.note) + '</span>' : "") + '</button>'; }).join("") +
       '<p class="small rnone" hidden>Nothing by that name.</p></div>' +
@@ -2046,6 +2195,8 @@
       return '<div class="field">' + label + (t === "long" ? '<textarea class="box"' + attrs + ' rows="' + Math.max(3, Math.ceil(String(real).length / 38)) + '">' + esc(real) + '</textarea>' : '<input type="text" class="box"' + attrs + ' value="' + esc(real) + '">') +
         '<span class="small">Shared with Site details, so a change here shows everywhere these words are used. <button type="button" class="linklike small" data-act="ed-unshare" data-path="' + esc(path) + '" data-word="' + shared.word + '">Use different words here only</button></span></div>';
     }
+    var stv = (t === "text" || t === "long" || t === "lines") && path ? storedOf(pgd, f, v) : null;
+    if (stv) return '<div class="field">' + label + storedTag(pgd, f, path, id, stv) + hint + '</div>';
     if (t === "info") return '<p class="info">' + esc(f.text || f.label || "") + (f.go ? ' <button type="button" class="linklike small" data-tab="' + esc(f.go) + '">' + esc(f.goLabel || "Open") + '</button>' : "") + '</p>';
     if (t === "set") return setField(pgd, f, value, path);
     if (t === "yesno") return '<div class="field swfield"><div class="swline">' + label + '<label class="switch"><input type="checkbox" role="switch" id="' + id + '" data-pf="' + esc(path) + '" data-kind="yesno"' + (v === true ? " checked" : "") + '><span class="knob" aria-hidden="true"></span></label></div>' + hint + '</div>';
@@ -2132,7 +2283,7 @@
           f.fields.map(function (g) { return edField(pgd, g, row ? row[g.name] : undefined, path + "." + i + "." + g.name); }).join("") + '</div>';
       }).join("") + '<button type="button" class="soft slim" data-act="ed-row-add" data-path="' + esc(path) + '">Add one</button></div>';
     }
-    return '<div class="field">' + label + input + hint + '</div>';
+    return '<div class="field">' + label + input + ((t === "text" || t === "long" || t === "lines") && path ? storedLink(pgd, f, path) : "") + hint + '</div>';
   }
 
   function imageSrc(pgd, v) {
@@ -2280,6 +2431,7 @@
       pgd.sel = keep && !(keep.where === rs.where && keep.id === rs.id && keep.block != null) ? keep : back;
     } else {
       if (!isSecList(rs.where) || (rs.where === "page" && rs.id === mainId(pgd))) { restore(); return; }
+      pgd.histSel = { where: rs.where, id: rs.id, block: null };
       var l = secList(pgd, rs.where), at = l.findIndex(function (x) { return x.id === rs.id; }), sec = l.splice(at, 1)[0];
       pgd.removed = { kind: "section", where: rs.where, at: at, sec: sec, page: pgd.page, pat: pgd.at, label: secName(pgd, sec), tpl: rs.where === "tpl" ? { kind: tplHere(pgd), id: tplId(pgd) } : null };
       pgd.what = "Remove section: " + secName(pgd, sec);
@@ -2626,7 +2778,8 @@
     Object.keys(pgd.pictures || {}).forEach(function (k) { var a = pgd.pictures[k], b = was[k] || {}; if (a.image !== b.image || a.alt !== b.alt || a.credit !== b.credit) out[k] = { image: a.image, alt: a.alt, credit: a.credit }; });
     return out;
   }
-  function savePages(after) {
+  // "later" is a copy made for Publish later: the changes are saved there, and the editor goes back to the live site.
+  function savePages(after, later) {
     var s = site(), pgd = pgOf(); if (!s || !pgd || !pgd.dirty) return;
     var miss = missingDescription(pgd);
     if (miss && miss.at) { pgd.at = miss.at; pgd.sel = { where: "item", id: miss.part, block: miss.block }; state.notice = { text: "Please describe the picture of " + miss.label + " before saving. It is read out to people who cannot see it.", problem: true }; edPatch(); pushPreview(); return; }
@@ -2641,17 +2794,18 @@
     var used = canon(doc) + canon(pics) + (contentNow ? canon(contentNow) : ""), uploads = Object.keys(pgd.uploads || {}).filter(function (k) { return used.indexOf(JSON.stringify(k)) >= 0; }).map(function (k) { var u = pgd.uploads[k]; return { key: k, name: u.name, ext: u.ext, content: u.content }; });
     edRemember(); state.notice = null;
     var th = themeOf(), thSend = th && themeChanges(th) > 0 ? JSON.parse(JSON.stringify(th.draft)) : null;
-    var saveTheme = function (r) { return thSend ? api("saveTheme", { site: s.id, values: thSend }).then(function () { th.values = JSON.parse(JSON.stringify(thSend)); return r; }) : r; };
+    var saveTheme = function (r) { return thSend ? api("saveTheme", { site: s.id, values: thSend, copy: later ? later.copy : undefined }).then(function () { th.values = JSON.parse(JSON.stringify(thSend)); return r; }) : r; };
+    var go = later ? function (fn) { fn(); } : onLive, said = later ? "Kept to publish " + later.when : null;
     if (thSend && canon(doc) === pgd.base && !picNames.length && !contentNow && !uploads.length) {
-      onLive(function () { change(key("pages", s.id), function () { return saveTheme({ ok: true }); }, function () { pgMark(pgd); state.dirty = false; if (after) setTimeout(after, 0); }, curCopy().kind === "trial" ? "Theme saved on this copy" : "Theme saved. Live in about two minutes"); }, "This theme change");
+      go(function () { change(key("pages", s.id), function () { return saveTheme({ ok: true }); }, function () { histBase(pgd); pgMark(pgd); state.dirty = false; if (after) setTimeout(after, 0); }, said || (curCopy().kind === "trial" ? "Theme saved on this copy" : "Theme saved. Live in about two minutes")); }, "This theme change");
       return;
     }
-    onLive(function () {
-      change(key("pages", s.id), function () { return api("savePages", { site: s.id, pages: doc, what: what, uploads: uploads, pictures: pics, content: contentNow, version: pgd.version, replace: !!pgd.replaceNext }).then(saveTheme).catch(function (e) {
+    go(function () {
+      change(key("pages", s.id), function () { return api("savePages", { site: s.id, copy: later ? later.copy : undefined, pages: doc, what: what, uploads: uploads, pictures: pics, content: contentNow, version: pgd.version, replace: !!pgd.replaceNext }).then(saveTheme).catch(function (e) {
           pgd.replaceNext = false;
           if (e.stale) state.ask = { kind: "stale" };
           throw e;
-        }); }, function () { state.dirty = false; if (after) setTimeout(after, 0); }, curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes");
+        }); }, function () { histBase(pgd); state.dirty = false; if (after) setTimeout(after, 0); }, said || (curCopy().kind === "trial" ? "Saved on this copy" : "Saved. Live in about two minutes"));
     }, (picNames.length ? "This change, including the shared " + (picNames.length === 1 ? "picture of " + picNames[0] + "," : "pictures of " + picNames.join(" and ") + ",") : "This page change") + (uploads.length ? (uploads.length === 1 ? " and its new photo" : " and its " + uploads.length + " new photos") : ""));
   }
 
@@ -3671,7 +3825,7 @@
     }
     else if (a === "ed-picker") { var pq2 = pgOf(); if (pq2) { pq2.picker = pq2.picker === el.dataset.path ? "" : el.dataset.path; edPatch(); } }
     else if (a === "ed-res") { var prs = pgOf(); if (!prs) return; prs.res = prs.res && prs.res.path === el.dataset.path && prs.res.mode === el.dataset.mode ? null : { path: el.dataset.path, mode: el.dataset.mode }; edPatch(); var rq = app.querySelector("[data-res-q]"); if (rq) rq.focus(); }
-    else if (a === "ed-res-set") { var prs2 = pgOf(), srs = prs2 && pgSel(prs2); if (!srs) return; pgSet(srs.sec.settings, el.dataset.path, el.dataset.v); prs2.res = null; prs2.what = "Edit " + (srs.kind ? srs.kind.label : srs.id); pgMark(prs2); edPatch(); pushPreview(); }
+    else if (a === "ed-res-set") { var prs2 = pgOf(), srs = prs2 && pgSel(prs2); if (!srs) return; pgSet(srs.sec.settings, el.dataset.path, el.dataset.lines ? (el.dataset.v ? [el.dataset.v] : []) : el.dataset.v); prs2.res = null; prs2.what = "Edit " + (srs.kind ? srs.kind.label : srs.id); pgMark(prs2); edPatch(); pushPreview(); }
     else if (a === "ed-res-new") { var prn = pgOf(); if (!prn) return; prn.res = null; prn.panel = "new"; prn.newWhat = el.dataset.what; edPatch(); var nfr = app.querySelector('form[data-form="ednew"] input[type=text]'); if (nfr) nfr.focus(); }
     else if (a === "ed-lib-close") { var plc = pgOf(); if (plc) { plc.lib = null; edPatch(); } }
     else if (a === "ed-lib-view") { var plv = pgOf(); if (plv && plv.lib) { plv.lib.view = el.dataset.v; plv.libView = el.dataset.v; libPatch(); } }
@@ -3710,7 +3864,11 @@
     }
     else if (a === "ed-save") savePages();
     else if (a === "ed-save-publish") { var cp = curCopy().id; savePages(function () { state.ask = { kind: "makelive", copy: cp }; if (pgOf()) edPatch(); else render(); var q = app.querySelector(".ask"); if (q && q.scrollIntoView) q.scrollIntoView({ block: "start" }); var nb = app.querySelector("#pub-note"); if (nb) nb.focus({ preventScroll: true }); }); }
-    else if (a === "ed-discard") { var pz = pgOf(); if (pz) { var tdd = themeOf(); if (tdd) { tdd.draft = JSON.parse(JSON.stringify(tdd.values)); themePush(); } pgReset(pz); pz.removed = null; state.renaming = null; pz.sel = null; pz.panel = ""; pz.uploads = {}; pz.picker = ""; edPatch(); pushPreview(""); } }
+    else if (a === "ed-later-go") { laterGo(); }
+    else if (a === "ed-undo") { var pu = pgOf(); if (pu) histStep(pu, true); }
+    else if (a === "ed-redo") { var pr0 = pgOf(); if (pr0) histStep(pr0, false); }
+    else if (a === "ed-chg-undo") { var pc0 = pgOf(); if (pc0) histUndoOne(pc0, el.dataset.k, Number(el.dataset.i)); }
+    else if (a === "ed-discard") { var pz = pgOf(); if (pz) { var tdd = themeOf(); if (tdd) { tdd.draft = JSON.parse(JSON.stringify(tdd.values)); themePush(); } pgReset(pz); histBase(pz); pz.removed = null; state.renaming = null; pz.sel = null; pz.panel = ""; pz.uploads = {}; pz.picker = ""; edPatch(); pushPreview(""); } }
     else if (a === "look") { var t = themeOf(), i = Number(el.dataset.i); if (t) { Object.assign(t.draft.colours, i < 0 ? t.values.colours : t.spec.looks[i].colours); themeUpdate(); } }
     else if (a === "theme-discard") { var t2 = themeOf(); if (t2) { t2.draft = JSON.parse(JSON.stringify(t2.values)); themeUpdate(); } }
     else if (a === "theme-publish") onLive(publishTheme, "This theme change");
@@ -3900,8 +4058,13 @@
     if (ev.key === "Enter" && ev.target.id === "pp-q") { var first = app.querySelector(".pp-all .pp-item:not([hidden])"); if (first) { ev.preventDefault(); first.click(); } return; }
     if (ev.target && ev.target.id === "ed-rename") { if (ev.key === "Enter") { ev.preventDefault(); renameDone(true); } else if (ev.key === "Escape") { ev.preventDefault(); renameDone(false); } return; }
     if (ev.key === "Escape" && state.ctx) { ctxClose(); return; }
+    var cmd = (ev.ctrlKey || ev.metaKey) && !ev.altKey, kc = String(ev.key || "").toLowerCase();
+    if (cmd && kc === "s") { ev.preventDefault(); var ps0 = pgOf(); if (ps0 && ps0.dirty && state.status !== "saving") { var sb0 = app.querySelector('[data-act="ed-save"]'); if (sb0) sb0.click(); } return; }
+    if (cmd && (ev.key === "/" || ev.code === "Slash")) { ev.preventDefault(); state.edMenu = state.edMenu === "keys" ? "" : "keys"; patchEdTop(); return; }
     var typing = ev.target && (ev.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName || ""));
-    if (typing) return; // AltGr is Ctrl+Alt on many keyboards, so leave typing alone
+    if (typing) return; // AltGr is Ctrl+Alt on many keyboards, so leave typing alone; boxes keep their own undo
+    if (cmd && kc === "z") { ev.preventDefault(); var pz0 = pgOf(); if (pz0) histStep(pz0, !ev.shiftKey); return; }
+    if (cmd && kc === "y") { ev.preventDefault(); var py0 = pgOf(); if (py0) histStep(py0, false); return; }
     var pk = pgOf();
     if (ev.shiftKey && ev.code === "KeyH" && (ev.ctrlKey || ev.metaKey || ev.altKey) && pk.sel) { ev.preventDefault(); toggleHidden(pk); return; }
     if (ev.shiftKey && (ev.key === "Delete" || (ED_MAC && ev.key === "Backspace")) && pk.sel) { ev.preventDefault(); removeSel(pk); return; }
@@ -3920,6 +4083,7 @@
   });
   app.addEventListener("focusout", function (ev) { if (ev.target && ev.target.id === "ed-rename" && state.renaming) setTimeout(function () { if (state.renaming) renameDone(true); }, 0); if (ev.target && ev.target.id === "tpl-rename" && state.tplRename) setTimeout(function () { if (state.tplRename) tplRenameDone(true); }, 0); });
   app.addEventListener("input", function (ev) {
+    if (ev.target.id === "later-date" || ev.target.id === "later-time") { state.later = state.later || {}; state.later[ev.target.id === "later-date" ? "date" : "time"] = ev.target.value; return; }
     if (ev.target.id === "tpl-new-name") {
       var pnn = pgOf(); if (!pnn || !pnn.tplNew) return; pnn.tplNew.name = ev.target.value;
       var all = tplAll(pnn, pnn.tplNew.kind), v = ev.target.value.trim().toLowerCase(), clash = !!v && Object.keys(all).some(function (id) { return String(all[id].name || "").toLowerCase() === v; });

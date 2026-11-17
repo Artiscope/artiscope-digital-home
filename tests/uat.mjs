@@ -22,7 +22,7 @@ fs.writeFileSync("/tmp/uat-sad/assets/site.js", fs.readFileSync("/tmp/uat-sad/as
 
 // ----- the server, with GitHub in memory -----
 let signedIn = "tester@artiscope.co.uk";
-globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "tester@artiscope.co.uk", SUPABASE_URL: "https://s", SUPABASE_SERVICE_ROLE_KEY: "k" }[k] || "") }, serve() {} };
+globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "tester@artiscope.co.uk", SUPABASE_URL: "https://s", SUPABASE_SERVICE_ROLE_KEY: "k", SCHEDULE_KEY: "a-long-random-key-for-the-clock-0123456789" }[k] || "") }, serve() {} };
 const { makePeople } = await import("./fakepeople.mjs"); const ppl = makePeople();
 const { handle } = await import("./home.mjs");
 const { makeGitHub } = await import("./fakegit.mjs");
@@ -92,6 +92,8 @@ const settle = (ms = 800) => page.waitForTimeout(ms);
 const frame = (host) => page.frames().find((f) => f.url().startsWith("https://" + host));
 const text = (sel) => page.innerText(sel);
 const notice = async () => (await page.locator(".notice").allInnerTexts()).join(" | ");
+// Undo or Redo of a save sits in Save's dropdown; the top bar's Undo is for changes not saved yet.
+async function savedStep(which) { if (!(await page.isVisible('.svp [data-act="' + which + '-step"]'))) await page.click('[data-act="ed-pop"][data-menu="save"]'); await page.click('.svp [data-act="' + which + '-step"]'); }
 async function liveSave() { await page.click('[data-act="ed-save"]'); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved", { timeout: 9000 }); await settle(900); }
 async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).catch(() => {}); await page.click('[data-tab="home"]', { timeout: 1500 }).catch(() => {}); await shot("open-" + id); await page.evaluate((x) => { window.__adh.state.leave = null; }, id); await page.waitForSelector('[data-act="open-site"][data-site="' + id + '"]', { timeout: 20000 }); await page.click('[data-act="open-site"][data-site="' + id + '"]'); await page.waitForSelector('[data-tab="overview"]'); if (!(await page.isVisible(".ed-exit"))) await page.click('.navb[data-tab="pages"]'); await page.waitForSelector("#ed-sections .sec", { timeout: 12000 }); await settle(1800); }
 
@@ -99,7 +101,7 @@ async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).cat
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all six sites, the Practice site among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 6, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 44"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 45"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await goTab(page, "home"); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -114,8 +116,8 @@ await check("Exit leads to the menu: Overview, Pages, Theme, Files, History, and
 await check("Clicking a part of the page opens its settings", async () => { await frame("worldartreview.com").click("#numbers"); await page.waitForSelector(".ed-right h2:has-text('Numbers band')"); });
 await check("Typing redraws the page before saving", async () => { await page.fill('[data-pf="eyebrow"]', "The review in numbers"); await settle(500); must((await frame("worldartreview.com").evaluate(() => document.querySelector("#numbers .eyebrow").textContent)) === "The review in numbers", "not redrawn"); });
 await check("Save on the live site asks once, then saves to the live site", async () => { await page.click('[data-act="ed-save"]'); await page.waitForSelector("text=goes live in about two minutes"); await shot("03-live-question"); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved"); await settle(1200); must(JSON.stringify(read(WR, "content/pages.json")).includes("The review in numbers"), "not on main"); });
-await check("Undo takes the save back on the live site, after one question", async () => { await page.click('[data-act="undo-step"]'); await page.click('[data-act="livesave"]'); await settle(2500); must(!JSON.stringify(read(WR, "content/pages.json")).includes("The review in numbers"), "still there"); });
-await check("Redo puts it back", async () => { await page.click('[data-act="redo-step"]'); await page.click('[data-act="livesave"]'); await settle(2500); must(JSON.stringify(read(WR, "content/pages.json")).includes("The review in numbers"), "not back"); });
+await check("Undo takes the save back on the live site, after one question", async () => { await savedStep("undo"); await page.click('[data-act="livesave"]'); await settle(2500); must(!JSON.stringify(read(WR, "content/pages.json")).includes("The review in numbers"), "still there"); });
+await check("Redo puts it back", async () => { await savedStep("redo"); await page.click('[data-act="livesave"]'); await settle(2500); must(JSON.stringify(read(WR, "content/pages.json")).includes("The review in numbers"), "not back"); });
 await check("Discard throws away unsaved typing", async () => { await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await page.fill('[data-pf="eyebrow"]', "Throw me away"); await settle(300); await page.click('[data-act="ed-discard"]'); await settle(400); must(!(await text(".ed-top")).includes("Edited"), "still edited"); });
 await check("Leaving with unsaved changes asks first, and Keep editing keeps them", async () => {
   await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await page.fill('[data-pf="eyebrow"]', "Keep me"); await settle(300);
@@ -125,7 +127,7 @@ await check("Leaving with unsaved changes asks first, and Keep editing keeps the
 area = "Editor frame";
 if (ONLY && ONLY.includes(area) && !ONLY.includes("Page editor, World Art Review")) await openSite("world-art-review");
 await check("The top bar has Exit, the panel switches, the site, the page picker, Inspector, Computer and Phone, Undo, Redo, More and Save", async () => {
-  for (const sel of [".ed-exit", '[data-act="ed-panel"][data-panel="sections"]', '[data-act="ed-panel"][data-panel="theme"]', '[data-act="ed-panel"][data-panel="addons"]', ".ed-sitebtn", ".ed-pagebtn", ".insp", '[data-act="ed-mode"][data-mode="phone"]', '[data-act="undo-step"]', '[data-act="redo-step"]', '[data-act="ed-pop"][data-menu="more"]', '[data-act="ed-save"]']) must(await page.isVisible(sel), "missing " + sel);
+  for (const sel of [".ed-exit", '[data-act="ed-panel"][data-panel="sections"]', '[data-act="ed-panel"][data-panel="theme"]', '[data-act="ed-panel"][data-panel="addons"]', ".ed-sitebtn", ".ed-pagebtn", ".insp", '[data-act="ed-mode"][data-mode="phone"]', '[data-act="ed-undo"]', '[data-act="ed-redo"]', '[data-act="ed-pop"][data-menu="more"]', '[data-act="ed-save"]']) must(await page.isVisible(sel), "missing " + sel);
   must(!(await page.isVisible(".ed .rail")), "the side menu is still in the editor"); await shot("02b-topbar");
 });
 await check("Save stays off until something changes", async () => {
@@ -233,7 +235,7 @@ await check("Deleting an article asks first, and Undo brings it back", async () 
   await page.selectOption(".pagepick", "a-understanding-palette-knife-painting"); await settle(1000); await page.click('.sec[data-where="item"][data-id="settings"]');
   await page.click('[data-act="ask"][data-k="ed-delart"]'); await page.click('[data-act="ed-delart"]'); await liveSave();
   must(!read(WR, "content/site.json").articles.some((x) => x.slug === "understanding-palette-knife-painting"), "not deleted");
-  await page.click('[data-act="undo-step"]'); await page.click('[data-act="livesave"]'); await settle(2500); must(read(WR, "content/site.json").articles.some((x) => x.slug === "understanding-palette-knife-painting"), "not back");
+  await savedStep("undo"); await page.click('[data-act="livesave"]'); await settle(2500); must(read(WR, "content/site.json").articles.some((x) => x.slug === "understanding-palette-knife-painting"), "not back");
 });
 await check("A new source with a link that is not https is refused", async () => {
   await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="source"]'); await page.fill("#nw-title", "A source"); await page.fill("#nw-url", "javascript:alert(1)");
@@ -973,6 +975,94 @@ await check("Global Art Monitor and Street Art Dispatch draw template sections, 
     await shot("41e-" + id); await page.click('[data-act="ed-discard"]'); await settle(800);
   }
   await openSite("world-art-review");
+});
+
+// =============== 7b. Stored data in templates ===============
+area = "Stored data";
+await check("In a template, a setting can be connected to the page's own data, and each page shows its own", async () => {
+  await openSite("world-art-review"); await openTpl("articles", "article", "default");
+  const qid = await addHere("quote", "tpl"); await settle(500);
+  await page.click('.storedl [data-mode="connect"] >> nth=0'); must(await page.isVisible(".resmenu"), "no menu");
+  await page.click('.resmenu [data-v="{page.title}"]'); await settle(900);
+  const shown = async () => (await frame("worldartreview.com").innerText("#" + qid)).trim();
+  const title = await page.evaluate(() => { const p = window.__adh.pgOf(); return p.site.articles.find((a) => a.slug === p.at.split(":")[1]).title; });
+  must((await shown()).includes(title), "shows " + await shown());
+  must((await text("body")).includes("This article's title"), "no tag");
+  await page.click('[data-act="ed-tpl-ex"]'); await page.click(".tpl-pop .pp-item:not(.on) >> nth=0"); await settle(1500);
+  const title2 = await page.evaluate(() => { const p = window.__adh.pgOf(); return p.site.articles.find((a) => a.slug === p.at.split(":")[1]).title; });
+  must(title2 !== title && (await shown()).includes(title2), "the other article shows " + await shown());
+  await shot("42a-stored"); await liveSave();
+  const sec = read(WR, "content/pages.json").templates.article.default.sections.find((x) => x.id === qid); must(JSON.stringify(sec.settings.text) === '["{page.title}"]', "saved " + JSON.stringify(sec.settings));
+});
+await check("An artist setting in an artist template can be this artist, and Disconnect empties it", async () => {
+  await openTpl("artists", "artist", "default"); const cid = await addHere("artist-cards", "tpl"); await settle(500);
+  if (await page.locator('.sec.blk[data-id="' + cid + '"]').count()) await page.click('.sec.blk[data-id="' + cid + '"] >> nth=0');
+  else { await page.click('.blocknote [data-act="ed-blockpicker"]'); await settle(300); if (await page.isVisible(".pk-item")) await page.click(".pk-item >> nth=0"); }
+  await settle(500); must((await page.evaluate(() => window.__adh.pgOf().sel || {})).block != null, "no artist block picked");
+  await page.click('.resf [data-mode="connect"] >> nth=0'); await page.click('.resmenu [data-v="{page.artist}"]'); await settle(800);
+  const v = await page.evaluate(() => { const p = window.__adh.pgOf(), s = p.doc.templates.artist.default.sections.find((x) => x.type === "artist-cards"); return JSON.stringify(s.settings); });
+  must(v.includes("{page.artist}"), "set " + v); must((await text("body")).includes("This portfolio") && !(await text(".ed-left")).includes("{page.artist}"), "tag");
+  await page.click('[data-act="ed-discard"]'); await settle(800);
+});
+
+// =============== 8. Undo, the Changes list and publishing later ===============
+area = "Undo and changes";
+const eyebrow = () => page.evaluate(() => window.__adh.pgOf().doc.pages.home.sections.find((x) => x.id === "numbers").settings.eyebrow);
+await check("Undo and Redo step through this page's changes, and Save turns off once everything is undone", async () => {
+  await page.selectOption(".pagepick", "home"); await settle(1200);
+  must(await page.isDisabled('[data-act="ed-undo"]') && await page.isDisabled('[data-act="ed-redo"]'), "on with nothing to undo");
+  const was = await eyebrow();
+  await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await page.fill('[data-pf="eyebrow"]', "Step one"); await settle(1700);
+  await page.fill('[data-pf="eyebrow"]', "Step two"); await settle(600);
+  await page.click('[data-act="ed-undo"]'); await settle(500); must(await eyebrow() === "Step one", "first undo: " + await eyebrow());
+  must(!(await page.isDisabled('[data-act="ed-redo"]')), "Redo is off after Undo");
+  await page.click('[data-act="ed-undo"]'); await settle(500); must(await eyebrow() === was && await page.isDisabled('[data-act="ed-save"]'), "everything undone, Save " + await page.isDisabled('[data-act="ed-save"]'));
+  await page.click('[data-act="ed-redo"]'); await settle(500); must(await eyebrow() === "Step one", "redo");
+  await page.fill('[data-pf="eyebrow"]', "Something new"); await settle(600); must(await page.isDisabled('[data-act="ed-redo"]'), "Redo stays on after a new change");
+  must((await frame("worldartreview.com").innerText("#numbers")).includes("Something new"), "preview");
+});
+await check("Removing a section happens at once and Undo puts it back in the same place, picked", async () => {
+  const before = await homeSecs(); await page.click('#ed-sections .sec[data-id="method"]:not(.blk)'); await page.keyboard.press("Shift+Delete"); await settle(500);
+  must((await homeSecs()).length === before.length - 1, "not removed");
+  await page.locator("body").click({ position: { x: 5, y: 890 } }).catch(() => {}); await page.keyboard.press(process.platform === "darwin" ? "Meta+z" : "Control+z"); await settle(600);
+  must(JSON.stringify(await homeSecs()) === JSON.stringify(before), "not back in place: " + (await homeSecs()).join());
+  must((await page.evaluate(() => window.__adh.pgOf().sel || {})).id === "method", "not picked");
+});
+await check("Each page keeps its own Undo, and the Changes list shows every change in plain words, each with its own Undo", async () => {
+  await page.selectOption(".pagepick", "page-standards"); await settle(1200);
+  must(await page.isDisabled('[data-act="ed-undo"]'), "the home page's changes undo here");
+  const n = Number(((await text(".chg-count")).match(/(\d+) changes?/) || [])[1]); must(n >= 2, "count " + n);
+  await page.click(".chg-count"); const list = await text(".chg");
+  must(/: Small line above the heading changed to "Something new"/.test(list) && list.includes("Home"), "list: " + list.replace(/\n/g, " | "));
+  await shot("43a-changes");
+  await page.click('.chg-row:has-text("Something new") [data-act="ed-chg-undo"]'); await settle(1200);
+  must((await page.evaluate(() => window.__adh.pgOf().page)) === "home" && (await eyebrow()) === "Step one", "undo from the list: " + await eyebrow());
+  await page.click('[data-act="ed-discard"]'); await settle(800); must(!(await page.isVisible(".chg-count")), "the count stays after Discard");
+});
+await check("Ctrl+S saves, and Ctrl+/ shows the shortcuts", async () => {
+  await page.keyboard.press("Escape"); if (await page.isEnabled('[data-act="ed-discard"]').catch(() => false)) { await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(600); }
+  await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await page.fill('[data-pf="eyebrow"]', "Saved with keys"); await settle(400);
+  await page.keyboard.press("Control+s"); await page.waitForSelector("text=goes live in about two minutes"); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved"); await settle(1500);
+  must(JSON.stringify(read(WR, "content/pages.json")).includes("Saved with keys"), "not saved");
+  await page.keyboard.press("Control+/"); await settle(300); const k = await text(".ed-pop"); must(k.includes("Undo") && k.includes("Redo") && k.includes("Save"), "keys: " + k); await page.keyboard.press("Escape");
+});
+await check("Publish later keeps the changes on a copy of their own, and the clock publishes them when the time comes", async () => {
+  await page.keyboard.press("Escape"); await settle(200);
+  await page.click('#ed-sections .sec[data-id="numbers"]:not(.blk)'); await page.fill('[data-pf="eyebrow"]', "Out on Monday"); await settle(500);
+  await page.click('[data-act="ed-pop"][data-menu="save"]'); must(!(await page.isDisabled('.svp .pp-item:has-text("Publish later")')), "Publish later is off");
+  await page.click('.svp .pp-item:has-text("Publish later")'); must(await page.isVisible("#later-date") && await page.isVisible("#later-time"), "no date and time");
+  await shot("43b-later"); await page.click('[data-act="ed-later-go"]'); await page.waitForSelector("text=Kept to publish", { timeout: 9000 }); await settle(1500);
+  must(!JSON.stringify(read(WR, "content/pages.json")).includes("Out on Monday"), "went live at once");
+  const refs = hub.refs ? hub.refs(WR) : null, id = (await page.evaluate(() => (window.__adh.state.data.sites.find((x) => x.id === "world-art-review").copies || []).map((c) => c.id))).find((x) => /^trial-later-/.test(x));
+  must(id, "no copy waiting"); must(JSON.stringify(JSON.parse(hub.read(WR, "adh/" + id, "content/pages.json"))).includes("Out on Monday"), "not on the copy");
+  must(!(await eyebrow() || "").includes("Out on Monday"), "still in the editor");
+  const { handle: h2, runLater } = await import("./home.mjs");
+  const bad = await h2(new Request("https://x/", { method: "POST", headers: { "x-schedule-key": "wrong-key-wrong-key-wrong-key" }, body: "{}" })); must(bad.status === 403, "a wrong key was let in");
+  const early = await runLater(new Date()); must(!early.done.length, "published early");
+  const r = await runLater(new Date(Date.now() + 3 * 86400000)); must(r.done.length === 1 && r.done[0].result === "published", JSON.stringify(r));
+  must(JSON.stringify(read(WR, "content/pages.json")).includes("Out on Monday") && hub.read(WR, "adh/" + id, "content/pages.json") == null, "not published");
+  // the clock changed the live site behind the console's back, so start afresh as a person would after it ran
+  await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); await settle(600);
 });
 
 // =============== 6c. New sections, batch 1 ===============

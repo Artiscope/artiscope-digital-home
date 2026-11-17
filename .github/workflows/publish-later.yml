@@ -1,0 +1,35 @@
+name: Publish later
+
+# The clock behind "Publish later" in the page editor. Every 15 minutes it
+# asks the server function to publish any changes whose time has come.
+# It needs one secret, SCHEDULE_KEY: a long random key that is also added
+# to the function's secrets in Supabase under the same name. Without it,
+# this job does nothing.
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Publish what is due
+        env:
+          SCHEDULE_KEY: ${{ secrets.SCHEDULE_KEY }}
+        run: |
+          if [ -z "$SCHEDULE_KEY" ]; then
+            echo "SCHEDULE_KEY is not set up yet, so nothing is published later."
+            exit 0
+          fi
+          curl -sS --fail-with-body -X POST \
+            "https://qjfutwulufvmhetztubt.supabase.co/functions/v1/dynamic-handler" \
+            -H "Content-Type: application/json" \
+            -H "apikey: sb_publishable_6X_IS-AOOVGNpzp73QPU8w_l_qSEnhX" \
+            -H "x-schedule-key: $SCHEDULE_KEY" \
+            -d '{"action":"runLater"}'

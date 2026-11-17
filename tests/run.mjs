@@ -249,4 +249,23 @@ globalThis.fetch = realFetch;
   wp.templates.article.default.sections[0].id = "quote-1"; fs.writeFileSync(wtmp + "/content/pages.json", JSON.stringify(wp));
   assert.throws(() => execFileSync("python3", ["tools/build_site.py", "/tmp/tpl-war-out"], { cwd: wtmp, stdio: "pipe" }), "a template section without t- in its id still built");
 }
+// step 8: Publish later. The time is London time; the copy's id carries it in UTC.
+{
+  const h = await import("./home.mjs");
+  assert.equal(h.fromLondon("2026-12-01T09:00").toISOString(), "2026-12-01T09:00:00.000Z", "winter: London is UTC");
+  assert.equal(h.fromLondon("2027-07-01T09:00").toISOString(), "2027-07-01T08:00:00.000Z", "summer: London is an hour ahead");
+  assert.equal(h.fromLondon("tomorrow"), null);
+  const id = h.laterId(h.fromLondon("2027-07-01T09:00")); assert.match(id, /^trial-later-202707010800-[0-9a-f]{6}$/);
+  assert.equal(h.laterOf(id).toISOString(), "2027-07-01T08:00:00.000Z"); assert.equal(h.copyName(id), "Publish later: 1 July 2027, 09:00");
+  assert.equal(h.copyName("trial-held-a1b2c3"), "Could not publish later");
+  // stored data: an artist or an article can be "the page's own" only inside a template
+  const W = SITES.find((x) => x.repo === "Artiscope/World-art-review");
+  const ctx = { ...W, artists: [{ slug: "zara-muse", name: "Zara Muse" }], articleSlugs: ["a-one"], sourceIds: [] };
+  const cur = { shared: {}, pages: { home: { title: "Home", sections: [] } } };
+  const cards = (id, v) => ({ id, type: "artist-cards", visible: true, settings: { artists: [v] } });
+  const out = cleanPages(ctx, { ...cur, templates: { artist: { default: { name: "Default artist portfolio", sections: [{ id: "main", type: "main" }, cards("t-cards", "{page.artist}")] } } } }, cur);
+  assert.deepEqual(out.templates.artist.default.sections[1].settings.artists, ["{page.artist}"]);
+  const onPage = cleanPages(ctx, { ...cur, pages: { home: { title: "Home", sections: [cards("cards", "{page.artist}")] } } }, cur);
+  assert.deepEqual(onPage.pages.home.sections[0].settings.artists, [], "a page outside a template has no page of its own to take from");
+}
 console.log("ALL TESTS PASSED");

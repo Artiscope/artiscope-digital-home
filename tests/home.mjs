@@ -957,6 +957,9 @@ function cleanField(f, v, site) {
     for (let i = 0; i < (f.count || 3); i++) { const row = rows[i] && typeof rows[i] === "object" ? rows[i] : {}, o = { on: row.on !== false }; for (const g of f.fields || []) o[g.name] = cleanField(g, row[g.name], site); out.push(o); }
     return out;
   }
+  // in a template, an artist or an article can be the page's own ("connect stored data")
+  if (t === "piece" && site.tplKind === "article" && v === "{page.article}") return v;
+  if (t === "artists" && f.one && site.tplKind && v === "{page.artist}") return v;
   if (t === "piece") { const ok = site.articleSlugs || []; return ok.includes(String(v == null ? "" : v)) ? String(v) : null; }
   if (t === "choice") { const ok = f.options.map((o) => o[0]); return ok.includes(String(v == null ? "" : v)) ? String(v) : (f.dflt && ok.includes(f.dflt) ? f.dflt : ok[0]); }
   if (t === "colour") { const x = String(v == null ? "" : v).trim(); const themeOk = (f.theme || []).map((o) => o[0]); return themeOk.includes(x) ? x : (/^#[0-9a-fA-F]{6}$/.test(x) ? x.toUpperCase() : (themeOk[0] || "")); }
@@ -965,7 +968,7 @@ function cleanField(f, v, site) {
     if (f.path) { x = x.startsWith(f.path) ? x.slice(f.path.length) : x; return /^[A-Za-z0-9._-]{1,120}$/.test(x) ? f.path + x : null; }
     return /^[A-Za-z0-9._-]{0,120}$/.test(x) ? x : "";
   }
-  if (t === "artists") { const ok = (site.artists || []).map((a) => a.slug); if (f.one) return ok.includes(String(v)) ? String(v) : ""; return (Array.isArray(v) ? v : []).map((x) => x && typeof x === "object" ? (ok.includes(String(x.v)) ? { v: String(x.v), hidden: true } : "") : (ok.includes(String(x)) ? String(x) : "")).filter(Boolean).slice(0, 20); }
+  if (t === "artists") { const ok = (site.artists || []).map((a) => a.slug).concat(site.tplKind ? ["{page.artist}"] : []); if (f.one) return ok.includes(String(v)) ? String(v) : ""; return (Array.isArray(v) ? v : []).map((x) => x && typeof x === "object" ? (ok.includes(String(x.v)) ? { v: String(x.v), hidden: true } : "") : (ok.includes(String(x)) ? String(x) : "")).filter(Boolean).slice(0, 20); }
   if (t === "rows") {
     const rows = (Array.isArray(v) ? v : []).slice(0, f.max || 40);
     return rows.map((row) => {
@@ -1253,7 +1256,7 @@ export function cleanPages(site, given, current) {
           if (spec[sec.type].popup) throw new Error("A popup goes in the Popups group, not in a template.");
           const sid = String(sec.id || "");
           if (!TPL_SEC.test(sid) || seen.has(sid)) throw new Error("Every section in a template needs its own short name, starting t-.");
-          seen.add(sid); sections.push(cleanSection(spec, sec, sid, site));
+          seen.add(sid); sections.push(cleanSection(spec, sec, sid, { ...site, tplKind: kind }));
         }
         if (mains !== 1) throw new Error("A template keeps the page's own content once. It can be moved, not removed.");
         out.templates[kind][id] = { name, sections };
@@ -1931,8 +1934,26 @@ function randomTail() {
 export function copySlug(name) {
   return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30).replace(/-+$/g, "");
 }
+// Publish later: a copy whose id carries the time it goes live, in UTC: trial-later-202612010900-a1b2c3.
+const LATER_ID = /^trial-later-(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})-[0-9a-f]{6}$/;
+export function laterOf(id) { const m = LATER_ID.exec(String(id)); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5])) : null; }
+export function londonWhen(d) {
+  try { return new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(d).replace(" at ", ", "); }
+  catch (_e) { return d.toISOString().slice(0, 16).replace("T", " ") + " UTC"; }
+}
+// "2026-12-01T09:00", meant as London time, as the moment it is.
+export function fromLondon(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(s || "")); if (!m) return null;
+  const guess = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  const parts = (t) => { const o = {}; for (const x of new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date(t))) o[x.type] = x.value; return Date.UTC(+o.year, +o.month - 1, +o.day, +o.hour % 24, +o.minute); };
+  let t = guess - (parts(guess) - guess); t = guess - (parts(t) - t);
+  return new Date(t);
+}
+export function laterId(d) { const p = (n) => String(n).padStart(2, "0"); return "trial-later-" + d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) + p(d.getUTCHours()) + p(d.getUTCMinutes()) + "-" + randomTail(); }
 export function copyName(id) {
   if (ownerOfCopy(id)) return "An editor's copy";
+  const later = laterOf(id); if (later) return "Publish later: " + londonWhen(later);
+  if (/^trial-held-/.test(String(id))) return "Could not publish later";
   const words = String(id).replace(/^trial-/, "").replace(/-[0-9a-f]{6}$/, "").replace(/-/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -1976,6 +1997,7 @@ async function copiesOf(site) {
       since: d.merge_base_commit && d.merge_base_commit.commit && d.merge_base_commit.commit.committer ? d.merge_base_commit.commit.committer.date : "",
       steps: commits.slice(-20).reverse().map(stepOf),
       canRedo: redoable.includes(r.id),
+      later: laterOf(r.id) ? laterOf(r.id).toISOString() : "",
       preview: "https://" + site.domain + "/preview/" + r.id + "/",
     };
   }));
@@ -2264,9 +2286,52 @@ function isAllowed(email) {
 
 // ---------- the actions the console can ask for ----------
 
+function sameText(a, b) {
+  a = String(a); b = String(b); let d = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return d === 0;
+}
+// Publishes every copy whose time has come. One that clashes with the live site is kept as an ordinary
+// trial copy called "Could not publish later", so someone can look at it.
+export async function runLater(now) {
+  const done = [];
+  for (const site of SITES) {
+    if (!site.repo || !site.live) continue;
+    const found = await gh("/repos/" + site.repo + "/git/matching-refs/heads/adh/trial-later-");
+    for (const r of Array.isArray(found.data) ? found.data : []) {
+      const id = String(r.ref).replace("refs/heads/adh/", ""), at = laterOf(id);
+      if (!at || at.getTime() > now.getTime()) continue;
+      const repo = "/repos/" + site.repo, before = await mainSha(site);
+      const cmp = await gh(repo + "/compare/main..." + "adh/" + id);
+      const commits = cmp.ok && Array.isArray(cmp.data.commits) ? cmp.data.commits : [];
+      if (!commits.length) { await gh(repo + "/git/refs/heads/adh/" + id, { method: "DELETE" }); done.push({ site: site.id, id, result: "nothing to publish" }); continue; }
+      const m = await gh(repo + "/merges", { method: "POST", body: JSON.stringify({ base: "main", head: "adh/" + id, commit_message: "Publish later: " + londonWhen(at) + " (by admin)" }) });
+      if (!(m.ok && m.data && m.data.sha)) {
+        const held = await gh(repo + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/adh/trial-held-" + randomTail(), sha: r.object.sha }) });
+        if (held.ok) await gh(repo + "/git/refs/heads/adh/" + id, { method: "DELETE" });
+        done.push({ site: site.id, id, result: "held" }); continue;
+      }
+      await gh(repo + "/git/refs/heads/adh/" + id, { method: "DELETE" });
+      const steps = commits.map((c) => stepOf(c).what).filter((w) => !/^(Merge|Bring in the latest)/.test(w)).slice(-20);
+      const v = await makeVersion(site, { admin: true, tag: "admin", name: "Publish later" }, { before, sha: m.data.sha, steps, note: "Published later, as planned for " + londonWhen(at) + ".", title: "" });
+      done.push({ site: site.id, id, result: "published", version: v.version || "" });
+    }
+  }
+  return { ok: true, done };
+}
+
 export async function handle(req) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return json({ error: "Use POST." }, 405);
+
+  // The clock (a timed job in GitHub) calls with its own key to publish what was kept for later.
+  const clockKey = req.headers && req.headers.get ? req.headers.get("x-schedule-key") : "";
+  if (clockKey) {
+    const want = env("SCHEDULE_KEY");
+    if (!want || want.length < 24 || !sameText(clockKey, want)) return json({ error: "Not allowed." }, 403);
+    if (!env("GITHUB_TOKEN")) return json({ error: "The GitHub connection has not been set up yet." }, 500);
+    return json(await runLater(new Date()));
+  }
 
   const email = await signedInEmail(req);
   if (!email) return json({ error: "Please sign in again." }, 401);
@@ -2338,7 +2403,7 @@ export async function handle(req) {
 
   // Which copy of the site this request is about, and the branch that goes with it.
   const WRITES = ["saveTheme", "saveEntry", "setHidden", "deleteEntry", "removePhoto", "undo", "uploadPhoto", "savePages", "saveFiles"];
-  const COPY_ACTIONS = ["makeCopy", "deleteCopy", "refreshCopy", "publish", "discard", "undoStep", "redoStep", "restoreVersion"];
+  const COPY_ACTIONS = ["makeCopy", "scheduleCopy", "deleteCopy", "refreshCopy", "publish", "discard", "undoStep", "redoStep", "restoreVersion"];
   const DRAFT_ACTIONS = ["answerTopic", "publishDraft", "returnDraft", "rejectDraft", "history"];
   if (!me.admin && DRAFT_ACTIONS.includes(action)) return json({ error: "Only the admin can do that." }, 403);
   let copies = [], copy = null, ref = "main";
@@ -2814,10 +2879,23 @@ export async function handle(req) {
 
   if (COPY_ACTIONS.includes(action)) {
     const repo = "/repos/" + site.repo;
+    // Publish later: a copy of the live site to save the changes on, published by the clock at that time.
+    if (action === "scheduleCopy") {
+      if (!me.admin) return json({ error: "Only the admin can publish later." }, 403);
+      if (!env("SCHEDULE_KEY")) return json({ error: "The clock that publishes later is not set up yet, so nothing was kept. It needs the same long random key added as SCHEDULE_KEY in Supabase (Edge Functions, Secrets) and in GitHub (artiscope-digital-home, Settings, Secrets and variables, Actions). Your changes are still here." }, 400);
+      const when = fromLondon(body.at);
+      if (!when || when.getTime() < Date.now() + 5 * 60000) return json({ error: "Choose a time at least five minutes from now." }, 400);
+      if (when.getTime() > Date.now() + 366 * 86400000) return json({ error: "Choose a time within the next year." }, 400);
+      if (copies.filter((c) => laterOf(c.id)).length >= 5) return json({ error: "Five changes are already waiting to publish later. Publish or delete one first." }, 400);
+      const sha = await mainSha(site), id = laterId(when);
+      const made = await gh(repo + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/adh/" + id, sha }) });
+      if (!sha || !made.ok) return json({ error: writeProblem(made, "GitHub did not keep the changes for later. Please try again.") }, 502);
+      return json({ ok: true, copy: id, when: londonWhen(when) });
+    }
     if (action === "makeCopy") {
       const slug = copySlug(body.name);
       if (!slug) return json({ error: "Give the trial copy a short name, for example Winter look." }, 400);
-      if (copies.filter((c) => c.kind === "trial" && !ownerOfCopy(c.id)).length >= MAX_TRIALS) return json({ error: "This site already has " + MAX_TRIALS + " trial copies. Delete one to make another." }, 400);
+      if (copies.filter((c) => c.kind === "trial" && !ownerOfCopy(c.id) && !laterOf(c.id) && !/^trial-held-/.test(c.id)).length >= MAX_TRIALS) return json({ error: "This site already has " + MAX_TRIALS + " trial copies. Delete one to make another." }, 400);
       const sha = await mainSha(site);
       const id = "trial-" + slug + "-" + randomTail();
       const made = await gh(repo + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/adh/" + id, sha }) });

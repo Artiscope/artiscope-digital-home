@@ -198,7 +198,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (17 November 2026, Version 44)
+## Where things stand (17 November 2026, Version 45)
 
 Done:
 
@@ -497,11 +497,57 @@ Done:
     Pages screen, since Pages opens the editor itself.
   - Checks: the "Templates" area of `tests/uat.mjs`, and the step 7 block
     in `tests/run.mjs`.
-  - "Connect stored data" on one-artist and one-article settings is still
-    shown off. It needs the owner's say on how it should work.
-  Steps 8 and 9 wait for the owner's go ahead, one at a time.
+  Stored data (Version 45, owner's yes on 17 November):
+  - In a template's sections, a setting can take its value from the page
+    it is drawn on: text, long text and lines connect to `{page.title}`
+    or `{page.summary}`, one artist to `{page.artist}` (this artist, or
+    an article's first artist where articles name artists) and one
+    article to `{page.article}` (`storedOptions`, `storedTag`,
+    `storedLink`, and Connect stored data in `resField`'s menu). Each
+    site fills them in `tplWrap` with `pageFill`. The server keeps the
+    artist and article ones only inside templates (`site.tplKind`).
+  Step 8, undo and saving (Version 45):
+  - Undo and Redo in the top bar are for changes not saved yet, kept per
+    page or template (`locKey`). Every change is noted in `pgMark` by
+    `histNote` as the places it touched, before and after (`diffInto`),
+    so one page's Undo never takes back another's. Typing in one box with
+    pauses under 1.5 seconds is one step. Undo selects what it changed
+    (`histGo`; a removed section is picked again via `histSel`). Save
+    turns off again once everything is undone. History starts afresh on
+    loading, Discard and Save (`histBase`).
+  - The Changes list: a count beside Save ("3 changes") opens every
+    unsaved change in plain words (`histLabel`, for example "Numbers
+    band: Small line above the heading changed to ...") with where it is
+    and its own Undo (`changesPop`, `histUndoOne`).
+  - Undo the last save and Redo the last save moved to Save's dropdown.
+  - Shortcuts: Ctrl/Cmd+Z, Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z, Ctrl/Cmd+S,
+    Ctrl/Cmd+/ (`ED_KEYS`). In a text box the box keeps its own undo.
+  - Publish later (owner chose to build it fully): the admin picks a
+    date and time, London time (`laterPop`). The server makes a copy
+    `adh/trial-later-<UTC yyyymmddhhmm>-<tail>` (`scheduleCopy`,
+    `laterId`, `fromLondon`) and the changes are saved there
+    (`savePages(after, later)`). The copy shows as "Publish later: 1
+    December 2026, 09:00"; it can be made live early or deleted like any
+    trial copy, and does not count towards the two trial copies. The
+    clock is `.github/workflows/publish-later.yml` in this repository,
+    every 15 minutes, calling the function with `x-schedule-key`; the
+    server checks it against the `SCHEDULE_KEY` secret and runs
+    `runLater`: each copy whose time has come is merged into main with a
+    new version and release note, and the copy deleted. One that clashes
+    with live is kept as "Could not publish later" (`trial-held-...`).
+    Without `SCHEDULE_KEY` in both Supabase and GitHub, scheduling is
+    refused with a plain message.
+  - Checks: the "Stored data" and "Undo and changes" areas of
+    `tests/uat.mjs`, and the step 8 block in `tests/run.mjs`.
+  Step 9 (add-ons, Edit code, Edit default text) waits for the owner's
+  go ahead.
 
 Waiting for the owner:
+
+- Publish later needs its clock key: a long random key (from a password
+  manager) added as SCHEDULE_KEY in Supabase (Edge Functions, Secrets)
+  and in GitHub (artiscope-digital-home, Settings, Secrets and
+  variables, Actions). Never take the key in the conversation.
 
 - To get release emails: on each site repository, Watch, Custom, tick
   Releases.
