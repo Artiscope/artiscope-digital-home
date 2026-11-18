@@ -1666,7 +1666,7 @@ const BUILT_IN = SITES.length;
 export const CONSOLE_REPO = "Artiscope/artiscope-digital-home";
 const SITE_ID = /^[a-z][a-z0-9-]{1,40}$/, REPO_NAME = /^Artiscope\/[A-Za-z0-9._-]{1,100}$/, DOMAIN_OK = /^[a-z0-9.-]{3,190}(\/[a-z0-9._-]{1,100})?$/;
 export const DEFAULT_SITE_LIST = [
-  { id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: "Artiscope/practice-build", kind: "starter", playground: true, live: false },
+  { id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: "Artiscope/practice-build", kind: "starter", playground: true, live: true },
   { id: "site-4", name: "Site 4", domain: "", repo: "", live: false },
   { id: "site-5", name: "Site 5", domain: "", repo: "", live: false },
 ];

@@ -676,12 +676,11 @@ Done:
     `viewWaiting`).
   - Checks: the "Practice build" area of `tests/uat.mjs`, and the step 3
     block in `tests/run.mjs`.
-  - To finish the practice build the owner makes an empty public
-    repository Artiscope/practice-build, adds it to the GitHub key
-    (Contents and Pull requests read and write, Actions read) and sets
-    its Pages source to GitHub Actions. Then the starter is pushed to it
-    with the address `https://artiscope.github.io/practice-build/`, and
-    `sites.json` switches it to `live: true`.
+  - The practice build is live (18 November): the owner made
+    Artiscope/practice-build and added it to the GitHub key, the starter
+    was pushed to it with the address
+    `https://artiscope.github.io/practice-build/`, and both `sites.json`
+    and `DEFAULT_SITE_LIST` mark it `live: true`.
 
 Waiting for the owner:
 
