@@ -152,6 +152,11 @@ export function wordMax(key) { return ["menu", "btn", "table"].includes(String(k
 const SLOT_WORDS = { name: "the artist's name", email: "the email address", n: "the number", total: "the total", low: "the low estimate", price: "the price",
   lot: "the lot number", tags: "the subjects", what: "what the photograph shows", shown: "the number shown", site: "the site's name", title: "the title" };
 export const slotsOf = (t) => [...String(t).matchAll(/\{([a-z]+)\}/g)].map((m) => m[1]);
+// What the console needs for Edit default text: the groups, and each word with the site's own words, its longest and why it is locked.
+export function wordSpec(site) {
+  const list = site.words || {}, locks = site.wordLocks || {};
+  return { groups: WORD_GROUPS, words: Object.keys(list).map((k) => ({ k, t: list[k], max: wordMax(k), lock: locks[k] || "" })) };
+}
 // Cleans the changed words: plain words only, known and not locked, within their length, with every slot kept.
 export function cleanWords(site, given) {
   const list = site.words || {}, locks = site.wordLocks || {}, out = {};
@@ -3370,7 +3375,7 @@ export async function handle(req) {
       let doc = f.data; try { doc = cleanPages(pctx, f.data, f.data); } catch (_e) { /* shown as it is */ }
       const extra = editorNow ? { site: editorNow, itemKinds: site.items, lists: Object.fromEntries(Object.entries(site.lists || {}).map(([k, l]) => [k, { label: l.label, section: l.section || "" }])), listFields: LIST_FIELDS, gam: !!site.model, model: site.model ? site.model.id : "", builtIn: site.builtIn || null,
         pageFields: site.model ? [{ name: "title", label: "Title in the browser tab and search results", type: "text" }, { name: "description", label: "Description for search engines", type: "long", plain: true, hint: "One or two sentences. Not shown on the page." }] : null } : {};
-      return json({ pages: doc, addonSpec: ADDONS.map((a) => ({ id: a.id, label: a.label, about: a.about, icon: a.icon, fields: a.fields })), kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageSizes, imageMeta, pictures, imageBase: preview + ps.images + "/", previewWaiting, artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, version, ...extra });
+      return json({ pages: doc, wordSpec: wordSpec(site), addonSpec: ADDONS.map((a) => ({ id: a.id, label: a.label, about: a.about, icon: a.icon, fields: a.fields })), kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageSizes, imageMeta, pictures, imageBase: preview + ps.images + "/", previewWaiting, artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, version, ...extra });
     }
     // the page fields may refer to artists and articles added in this same save
     const sctx = body.content && typeof body.content === "object" ? pageCtx(body.content) : pctx;

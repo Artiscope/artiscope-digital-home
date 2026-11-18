@@ -1440,3 +1440,32 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focu
 
 /* Version 51: the "could not be opened" card sits at its own height */
 .ed .ed-fail { align-self: start; height: auto; min-height: 0; }
+
+/* Version 52: Edit default text, in the editor's left column */
+.wdpanel { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+.wd-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wd-head .lt { margin: 0; }
+.wd-only { display: flex; align-items: center; gap: 10px; min-height: 34px; }
+.wd-only > label:first-child { flex: 1; color: var(--text); }
+.wd-body { display: flex; flex-direction: column; gap: 4px; }
+.wd-grp { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 0 12px; border: 0; border-radius: 12px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.wd-grp .t { flex: 1; min-width: 0; }
+.wd-grp:hover { box-shadow: inset 0 0 0 1.5px var(--btn-edge); }
+.wd-grp.open { background: var(--btn); box-shadow: inset 0 0 0 1.5px var(--btn-edge); color: var(--bright); font-weight: 600; }
+.wd-grp .small { font-weight: 400; }
+.wd-grp .cnt { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 24px; padding: 0 8px; border-radius: 8px; background: var(--field); box-shadow: inset 0 0 0 1.5px var(--field-edge); font-size: 12px; font-weight: 400; color: var(--text); }
+.wd-list { display: flex; flex-direction: column; padding: 2px 6px 8px; }
+.wd-row { display: flex; flex-direction: column; gap: 6px; padding: 10px 2px; }
+.wd-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.wd-l { color: var(--bright); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.wd-act { flex: none; }
+.wd-act .linklike { min-height: 28px; font-size: 13px; }
+.wdpanel .wd-in { width: 100%; }
+.wdpanel .wd-in.on { box-shadow: inset 0 0 0 1.5px var(--ice); }
+.wdpanel .wd-in.bad { box-shadow: inset 0 0 0 1.5px var(--problem); }
+.wd-err { color: var(--problem); margin: 0; }
+.wd-note, .wd-where { margin: 0; }
+.wd-where { color: var(--text); }
+.wd-fixed { background: var(--field); box-shadow: inset 0 0 0 1.5px var(--field-edge); border-radius: 10px; padding: 10px 12px; color: var(--muted); }
+.wdpanel .pp-search { margin: 2px 0 0; }
+.wdpanel .pp-search input[type="text"] { width: 100%; box-sizing: border-box; }

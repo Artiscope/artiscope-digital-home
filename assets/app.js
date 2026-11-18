@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "51";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "52";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -131,9 +131,10 @@
         var pgd = await api("pages", { site: s.id });
         var pref = state.edPrefs[s.id] || {};
         var pics = {}; (pgd.pictures || []).forEach(function (p) { pics[p.key] = p; });
+        if (pgd.pages && pgd.wordSpec && (!pgd.pages.words || typeof pgd.pages.words !== "object")) pgd.pages.words = {};
         if (pgd.pages) { pgd.pages.groups = pgd.pages.groups || {}; ["top", "popups", "bottom"].forEach(function (w) { if (!pgd.pages.groups[w]) pgd.pages.groups[w] = []; }); tplNormal(pgd.pages, pgd.itemKinds); }
         state.pg[s.id] = { version: pgd.version || "", pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageSizes: pgd.imageSizes || {}, imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false,
-          site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, addonSpec: pgd.addonSpec || [], lists: pgd.lists || {}, listFields: pgd.listFields || [], at: pref.at || "", gam: !!pgd.gam, model: pgd.model || (pgd.gam ? "gam" : ""), builtIn: pgd.builtIn || null, pageFields: pgd.pageFields || null, leftPanel: pref.leftPanel || undefined, previewWaiting: !!pgd.previewWaiting };
+          site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, addonSpec: pgd.addonSpec || [], wordSpec: pgd.wordSpec || null, lists: pgd.lists || {}, listFields: pgd.listFields || [], at: pref.at || "", gam: !!pgd.gam, model: pgd.model || (pgd.gam ? "gam" : ""), builtIn: pgd.builtIn || null, pageFields: pgd.pageFields || null, leftPanel: pref.leftPanel || undefined, previewWaiting: !!pgd.previewWaiting };
         var made = state.pg[s.id]; if (made.at && !atKnown(made)) made.at = ""; histBase(made);
         if (state.openPanel) { made.leftPanel = state.openPanel; made.leftHidden = false; state.openPanel = ""; }
         render();
@@ -755,6 +756,10 @@
       if (!ev.data) return;
       if (ev.data.type === "adh-click") { var pgd = pgOf(); if (!pgd) return; try { if (ev.origin !== new URL(pgd.preview).origin) return; } catch (e) { return; } var vw = String(ev.data.view || ""), kk = atKind(pgd); if (vw && vw !== "every" && !(vw === "tpl" && tplHere(pgd)) && vw !== (kk === "other" ? "page" : kk)) return; pickSection(String(ev.data.id || ""), ev.data.block, true, undefined, String(ev.data.bf || "")); return; }
       if (ev.data.type === "adh-add") { var pa = pgOf(); if (!pa) return; try { if (ev.origin !== new URL(pa.preview).origin) return; } catch (e) { return; } var va = String(ev.data.view || ""), ka = atKind(pa); if (va && va !== "every" && !(va === "tpl" && tplHere(pa)) && va !== (ka === "other" ? "page" : ka)) return; previewAdd(pa, ev.data); return; }
+      if (ev.data.type === "adh-found") { var pf = pgOf(); if (!pf) return; try { if (ev.origin !== new URL(pf.preview).origin) return; } catch (e) { return; }
+        var fw = wordOf(pf, String(ev.data.key || "")); if (!fw) return;
+        var ft = ev.data.found ? "Outlined in blue on the page." : "Not on the page shown now. It may be on another kind of page, such as an article, or in the phone menu or a pop-up. Choose another page from the picker at the top.";
+        pf.wordFound = { k: fw.k, text: ft }; var fr = app.querySelector('.wd-row[data-k="' + cssq(fw.k) + '"] .wd-where'); if (fr) { fr.textContent = ft; fr.hidden = false; } return; }
       if (ev.data.type === "adh-nav") { var pn = pgOf(); if (!pn) return; try { if (ev.origin !== new URL(pn.preview).origin) return; } catch (e) { return; } navTo(pn.gam && ev.data.path != null ? gamWhere(pn, ev.data.path) : String(ev.data.hash || "home")); return; }
       var t = themeOf(); if (!t || ev.data.type !== "adh-ready") return;
       try { if (ev.origin !== new URL(t.spec.url).origin) return; } catch (e) { return; }
@@ -980,6 +985,14 @@
     var x = d.length === 1 ? d[0] : null, sv = function (v) { var w = Array.isArray(v) && v.length === 1 ? v[0] : v; if (typeof w === "string" && w.indexOf("{page.") === 0) return "connected to the page's own data"; return v === true ? "turned on" : v === false ? "turned off" : typeof v === "string" && v.length && v.length <= 40 && v.indexOf("<") < 0 ? 'changed to "' + v + '"' : "changed"; };
     if (x && x.p[0] === "theme" && x.p.length >= 3) { var t = themeOf(), f = t && x.p[1] === "settings" ? (t.spec.settings || []).find(function (y) { return y.name === x.p[2]; }) : null; return "Theme: " + (f ? f.label : String(x.p[2]).replace(/_/g, " ")) + " " + sv(x.after); }
     var sec = null, rest = null;
+    if (x && x.p[0] === "doc" && x.p[1] === "words") {
+      var wk = x.p[2], wa = x.after, wb = x.before;
+      if (wk == null && wa && typeof wa === "object" && Object.keys(wa).length === 1) { wk = Object.keys(wa)[0]; wa = wa[wk]; wb = undefined; }
+      if (wk == null && wb && typeof wb === "object" && Object.keys(wb).length === 1 && (!wa || !Object.keys(wa).length)) { wk = Object.keys(wb)[0]; wa = undefined; }
+      var ww = wk != null ? wordOf(pgd, wk) : null;
+      if (!ww) return "Default text changed";
+      return "Default text, " + wordGroupName(pgd, ww.k) + ": " + (wa == null || wa === "" ? '"' + ww.t + '" back to the site\'s own' : '"' + ww.t + '" changed to "' + wa + '"');
+    }
     if (x && x.p[0] === "doc" && x.p[1] === "addons" && x.p.length >= 4) {
       var ad = addonOf(pgd, x.p[2]), af = ad ? (ad.fields || []).filter(function (y) { return y.name === x.p[3]; })[0] : null;
       if (x.p[3] === "on") return (ad ? ad.label : x.p[2]) + (x.after ? " turned on" : " turned off");
@@ -1141,7 +1154,104 @@
     if (p === "theme") return themePanel(pgd);
     if (p === "themeold") return '<div class="lpanel"><h2 class="lt">Theme settings</h2><p class="small">Colours and typefaces for the whole site. They move into this panel in a later step. Until then they are on the Theme screen.</p><button type="button" class="soft" data-tab="theme">Open the Theme screen</button></div>';
     if (p === "addons") return addonsPanel(pgd);
+    if (p === "words" && pgd.wordSpec) return wordsPanel(pgd);
     return edList(pgd);
+  }
+  // ----- Edit default text: the fixed words of the site's design. Changed ones are kept in the page list
+  // file under "words"; an empty box keeps the site's own. The server checks them again on Save (cleanWords).
+  function wordList(pgd) { return (pgd.wordSpec && pgd.wordSpec.words) || []; }
+  function wordOf(pgd, k) { return wordList(pgd).filter(function (w) { return w.k === k; })[0] || null; }
+  function wordGroupOf(k) { return String(k).split(".")[0]; }
+  function wordGroupName(pgd, k) { var g = wordGroupOf(k), f = ((pgd.wordSpec || {}).groups || []).filter(function (x) { return x[0] === g; })[0]; return f ? f[1] : "Other words"; }
+  function wordNow(pgd, k) { var v = (pgd.doc.words || {})[k]; return typeof v === "string" ? v : ""; }
+  function wordChanged(pgd, w) { var v = wordNow(pgd, w.k).trim(); return !!v && v !== w.t; }
+  var WORD_SLOT_SAY = { name: "the artist's name", email: "the email address", n: "the number", total: "the total", low: "the low estimate", price: "the price", lot: "the lot number", tags: "the subjects", what: "what the photograph shows", shown: "the number shown", site: "the site's name", title: "the title" };
+  function wordSlots(t) { return String(t).match(/\{[a-z]+\}/g) || []; }
+  // What is wrong with the words typed, in plain words; empty when nothing is.
+  function wordProblem(w, v) {
+    v = String(v || "").trim(); if (!v || w.lock) return "";
+    if (v.length > w.max) return "Too long for this spot. Keep it to " + w.max + " letters or fewer.";
+    var need = wordSlots(w.t), lost = need.filter(function (x) { return v.indexOf(x) < 0; });
+    if (lost.length) return "Keep " + lost[0] + " in the words. It is where " + (WORD_SLOT_SAY[lost[0].slice(1, -1)] || "the site's own detail") + " goes. Your other changes are kept.";
+    var odd = wordSlots(v).filter(function (x) { return need.indexOf(x) < 0; });
+    if (odd.length) return odd[0] + " is not something the site can fill in here. Take it out" + (need.length ? ", or use " + need.join(" or ") : "") + ".";
+    return "";
+  }
+  function wordNote(pgd, w, flat) {
+    var v = wordNow(pgd, w.k), bits = [];
+    if (flat) bits.push(wordGroupName(pgd, w.k) + ".");
+    if (wordGroupOf(w.k) === "sr") bits.push("Read out by screen readers, not shown.");
+    if (/<[a-z\/!]/i.test(v)) bits.push("Only plain words are kept, so the tags will be taken out when you save.");
+    if (v.trim()) bits.push(v.trim().length + " of " + w.max);
+    return bits.join(" ");
+  }
+  function wordRow(pgd, w, flat) {
+    var id = "wd-" + w.k.replace(/[^a-z0-9]+/g, "-"), v = wordNow(pgd, w.k), bad = wordProblem(w, v), found = pgd.wordFound && pgd.wordFound.k === w.k ? pgd.wordFound : null;
+    if (w.lock) return '<div class="wd-row locked" data-k="' + esc(w.k) + '"><div class="wd-top"><span class="wd-l">' + esc(w.t) + '</span><span class="small muted">Locked</span></div>' +
+      '<div class="wd-fixed">' + esc(w.t) + '</div><p class="small muted">' + esc(w.lock) + (flat ? " " + esc(wordGroupName(pgd, w.k)) + "." : "") + '</p></div>';
+    var act = wordChanged(pgd, w) || v.trim() ? '<button type="button" class="linklike small" data-act="wd-reset" data-k="' + esc(w.k) + '">Use the site\'s own</button>'
+      : wordGroupOf(w.k) === "sr" ? "" : '<button type="button" class="linklike small" data-act="wd-find" data-k="' + esc(w.k) + '">Show me where</button>';
+    var note = wordNote(pgd, w, flat);
+    return '<div class="wd-row" data-k="' + esc(w.k) + '"><div class="wd-top"><label class="wd-l" for="' + id + '">' + esc(w.t) + '</label><span class="wd-act">' + act + '</span></div>' +
+      '<input type="text" class="wd-in' + (bad ? " bad" : v.trim() ? " on" : "") + '" id="' + id + '" data-wd="' + esc(w.k) + '" value="' + esc(v) + '" placeholder="' + esc(w.t) + '" autocomplete="off" spellcheck="true"' + (bad ? ' aria-invalid="true"' : "") + '>' +
+      '<p class="small wd-err" role="alert"' + (bad ? "" : " hidden") + '>' + esc(bad) + '</p><p class="small muted wd-note"' + (note ? "" : " hidden") + '>' + esc(note) + '</p>' +
+      '<p class="small wd-where" role="status"' + (found ? "" : " hidden") + '>' + (found ? esc(found.text) : "") + '</p></div>';
+  }
+  function wordsBody(pgd) {
+    var list = wordList(pgd), q = String(state.wordQ || "").trim().toLowerCase(), only = !!state.wordOnly;
+    if (q || only) {
+      var hits = list.filter(function (w) { return (!only || wordChanged(pgd, w)) && (!q || (w.t + " " + wordNow(pgd, w.k) + " " + wordGroupName(pgd, w.k)).toLowerCase().indexOf(q) >= 0); });
+      return (hits.length ? '<p class="small muted">' + hits.length + (hits.length === 1 ? " word" : " words") + (q ? ' match "' + esc(state.wordQ.trim()) + '"' : " changed") + '</p>' + hits.map(function (w) { return wordRow(pgd, w, true); }).join("")
+        : '<p class="small">' + (only && !q ? "No words changed yet. Every word is the site's own." : "No word matches that.") + '</p>');
+    }
+    return ((pgd.wordSpec || {}).groups || []).map(function (g) {
+      var ws = list.filter(function (w) { return wordGroupOf(w.k) === g[0]; }); if (!ws.length) return "";
+      var open = state.wordGroup === g[0], ch = ws.filter(function (w) { return wordChanged(pgd, w); }).length;
+      return '<button type="button" class="wd-grp' + (open ? " open" : "") + '" data-act="wd-group" data-g="' + esc(g[0]) + '" aria-expanded="' + open + '"><span class="t">' + esc(g[1]) + '</span>' + (ch ? '<span class="small">' + ch + ' changed</span>' : "") + '<span class="cnt">' + ws.length + '</span></button>' +
+        (open ? '<div class="wd-list">' + ws.map(function (w) { return wordRow(pgd, w, false); }).join("") + '</div>' : "");
+    }).join("");
+  }
+  function wordsPanel(pgd) {
+    var list = wordList(pgd), ch = list.filter(function (w) { return wordChanged(pgd, w); }).length;
+    return '<div class="lpanel wdpanel"><div class="wd-head"><h2 class="lt">Default text</h2><button type="button" class="soft slim" data-act="wd-close">Close</button></div>' +
+      '<p class="small">The fixed words the site uses everywhere, such as buttons, empty spaces and the Page not found message. An empty box keeps the site\'s own words. Changes go live with Save.</p>' +
+      '<label class="pp-search">' + ic("search") + '<input type="text" id="wd-q" placeholder="Search ' + list.length + ' words" value="' + esc(state.wordQ || "") + '" autocomplete="off" aria-label="Search the words"></label>' +
+      '<div class="wd-only"><label for="wd-only">Changed only</label><span class="small wd-count">' + ch + ' changed</span><label class="switch"><input type="checkbox" role="switch" id="wd-only"' + (state.wordOnly ? " checked" : "") + '><span class="knob" aria-hidden="true"></span></label></div>' +
+      '<div id="wd-body" class="wd-body">' + wordsBody(pgd) + '</div></div>';
+  }
+  function wordsRefresh(pgd) { var b = app.querySelector("#wd-body"); if (b) b.innerHTML = wordsBody(pgd); wordsCount(pgd); }
+  function wordsCount(pgd) {
+    var c = app.querySelector(".wd-count"); if (c) c.textContent = wordList(pgd).filter(function (w) { return wordChanged(pgd, w); }).length + " changed";
+    Array.prototype.forEach.call(app.querySelectorAll(".wd-grp"), function (b) {
+      var g = b.dataset.g, n = wordList(pgd).filter(function (w) { return wordGroupOf(w.k) === g && wordChanged(pgd, w); }).length, sm = b.querySelector(".small");
+      if (n && !sm) { sm = document.createElement("span"); sm.className = "small"; b.insertBefore(sm, b.querySelector(".cnt")); }
+      if (sm) { if (n) sm.textContent = n + " changed"; else sm.remove(); }
+    });
+  }
+  // One word typed: kept at once, the row's own message and count updated, the preview redrawn.
+  function wordSet(pgd, k, v, row) {
+    var w = wordOf(pgd, k); if (!w || w.lock) return;
+    pgd.doc.words = pgd.doc.words || {};
+    if (String(v).trim()) pgd.doc.words[k] = v; else delete pgd.doc.words[k];
+    pgd.wordFound = null; pgd.what = "Default text: " + w.t; pgMark(pgd); patchEdTop(); pushSoon();
+    if (!row) return;
+    var bad = wordProblem(w, v), inp = row.querySelector(".wd-in"), er = row.querySelector(".wd-err"), nt = row.querySelector(".wd-note"), wh = row.querySelector(".wd-where"), act = row.querySelector(".wd-act");
+    if (inp) { inp.classList.toggle("bad", !!bad); inp.classList.toggle("on", !bad && !!String(v).trim()); if (bad) inp.setAttribute("aria-invalid", "true"); else inp.removeAttribute("aria-invalid"); }
+    if (er) { er.textContent = bad; er.hidden = !bad; }
+    if (nt) { var n = wordNote(pgd, w, !!(state.wordQ || state.wordOnly)); nt.textContent = n; nt.hidden = !n; }
+    if (wh) wh.hidden = true;
+    if (act) act.innerHTML = String(v).trim() ? '<button type="button" class="linklike small" data-act="wd-reset" data-k="' + esc(k) + '">Use the site\'s own</button>' : wordGroupOf(k) === "sr" ? "" : '<button type="button" class="linklike small" data-act="wd-find" data-k="' + esc(k) + '">Show me where</button>';
+    wordsCount(pgd);
+  }
+  // "Show me where": the preview outlines the first place this page shows the word.
+  function wordFind(pgd, k) {
+    var w = wordOf(pgd, k); if (!w) return;
+    var say = function (t) { pgd.wordFound = { k: k, text: t }; var row = app.querySelector('.wd-row[data-k="' + cssq(k) + '"] .wd-where'); if (row) { row.textContent = t; row.hidden = false; } };
+    if (pgd.inspector === false) { say("Turn on the inspector, the pointer switch at the top, to find words on the page."); return; }
+    var frame = document.getElementById("ed-frame"); if (!frame || !frame.contentWindow) return;
+    var v = wordNow(pgd, k).trim();
+    say("Looking on the page shown");
+    try { frame.contentWindow.postMessage({ type: "adh-find", key: k, text: v || w.t, label: "Default text: " + w.t }, new URL(pgd.preview).origin); } catch (e) { /* the preview is not ready */ }
   }
   // ----- step 9: add-ons, our own small extras for every page, kept in the page list file -----
   function addonOf(pgd, id) { return (pgd.addonSpec || []).filter(function (a) { return a.id === id; })[0] || null; }
@@ -1250,6 +1360,7 @@
       '<div class="pp-lvl">' + level + '</div>' +
       '<div class="pp-all" hidden>' + groups.map(function (x) { return x.items.map(function (y) { return y.v === "home" ? item({ label: "Home page", icon: "home" })({ v: "home", label: "Home page" }) : item(x)(y); }).join(""); }).join("") +
         tk.map(function (k) { return Object.keys(tplAll(pgd, k)).map(function (id) { return tplLine(k, id, true); }).join(""); }).join("") + '<p class="small pp-none" hidden>Nothing matches that.</p></div>' +
+      (pgd.wordSpec ? '<button type="button" class="pp-item" data-act="wd-open">' + ic("text") + '<span class="t">Edit default text</span><em>' + wordList(pgd).length + ' words</em></button>' : "") +
       '<button type="button" class="pp-item pp-new" data-act="ed-new">' + ic("plus") + '<span class="t">Make something new</span></button></div>';
   }
   // The web address of this page on the live site.
@@ -1280,7 +1391,7 @@
     var body = keys ? '<p class="cap">Keyboard shortcuts</p>' + ED_KEYS.map(function (k) { return '<div class="pp-item still"><span class="t">' + esc(k[1]) + '</span><span class="kbd">' + esc(k[0]) + '</span></div>'; }).join("")
       : help ? '<p class="cap">Help</p><p class="pop-note">Click a part of the page, or a row on the left, to change it. Save keeps your changes on the copy you are working on. On a trial copy, Make live puts them on the site.</p><p class="pop-note">The hover outlines and clicks on the page come from the inspector. Turn it off to use the page as a visitor would.</p>'
       : (isAdmin() ? '<button type="button" class="pp-item" data-act="code-open">' + ic("code") + '<span class="t">Edit code</span></button>' : '<button type="button" class="pp-item" disabled>' + ic("code") + '<span class="t">Edit code</span><em>Admin only</em></button>') +
-        '<button type="button" class="pp-item" disabled>' + ic("text") + '<span class="t">Edit default text</span><em>Later step</em></button>' +
+        (pgd && pgd.wordSpec ? '<button type="button" class="pp-item" data-act="wd-open">' + ic("text") + '<span class="t">Edit default text</span><em>' + wordList(pgd).length + ' words</em></button>' : '<button type="button" class="pp-item" disabled>' + ic("text") + '<span class="t">Edit default text</span><em>Not on this site</em></button>') +
         '<a class="pp-item" href="' + esc(liveHref(s, pgd)) + '" target="_blank" rel="noopener">' + ic("globe") + '<span class="t">View the live page</span></a>' +
         '<button type="button" class="pp-item" data-act="ed-pop" data-menu="help">' + ic("help") + '<span class="t">Help</span></button>' +
         '<button type="button" class="pp-item" data-act="ed-pop" data-menu="keys">' + ic("keys") + '<span class="t">Keyboard shortcuts</span></button>';
@@ -2399,7 +2510,7 @@
     var pictures = Object.keys(pgd.pictures || {}).map(function (k) { var p = pgd.pictures[k]; return { key: k, image: p.image, alt: p.alt, credit: p.credit }; });
     if (sel && sel.pic) label = sel.kind.label;
     var gamAt = pgd.gam ? { kind: atKind(pgd), key: atKey(pgd) } : null;
-    try { frame.contentWindow.postMessage({ type: "adh-pages", names: previewNames(pgd), social: themeSocial(), at: gamAt || atHash(pgd), data: pgd.gam ? pgd.site : undefined, content: pgd.gam ? undefined : pgd.site || undefined, show: atKind(pgd) === "article" ? atKey(pgd) : "", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages, lists: pgd.doc.lists, groups: pgd.doc.groups || { top: [], popups: [], bottom: [] }, templates: pgd.doc.templates || {}, assign: pgd.doc.assign || {}, addons: pgd.doc.addons || {} }, tpl: tplHere(pgd) ? { kind: tplHere(pgd), id: tplId(pgd) } : null, images: images, pictures: pictures, pick: id, block: id ? block : -1, bf: id ? bf : "", bi: id ? bi : -1, label: id ? label : "", scroll: !!pgd.scrollNext }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
+    try { frame.contentWindow.postMessage({ type: "adh-pages", names: previewNames(pgd), social: themeSocial(), at: gamAt || atHash(pgd), data: pgd.gam ? pgd.site : undefined, content: pgd.gam ? undefined : pgd.site || undefined, show: atKind(pgd) === "article" ? atKey(pgd) : "", pages: { shared: pgd.doc.shared, pages: pgd.doc.pages, lists: pgd.doc.lists, groups: pgd.doc.groups || { top: [], popups: [], bottom: [] }, templates: pgd.doc.templates || {}, assign: pgd.doc.assign || {}, addons: pgd.doc.addons || {}, words: pgd.doc.words || {} }, tpl: tplHere(pgd) ? { kind: tplHere(pgd), id: tplId(pgd) } : null, images: images, pictures: pictures, pick: id, block: id ? block : -1, bf: id ? bf : "", bi: id ? bi : -1, label: id ? label : "", scroll: !!pgd.scrollNext }, new URL(pgd.preview).origin); } catch (e) { /* preview only */ }
     pgd.scrollNext = false; themePush();
   }
   // The names the preview shows on its outlines: each section's name, and each kind of block's.
@@ -4566,6 +4677,11 @@
     else if (a === "ed-save-publish") { var cp = curCopy().id; savePages(function () { state.ask = { kind: "makelive", copy: cp }; if (pgOf()) edPatch(); else render(); var q = app.querySelector(".ask"); if (q && q.scrollIntoView) q.scrollIntoView({ block: "start" }); var nb = app.querySelector("#pub-note"); if (nb) nb.focus({ preventScroll: true }); }); }
     else if (a === "ed-later-go") { laterGo(); }
     else if (a === "ed-addons-go") { var pg0 = pgOf(); if (pg0) { pg0.picker2 = null; pg0.leftPanel = "addons"; pg0.leftHidden = false; edPatch(); } }
+    else if (a === "wd-open") { var pwo = pgOf(); if (pwo) { pwo.leftPanel = "words"; pwo.leftHidden = false; pwo.fontPick = null; state.edMenu = ""; if (pwo.picker2) pwo.picker2 = null; edPatch(); edAddress(site(), pwo); var sq = app.querySelector("#wd-q"); if (sq && sq.focus) sq.focus(); } }
+    else if (a === "wd-close") { var pwc = pgOf(); if (pwc) { pwc.leftPanel = "sections"; pwc.wordFound = null; edPatch(); edAddress(site(), pwc); } }
+    else if (a === "wd-group") { state.wordGroup = state.wordGroup === el.dataset.g ? "" : el.dataset.g; var pwg = pgOf(); if (pwg) wordsRefresh(pwg); var gb = app.querySelector('.wd-grp[data-g="' + cssq(el.dataset.g) + '"]'); if (gb && gb.focus) gb.focus(); }
+    else if (a === "wd-reset") { var pwr = pgOf(); if (pwr) { var rk = el.dataset.k, rr = el.closest(".wd-row"), ri = rr && rr.querySelector(".wd-in"); if (ri) ri.value = ""; wordSet(pwr, rk, "", rr); if (ri && ri.focus) ri.focus(); } }
+    else if (a === "wd-find") { var pwf = pgOf(); if (pwf) wordFind(pwf, el.dataset.k); }
     else if (a === "ed-addon-open") { state.addonOpen = state.addonOpen === el.dataset.id ? "" : el.dataset.id; edPatch(); }
     else if (a === "ed-undo") { var pu = pgOf(); if (pu) histStep(pu, true); }
     else if (a === "ed-redo") { var pr0 = pgOf(); if (pr0) histStep(pr0, false); }
@@ -4792,6 +4908,9 @@
   });
   app.addEventListener("focusout", function (ev) { if (ev.target && ev.target.id === "ed-rename" && state.renaming) setTimeout(function () { if (state.renaming) renameDone(true); }, 0); if (ev.target && ev.target.id === "tpl-rename" && state.tplRename) setTimeout(function () { if (state.tplRename) tplRenameDone(true); }, 0); });
   app.addEventListener("input", function (ev) {
+    if (ev.target.id === "wd-only") { var po = pgOf(); state.wordOnly = ev.target.checked; if (po) { var bo = app.querySelector("#wd-body"); if (bo) bo.innerHTML = wordsBody(po); } return; }
+    if (ev.target.id === "wd-q") { var pq = pgOf(); state.wordQ = ev.target.value; if (pq) { var bq = app.querySelector("#wd-body"); if (bq) bq.innerHTML = wordsBody(pq); } return; }
+    if (ev.target.dataset && ev.target.dataset.wd) { var pw = pgOf(); if (pw) wordSet(pw, ev.target.dataset.wd, ev.target.value, ev.target.closest(".wd-row")); return; }
     if (ev.target.id === "ao-q") {
       state.addonQ = ev.target.value; var aq = ev.target.value.trim().toLowerCase(), any = false;
       Array.prototype.forEach.call(app.querySelectorAll(".ao-row"), function (r) { var hit = !aq || r.dataset.q.indexOf(aq) >= 0; r.hidden = !hit; if (hit) any = true; });
@@ -5113,7 +5232,7 @@
         else if (a === "resendInvite") resolve({ ok: true, emailed: true });
         else if (a === "resetPractice") resolve({ ok: true });
         else if (a === "history") resolve({ changes: demoHistory });
-        else if (a === "pages") resolve({ addonSpec: demoSite.addonSpec || [], site: demoSite.site ? JSON.parse(JSON.stringify(demoSite.site)) : null, itemKinds: demoSite.itemKinds, lists: demoSite.lists, listFields: demoSite.listFields, pictures: JSON.parse(JSON.stringify(demoSpots.filter(function (x) { return x.kind !== "work"; }))), imageMeta: JSON.parse(JSON.stringify(demoMeta)), pages: JSON.parse(JSON.stringify(demoPages)), kinds: demoKinds, summaries: demoSummaries, images: demoFiles.slice(), imageBase: (params.get("preview") || "https://worldartreview.com/") + "images/", artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }], preview: params.get("preview") || "https://worldartreview.com/" });
+        else if (a === "pages") resolve({ wordSpec: demoSite.wordSpec || null, addonSpec: demoSite.addonSpec || [], site: demoSite.site ? JSON.parse(JSON.stringify(demoSite.site)) : null, itemKinds: demoSite.itemKinds, lists: demoSite.lists, listFields: demoSite.listFields, pictures: JSON.parse(JSON.stringify(demoSpots.filter(function (x) { return x.kind !== "work"; }))), imageMeta: JSON.parse(JSON.stringify(demoMeta)), pages: JSON.parse(JSON.stringify(demoPages)), kinds: demoKinds, summaries: demoSummaries, images: demoFiles.slice(), imageBase: (params.get("preview") || "https://worldartreview.com/") + "images/", artists: [{ slug: "zara-muse", name: "Zara Muse" }, { slug: "konn-artiss", name: "Konn Artiss" }], preview: params.get("preview") || "https://worldartreview.com/" });
         else if (a === "savePages") {
           var named = {}; (body.uploads || []).forEach(function (u) { var n = String(u.name || "photo").toLowerCase().replace(/\.[a-z]+$/, "").replace(/[^a-z0-9]+/g, "-") + "." + u.ext; named[u.key] = n; if (demoFiles.indexOf(n) < 0) demoFiles.push(n); });
           var fix = function (v) { return JSON.parse(JSON.stringify(v), function (k, x) { return typeof x === "string" && named[x] ? named[x] : x; }); };

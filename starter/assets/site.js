@@ -168,6 +168,8 @@
     document.head.appendChild(st);
   }
   function draw(m) {
+    // the words changed in Edit default text, for the words this script writes itself
+    window.ADH_WORDS = m.pages && m.pages.words && typeof m.pages.words === "object" ? m.pages.words : {};
     var site = window.STARTER.Site(m.data, m.pages, "", { mark: true, show: m.show || "", social: m.social || {}, tpl: m.tpl || null, imageSrc: function (name) { return (m.images || {})[name] || ROOT + "assets/images/" + name; } });
     var at = m.at || { kind: "page", key: "home" }, out = null;
     if (at.kind === "artist") { out = site.artistPage(at.key); }
@@ -218,15 +220,46 @@
     if (label) { target.setAttribute("data-adh-label", label); }
     if (scroll) { var r0 = target.getBoundingClientRect(), y0 = window.pageYOffset + r0.top - (r0.height < window.innerHeight ? (window.innerHeight - r0.height) / 2 : 20); try { window.scrollTo({ top: Math.max(0, y0), behavior: "smooth" }); } catch (x) { window.scrollTo(0, Math.max(0, y0)); } }
   }
+  // Edit default text: "Show me where" outlines the first place on this page that shows a word.
+  // A word with slots ({n} of {total}) matches whatever the site filled in. The text of a whole
+  // element is tried first, so "Close" does not match inside a longer line.
+  function findClear() {
+    var t = document.getElementById("adh-found-tag"); if (t) { t.remove(); }
+    Array.prototype.forEach.call(document.querySelectorAll(".adh-found"), function (x) { x.classList.remove("adh-found"); });
+  }
+  function findWord(text, label) {
+    findClear();
+    var t = String(text || "").replace(/\s+/g, " ").trim(); if (!t) { return 0; }
+    var body = t.split(/\{[a-z]+\}/).map(function (p) { return p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join(".+?");
+    var exact = new RegExp("^" + body + "$"), part = new RegExp(body), hit = null, loose = null;
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (var n = walker.nextNode(); n && !hit; n = walker.nextNode()) {
+      var el = n.parentElement; if (!el || el.closest("#adh-hover, #adh-found-tag, script, style, noscript")) { continue; }
+      var r = el.getBoundingClientRect(); if (!r.width || !r.height) { continue; }
+      var own = n.nodeValue.replace(/\s+/g, " ").trim(), all = (el.textContent || "").replace(/\s+/g, " ").trim();
+      if (exact.test(own) || exact.test(all)) { hit = el; } else if (!loose && part.test(own)) { loose = el; }
+    }
+    hit = hit || loose; if (!hit) { return 0; }
+    if (!document.getElementById("adh-found-css")) { var st = document.createElement("style"); st.id = "adh-found-css"; st.textContent = ".adh-found{outline:2px solid #8EC5FF!important;outline-offset:3px;border-radius:4px}#adh-found-tag{position:absolute;z-index:2147483000;background:#8EC5FF;color:#0E1A26;font:600 12px/1 'Libre Franklin',Arial,sans-serif;padding:6px 10px;border-radius:7px;white-space:nowrap;pointer-events:none}"; document.head.appendChild(st); }
+    hit.classList.add("adh-found");
+    var b = hit.getBoundingClientRect(), y = window.pageYOffset + b.top - Math.max(80, (window.innerHeight - b.height) / 2);
+    window.scrollTo(0, Math.max(0, y));
+    var tag = document.createElement("div"); tag.id = "adh-found-tag"; tag.textContent = label || t;
+    tag.style.left = Math.max(4, window.pageXOffset + b.left - 2) + "px"; tag.style.top = Math.max(4, window.pageYOffset + b.top - 32) + "px";
+    document.body.appendChild(tag);
+    return 1;
+  }
   window.addEventListener("message", function (e) {
     if (e.origin !== ok || !e.data) { return; }
     if (!active) { active = true; window.ADH_EDIT = true; document.querySelectorAll("[data-popup]").forEach(function (p) { p.hidden = true; }); document.documentElement.classList.add("adh"); style(); }
     if (e.data.type === "adh-pages" && e.data.data && e.data.pages) {
+      findClear();
       var m = e.data; NAMES = m.names || {}; hoverOff();
       loadRender(function () { var moved = false; try { moved = draw(m); } catch (x) { } pick(m.pick, m.block, m.label, m.scroll || moved, m.bf, m.bi); });
       return;
     }
     if (e.data.type === "adh-pick") { pick(e.data.id, e.data.block, e.data.label, true, e.data.bf, e.data.bi); }
+    if (e.data.type === "adh-find") { var found = findWord(e.data.text, e.data.label); window.parent.postMessage({ type: "adh-found", key: e.data.key, found: found }, ok); }
   });
   function whatAt(t) {
     var id = "", block = -1, bf = "";

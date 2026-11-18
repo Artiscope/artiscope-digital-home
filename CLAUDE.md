@@ -219,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (18 November 2026, Version 51)
+## Where things stand (18 November 2026, Version 52)
 
 Done:
 
@@ -603,8 +603,7 @@ Done:
   - Checks: the "Add-ons" and "Edit code" areas of `tests/uat.mjs`
     (`hub.setRun` in `tests/fakegit.mjs` sets a check's result), and the
     step 9 block in `tests/run.mjs`.
-  Edit default text stays shown but switched off; the owner chose to
-  leave it for later.
+  Edit default text came later, in Version 52 (below).
 - Version 47: the Flat and crisp look (see Design rules), and the
   picked outline, name tag and plus in all four sites' editor link turned
   ice blue (#8EC5FF, words #0E1A26), with no halo.
@@ -798,32 +797,44 @@ Done:
   - Checks: the "Edge cases" area of `tests/uat.mjs` and the edge block in
     `tests/build.mjs`.
 
-- Edit default text, step 2 of 4 (18 November): the sites and the
-  server, from the approved sample
-  (https://claude.ai/artifact/BtS13Hb1gcpWWU4Kuz7n1z). Step 3 (the console
-  panel) and step 4 (checks, Version 52) are next.
-  - Every fixed word of a site's design (buttons, menu words, empty
+- Edit default text (Version 52, 18 November), from the approved sample
+  (https://claude.ai/artifact/BtS13Hb1gcpWWU4Kuz7n1z).
+  - Sites: every fixed word of a site's design (buttons, menu words, empty
     spaces, table headings, Page not found, words for screen readers) is
     drawn through `W("key", "the site's own words")` (`Wt` for plain words
     on World Art Review and the starter, `SW` in each `site.js`). Changed
     words live in the page list file under `words` (only the changed
     ones; no `words` at all when none are changed). Each site's build
     refuses `words` that are not plain words. Pages carry the changed
-    words in `script#adh-words` for `site.js`; the editor will set
-    `window.ADH_WORDS`. World Art Review sets the words in its fixed
-    markup with `applyWords()` on every page drawn.
+    words in `script#adh-words` for `site.js`; in the editor `draw` sets
+    `window.ADH_WORDS`, and World Art Review sets `PAGES.words` and runs
+    `applyWords()` (its fixed markup) on every page drawn. The editor link
+    answers `adh-find` (outline the first place a word shows, `findWord`,
+    `#adh-found-tag`) with `adh-found`.
   - Server: `WAR_WORDS`, `GAM_WORDS`, `SAD_WORDS`, `STARTER_WORDS` (key to
     the site's own words), `WORD_GROUPS` (by the key's first part),
     `WORD_LOCKS` (form notes saying what the form does; the publisher
     disclosure heading on Global Art Monitor; Draft and Date to confirm on
     Street Art Dispatch), `wordMax` (40 for menu, button and table words,
-    200 otherwise), `slotsOf` and `cleanWords` (plain words only, every
-    {slot} kept, no new slots, unknown and locked words dropped), used by
-    `cleanPages`. Long passages about method and facts are left out of
-    the lists on purpose.
+    200 otherwise), `slotsOf`, `cleanWords` (plain words only, every
+    {slot} kept, no new slots, unknown and locked words dropped) used by
+    `cleanPages`, and `wordSpec` sent to the console with the pages.
+    Long passages about method and facts are left out on purpose.
+  - Console: Edit default text in More and in the page picker opens
+    `wordsPanel` in the left column (`leftPanel: "words"`): search
+    (`state.wordQ`), Changed only (`state.wordOnly`), groups one open at a
+    time (`state.wordGroup`), a box per word with the site's own words as
+    its label and placeholder, Use the site's own (`wd-reset`), Show me
+    where (`wordFind`), counts, and plain messages (`wordProblem`).
+    Typing goes through `wordSet` (preview, Undo and the Changes list:
+    "Default text, Buttons: ... changed to ..."). Locked words show their
+    reason and no box.
   - When adding a fixed word to a site, use W() with a new key and run
     `node tests/run.mjs`: it fails until the server's list matches the
     code (`tests/tools/site-words.mjs` reads the calls).
+  - Checks: the Edit default text block in `tests/run.mjs` and the
+    "Default text" area of `tests/uat.mjs` (13 checks, edge cases
+    included).
 
 Waiting for the owner:
 
@@ -859,9 +870,8 @@ Notes for checking:
   confirm" on the Venice entry stay until the owner gives confirmed
   facts. Only one session changes its repository at a time.
 
-Later, in this order unless the owner says otherwise: building new
-sites from the console (above), payments (Stripe), Edit default text,
-extras. A comparison
+Later, in this order unless the owner says otherwise: payments
+(Stripe), extras. A comparison
 with Shopify is paused until the owner sends screenshots or code.
 
 Earlier samples and reports, for reference:

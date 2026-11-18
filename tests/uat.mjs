@@ -113,8 +113,9 @@ const text = (sel) => page.innerText(sel);
 const notice = async () => (await page.locator(".notice").allInnerTexts()).join(" | ");
 // Undo or Redo of a save sits in Save's dropdown; the top bar's Undo is for changes not saved yet.
 async function savedStep(which) { if (!(await page.isVisible('.svp [data-act="' + which + '-step"]'))) await page.click('[data-act="ed-pop"][data-menu="save"]'); await page.click('.svp [data-act="' + which + '-step"]'); }
+async function liveSaveTry() { await page.click('[data-act="ed-save"]'); await page.click('[data-act="livesave"]'); await settle(2500); }
 async function liveSave() { await page.click('[data-act="ed-save"]'); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved", { timeout: 9000 }); await settle(900); }
-async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).catch(() => {}); await page.click('[data-tab="home"]', { timeout: 1500 }).catch(() => {}); await shot("open-" + id); await page.evaluate((x) => { window.__adh.state.leave = null; }, id); await page.waitForSelector('[data-act="open-site"][data-site="' + id + '"]', { timeout: 20000 }); await page.click('[data-act="open-site"][data-site="' + id + '"]'); await page.waitForSelector('[data-tab="overview"]'); if (!(await page.isVisible(".ed-exit"))) await page.click('.navb[data-tab="pages"]'); await page.waitForSelector("#ed-sections .sec", { timeout: 12000 }); await settle(1800); }
+async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).catch(() => {}); await page.click('[data-tab="home"]', { timeout: 1500 }).catch(() => {}); await shot("open-" + id); await page.evaluate((x) => { window.__adh.state.leave = null; }, id); await page.waitForSelector('[data-act="open-site"][data-site="' + id + '"]', { timeout: 20000 }); await page.click('[data-act="open-site"][data-site="' + id + '"]'); await page.waitForSelector('[data-tab="overview"]'); if (!(await page.isVisible(".ed-exit"))) await page.click('.navb[data-tab="pages"]'); await page.waitForSelector("#ed-sections .sec, .wdpanel", { timeout: 12000 }); await settle(1800); }
 
 // The usability walk (AUDIT=1): every screen at computer and phone width, then stop. See tests/audit.mjs.
 if (process.env.AUDIT) {
@@ -128,7 +129,7 @@ if (process.env.AUDIT) {
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all seven sites, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 7, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 51"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 52"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -1800,6 +1801,138 @@ await check("Signing out clears an old error message", async () => {
   await page.click("details.acct summary"); await page.click('[data-act="signout"]'); await settle(800);
   must(!/Old trouble/.test(await text("body")), "error still shown after signing out");
   await page.reload(); await page.waitForSelector('[data-act="open-site"]', { timeout: 20000 });
+});
+
+// =============== 14. Edit default text (Version 52) ===============
+area = "Default text";
+if (ONLY && ONLY.includes(area)) { await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 20000 }); }
+const gamF = () => frame("globalartmonitor.com");
+const wdRow = (k) => '.wd-row[data-k="' + k + '"]';
+await check("Edit default text opens from More, with the site's words in groups", async () => {
+  await openSite("global-art-monitor");
+  await page.click('[data-act="ed-pop"][data-menu="more"]'); await page.click('.ed-pop.mp [data-act="wd-open"]'); await settle(500);
+  must(await page.isVisible(".wdpanel"), "no panel");
+  must(/Search 85 words/.test(await page.getAttribute("#wd-q", "placeholder")), "placeholder: " + await page.getAttribute("#wd-q", "placeholder"));
+  const groups = await page.$$eval(".wd-grp .t", (x) => x.map((y) => y.textContent));
+  must(groups.includes("Buttons") && groups.includes("Auction table") && groups.includes("Page not found") && groups.includes("Words for screen readers"), "groups: " + groups);
+  await shot("90-words");
+});
+await check("Show me where outlines the word on the page", async () => {
+  await page.click('.wd-grp[data-g="btn"]'); await settle(300);
+  await page.click(wdRow("btn.read-feature") + ' [data-act="wd-find"]'); await settle(1200);
+  must(/Outlined in blue/.test(await text(wdRow("btn.read-feature") + " .wd-where")), "said: " + await text(wdRow("btn.read-feature") + " .wd-where"));
+  must(/Read the feature/.test(await gamF().innerText(".adh-found")), "nothing outlined");
+  await page.click(wdRow("btn.tell-me") + ' [data-act="wd-find"]').catch(() => {}); await settle(1000);
+});
+await check("Typing a word changes the page as you type, and joins the Changes list", async () => {
+  await page.fill(wdRow("btn.read-feature") + " .wd-in", "Read the whole feature"); await settle(900);
+  must((await gamF().innerText("body")).includes("Read the whole feature"), "preview not changed");
+  must(/1 changed/.test(await text(".wd-count")) && /1 changed/.test(await text('.wd-grp[data-g="btn"]')), "counts not updated");
+  must(await page.isVisible(wdRow("btn.read-feature") + ' [data-act="wd-reset"]'), "no Use the site's own");
+  await page.click('[data-act="ed-pop"][data-menu="changes"]'); await settle(300);
+  must(/Default text, Buttons: "Read the feature" changed to "Read the whole feature"/.test(await text(".ed-pop.chg")), "changes: " + await text(".ed-pop.chg"));
+  await page.keyboard.press("Escape"); await shot("91-word-typed");
+});
+await check("A word with a slot must keep it, and long words are stopped", async () => {
+  await page.click('.wd-grp[data-g="item"]'); await settle(300);
+  await page.fill(wdRow("item.at-auction") + " .wd-in", "At auction"); await settle(300);
+  must(/Keep \{name\} in the words\. It is where the artist's name goes/.test(await text(wdRow("item.at-auction") + " .wd-err")), "no slot message");
+  await page.fill(wdRow("item.at-auction") + " .wd-in", "{name} under the hammer"); await settle(300);
+  must(!(await page.isVisible(wdRow("item.at-auction") + " .wd-err")), "message stays");
+  await page.click('.wd-grp[data-g="btn"]'); await settle(300);
+  await page.fill(wdRow("btn.open-profile") + " .wd-in", "A very long line of words for one small button"); await settle(300);
+  must(/Too long for this spot\. Keep it to 40 letters/.test(await text(wdRow("btn.open-profile") + " .wd-err")), "no length message");
+  await shot("92-word-problems");
+});
+await check("Save refuses words that would break the site and keeps them; fixed, they save", async () => {
+  await liveSaveTry(); must(/too long/i.test(await notice()) && /still here and not lost/.test(await notice()), "notice: " + await notice());
+  await page.fill(wdRow("btn.open-profile") + " .wd-in", ""); await settle(300);
+  await liveSave();
+  const w = read(GR, "data/pages.json").words;
+  must(w && w["btn.read-feature"] === "Read the whole feature" && w["item.at-auction"] === "{name} under the hammer" && !w["btn.open-profile"], "saved: " + JSON.stringify(w));
+});
+await check("Locked words are shown with the reason, and cannot be typed in", async () => {
+  await page.fill("#wd-q", "publishes"); await settle(300);
+  must(await page.isVisible(wdRow("item.who") + ".locked") && !(await page.$(wdRow("item.who") + " .wd-in")), "not locked");
+  must(/publisher disclosure/.test(await text(wdRow("item.who"))), "no reason");
+  await page.fill("#wd-q", ""); await settle(200);
+});
+await check("Changed only, Use the site's own and Undo", async () => {
+  await page.click("#wd-only"); await settle(300);
+  must((await page.$$(".wd-row")).length === 2, "rows: " + (await page.$$(".wd-row")).length);
+  await page.click(wdRow("btn.read-feature") + ' [data-act="wd-reset"]'); await settle(700);
+  must((await gamF().innerText("body")).includes("Read the feature"), "preview not put back");
+  await page.click('[data-act="ed-undo"]'); await settle(800);
+  must(await page.inputValue(wdRow("btn.read-feature") + " .wd-in") === "Read the whole feature", "Undo did not bring it back");
+  await page.click("#wd-only"); await settle(200);
+  await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(600);
+});
+await check("World Art Review: a changed menu word shows in the page's own menu bar", async () => {
+  await page.evaluate(() => { const st = window.__adh.state; st.leave = null; st.dirty = false; });
+  await openSite("world-art-review");
+  await page.click(".ed-pagebtn"); await page.click('.pp [data-act="wd-open"]'); await settle(400);
+  await page.fill("#wd-q", "menu"); await settle(300);
+  await page.fill(wdRow("menu.open") + " .wd-in", "Sections"); await settle(1200);
+  const f = frame("worldartreview.com"); must(/Sections/.test(await f.innerText("header .menubtn")), "menu button: " + await f.innerText("header .menubtn"));
+  await page.fill("#wd-q", ""); await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(600);
+});
+await check("Edge: code typed in is taken out on Save, and a box of spaces keeps the site's own words", async () => {
+  await page.click('[data-act="wd-close"]').catch(() => {}); await settle(300);
+  await openSite("global-art-monitor");
+  await page.click('[data-act="ed-pop"][data-menu="more"]'); await page.click('.ed-pop.mp [data-act="wd-open"]'); await settle(400);
+  await page.fill("#wd-q", "close"); await settle(300);
+  await page.fill(wdRow("menu.close") + " .wd-in", "<b>Shut</b>"); await settle(300);
+  must(/tags will be taken out/.test(await text(wdRow("menu.close") + " .wd-note")), "no note about the tags");
+  await page.fill(wdRow("btn.close") + " .wd-in", "   "); await settle(300);
+  await liveSave();
+  const w = read(GR, "data/pages.json").words || {};
+  must(w["menu.close"] === "Shut" && !("btn.close" in w), "saved: " + JSON.stringify(w));
+  must(!/<b>/.test(JSON.stringify(read(GR, "data/pages.json"))), "the tags were kept");
+});
+await check("Edge: no matches, nothing changed, and Show me where with the inspector off", async () => {
+  await page.fill("#wd-q", "zzzz"); await settle(300); must(/No word matches that/.test(await text("#wd-body")), "no message for no matches");
+  await page.fill("#wd-q", ""); await settle(200);
+  await page.click('.wd-grp[data-g="nf"]'); await settle(300);
+  await page.click(wdRow("nf.home") + ' [data-act="wd-find"]'); await settle(1200);
+  must(/Not on the page shown now/.test(await text(wdRow("nf.home") + " .wd-where")), "said: " + await text(wdRow("nf.home") + " .wd-where"));
+  await page.click('[data-act="ed-inspector"]'); await settle(800);
+  await page.click(wdRow("nf.title") + ' [data-act="wd-find"]'); await settle(300);
+  must(/Turn on the inspector/.test(await text(wdRow("nf.title") + " .wd-where")), "no message with the inspector off");
+  await page.click('[data-act="ed-inspector"]'); await settle(1200);
+  // put the saved words back, so later areas see the site as it was
+  const doc = read(GR, "data/pages.json"); delete doc.words; hub.commitOn(GR, "main", "data/pages.json", JSON.stringify(doc, null, 2), "Words back");
+});
+await check("Edge: Street Art Dispatch keeps Draft and Date to confirm locked; other words change", async () => {
+  await page.evaluate(() => { const st = window.__adh.state; st.leave = null; st.dirty = false; delete st.pg["global-art-monitor"]; });
+  await openSite("street-art-dispatch");
+  await page.click(".ed-pagebtn"); await page.click('.pp [data-act="wd-open"]'); await settle(400);
+  await page.fill("#wd-q", "confirm"); await settle(300);
+  must(await page.isVisible(wdRow("missing.date") + ".locked") && /confirmed facts/.test(await text(wdRow("missing.date"))), "Date to confirm is not locked");
+  await page.fill("#wd-q", "draft"); await settle(300);
+  must(await page.isVisible(wdRow("item.draft") + ".locked"), "Draft is not locked");
+  await page.fill("#wd-q", "Menu"); await settle(300);
+  await page.fill(wdRow("menu.open") + " .wd-in", "Sections"); await settle(1200);
+  must(/Sections/.test(await SF().innerText("#menuBtn")), "menu button: " + await SF().innerText("#menuBtn"));
+  await page.fill("#wd-q", ""); await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(600);
+});
+await check("Edge: a site built in the console saves its changed words", async () => {
+  await page.evaluate(() => { const st = window.__adh.state; st.leave = null; st.dirty = false; });
+  await openSite("practice-build");
+  await page.click(".ed-pagebtn"); await page.click('.pp [data-act="wd-open"]'); await settle(400);
+  await page.fill("#wd-q", "skip"); await settle(300);
+  await page.fill(wdRow("menu.skip") + " .wd-in", "Jump to the page"); await settle(500);
+  await liveSave();
+  must((pbRead("data/pages.json").words || {})["menu.skip"] === "Jump to the page", "saved: " + JSON.stringify(pbRead("data/pages.json").words));
+  must(/Jump to the page/.test(await pbFrame().evaluate(() => document.querySelector(".skip") ? document.querySelector(".skip").textContent : "")), "not in the preview");
+  await page.fill("#wd-q", ""); await settle(300);
+});
+await check("On a phone, the panel fits and the boxes are full width", async () => {
+  await page.setViewportSize({ width: 390, height: 844 }); await settle(600);
+  const ov = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1); must(!ov, "the page runs off the side");
+  const b = await page.locator(".wdpanel").boundingBox(); must(b && b.x >= 0 && b.x + b.width <= 391, "panel at " + JSON.stringify(b));
+  await shot("93-words-phone");
+  await page.setViewportSize({ width: 1440, height: 900 }); await settle(500);
+  await page.click('[data-act="wd-close"]'); await settle(300); must(await page.isVisible("#ed-sections"), "Close did not go back to the sections");
 });
 
 // =============== results ===============
