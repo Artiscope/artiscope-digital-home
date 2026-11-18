@@ -978,26 +978,100 @@ for (const k of STARTER_KINDS) {
   if (def.starter) def = { ...def, starter: ST_BRACKET(def.fields, def.starter, k) };
   STARTER_SECTIONS[k] = def;
 }
+// What an article and an artist hold on a site built from the starter. Whatever is not given yet
+// stays in square brackets on the page, so nothing on the site is ever made up.
+const ST_SOURCES = { name: "sources", label: "Sources", type: "rows", fields: [
+  { name: "title", label: "Title", type: "text", hint: "The title of the article, page or record." }, { name: "publisher", label: "Publisher", type: "text", hint: "Such as The Guardian or the gallery's own site." },
+  { name: "date", label: "Date", type: "text" }, { name: "href", label: "Link", type: "text", hint: "A full web address starting https://." }] };
+const ST_SOURCE_BLOCKS = { field: "sources", label: "Source", add: "Add a source", about: "A source this page rests on, listed at its foot." };
+const ST_PICTURE = (what) => ({ id: "picture", label: "Picture", about: "The picture on the " + what + ", its description and its credit.", fields: [
+  { name: "image", label: "Picture", type: "image" }, { name: "alt", label: "What the picture shows", type: "text", hint: "For people who cannot see it. Say what is in the picture." },
+  { name: "credit", label: "Credit", type: "text", hint: "Such as the photographer and the gallery. Shown under the picture." }] });
+const ST_HIDDEN = (what) => ({ id: "settings", label: "Settings", about: "Whether visitors can see the " + what + ".", fields: [
+  { name: "hidden", label: "Hidden from the site", type: "yesno", hint: "A hidden " + what + " is kept here but not shown or listed. New ones start hidden, so you can write in peace." }] });
 const STARTER_ITEMS = {
+  article: { label: "Article", parts: [
+    { id: "words", label: "Title and summary", about: "The heading of the article and how it is listed.", fields: [
+      { name: "title", label: "Title", type: "text" }, { name: "kicker", label: "Small line above the title", type: "text", hint: "Such as Interview, Review or News. Leave empty to hide." },
+      { name: "summary", label: "Summary", type: "long", plain: true, hint: "Shown under the title, on the Articles page and in search results." },
+      { name: "date", label: "Date", type: "text", hint: "Such as 18 November 2026. The Articles page lists the newest first." },
+      { name: "artist", label: "About an artist", type: "artists", one: true, hint: "The article is then listed on that artist's page." },
+    ] },
+    ST_PICTURE("article"),
+    { id: "body", label: "The words", about: "The text of the article.", fields: [{ name: "body", label: "Text", type: "long", hint: "Type as you would in a document. A fact that comes only from an artist's own channels is written as reported." }] },
+    { id: "sources", label: "Sources", about: "Every source the article rests on, listed at its foot.", fields: [ST_SOURCES], blocks: ST_SOURCE_BLOCKS },
+    ST_HIDDEN("article"),
+  ] },
+  artist: { label: "Artist", parts: [
+    { id: "words", label: "Name and line", about: "The artist's name and a short line on their work.", fields: [
+      { name: "name", label: "Name", type: "text", hint: "The page keeps its web address when the name changes." }, { name: "line", label: "A short line on their work", type: "text", hint: "Such as Painter and printmaker. Shown under the name and on the Artists page." },
+    ] },
+    { id: "about", label: "About the artist", about: "Their work, how they make it and where it has been shown. Nothing about their private life.", fields: [{ name: "about", label: "Text", type: "long" }] },
+    { id: "details", label: "Details", about: "Short facts in the box under the text, each with its label.", fields: [{ name: "details", label: "Details", type: "rows", fields: [{ name: 0, label: "Label", type: "text", hint: "Such as Based in." }, { name: 1, label: "Detail", type: "text" }] }],
+      blocks: { field: "details", label: "Detail", add: "Add a detail", about: "One fact, with its label.", title: (b) => b[0] } },
+    ST_PICTURE("artist page"),
+    { id: "sources", label: "Sources", about: "Every source the page rests on, listed at its foot.", fields: [ST_SOURCES], blocks: ST_SOURCE_BLOCKS },
+    ST_HIDDEN("artist"),
+  ] },
   site: { label: "Site details", parts: [
     { id: "details", label: "Site details", about: "The email address the forms open a message to.", fields: [
       { name: "site.email", label: "Email shown on the site", type: "text", hint: "Every form opens the visitor's own email app with a message ready to send here." },
     ] },
   ] },
 };
+// The Articles and Artists pages the site draws itself: their small line, heading and introduction.
+const STARTER_LISTS = {
+  articles: { label: "Articles list", start: { eyebrow: "Articles", heading: ["Articles"], intro: "[A line about what the articles cover]" } },
+  artists: { label: "Artists list", start: { eyebrow: "Artists", heading: ["Artists"], intro: "[A line about the artists on this site]" } },
+};
 const EMAIL_SHAPE = /^[^\s@<>"(),;:]{1,64}@[a-z0-9.-]{1,190}\.[a-z]{2,24}$/i;
 export function starterForEditor(content) {
-  const s = (content && content.site) || {};
-  // no articles or artists on a new site yet: they come in a later step
-  return { site: { email: String(s.email || ""), address: String(s.address || ""), indexed: s.indexed === true }, articles: [], artists: [] };
+  const c = content || {}, s = c.site || {};
+  return { site: { email: String(s.email || ""), address: String(s.address || ""), indexed: s.indexed === true },
+    articles: JSON.parse(JSON.stringify(Array.isArray(c.articles) ? c.articles : [])), artists: JSON.parse(JSON.stringify(Array.isArray(c.artists) ? c.artists : [])) };
 }
-export function starterFromEditor(given, content) {
+const ST_NEW_ARTICLE = (slug, g) => ({ slug, title: String((g && g.title) || "New article"), kicker: "", summary: "", date: "", artist: "", image: "", alt: "", credit: "", body: "", sources: [], hidden: true });
+const ST_NEW_ARTIST = (slug, g) => ({ slug, name: String((g && g.name) || "New artist"), line: "", about: "", details: [], image: "", alt: "", credit: "", sources: [], hidden: true });
+// Turns the edited site details, articles and artists back into data/content.json. Throws with a plain reason.
+export function starterFromEditor(given, content, kinds = STARTER_ITEMS) {
   if (!given || typeof given !== "object") throw new Error("The site details could not be read.");
-  const c = JSON.parse(JSON.stringify(content || {})), was = starterForEditor(content), want = String(((given.site || {}).email) ?? was.site.email).trim();
-  if (want === was.site.email) return { content: c, changed: [] };
-  if (want && !EMAIL_SHAPE.test(want)) throw new Error("The email shown on the site does not look like an email address.");
-  c.site = { ...(c.site || {}), email: want };
-  return { content: c, changed: ["Edit site details"] };
+  const c = JSON.parse(JSON.stringify(content || {})), was = starterForEditor(content), changed = [];
+  const want = String(((given.site || {}).email) ?? was.site.email).trim();
+  if (want !== was.site.email) {
+    if (want && !EMAIL_SHAPE.test(want)) throw new Error("The email shown on the site does not look like an email address.");
+    c.site = { ...(c.site || {}), email: want }; changed.push("Edit site details");
+  }
+  const ga = Array.isArray(given.articles) ? given.articles : was.articles, gr = Array.isArray(given.artists) ? given.artists : was.artists;
+  const ctx = { artists: gr.map((a) => ({ slug: String((a && a.slug) || "") })), articleSlugs: ga.map((a) => String((a && a.slug) || "")) };
+  const tidy = (x) => { x.sources = (x.sources || []).filter((r) => r && String(r.title || "").trim()).map((r) => ({ ...r, href: /^https?:\/\/[^\s<>"']+$/i.test(String(r.href || "").trim()) ? String(r.href).trim() : "" })); return x; };
+  const go = (list, cur0, make, kind, word, nameKey) => {
+    const out = [], seen = new Set();
+    if (list.length > 500) throw new Error("A site can hold up to 500 " + word + "s.");
+    for (const g of list) {
+      const slug = String((g && g.slug) || ""), cur = cur0.find((x) => x.slug === slug);
+      if (seen.has(slug)) throw new Error("Two " + word + "s have the same web address.");
+      seen.add(slug);
+      if (!cur && !SLUG.test(slug)) throw new Error("A new " + word + " needs a web address of letters, digits and hyphens.");
+      if (!cur && ["articles", "artists"].includes(slug)) throw new Error("That web address is taken by the " + word + "s page.");
+      const base = cur || make(slug, g), next = tidy(cleanItem(kind, cur ? g : { ...base, ...g }, base, ctx));
+      next.slug = slug;
+      if (!String(next[nameKey] || "").trim()) throw new Error("Every " + word + " needs " + (nameKey === "name" ? "a name." : "a title."));
+      const label = String(next[nameKey]).trim();
+      if (!cur) changed.push("Add " + word + ": " + label);
+      else if (canon(next) !== canon(cur)) changed.push((cur.hidden === true && next.hidden !== true ? "Show " : next.hidden === true && cur.hidden !== true ? "Hide " : "Edit ") + word + ": " + label);
+      out.push(cur && canon(next) === canon(cur) ? cur : next);
+    }
+    for (const cur of cur0) if (!seen.has(cur.slug)) changed.push("Remove " + word + ": " + String(cur[nameKey] || cur.slug));
+    return out;
+  };
+  const arts = go(ga, was.articles, ST_NEW_ARTICLE, kinds.article, "article", "title");
+  const people = go(gr, was.artists, ST_NEW_ARTIST, kinds.artist, "artist", "name");
+  // an article about an artist who has gone keeps nothing pointing at them
+  const alive = new Set(people.map((x) => x.slug));
+  const fixed = arts.map((a) => a.artist && !alive.has(a.artist) ? { ...a, artist: "" } : a);
+  if (canon(fixed) !== canon((content || {}).articles || [])) c.articles = fixed;
+  if (canon(people) !== canon((content || {}).artists || [])) c.artists = people;
+  return { content: c, changed };
 }
 const STARTER_MODEL = {
   id: "starter",
@@ -1006,8 +1080,8 @@ const STARTER_MODEL = {
     return content ? { content: content.data, shas: [content.sha] } : null;
   },
   forEditor: (n) => starterForEditor(n.content),
-  fromEditor(_kinds, given, n) {
-    const r = starterFromEditor(given, n.content);
+  fromEditor(kinds, given, n) {
+    const r = starterFromEditor(given, n.content, kinds || STARTER_ITEMS);
     return { files: r.changed.length ? [["data/content.json", r.content]] : [], changed: r.changed };
   },
   spots: () => [],
@@ -1052,7 +1126,7 @@ export function starterSite(e) {
     want: e.want || "", registrar: e.registrar || "", todo: Array.isArray(e.todo) ? e.todo : [],
     pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
     code: { edit: ["assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs"], read: ["data/pages.json", "data/theme.json", "data/content.json"] },
-    sectionKinds: STARTER_SECTIONS, items: STARTER_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: STARTER_THEME, collections: [],
+    sectionKinds: STARTER_SECTIONS, items: STARTER_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: STARTER_THEME, collections: [], lists: STARTER_LISTS,
   };
 }
 
@@ -2661,11 +2735,9 @@ function buildHome() {
   ];
 }
 function buildSet() {
-  const cards = (title, text) => [1, 2, 3].map(() => ({ title, text, link: "", href: "" }));
   return {
     home: buildHome(),
     about: [BUILD_SEC("about", "text-picture", { heading: "[About us]", body: "[Who you are and what the site is for]" }), BUILD_SEC("quote", "quote")],
-    artists: [BUILD_SEC("artists", "columns", { heading: "[Artists]", numbered: false, columns: cards("[Artist name]", "[A few words about their work]") })],
     exhibitions: [BUILD_SEC("exhibitions", "exhibitions")],
     visit: [BUILD_SEC("visit", "visit")],
     contact: [BUILD_SEC("contact", "contact-form")],
@@ -2680,7 +2752,13 @@ export function copyLayout(doc, from) {
   const order = (keys.includes("home") ? ["home"] : []).concat(keys.filter((k) => k !== "home")).slice(0, 12);
   for (const key of order) {
     const k2 = key === "home" ? "home" : buildSlug(key);
-    if (!k2 || out[k2]) continue;
+    if (!k2 || out[k2] || labels.some((x) => x[0] === k2)) continue;
+    // a page of articles or artists becomes the list the site draws itself from the new site's own
+    if (k2 === "articles" || k2 === "artists") {
+      labels.push([k2, k2 === "articles" ? "Articles" : "Artists"]);
+      swapped.push({ page: human(key), from: "the whole page", to: "the " + (k2 === "articles" ? "Articles" : "Artists") + " list, drawn by the site from your own " + k2 });
+      continue;
+    }
     const title = key === "home" ? "Home" : human(key), secs = [], used = {};
     for (const s of src[key].sections) {
       if (!s || typeof s !== "object" || s.visible === false) continue;
@@ -2710,7 +2788,8 @@ export function nameInto(pages, c) {
 }
 function buildPagesDoc(list) {
   const links = list.labels.slice(0, 7).map(([k, t]) => [t, k === "home" ? "./" : k + "/"]), pages = {};
-  for (const [k, t] of list.labels) pages[k] = buildPage(k, t, list.sections[k]);
+  // Articles and Artists are lists the site draws itself, so they are links, not pages
+  for (const [k, t] of list.labels) if (list.sections[k]) pages[k] = buildPage(k, t, list.sections[k]);
   return {
     _how_to_edit: "This file is edited in Artiscope Digital Home. Each page is a list of sections; words in square brackets are placeholders waiting for real words.",
     shared: {
@@ -2730,7 +2809,7 @@ export function planFiles(c, address, copied) {
   const look = buildLooks().find((l) => l.name === c.look) || buildLooks()[0];
   const v = cleanTheme(STARTER_THEME, { colours: look.colours, fonts: look.fonts, settings: { corners: look.corners === "round" ? "round" : "" } });
   const theme = themeFile({ pages: { images: "assets/images" } }, STARTER_THEME, v);
-  const content = { site: { email: c.email, address, indexed: false } };
+  const content = { site: { email: c.email, address, indexed: false }, articles: [], artists: [] };
   return { pages, theme, content, notes };
 }
 const buildCopies = {};

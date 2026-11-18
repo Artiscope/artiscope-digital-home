@@ -120,7 +120,7 @@ async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).cat
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all seven sites, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 7, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 49"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 50"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -1661,6 +1661,63 @@ await check("The practice build: Start building rebuilds it with the choices, an
   await page.click('[data-act="bd-create"]'); await page.waitForSelector("text=is on the practice build", { timeout: 15000 });
   must(read(PB, "data/pages.json").shared.header.settings.name === "Tess tries it" && !hub.repoMade("Artiscope/tess-tries-it"), "not rebuilt in place");
   await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]');
+});
+
+// =============== 12. Articles and artists on a site built in the console ===============
+area = "Articles and artists";
+const pbText = async () => { const f = pbFrame(); return f ? await f.innerText("body").catch(() => "") : ""; };
+await check("Create artist: a new artist opens on their own page, hidden until shown", async () => {
+  await openSite("practice-build");
+  await page.click(".ed-pagebtn"); await page.click('[data-act="ed-ppgroup"][data-g="artists"]'); await settle(300);
+  await page.click('.pp [data-act="ed-new"][data-what="artist"]'); await settle(300);
+  await page.fill("#nw-name", "Test Artist"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1500);
+  must(await page.inputValue(".pagepick") === "artist-test-artist", "address: " + await page.inputValue(".pagepick"));
+  must((await pbText()).includes("Test Artist") && (await pbText()).includes("[A short line on their work]"), "not drawn: " + (await pbText()).slice(0, 120));
+  await page.click('.sec[data-where="item"][data-id="words"]'); await page.fill('[data-pf="line"]', "Painter and printmaker"); await settle(400);
+  await page.click('.sec[data-where="item"][data-id="settings"]'); must(await page.isChecked('[data-pf="hidden"]'), "not hidden"); await page.click('[data-pf="hidden"]'); await settle(400);
+  await shot("70-artist");
+});
+await check("Create article: the article names the artist, and saving writes both to the site", async () => {
+  await page.click(".ed-pagebtn"); await page.click('[data-act="ed-ppgroup"][data-g="articles"]'); await settle(300);
+  await page.click('.pp [data-act="ed-new"][data-what="article"]'); await settle(300);
+  await page.fill("#nw-title", "A first article"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1500);
+  must(await page.inputValue(".pagepick") === "a-a-first-article", "address: " + await page.inputValue(".pagepick"));
+  await page.fill('[data-pf="summary"]', "What the article is about, in a sentence."); await page.fill('[data-pf="date"]', "18 November 2026");
+  await page.click('[data-act="ed-res"][data-mode="list"]'); await page.click('[data-act="ed-res-set"][data-v="test-artist"]'); await settle(600);
+  await page.click('.sec[data-where="item"][data-id="settings"]'); await page.click('[data-pf="hidden"]'); await settle(500);
+  const t = await pbText(); must(t.includes("A first article") && t.includes("About Test Artist") && t.includes("18 November 2026"), "preview: " + t.slice(0, 200));
+  await shot("71-article");
+  await liveSave();
+  const c = pbRead("data/content.json"), a = c.articles.find((x) => x.slug === "a-first-article"), x = c.artists.find((y) => y.slug === "test-artist");
+  must(a && a.hidden === false && a.artist === "test-artist" && a.summary.startsWith("What the article") && x && x.hidden === false && x.line === "Painter and printmaker", "saved: " + JSON.stringify(c).slice(0, 300));
+});
+await check("The Articles list and the artist's page fill themselves in, and the menu gains Articles and Artists", async () => {
+  await page.selectOption(".pagepick", "articles"); await settle(1500);
+  let t = await pbText(); must(t.includes("A first article") && /Articles\s/.test(t), "list: " + t.slice(0, 200));
+  await page.click('.sec[data-where="list"]').catch(() => {}); await shot("72-articles-list");
+  await page.selectOption(".pagepick", "artist-test-artist"); await settle(1500);
+  t = await pbText(); must(t.includes("Articles about Test Artist") && t.includes("A first article"), "artist page: " + t.slice(0, 300));
+  const menu = await pbFrame().$$eval(".nav-links a", (as) => as.map((a) => a.textContent.trim())); must(menu.includes("Articles") && menu.includes("Artists"), "menu: " + menu);
+});
+await check("The article template: a section added once shows on every article", async () => {
+  await page.selectOption(".pagepick", "a-a-first-article"); await settle(1200);
+  await page.click('.addl[data-act="ed-secpicker"][data-g="tpl"]').catch(async () => { await page.click('.addl[data-act="ed-secpicker"]'); }); await settle(400);
+  await page.click('.pk-item[data-key="quote"]'); await settle(900);
+  await liveSave();
+  const tp = pbRead("data/pages.json").templates.article.default.sections; must(tp.some((x) => x.type === "quote" && /^t-/.test(x.id)) && tp.some((x) => x.type === "main"), "template: " + JSON.stringify(tp).slice(0, 200));
+  must((await pbText()).includes("[A line worth remembering]"), "the template's section is not on the article");
+  await shot("73-template");
+});
+await check("An artist named in an article cannot be deleted; hiding is offered instead", async () => {
+  await page.selectOption(".pagepick", "artist-test-artist"); await settle(1000); await page.click('.sec[data-where="item"][data-id="settings"]'); await settle(300);
+  must(/named in 1 article/.test(await text("body")), "no reason given");
+});
+await check("A new page on a site built in the console starts with a Text with picture section", async () => {
+  await page.click(".ed-pagebtn"); await page.click('.pp [data-act="ed-new"]'); await settle(300);
+  await page.fill("#nw-title", "Visit the studio"); await page.click('form[data-form="ednew"] button[type=submit]'); await settle(1500);
+  await liveSave();
+  const pg = pbRead("data/pages.json").pages["visit-the-studio"]; must(pg && pg.path === "visit-the-studio/index.html" && pg.sections[0].type === "text-picture" && pg.sections[0].settings.heading === "Visit the studio", "page: " + JSON.stringify(pg).slice(0, 200));
+  const links = pbRead("data/pages.json").shared.header.settings.links.map((l) => l[1]); must(links.includes("visit-the-studio/"), "not in the menu: " + links);
 });
 
 // =============== results ===============

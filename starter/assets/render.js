@@ -22,7 +22,8 @@
   // The data file as one object, the same shape Artiscope Digital Home edits.
   function fromFiles(content) {
     var c = JSON.parse(JSON.stringify(content || {})), s = c.site || {};
-    return { site: { email: String(s.email || ""), address: String(s.address || ""), indexed: s.indexed === true } };
+    return { site: { email: String(s.email || ""), address: String(s.address || ""), indexed: s.indexed === true },
+      articles: Array.isArray(c.articles) ? c.articles : [], artists: Array.isArray(c.artists) ? c.artists : [] };
   }
 
   function Site(D, PAGES, THEME, opts) {
@@ -39,7 +40,28 @@
     function shared(key) { var part = (PAGES.shared || {})[key] || {}; return [part.settings || {}, get(part, "visible", true) !== false]; }
     function hd() { return shared("header")[0]; }
     function NAME() { return get(hd(), "name", "") || "[Site name]"; }
-    function navLinks() { return (get(hd(), "links", []) || []).filter(function (l) { return Array.isArray(l) && l[0]; }); }
+    // The menu: the links chosen in the console, then Articles and Artists once there is one to show.
+    function navLinks() {
+      var out = (get(hd(), "links", []) || []).filter(function (l) { return Array.isArray(l) && l[0]; });
+      var has = function (a) { return out.some(function (l) { return String(l[1] || "").replace(/^\.?\//, "").replace(/index\.html$/, "") === a; }); };
+      if (listOn("articles") && ARTICLES.length && !has("articles/")) out.push([listWords("articles").name, "articles/"]);
+      if (listOn("artists") && ARTISTS.length && !has("artists/")) out.push([listWords("artists").name, "artists/"]);
+      return out;
+    }
+    // ----- articles and artists: the ones visitors can see, newest article first -----
+    var stamp = function (a) { var t = Date.parse(String(a.date || "")); return isNaN(t) ? -Infinity : t; };
+    var ARTICLES = (D.articles || []).filter(function (a) { return a && a.slug && a.hidden !== true; }).map(function (a, i) { return { a: a, i: i }; })
+      .sort(function (x, y) { return stamp(y.a) - stamp(x.a) || x.i - y.i; }).map(function (x) { return x.a; });
+    var ARTISTS = (D.artists || []).filter(function (x) { return x && x.slug && x.hidden !== true; });
+    function articleOf(slug) { return (D.articles || []).find(function (a) { return a.slug === slug; }) || null; }
+    function artistOf(slug) { return (D.artists || []).find(function (a) { return a.slug === slug; }) || null; }
+    // A list page is drawn by the site unless a page of the console already uses its address.
+    function listOn(k) { return !Object.keys(PAGES.pages || {}).some(function (x) { return PAGES.pages[x].path === k + "/index.html"; }); }
+    function listWords(k) {
+      var l = ((PAGES.lists || {})[k]) || {}, h = Array.isArray(l.heading) ? l.heading.filter(Boolean) : l.heading ? [l.heading] : [];
+      var name = k === "articles" ? "Articles" : "Artists";
+      return { name: name, eyebrow: l.eyebrow == null ? name : l.eyebrow, heading: h.length ? h : [name], intro: l.intro == null ? (k === "articles" ? "[A line about what the articles cover]" : "[A line about the artists on this site]") : l.intro };
+    }
     function photo(desc, ratio) {
       var st = ratio ? ' style="aspect-ratio:' + ratio + '"' : "";
       return '<div class="ph" role="img" aria-label="Photograph to come: ' + esc(desc) + '"' + st + '><span class="ph-t">Photo to come</span><span class="ph-d">' + esc(desc) + '</span></div>';
@@ -322,6 +344,87 @@
       if (!parts.length && opts.mark) parts.push('<section class="sec sec--lib sec--empty"><div class="wrap"><p class="dek">This page has no sections yet. Add one from the list on the left.</p></div></section>');
       return page(pg.path, (pg.title || NAME()), pg.description || "", (pg.own ? top.concat(parts) : parts).join("\n  "), { top: pg.own ? "" : top.join("\n"), own: !!pg.own });
     }
+    // ----- an article, an artist, and the two list pages -----
+    function M(h, id) { return opts.mark ? h.replace(/^(\s*<[a-z]+)/, '$1 data-adh="' + id + '"') : h; }
+    function tplOf(kind, slug) {
+      var all = ((PAGES.templates || {})[kind]) || {}, o = opts.tpl;
+      var id = o && o.kind === kind && all[o.id] ? o.id : ((((PAGES.assign || {})[kind]) || {})[slug] || "default");
+      return all[id] || all["default"] || null;
+    }
+    // A setting in a template can take its value from the page it is drawn on ("connect stored data").
+    function pageFill(v, kind, it) {
+      if (!it) return v;
+      if (Array.isArray(v)) return v.map(function (x) { return pageFill(x, kind, it); });
+      if (v && typeof v === "object") { var o = {}; Object.keys(v).forEach(function (k) { o[k] = pageFill(v[k], kind, it); }); return o; }
+      if (typeof v !== "string" || v.indexOf("{page.") < 0) return v;
+      if (v === "{page.artist}") return kind === "artist" ? it.slug : (it.artist || "");
+      if (v === "{page.article}") return kind === "article" ? it.slug : "";
+      var plain = function (x) { return String(x == null ? "" : x).replace(/<[^>]*>/g, "").replace(/[<>]/g, ""); };
+      return v.split("{page.title}").join(plain(kind === "artist" ? it.name : it.title)).split("{page.summary}").join(plain(kind === "artist" ? it.line : it.summary));
+    }
+    function tplWrap(kind, slug, inner) {
+      var t = tplOf(kind, slug); if (!t || !Array.isArray(t.sections)) return inner;
+      var item = kind === "article" ? articleOf(slug) : artistOf(slug), placed = false, seen = {};
+      inner.replace(/ id="([^"]+)"/g, function (m, x) { seen[x] = 1; return m; });
+      var out = t.sections.map(function (sec) {
+        if (sec && sec.type === "main") { placed = true; return inner; }
+        if (!sec || sec.visible === false || !S[sec.type]) return "";
+        return mark(cssMark(own(S[sec.type](pageFill(sec.settings || {}, kind, item), { id: sec.id, page: "tpl" }), sec.id, seen), sec), sec.id);
+      });
+      if (!placed) out.unshift(inner);
+      return out.filter(Boolean).join("\n");
+    }
+    function or(v, words) { v = String(v == null ? "" : v).trim(); return v || words; }
+    function sources(list) {
+      var rows = (list || []).filter(function (x) { return x && String(x.title || "").trim(); });
+      if (!rows.length) return opts.mark ? '<section class="r-src" aria-label="Sources"><h2 class="kicker">Sources</h2><p class="dek">[Add the sources this page rests on]</p></section>' : "";
+      return '<section class="r-src" aria-label="Sources"><h2 class="kicker">Sources</h2><ol>' + rows.map(function (x, i) {
+        var t = /^https?:\/\//i.test(String(x.href || "")) ? '<a href="' + esc(x.href) + '" rel="noopener">' + txt(x.title) + '</a>' : txt(x.title);
+        return '<li data-adh-b="sources.' + i + '">' + t + [x.publisher, x.date].filter(function (y) { return String(y || "").trim(); }).map(function (y) { return ", " + txt(y); }).join("") + '</li>';
+      }).join("") + '</ol></section>';
+    }
+    function figure(x, desc, ratio) {
+      return '<figure class="r-fig">' + picOf(x, desc, ratio) + (String(x.credit || "").trim() ? '<figcaption>' + txt(x.credit) + '</figcaption>' : (opts.mark ? '<figcaption>[Credit]</figcaption>' : "")) + '</figure>';
+    }
+    function card(kind, x) {
+      var href = "@@" + (kind === "article" ? "articles/" : "artists/") + x.slug + "/";
+      if (kind === "artist") return '<a class="r-card r-card--artist" href="' + href + '">' + picOf(x, "Portrait of " + or(x.name, "the artist"), "4/5") + '<span class="r-ct">' + txt(or(x.name, "[Artist name]")) + '</span><span class="r-cs">' + txt(or(x.line, "")) + '</span></a>';
+      return '<a class="r-card" href="' + href + '">' + picOf(x, or(x.alt, "Picture for the article"), "3/2") + '<span class="r-in"><span class="r-cd">' + txt([x.date, x.kicker].filter(function (y) { return String(y || "").trim(); }).join("  ")) + '</span><span class="r-ct">' + txt(or(x.title, "[Article title]")) + '</span><span class="r-cs">' + txt(or(x.summary, "")) + '</span></span></a>';
+    }
+    function articlePage(a) {
+      var who = a.artist ? artistOf(a.artist) : null, i = ARTICLES.indexOf(a), nxt = ARTICLES.length > 1 ? ARTICLES[(i + 1) % ARTICLES.length] : null;
+      if (nxt === a) nxt = null;
+      var meta = [String(a.date || "").trim() ? '<span>' + txt(a.date) + '</span>' : "", who ? '<span>About <a href="@@artists/' + esc(who.slug) + '/">' + txt(or(who.name, "[Artist name]")) + '</a></span>' : ""].filter(Boolean).join("");
+      var main = '<article class="r-art">\n    ' + M('<header class="r-head">' + (listOn("articles") ? '<p class="crumb"><a href="@@articles/">' + txt(listWords("articles").name) + '</a></p>' : "") +
+        (String(a.kicker || "").trim() ? '<p class="kicker">' + txt(a.kicker) + '</p>' : "") + '<h1>' + txt(or(a.title, "[Article title]")) + '</h1>' +
+        '<p class="r-stand">' + txt(or(a.summary, "[One or two sentences that sum up the article]")) + '</p>' + (meta ? '<p class="r-meta">' + meta + '</p>' : "") + '</header>', "words") + '\n    ' +
+        M(figure(a, "[What the photograph shows]", "16/9"), "picture") + '\n    ' +
+        M('<div class="r-body">' + (String(a.body || "").replace(/<[^>]*>/g, "").trim() ? a.body : "<p>[Write the article here]</p>") + '</div>', "body") + '\n    ' +
+        M('<div class="r-after">' + sources(a.sources) + '</div>', "sources") +
+        (nxt ? '\n    <aside class="r-next on-band" aria-label="Next article"><div><p class="kicker">Next article</p><h2>' + txt(or(nxt.title, "[Article title]")) + '</h2></div><a class="btn" href="@@articles/' + esc(nxt.slug) + '/">Read next</a></aside>' : "") + '\n  </article>';
+      main = tplWrap("article", a.slug, main); AO_KIND = "article";
+      return page("articles/" + a.slug + "/index.html", or(a.title, "[Article title]") + " | " + NAME(), String(a.summary || ""), main);
+    }
+    function artistPage(x) {
+      var about = ARTICLES.filter(function (a) { return a.artist === x.slug; });
+      var rows = (x.details || []).filter(function (d) { return Array.isArray(d) && String(d[0] || "").trim(); });
+      var dl = rows.length ? '<dl class="r-dl">' + rows.map(function (d, i) { return '<div data-adh-b="details.' + i + '"><dt>' + txt(d[0]) + '</dt><dd>' + txt(d[1] || "") + '</dd></div>'; }).join("") + '</dl>' : (opts.mark ? '<dl class="r-dl"><div><dt>[Detail, such as Based in]</dt><dd>[What it is]</dd></div></dl>' : "");
+      var main = '<article class="r-art">\n    <div class="wrap r-artist">\n      <div class="r-who">' +
+        M('<header>' + (listOn("artists") ? '<p class="crumb"><a href="@@artists/">' + txt(listWords("artists").name) + '</a></p>' : "") + '<p class="kicker">Artist</p><h1>' + txt(or(x.name, "[Artist name]")) + '</h1><p class="r-stand">' + txt(or(x.line, "[A short line on their work]")) + '</p></header>', "words") +
+        M('<div class="r-body r-body--side">' + (String(x.about || "").replace(/<[^>]*>/g, "").trim() ? x.about : "<p>[About the artist: their work, how they make it and where it has been shown]</p>") + '</div>', "about") +
+        M('<div>' + dl + '</div>', "details") + '</div>\n      ' + M(figure(x, "Portrait of " + or(x.name, "the artist"), "4/5"), "picture") + '\n    </div>' +
+        (about.length ? '\n    <section class="wrap r-more" aria-label="Articles about ' + esc(or(x.name, "the artist")) + '"><h2>Articles about ' + txt(or(x.name, "[Artist name]")) + '</h2><div class="r-cards">' + about.map(function (a) { return card("article", a); }).join("") + '</div></section>' : "") +
+        '\n    ' + M('<div class="wrap r-after">' + sources(x.sources) + '</div>', "sources") + '\n  </article>';
+      main = tplWrap("artist", x.slug, main); AO_KIND = "artist";
+      return page("artists/" + x.slug + "/index.html", or(x.name, "[Artist name]") + " | " + NAME(), String(x.line || ""), main);
+    }
+    function listPage(k) {
+      var w = listWords(k), items = k === "articles" ? ARTICLES : ARTISTS;
+      var head = M('<header class="r-lhead">' + (String(w.eyebrow || "").trim() ? '<p class="kicker">' + txt(w.eyebrow) + '</p>' : "") + '<h1>' + w.heading.map(txt).join("<br>") + '</h1>' + (String(w.intro || "").trim() ? '<p class="dek">' + txt(w.intro) + '</p>' : "") + '</header>', "listhead");
+      var grid = items.length ? '<div class="r-cards' + (k === "artists" ? " r-cards--4" : "") + '">' + items.map(function (x) { return card(k === "articles" ? "article" : "artist", x); }).join("") + '</div>'
+        : '<p class="dek">' + (k === "articles" ? "[No articles yet]" : "[No artists yet]") + '</p>';
+      return page(k + "/index.html", w.name + " | " + NAME(), String(w.intro || ""), '<section class="sec sec--lib"><div class="wrap r-list">' + head + grid + '</div></section>');
+    }
     function notFound() {
       var base = SITE_URL.replace(/^https:\/\/[^\/]+/, "") || "/";
       var head = "<script>document.write('<base href=\"'+(location.hostname.slice(-9)==='github.io'?'" + esc(base) + "':'/')+'\">')</script>\n";
@@ -333,17 +436,32 @@
       var out = [], done = {};
       function p(k) { if (PAGES.pages[k] && !done[k]) { done[k] = 1; out.push(sectionsPage(k)); } }
       p("home"); Object.keys(PAGES.pages || {}).forEach(p);
+      // a list page is published once it has something in it, or the menu already leads to it
+      ["articles", "artists"].forEach(function (k) {
+        var linked = (get(hd(), "links", []) || []).some(function (l) { return Array.isArray(l) && String(l[1] || "").replace(/^\.?\//, "") === k + "/"; });
+        if (listOn(k) && ((k === "articles" ? ARTICLES : ARTISTS).length || linked)) out.push(listPage(k));
+      });
+      ARTICLES.forEach(function (a) { out.push(articlePage(a)); });
+      ARTISTS.forEach(function (x) { out.push(artistPage(x)); });
       out.push(notFound());
       return out;
     }
     return {
       all: all, sectionsPage: sectionsPage, notFound: notFound, address: SITE_URL,
-      articlePage: function () { return null; }, featurePage: function () { return null; }, artistPage: function () { return null; },
+      // in the editor a hidden article or artist can still be opened; on the site it has no page
+      articlePage: function (s) { var a = articleOf(s); return a && (opts.mark || a.hidden !== true) ? articlePage(a) : null; },
+      featurePage: function (s) { var a = articleOf(s); return a && (opts.mark || a.hidden !== true) ? articlePage(a) : null; },
+      artistPage: function (s) { var x = artistOf(s); return x && (opts.mark || x.hidden !== true) ? artistPage(x) : null; },
+      listPage: function (k) { return (k === "articles" || k === "artists") && listOn(k) ? listPage(k) : null; },
       // Which page a web address inside the site leads to.
       which: function (path) {
         path = String(path || "").replace(/^\/+/, "").replace(/index\.html$/, "").split("#")[0].split("?")[0];
         var k = Object.keys(PAGES.pages || {}).find(function (x) { return PAGES.pages[x].path === path + (path && !/\/$/.test(path) ? "/" : "") + "index.html"; });
-        return k ? { kind: "page", key: k } : null;
+        if (k) return { kind: "page", key: k };
+        var m = /^(articles|artists)\/?$/.exec(path); if (m && listOn(m[1])) return { kind: "list", key: m[1] };
+        if ((m = /^articles\/([a-z0-9-]+)\/?$/.exec(path)) && articleOf(m[1])) return { kind: "article", key: m[1] };
+        if ((m = /^artists\/([a-z0-9-]+)\/?$/.exec(path)) && artistOf(m[1])) return { kind: "artist", key: m[1] };
+        return null;
       },
     };
   }

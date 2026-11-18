@@ -162,6 +162,7 @@
     var at = m.at || { kind: "page", key: "home" }, out = null;
     if (at.kind === "artist") { out = site.artistPage(at.key); }
     else if (at.kind === "article") { out = site.articlePage(at.key); }
+    else if (at.kind === "list") { out = site.listPage(at.key); }
     else if (m.pages.pages[at.key]) { out = site.sectionsPage(at.key); }
     if (!out) { out = site.notFound(); }
     view = at; types = {};

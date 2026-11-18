@@ -3,5 +3,7 @@
     "email": "info@grovegallery.com",
     "address": "https://example.org/",
     "indexed": false
-  }
+  },
+  "articles": [],
+  "artists": []
 }

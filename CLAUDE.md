@@ -219,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (18 November 2026, Version 49)
+## Where things stand (18 November 2026, Version 50)
 
 Done:
 
@@ -733,6 +733,43 @@ Done:
   - The GitHub key needs, for Create site: All repositories in the
     Artiscope organisation, with Administration, Contents, Pages,
     Workflows and Pull requests set to Read and write, and Actions Read.
+
+- Step 5 (Version 50, 18 November): articles and artist pages on every
+  site built in the console, from the approved sample
+  (https://claude.ai/artifact/DHjcXbzGsNq27cChZt9d9n).
+  - Content: `data/content.json` holds `articles` (slug, title, kicker,
+    summary, date as written, artist (one artist's slug), image, alt,
+    credit, body, sources of title, publisher, date and https link,
+    hidden) and `artists` (slug, name, line, about, details as label and
+    detail pairs, image, alt, credit, sources, hidden). New ones start
+    hidden. An artist keeps their web address when the name changes;
+    removing an artist clears any article that named them.
+  - Server: `STARTER_ITEMS` (article and artist parts: words, picture,
+    body or about, details, sources, settings), `starterForEditor` and
+    `starterFromEditor` (like Street Art Dispatch's), `STARTER_LISTS` (the
+    Articles and Artists list pages, their small line, heading and
+    introduction kept under `lists` in the page list file). Templates
+    work as on the other sites.
+  - Site (`starter/assets/render.js`): `articlePage` (articles/<slug>/),
+    `artistPage` (artists/<slug>/, with "Articles about" filled in from
+    the articles that name them), `listPage` (articles/ and artists/,
+    newest article first by date where the date can be read), `tplWrap`
+    and `pageFill`. A list is published once it has something in it or
+    the menu leads to it, and never where a page of the console uses
+    that address. Articles and Artists join the menu once there is one
+    to show. Hidden ones get no page; the editor can still open them.
+    Unfilled words show in square brackets; the editor alone shows
+    "[Credit]" and "[Add the sources this page rests on]".
+  - Start building: the ready set's Artists is now the list the site
+    draws (a link, not a page); a copied page of articles or artists
+    becomes the list too, and says so.
+  - Console: the page picker has Articles and Artists with their
+    templates and Create article and Create artist; the lists are under
+    Lists; links can point to lists, articles and artists; an artist
+    named in an article cannot be deleted (hide instead); a new page
+    starts with a Text with picture section and joins the menu.
+  - Checks: the step 5 block in `tests/build.mjs` and the "Articles and
+    artists" area of `tests/uat.mjs`.
 
 Waiting for the owner:
 

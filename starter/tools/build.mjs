@@ -53,6 +53,30 @@ function checkPages() {
       if (sec.settings != null && typeof sec.settings !== "object") fail("The settings of section '" + sid + "' on page '" + key + "' must be a list of fields.");
     }
   }
+  // templates: the sections article and artist pages are drawn with, around their own content ("main")
+  const templates = pages.templates || {};
+  if (typeof templates !== "object" || Array.isArray(templates)) fail("The templates in data/pages.json must be grouped by kind of page.");
+  for (const [kind, all] of Object.entries(templates)) {
+    if (!["article", "artist"].includes(kind) || !all || typeof all !== "object" || !all.default) fail("Templates are for articles and artists, and each kind needs a default: " + JSON.stringify(kind));
+    for (const [tid, t] of Object.entries(all)) {
+      const secs = t && t.sections;
+      if (!Array.isArray(secs) || secs.filter((x) => x && x.type === "main").length !== 1) fail("The template '" + tid + "' needs a list of sections with the page's own content in it once.");
+      for (const sec of secs) {
+        if (!sec || (sec.type !== "main" && (!KINDS.includes(sec.type) || sec.type === "signup-popup"))) fail("The template '" + tid + "' has a section of a kind the site cannot draw.");
+        if (sec.type !== "main" && !/^t-[a-z0-9-]+$/.test(String(sec.id || ""))) fail("Every section in a template needs its own id starting t-: " + JSON.stringify(sec.id));
+      }
+    }
+  }
+  if (pages.assign != null && (typeof pages.assign !== "object" || Array.isArray(pages.assign))) fail("The templates chosen for articles and artists must be listed by kind.");
+  // articles and artists: each needs its own web address
+  for (const k of ["articles", "artists"]) {
+    if (content[k] != null && !Array.isArray(content[k])) fail("data/content.json: " + k + " must be a list.");
+    const seen = new Set();
+    for (const x of content[k] || []) {
+      if (!x || !/^[a-z0-9][a-z0-9-]{0,80}$/.test(String(x.slug || "")) || seen.has(x.slug)) fail("data/content.json: every one of the " + k + " needs its own web address of letters, digits and hyphens: " + JSON.stringify(x && x.slug));
+      seen.add(x.slug);
+    }
+  }
   const gseen = new Set();
   for (const where of ["top", "popups", "bottom"]) {
     for (const sec of ((pages.groups || {})[where] || [])) {

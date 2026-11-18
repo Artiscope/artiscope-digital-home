@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "49";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "50";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -1055,7 +1055,7 @@
 
   // ----- which page the editor is on -----
   // A page of sections (pgd.page), or with pgd.at set: "list:reviews", "article:slug", "artist:slug", or "other:standards".
-  var LIST_HASH = { artists: 1, reviews: 1, explained: 1, library: 1, guides: 1, research: 1, search: 1 };
+  var LIST_HASH = { articles: 1, artists: 1, reviews: 1, explained: 1, library: 1, guides: 1, research: 1, search: 1 };
   function atKind(pgd) { return pgd.at ? pgd.at.split(":")[0] : "page"; }
   function atKey(pgd) { return pgd.at ? pgd.at.slice(pgd.at.indexOf(":") + 1) : pgd.page; }
   function atKnown(pgd) {
@@ -1094,6 +1094,8 @@
   function gamWhere(pgd, path) {
     path = String(path || "").replace(/^\/+/, "").replace(/index\.html$/, ""); var m;
     if (path === "" ) return "home";
+    if (pgd.model === "starter" && (m = /^(articles|artists)\/?$/.exec(path)) && pgd.lists[m[1]]) return m[1];
+    if (pgd.model === "starter" && (m = /^articles\/([a-z0-9-]+)\/?$/.exec(path)) && pgd.site.articles.some(function (a) { return a.slug === m[1]; })) return "a-" + m[1];
     if ((m = /^artists\/([a-z0-9-]+)\/?$/.exec(path)) && pgd.site.artists.some(function (a) { return a.slug === m[1]; })) return "artist-" + m[1];
     if ((m = /^(?:research|dispatches|urban-culture)\/([a-z0-9-]+)\/?$/.exec(path)) && pgd.site.articles.some(function (a) { return a.slug === m[1]; })) return "a-" + m[1];
     var want = path.replace(/\/?$/, "/") + "index.html", key = Object.keys(pgd.doc.pages).find(function (k) { return pgd.doc.pages[k].path === want; });
@@ -1116,8 +1118,8 @@
     pgd.sel = null; pgd.panel = ""; pgd.picker = ""; state.confirm = null; edRemember(); edPatch(); pushPreview("");
   }
   // What each site calls an artist's page.
-  function artistsWord(pgd) { return pgd.model === "sad" ? "Artist profiles" : pgd.gam ? "Artist market profiles" : "Artist portfolios"; }
-  function artistWord(pgd) { return pgd.model === "sad" ? "Artist profile" : pgd.gam ? "Artist market profile" : "Artist portfolio"; }
+  function artistsWord(pgd) { return pgd.model === "starter" ? "Artists" : pgd.model === "sad" ? "Artist profiles" : pgd.gam ? "Artist market profiles" : "Artist portfolios"; }
+  function artistWord(pgd) { return pgd.model === "starter" ? "Artist" : pgd.model === "sad" ? "Artist profile" : pgd.gam ? "Artist market profile" : "Artist portfolio"; }
 
 
   function viewLeave() {
@@ -1179,8 +1181,11 @@
     g.push({ id: "pages", label: "Pages", icon: "doc", items: Object.keys(pgd.doc.pages).map(function (k) { return o(k === "home" ? "home" : "page-" + k, shortTitle(pgd, pgd.doc.pages[k].title) || k); }).concat([o("not-found", "Page not found")]) });
     var lists = Object.keys(pgd.lists).map(function (k) { return o(k, pgd.lists[k].label); });
     if (lists.length) g.push({ id: "lists", label: "Lists", icon: "list", items: lists });
-    if (pgd.site && pgd.model === "starter") g.push({ id: "site", label: "Across the site", icon: "gear", items: [o("site-details", "Site details")] });
-    else if (pgd.site) {
+    if (pgd.site && pgd.model === "starter") {
+      g.push({ id: "articles", label: "Articles", icon: "book", items: (pgd.site.articles || []).map(function (a) { return o("a-" + a.slug, (a.title || "Untitled") + (a.hidden ? " (hidden)" : "")); }) });
+      g.push({ id: "artists", label: "Artists", icon: "person", items: (pgd.site.artists || []).map(function (a) { return o("artist-" + a.slug, (a.name || "Unnamed") + (a.hidden ? " (hidden)" : "")); }) });
+      g.push({ id: "site", label: "Across the site", icon: "gear", items: [o("site-details", "Site details")] });
+    } else if (pgd.site) {
       var arts = pgd.site.articles.slice().sort(function (a, b) { return String(a.title).localeCompare(String(b.title)); });
       g.push({ id: "articles", label: "Articles", icon: "book", items: arts.map(function (a) { return o("a-" + a.slug, a.title + (a.hidden ? " (hidden)" : "")); }) });
       g.push({ id: "artists", label: artistsWord(pgd), icon: "person", items: pgd.site.artists.map(function (a) { return o("artist-" + a.slug, a.name + (pgd.gam || a.published ? "" : " (not published)")); }) });
@@ -1198,7 +1203,7 @@
   function pageIcon(pgd) { var k = atKind(pgd); return k === "page" ? (atKey(pgd) === "home" ? "home" : "doc") : { list: "list", article: "book", artist: "person", site: "gear" }[k] || "doc"; }
   // The page picker: a search box, the kinds of page, then the pages of one kind.
   // Kinds of page the sites do not have yet. Shown greyed, used by none, until they are built.
-  function laterKinds(pgd) { if (pgd.model === "starter") return [["book", "Articles"], ["person", "Artists"], ["frame", "Artworks"], ["calendar", "Exhibitions"]]; var out = [["frame", "Artworks"], ["gallery", "Collections of works"], ["calendar", "Exhibitions"]]; if (pgd.gam && pgd.model !== "sad") out.push(["table", "Auction results"]); return out; }
+  function laterKinds(pgd) { if (pgd.model === "starter") return [["frame", "Artworks"], ["calendar", "Exhibitions"]]; var out = [["frame", "Artworks"], ["gallery", "Collections of works"], ["calendar", "Exhibitions"]]; if (pgd.gam && pgd.model !== "sad") out.push(["table", "Auction results"]); return out; }
   function pagePop(pgd) {
     var cur = atHash(pgd), groups = pageGroups(pgd), g = groups.find(function (x) { return x.id === state.ppGroup; }), tk = tplKinds(pgd);
     var item = function (grp) { return function (x) {
@@ -1221,7 +1226,8 @@
         (ts.length ? '<p class="cap">' + esc(pgd.itemKinds[gk].label) + ' templates</p>' + ts.map(function (id) { return tplLine(gk, id); }).join("") +
           '<button type="button" class="soft slim pp-make" data-act="ed-tpl-new" data-kind="' + gk + '"' + (empty ? " disabled" : "") + '>' + ic("plus", 14) + 'Create template</button>' +
           (empty ? '<p class="small pp-note">Nothing to show until there is one to fill the preview.</p>' : "") : "") +
-        '<p class="cap">' + esc(g.label) + '</p>' + g.items.filter(function (x) { return x.v !== "home"; }).map(item(g)).join("");
+        '<p class="cap">' + esc(g.label) + '</p>' + g.items.filter(function (x) { return x.v !== "home"; }).map(item(g)).join("") +
+        (pgd.model === "starter" && gk ? '<button type="button" class="soft slim pp-make" data-act="ed-new" data-what="' + gk + '">' + ic("plus", 14) + (gk === "article" ? "Create article" : "Create artist") + '</button>' : "");
     } else {
       level = item({ label: "Home page", icon: "home" })({ v: "home", label: "Home page" }) + groups.map(function (x) {
         var k = kindOf(x.id), nt = k && tk.indexOf(k) >= 0 ? Object.keys(tplAll(pgd, k)).length : 0, n = x.id === "pages" ? x.items.length - 1 : x.items.length;
@@ -1860,12 +1866,14 @@
   // Making something new: a page, an article, an artist or a source.
   var NEW_WHAT = [["page", "Page"], ["article", "Article"], ["artist", "Artist"], ["source", "Source"]];
   function edNew(pgd) {
-    var w = pgd.newWhat || "page", ok = function (x) { return x === "page" || (!!pgd.site && pgd.model !== "starter" && !(pgd.gam && x === "source")); };
+    var w = pgd.newWhat || "page", ok = function (x) { return x === "page" || (!!pgd.site && !(pgd.gam && x === "source")); };
     if (!ok(w)) w = "page";
     var tabs = '<div class="seg mini">' + NEW_WHAT.filter(function (x) { return ok(x[0]); }).map(function (x) { return '<button type="button" class="' + (w === x[0] ? "on" : "") + '" data-act="ed-new" data-what="' + x[0] + '">' + x[1] + '</button>'; }).join("") + '</div>';
     var f = function (id, label, hint, extra) { return '<div class="field"><label for="nw-' + id + '">' + esc(label) + '</label><input type="text" id="nw-' + id + '" name="' + id + '" maxlength="160"' + (extra || "") + '>' + (hint ? '<span class="small">' + esc(hint) + '</span>' : "") + '</div>'; };
     var body = "";
     if (w === "page") body = f("title", "Page title", "Such as Visit us or About the review.") + '<label class="chk"><input type="checkbox" name="menu" checked> Add it to the menu bar</label><label class="chk"><input type="checkbox" name="own"> Its own layout: no menu bar, footer or shared sections, for a page such as Coming soon</label><span class="small">It starts with one text section. Add more from the section library.</span>';
+    else if (w === "article" && pgd.model === "starter") body = f("title", "Title", "You can change it later.") + '<span class="small">New articles start hidden, so you can write in peace. Show it from its Settings when it is ready. Its words start in square brackets until you write them.</span>';
+    else if (w === "artist" && pgd.model === "starter") body = f("name", "Artist's name") + '<span class="small">New artists start hidden too. Their page keeps its web address if the name changes later.</span>';
     else if (w === "article" && pgd.model === "sad") body = f("title", "Title", "You can change it later.") + '<span class="small">New articles start hidden, so you can write in peace. Show it from its Settings when it is ready. It goes under Dispatches; move it to Urban Culture in Title and summary.</span>';
     else if (w === "article" && pgd.gam) body = f("title", "Title", "You can change it later.") + '<span class="small">New articles start hidden, so you can write in peace. Show it from its Settings when it is ready. It goes under Research; choose where else it shows in Title and summary.</span>';
     else if (w === "artist" && pgd.model === "sad") body = f("name", "Artist's name") + '<span class="small">The artist\'s card shows Coming soon until you choose the story their profile links to.</span>';
@@ -2001,22 +2009,23 @@
         (cites ? "" : asking("ed-delsrc") ? '<span class="small">Delete this source?</span><div class="row"><button type="button" class="btn slim" data-act="ed-delsrc">Yes, delete</button><button type="button" class="linklike small" data-act="cancel">Keep it</button></div>'
           : '<button type="button" class="linklike small" data-act="ask" data-k="ed-delsrc" style="align-self:flex-start">Delete this source</button>') + '</div>';
     }
-    if (sel.where === "item" && atKind(pgd) === "artist" && sel.id === (pgd.model === "sad" ? "words" : pgd.gam ? "about" : "settings")) {
+    if (sel.where === "item" && atKind(pgd) === "artist" && sel.id === (pgd.model === "sad" ? "words" : pgd.model === "starter" ? "settings" : pgd.gam ? "about" : "settings")) {
       var why = artistInUse(pgd, itemOf(pgd));
       return '<div class="stack extras"><div class="sub">Delete</div>' + (why ? '<span class="small">' + esc(why) + '</span>'
-        : asking("ed-delartist") ? '<span class="small">Delete ' + esc(itemOf(pgd).name) + (pgd.model === "sad" ? "'s profile" : pgd.gam ? "'s market profile" : "'s portfolio") + '? Undo can still bring it back after saving.</span><div class="row"><button type="button" class="btn slim" data-act="ed-delartist">Yes, delete</button><button type="button" class="linklike small" data-act="cancel">Keep it</button></div>'
-        : '<button type="button" class="linklike small" data-act="ask" data-k="ed-delartist" style="align-self:flex-start">Delete this artist</button>' + (pgd.gam ? "" : '<span class="small">Unpublishing keeps the portfolio for later.</span>')) + '</div>';
+        : asking("ed-delartist") ? '<span class="small">Delete ' + esc(itemOf(pgd).name) + (pgd.model === "starter" ? "'s page" : pgd.model === "sad" ? "'s profile" : pgd.gam ? "'s market profile" : "'s portfolio") + '? Undo can still bring it back after saving.</span><div class="row"><button type="button" class="btn slim" data-act="ed-delartist">Yes, delete</button><button type="button" class="linklike small" data-act="cancel">Keep it</button></div>'
+        : '<button type="button" class="linklike small" data-act="ask" data-k="ed-delartist" style="align-self:flex-start">Delete this artist</button>' + (pgd.model === "starter" ? '<span class="small">Hiding the artist keeps the page for later.</span>' : pgd.gam ? "" : '<span class="small">Unpublishing keeps the portfolio for later.</span>')) + '</div>';
     }
     return "";
   }
   var WAR_BUILT_IN = { home: 1, standards: 1 };
   var GAM_BUILT_IN = { home: 1, "auction-results": 1, artists: 1, research: 1, "market-intelligence": 1, "collecting-valuation": 1, about: 1, contact: 1 };
   // The links a new page can be added to: the menu bar, or on Global Art Monitor the full-screen menu.
-  function menuLinks(pgd) { var st = pgd.doc.shared.header.settings; if (pgd.gam && pgd.model !== "sad") { st.menu_extra = st.menu_extra || []; return st.menu_extra; } st.links = st.links || []; return st.links; }
+  function menuLinks(pgd) { var st = pgd.doc.shared.header.settings; if (pgd.gam && pgd.model !== "sad" && pgd.model !== "starter") { st.menu_extra = st.menu_extra || []; return st.menu_extra; } st.links = st.links || []; return st.links; }
   function menuHref(pgd, key) { return pgd.gam ? key + "/" : "#page-" + key; }
   // Why an artist cannot be deleted yet, in plain words, or "" when they can.
   function artistInUse(pgd, a) {
     if (!a) return "";
+    if (pgd.model === "starter") { var about = pgd.site.articles.filter(function (x) { return x.artist === a.slug; }); return about.length ? (a.name || "This artist") + " is named in " + about.length + (about.length === 1 ? " article (" + (about[0].title || "untitled") + ")" : " articles") + ". Choose another artist there first, or hide this artist instead." : ""; }
     if (pgd.gam) { var n = (a.sales || []).length; return n ? a.name + " has " + n + (n === 1 ? " sale" : " sales") + ". Remove the sales and save first, then delete the artist." : ""; }
     var named = pgd.site.articles.filter(function (x) { return (x.artists || []).indexOf(a.slug) >= 0; });
     return named.length ? a.name + " is named in " + named.length + (named.length === 1 ? " article (" + named[0].title + ")" : " articles") + ". Take them out of those first, or unpublish the portfolio instead." : "";
@@ -2129,8 +2138,9 @@
     if (pgd.gam) {
       var pages = pgd.model === "starter" ? [{ label: "Home page", href: "./" }] : []; Object.keys(pgd.doc.pages).forEach(function (k) { var pg = pgd.doc.pages[k], at = String(pg.path || "").replace(/index\.html$/, ""); if (k !== "home" && at) pages.push({ label: shortTitle(pgd, pg.title) || k, href: at }); });
       push("pages", "Pages", pages);
-      push("artists", artistsWord(pgd), (site2.artists || []).map(function (a) { return { label: a.name, href: "artists/" + a.slug + "/", pic: a.image }; }));
-      push("articles", "Articles", (site2.articles || []).filter(function (a) { return !a.hidden; }).map(function (a) { return { label: a.title, href: (pgd.model === "sad" ? (a.section || "dispatches") : "research") + "/" + a.slug + "/" }; }));
+      if (pgd.model === "starter") push("lists", "Lists", Object.keys(pgd.lists || {}).map(function (k) { return { label: pgd.lists[k].label, href: k + "/" }; }));
+      push("artists", artistsWord(pgd), (site2.artists || []).filter(function (a) { return pgd.model !== "starter" || !a.hidden; }).map(function (a) { return { label: a.name, href: "artists/" + a.slug + "/", pic: a.image }; }));
+      push("articles", "Articles", (site2.articles || []).filter(function (a) { return !a.hidden; }).map(function (a) { return { label: a.title, href: (pgd.model === "starter" ? "articles" : pgd.model === "sad" ? (a.section || "dispatches") : "research") + "/" + a.slug + "/" }; }));
       return out;
     }
     pageGroups(pgd).forEach(function (g) {
@@ -4036,7 +4046,11 @@
     }
     if (a === "bd-create") {
       if (b.busy) return; b.busy = true; b.err = ""; render();
-      api("createSite", { site: b.site, choices: b.c }).then(function (r) { b.busy = false; b.done = r; render(); }, function (e) { b.busy = false; b.err = e.message; render(); });
+      api("createSite", { site: b.site, choices: b.c }).then(function (r) {
+        // whatever the editor had read of this site before is out of date now
+        delete state.pg[b.site]; delete state.theme[b.site]; if (state.files) delete state.files[b.site]; if (state.versions) delete state.versions[b.site];
+        b.busy = false; b.done = r; render();
+      }, function (e) { b.busy = false; b.err = e.message; render(); });
       return;
     }
     if (a === "bd-open") { var id = b.site; state.build = null; state.inSite = false; state.tab = "home"; load().then(function () { openSite(id); }); return; }
@@ -4184,7 +4198,7 @@
   // ----- making a page, an article, an artist or a source -----
   function slugFrom(t) { return String(t || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50); }
   function freeSlug(base, taken) { base = base || "new"; var n = 2, out = base; while (taken.indexOf(out) >= 0) out = base + "-" + (n++); return out; }
-  var RESERVED_PAGES = ["home", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search", "assets", "data", "tools", "inbox", "preview", "auction-results", "market-intelligence", "collecting-valuation", "about", "contact", "dispatches", "urban-culture", "interventions", "exhibitions", "collecting", "images"];
+  var RESERVED_PAGES = ["home", "articles", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search", "assets", "data", "tools", "inbox", "preview", "auction-results", "market-intelligence", "collecting-valuation", "about", "contact", "dispatches", "urban-culture", "interventions", "exhibitions", "collecting", "images"];
   function makeNew(form) {
     var pgd = pgOf(); if (!pgd) return;
     var val = function (n) { var x = form.querySelector('[name="' + n + '"]'); return x ? (x.type === "checkbox" ? x.checked : x.value.trim()) : ""; };
@@ -4193,7 +4207,10 @@
     if (w === "page") {
       var title = val("title"); if (!title) return say("Please give the page a title.");
       var key = freeSlug(slugFrom(title) || "page", Object.keys(pgd.doc.pages).concat(RESERVED_PAGES));
-      if (pgd.model === "sad") {
+      if (pgd.model === "starter") {
+        var tpk = JSON.parse(JSON.stringify((pgd.kinds["text-picture"] && pgd.kinds["text-picture"].starter) || {})); tpk.heading = title;
+        pgd.doc.pages[key] = { path: key + "/index.html", title: title, description: "", sections: [{ id: "words", type: "text-picture", visible: true, settings: tpk }] };
+      } else if (pgd.model === "sad") {
         var tp = JSON.parse(JSON.stringify((pgd.kinds["text-page"] && pgd.kinds["text-page"].starter) || {})); tp.heading = title;
         pgd.doc.pages[key] = { path: key + "/index.html", title: title + " | Street Art Dispatch", description: "", current: "", intro: false, sections: [{ id: "text", type: "text-page", visible: true, settings: tp }] };
       } else if (pgd.gam) {
@@ -4210,15 +4227,17 @@
     if (!pgd.site) return;
     if (w === "article" && pgd.gam) {
       var gt = val("title"); if (!gt) return say("Please give the article a title.");
-      var gs = freeSlug(slugFrom(gt) || "article", pgd.site.articles.map(function (x) { return x.slug; }));
-      if (pgd.model === "sad") pgd.site.articles.push({ slug: gs, section: "dispatches", kicker: "", title: gt, standfirst: "", tags: [], body: "<p>Write here.</p>", hidden: true });
+      var gs = freeSlug(slugFrom(gt) || "article", pgd.site.articles.map(function (x) { return x.slug; }).concat(["articles", "artists"]));
+      if (pgd.model === "starter") pgd.site.articles.push({ slug: gs, title: gt, kicker: "", summary: "", date: "", artist: "", image: "", alt: "", credit: "", body: "", sources: [], hidden: true });
+      else if (pgd.model === "sad") pgd.site.articles.push({ slug: gs, section: "dispatches", kicker: "", title: gt, standfirst: "", tags: [], body: "<p>Write here.</p>", hidden: true });
       else pgd.site.articles.push({ slug: gs, title: gt, kicker: "Research", tags: ["research"], mins: 5, standfirst: "", body: "<p>Write here.</p>", description: "", hidden: true });
       pgd.what = "Add article: " + gt; pgMark(pgd); navTo("a-" + gs); pickSection("words", null, false, "item"); return;
     }
     if (w === "artist" && pgd.gam) {
       var gn = val("name"); if (!gn) return say("Please give the artist's name.");
-      var ga = freeSlug(slugFrom(gn) || "artist", pgd.site.artists.map(function (x) { return x.slug; }));
-      if (pgd.model === "sad") pgd.site.artists.push({ slug: ga, name: gn, role: "", cover: "", read: null, summary: "", facts: [], note: "" });
+      var ga = freeSlug(slugFrom(gn) || "artist", pgd.site.artists.map(function (x) { return x.slug; }).concat(["articles", "artists"]));
+      if (pgd.model === "starter") pgd.site.artists.push({ slug: ga, name: gn, line: "", about: "", details: [], image: "", alt: "", credit: "", sources: [], hidden: true });
+      else if (pgd.model === "sad") pgd.site.artists.push({ slug: ga, name: gn, role: "", cover: "", read: null, summary: "", facts: [], note: "" });
       else pgd.site.artists.push({ slug: ga, name: gn, line: "", houses: [], summary: "", body: [], sources: [], image: "", alt: "", caption: "", sales: [] });
       pgd.artists.push({ slug: ga, name: gn });
       pgd.what = "Add artist: " + gn; pgMark(pgd); navTo("artist-" + ga); pickSection("words", null, false, "item"); return;
@@ -4378,13 +4397,13 @@
       var pd5 = pgOf(), ar = pd5 && itemOf(pd5); if (!ar || artistInUse(pd5, ar)) return;
       pd5.site.artists = pd5.site.artists.filter(function (x) { return x !== ar; }); delete pd5.pictures["artist:" + ar.slug];
       pd5.artists = pd5.artists.filter(function (x) { return x.slug !== ar.slug; });
-      pd5.what = "Delete artist: " + ar.name; state.confirm = null; pgMark(pd5); navTo(pd5.gam ? "page-artists" : "artists");
+      pd5.what = "Delete artist: " + ar.name; state.confirm = null; pgMark(pd5); navTo(pd5.model === "starter" ? "artists" : pd5.gam ? "page-artists" : "artists");
     }
     else if (a === "ed-delart") {
       var pz3 = pgOf(), it3 = pz3 && itemOf(pz3); if (!it3) return;
       var sec3 = it3.section; pz3.site.articles = pz3.site.articles.filter(function (x) { return x !== it3; }); delete pz3.pictures["article:" + it3.slug];
       pz3.what = "Delete article: " + it3.title; state.confirm = null; pgMark(pz3);
-      navTo(({ explained: "explained", library: "library", reviews: "reviews", features: "artists" })[sec3] || "home");
+      navTo(pz3.model === "starter" ? "articles" : ({ explained: "explained", library: "library", reviews: "reviews", features: "artists" })[sec3] || "home");
     }
     else if (a === "ed-pk") {
       var pp2 = pgOf(), ps2 = pp2 && pgSel(pp2); if (!ps2) return;

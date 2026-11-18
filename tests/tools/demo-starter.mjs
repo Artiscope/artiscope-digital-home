@@ -12,7 +12,7 @@ const E = m.starterForEditor(content), pages = read("data/pages.json");
 const doc = m.cleanPages({ ...S, artists: [], articleSlugs: [] }, pages, pages), summaries = {};
 for (const [k, part] of Object.entries(doc.shared)) summaries["shared:" + k] = S.sectionKinds[part.type].summary ? String(S.sectionKinds[part.type].summary(part.settings)) : "";
 for (const [k, pg] of Object.entries(doc.pages)) for (const sec of pg.sections) summaries[k + ":" + sec.id] = S.sectionKinds[sec.type].summary ? String(S.sectionKinds[sec.type].summary(sec.settings || {})) : "";
-fs.writeFileSync(C_DIR + "/assets/demo-starter.json", JSON.stringify({ addonSpec: m.ADDONS.map((a) => ({ id: a.id, label: a.label, about: a.about, icon: a.icon, fields: a.fields })), pages: doc, kinds, summaries, images: [], imageMeta: {}, pictures: [], artists: [], site: E, itemKinds: S.items, lists: {}, listFields: [], gam: true, model: "starter", builtIn: S.builtIn,
+fs.writeFileSync(C_DIR + "/assets/demo-starter.json", JSON.stringify({ addonSpec: m.ADDONS.map((a) => ({ id: a.id, label: a.label, about: a.about, icon: a.icon, fields: a.fields })), pages: doc, kinds, summaries, images: [], imageMeta: {}, pictures: [], artists: [], site: E, itemKinds: JSON.parse(JSON.stringify(S.items)), lists: Object.fromEntries(Object.entries(S.lists).map(([k, l]) => [k, { label: l.label, section: "" }])), listFields: m.LIST_FIELDS, gam: true, model: "starter", builtIn: S.builtIn,
     pageFields: [{ name: "title", label: "Title in the browser tab and search results", type: "text" }, { name: "description", label: "Description for search engines", type: "long", plain: true, hint: "One or two sentences. Not shown on the page." }] }));
 console.log("Wrote the practice build sample");
 
