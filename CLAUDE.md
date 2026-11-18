@@ -798,6 +798,33 @@ Done:
   - Checks: the "Edge cases" area of `tests/uat.mjs` and the edge block in
     `tests/build.mjs`.
 
+- Edit default text, step 2 of 4 (18 November): the sites and the
+  server, from the approved sample
+  (https://claude.ai/artifact/BtS13Hb1gcpWWU4Kuz7n1z). Step 3 (the console
+  panel) and step 4 (checks, Version 52) are next.
+  - Every fixed word of a site's design (buttons, menu words, empty
+    spaces, table headings, Page not found, words for screen readers) is
+    drawn through `W("key", "the site's own words")` (`Wt` for plain words
+    on World Art Review and the starter, `SW` in each `site.js`). Changed
+    words live in the page list file under `words` (only the changed
+    ones; no `words` at all when none are changed). Each site's build
+    refuses `words` that are not plain words. Pages carry the changed
+    words in `script#adh-words` for `site.js`; the editor will set
+    `window.ADH_WORDS`. World Art Review sets the words in its fixed
+    markup with `applyWords()` on every page drawn.
+  - Server: `WAR_WORDS`, `GAM_WORDS`, `SAD_WORDS`, `STARTER_WORDS` (key to
+    the site's own words), `WORD_GROUPS` (by the key's first part),
+    `WORD_LOCKS` (form notes saying what the form does; the publisher
+    disclosure heading on Global Art Monitor; Draft and Date to confirm on
+    Street Art Dispatch), `wordMax` (40 for menu, button and table words,
+    200 otherwise), `slotsOf` and `cleanWords` (plain words only, every
+    {slot} kept, no new slots, unknown and locked words dropped), used by
+    `cleanPages`. Long passages about method and facts are left out of
+    the lists on purpose.
+  - When adding a fixed word to a site, use W() with a new key and run
+    `node tests/run.mjs`: it fails until the server's list matches the
+    code (`tests/tools/site-words.mjs` reads the calls).
+
 Waiting for the owner:
 
 - Create site needs the GitHub key widened (see step 4 above). The

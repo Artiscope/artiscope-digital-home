@@ -337,4 +337,56 @@ globalThis.fetch = realFetch;
     assert.ok(/\n\s+create:/.test(wf) && /ref_type == 'branch'/.test(wf), dir + ": the preview is built when a copy is made");
   }
 }
+// Edit default text, step 2: every site draws its fixed words through W(), and the server's lists match the code
+{
+  const h = await import("./home.mjs"); const { wordsIn } = await import("./tools/site-words.mjs"); const { execFileSync } = await import("node:child_process");
+  const S = sadDir();
+  const sets = { war: [[W_DIR + "/src/index.html"], h.WAR_WORDS], gam: [[G_DIR + "/assets/render.js", G_DIR + "/assets/site.js"], h.GAM_WORDS],
+    sad: [[S + "/assets/render.js", S + "/assets/site.js"], h.SAD_WORDS], starter: [[C_DIR + "/starter/assets/render.js", C_DIR + "/starter/assets/site.js"], h.STARTER_WORDS] };
+  for (const [id, [files, list]] of Object.entries(sets)) {
+    const found = wordsIn(files);
+    assert.deepEqual(found.clash, [], id + ": one key, one set of words");
+    assert.deepEqual(found.words, list, id + ": the server's list of words matches the site's code");
+    for (const k of Object.keys(h.WORD_LOCKS[id])) assert.ok(list[k], id + ": a locked word is one the site uses: " + k);
+    for (const k of Object.keys(list)) assert.ok(h.WORD_GROUPS.some((g) => g[0] === k.split(".")[0]), id + ": " + k + " belongs to a group");
+  }
+  // the server cleans what is saved
+  const gam = SITES.find((x) => x.id === "global-art-monitor"), war = SITES.find((x) => x.id === "world-art-review");
+  assert.equal(SITES.find((x) => x.id === "practice-site").words, war.words, "the Practice site has World Art Review's words");
+  assert.deepEqual(h.cleanWords(gam, { "btn.read-feature": " Read the  <b>whole</b> feature ", "nope.key": "x", "item.who": "Who pays us", "menu.open": "Menu", "menu.close": "  " }),
+    { "btn.read-feature": "Read the whole feature" }, "plain words only; unknown, locked, unchanged and empty words are dropped");
+  assert.throws(() => h.cleanWords(gam, { "btn.read-feature": "x".repeat(41) }), /too long\. Keep them to 40 letters/);
+  assert.ok(h.cleanWords(gam, { "missing.no-priced": "y".repeat(200) })["missing.no-priced"], "longer words are allowed where there is room");
+  assert.throws(() => h.cleanWords(gam, { "item.at-auction": "At auction" }), /Keep \{name\} in the words in place of "\{name\} at auction"\. It is where the artist's name goes/);
+  assert.throws(() => h.cleanWords(gam, { "btn.count": "{n} of {total}, {all}" }), /\{all\} is not something the site can fill in/);
+  assert.deepEqual(h.cleanWords(gam, { "btn.count": "{n} out of {total}" }), { "btn.count": "{n} out of {total}" });
+  const gp = JSON.parse(fs.readFileSync(G_DIR + "/data/pages.json", "utf8"));
+  assert.ok(!("words" in h.cleanPages(gam, gp, gp)), "a site with no changed words gets no words in its file");
+  const withW = h.cleanPages(gam, { ...gp, words: { "menu.open": "Sections" } }, gp);
+  assert.deepEqual(withW.words, { "menu.open": "Sections" });
+  assert.deepEqual(h.cleanPages(gam, { ...withW, words: undefined }, withW).words, { "menu.open": "Sections" }, "a save without words keeps the ones there");
+  assert.ok(!("words" in h.cleanPages(gam, { ...withW, words: {} }, withW)), "putting every word back leaves none in the file");
+  // each site draws changed words, and refuses a file whose words are not plain words
+  const tmp = "/tmp/run-words"; fs.rmSync(tmp, { recursive: true, force: true });
+  const tryBuild = (src, kind, words, file, cmd, check) => {
+    const dir = tmp + "/" + kind; fs.cpSync(src, dir, { recursive: true, filter: (p) => !p.includes("/.git") });
+    const pf = dir + "/" + file, pg = JSON.parse(fs.readFileSync(pf, "utf8")); pg.words = words; fs.writeFileSync(pf, JSON.stringify(pg));
+    execFileSync("python3", cmd, { cwd: dir, stdio: "pipe" }); check(dir);
+    pg.words = { "menu.open": 3 }; fs.writeFileSync(pf, JSON.stringify(pg));
+    assert.throws(() => execFileSync("python3", cmd, { cwd: dir, stdio: "pipe" }), undefined, kind + ": words that are not plain words do not publish");
+  };
+  tryBuild(G_DIR, "gam", { "menu.open": "Sections", "nf.title": "Not in the record" }, "data/pages.json", ["tools/build.py"], (d) => {
+    const home = fs.readFileSync(d + "/index.html", "utf8"); assert.ok(home.includes('aria-controls="menu">Sections</button>') && home.includes('id="adh-words"'), "Global Art Monitor draws a changed word");
+    assert.ok(fs.readFileSync(d + "/404.html", "utf8").includes("Not in the record"));
+  });
+  tryBuild(S, "sad", { "menu.open": "Sections" }, "data/pages.json", ["tools/build.py", tmp + "/sad-out"], () => {
+    assert.ok(fs.readFileSync(tmp + "/sad-out/index.html", "utf8").includes('</i>Sections</button>'), "Street Art Dispatch draws a changed word");
+  });
+  tryBuild(C_DIR + "/starter", "starter", { "menu.skip": "Jump to the page" }, "data/pages.json", ["tools/build.py", tmp + "/st-out"], () => {
+    assert.ok(fs.readFileSync(tmp + "/st-out/index.html", "utf8").includes(">Jump to the page</a>"), "a site built in the console draws a changed word");
+  });
+  tryBuild(W_DIR, "war", { "menu.close": "Shut" }, "content/pages.json", ["tools/build_site.py", tmp + "/war-out"], () => {
+    assert.ok(fs.readFileSync(tmp + "/war-out/index.html", "utf8").includes('"menu.close": "Shut"'), "World Art Review carries the changed words to the page");
+  });
+}
 console.log("ALL TESTS PASSED");

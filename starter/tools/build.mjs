@@ -67,6 +67,8 @@ function checkPages() {
       }
     }
   }
+  // changed fixed words, from Edit default text: plain words only
+  if (pages.words != null && (typeof pages.words !== "object" || Array.isArray(pages.words) || Object.values(pages.words).some((v) => typeof v !== "string"))) fail("The changed words in data/pages.json must be a list of plain words.");
   if (pages.assign != null && (typeof pages.assign !== "object" || Array.isArray(pages.assign))) fail("The templates chosen for articles and artists must be listed by kind.");
   // articles and artists: each needs its own web address
   for (const k of ["articles", "artists"]) {

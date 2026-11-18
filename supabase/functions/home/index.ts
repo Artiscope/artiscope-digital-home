@@ -17,6 +17,158 @@
 
 // The typefaces the console offers, each with the exact request Google
 // Fonts needs for it. A short list on purpose.
+// ----- Edit default text: the fixed words of each site's design -----
+// Every word a site's design writes itself (buttons, empty spaces, Page not found, words for screen
+// readers) is drawn through W("key", "the site's own words") in the site's code. Changed words are kept
+// in the page list file under "words"; a word not changed keeps the site's own. These lists hold the
+// site's own words, and tests/run.mjs checks they match the sites' code exactly.
+export const WORD_GROUPS = [["menu", "Menu and links"], ["loading", "Loading screen"], ["btn", "Buttons"], ["table", "Auction table"], ["archive", "Archive search"],
+  ["missing", "Missing or empty"], ["form", "Forms"], ["item", "Articles and artists"], ["note", "Notebook and reading tools"], ["toast", "Short messages"],
+  ["search", "Search"], ["gw", "Gallery walk"], ["nf", "Page not found"], ["sr", "Words for screen readers"]];
+// Words that cannot be changed here, and why. The form notes say honestly what the form does, and the
+// rest follow each site's own rules.
+const NOTE_LOCK = "This line says honestly what the form does, so it stays as it is.";
+export const WORD_LOCKS = {
+  war: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
+  gam: { "form.note": NOTE_LOCK, "item.who": "The heading of the publisher disclosure stays as it is, by the site's rules." },
+  sad: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK, "missing.date": "Stays until confirmed facts are given, by the site's rules.", "item.draft": "Stays until confirmed facts are given, by the site's rules." },
+  starter: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
+};
+export const WAR_WORDS = {
+  "menu.close": "Close", "menu.artists": "Artists A to Z", "menu.reviews": "Reviews", "menu.explained": "Art Explained",
+  "menu.library": "Collector's Library", "menu.method": "How we research", "menu.subscribe": "Subscribe", "menu.search": "Search",
+  "menu.notebook-count": "Your notebook ({n})", "menu.notebook": "Your notebook", "menu.open": "Menu", "btn.close": "Close",
+  "btn.join": "Ask to join", "btn.back-reading": "Back to reading", "btn.previous": "Previous", "btn.next": "Next",
+  "btn.leave-gallery": "Leave the gallery", "btn.see-sources": "See in sources", "btn.open-original": "Open original", "btn.remove": "Remove",
+  "btn.delete": "Delete", "btn.count": "{n} of {total}", "btn.top": "Top", "btn.prev-artist": "Previous artist", "btn.next-artist": "Next artist",
+  "btn.source": "Source", "btn.read-source": "Read it at the source", "btn.write": "Write the email", "btn.walk": "Walk the gallery",
+  "btn.read-next": "Read next", "btn.copy": "Copy link", "btn.open-portfolio": "Open the portfolio", "missing.image": "Image to supply",
+  "missing.untitled": "Untitled work", "missing.work": "Work to be documented", "missing.artwork-image": "Artwork image to supply",
+  "missing.title": "Title to confirm", "missing.dates": "Dates to confirm", "missing.year": "Year to confirm", "missing.to-add": "To add",
+  "form.your-name": "Your name", "form.email": "Your email", "form.sub-err": "We need a working email address to send it to.",
+  "form.topics": "Anything you would like us to cover? Optional.", "form.thanks": "Your email app should now be open.",
+  "form.thanks-name": "Thank you, {name}. Your email app should now be open.",
+  "form.need-email": "We need a working email address, so we can reply.", "form.need-message": "Write your message first.",
+  "form.subject": "Please add me to the World Art Review letter", "form.first-name": "Your first name",
+  "form.note": "This opens your own email app with a message ready to send to {email}.", "form.topic": "What it is about",
+  "form.message": "Your message", "form.note-contact": "This opens your own email app with your message ready to send to {email}.",
+  "item.sources": "Sources", "item.spotted": "Spotted an error?", "item.tell-us": "Tell us how to correct it", "item.year": "Year",
+  "item.medium": "Medium", "item.size": "Size", "item.notes": "Notes", "item.source": "Source", "item.reported": "Reported",
+  "item.in-research": "Portfolio in research", "item.glance": "At a glance", "item.see-missing": "See what is missing",
+  "item.in-portfolio": "In this portfolio", "item.works": "Documented works", "item.career": "Career timeline",
+  "item.where": "Where to see the work", "item.reading-now": "Reading now", "item.back": "Back to the section",
+  "item.in-article": "Artists in this article", "item.related": "Related", "note.ask": "What do you notice?", "note.in": "In your notebook",
+  "note.writing": "Writing...", "note.saved": "Saved in your notebook", "note.empty-saved": "Use the bookmark on any article to keep it here.",
+  "note.empty-notes": "Open any documented work and write down what you notice. Your notes collect here.",
+  "note.kept": "Kept in this browser only. Nobody else can see it.", "note.saved-read": "Saved to read", "note.noticed": "What you noticed",
+  "note.deleted": "Note deleted", "note.ask-hint": "A colour, a mark, a detail you keep coming back to",
+  "toast.removed": "Removed from your reading list", "toast.saved": "Saved to your reading list", "toast.smaller": "Smaller text",
+  "toast.larger": "Larger text", "toast.standard": "Standard text", "toast.copied": "Link copied", "toast.no-copy": "Copying is not available here",
+  "search.hint": "Artists, artworks, techniques", "search.keys-move": "Up and down arrows to move", "search.keys-open": "Enter to open",
+  "search.keys-close": "Esc to close", "gw.kicker": "Gallery walk", "gw.note-hint": "Write it down before you move on",
+  "gw.hint": "Drag, scroll or use the arrow keys.", "nf.eyebrow": "Not found", "nf.line1": "We could not", "nf.line2": "find that page",
+  "nf.home": "Return to the homepage", "sr.menu": "Menu", "sr.more": "More", "sr.search": "Search World Art Review",
+  "sr.close-search": "Close search", "sr.results": "Results", "sr.wall": "Works on the wall", "sr.source": "Source", "sr.tools": "Reading tools",
+  "sr.remove": "Remove {title}", "sr.delete-note": "Delete this note", "sr.text-size": "Change text size", "sr.save": "Save to reading list",
+  "sr.sections": "Sections", "sr.open-menu": "Open menu", "sr.share": "Share this page", "sr.privacy": "Privacy", "sr.elsewhere": "Elsewhere",
+  "sr.larger": "Larger picture", "sr.breadcrumb": "Breadcrumb",
+};
+export const GAM_WORDS = {
+  "menu.skip": "Skip to content", "menu.open": "Menu", "menu.close": "Close", "menu.foot-sections": "Sections", "menu.foot-artists": "Artists",
+  "menu.foot-about": "About", "loading.line": "Art market intelligence, beyond the headlines.", "loading.word": "Loading",
+  "btn.read-feature": "Read the feature", "btn.open-profile": "Open the market profile", "btn.tell-me": "Tell me when a profile is added",
+  "btn.full-method": "Read the full method", "btn.count": "{n} of {total}", "btn.previous": "Previous", "btn.next": "Next", "btn.source": "Source",
+  "btn.read-source": "Read it at the source", "btn.join": "Ask to join", "btn.close": "Close", "table.from": "From {low}",
+  "table.calculated": "Our calculation", "table.lot": "Lot {lot}", "table.swipe": "Swipe sideways to see every column.", "table.date": "Sale date",
+  "table.artist": "Artist", "table.work": "Work", "table.house": "House and sale", "table.estimate": "Estimate", "table.hammer": "Hammer price",
+  "table.premium": "With premium", "table.currency": "Currency", "table.source": "Source", "table.key-hammer": "Hammer price",
+  "table.key-premium": "Price with premium", "table.key-estimate": "Estimate", "table.bar-high": "High estimate {price}",
+  "table.bar-hammer": "Hammer {price}", "table.bar-premium": "With premium {price}", "table.chip-premium": "With buyer's premium",
+  "missing.high": "High estimate to confirm", "missing.tbc": "To confirm", "missing.no-priced": "No priced sale documented yet.",
+  "missing.picture": "Picture to supply", "missing.title": "Title to confirm", "missing.to-add": "To add", "missing.no-dated": "No dated sale yet.",
+  "form.first-name": "First name", "form.email": "Email", "form.note": "This opens your own email app with a message ready to send to {email}.",
+  "form.need-email": "We need a working email address, so we can reply.", "form.subject": "Please add me to the market note",
+  "form.sent": "Your email app should now be open with the message ready. Send it and you are on the list. If nothing opened, write to {email}.",
+  "item.reported": "Reported", "item.crumb-artists": "Artist Market Profiles", "item.highest": "Highest documented price",
+  "item.priced": "Priced results", "item.out-of": "Out of {total} lots we have found.", "item.earliest": "Earliest dated sale",
+  "item.houses": "Auction houses", "item.timeline": "Artist auction timeline", "item.at-auction": "{name} at auction",
+  "item.side-by-side": "Estimate, hammer and total, side by side", "item.about": "About the artist", "item.related": "Related reading",
+  "item.sources": "Background sources", "item.gap": "Spotted a gap?", "item.crumb-research": "Research Reports", "item.more": "More research",
+  "item.figures": "The figures", "item.who": "Who publishes this", "nf.eyebrow": "Page not found", "nf.title": "That page is not in the record.",
+  "nf.lede": "The link may be old or mistyped.", "nf.home": "Go to the home page", "nf.results": "Browse auction results", "sr.nav": "Sections",
+  "sr.menu": "All sections", "sr.social": "Social media", "sr.share": "Share this page", "sr.privacy": "Privacy",
+  "sr.table": "Auction results table",
+  "sr.ladder": "Bar comparison of estimate, hammer price and price with premium for each priced sale. The same figures are in the table.",
+  "sr.filter-artist": "Filter by artist", "sr.filter-house": "Filter by auction house", "sr.larger": "Larger picture",
+};
+export const SAD_WORDS = {
+  "menu.open": "Menu", "menu.close": "Close", "menu.skip": "Skip to content", "btn.read-story": "Read the story", "btn.open-profile": "Open profile",
+  "btn.read-column": "Read the column", "btn.read-dispatch": "Read the dispatch", "btn.close": "Close", "btn.join": "Ask to join",
+  "btn.count": "{n} of {total}", "btn.previous": "Previous", "btn.next": "Next", "btn.source": "Source", "btn.read-source": "Read it at the source",
+  "btn.write": "Write the email", "btn.read-next": "Read next", "archive.all-years": "All years", "archive.search": "Search",
+  "archive.artist": "Artist", "archive.all-artists": "All artists", "archive.city": "City", "archive.all-cities": "All cities",
+  "archive.year": "Year", "archive.count": "{n} interventions, newest first", "archive.clear": "Clear filters",
+  "archive.empty": "Nothing matches those filters yet.", "archive.showing": "Showing {shown} of {total} interventions",
+  "missing.photo": "Photo to come", "missing.awaiting": "Awaiting confirmation", "missing.soon": "Coming soon", "missing.date": "Date to confirm",
+  "missing.title": "Title to confirm", "missing.tbc": "To confirm", "missing.to-add": "To add",
+  "missing.commission": "Photograph to be commissioned.", "form.email": "Email address", "form.placeholder": "you@example.com",
+  "form.note": "This opens your own email app with a message ready to send to {email}.", "form.name": "Your name", "form.your-email": "Your email",
+  "form.topic": "What it is about", "form.message": "Your message",
+  "form.note-contact": "This opens your own email app with your message ready to send to {email}.", "form.subject": "Subscribe to the Dispatch",
+  "form.sent-box": "Your email app should open with a subscription request. Send it and we’ll add you.",
+  "form.need-email": "We need a working email address, so we can reply.", "form.need-message": "Please write your message first.",
+  "form.sent": "Your email app should now be open with the message ready. Send it and it reaches us. If nothing opened, write to {email}.",
+  "form.need-email-join": "We need a working email address, so we can add you.",
+  "form.sent-join": "Your email app should now be open with the message ready. Send it and we will add you. If nothing opened, write to {email}.",
+  "item.min-read": "{n} min read", "item.mins": "{n} min", "item.dates": "Dates:", "item.reported": "Reported", "item.draft": "Draft",
+  "item.filed": "Filed under {tags}.", "item.next-column": "Next column", "item.next-dispatch": "Next dispatch", "item.in-archive": "In the archive",
+  "item.see-archive": "See these entries in the archive", "item.crumb-artists": "Artists", "item.kicker-artist": "Artist",
+  "item.read-more": "Read more", "nf.eyebrow": "Page not found", "nf.title": "That page isn’t here.",
+  "nf.lede": "It may have moved, or the address may be mistyped.", "nf.home": "Go to the front page", "nf.or": "or",
+  "nf.archive": "search the archive", "sr.social": "Social media", "sr.photo": "Photograph to come: {what}", "sr.share": "Share this page",
+  "sr.privacy": "Privacy", "sr.nav": "Sections", "sr.menu": "Menu", "sr.photo-box": "Photo",
+};
+export const STARTER_WORDS = {
+  "menu.articles": "Articles", "menu.artists": "Artists", "menu.open": "Menu", "menu.close": "Close", "menu.skip": "Skip to content",
+  "btn.join": "Ask to join", "btn.close": "Close", "btn.count": "{n} of {total}", "btn.previous": "Previous", "btn.next": "Next",
+  "btn.source": "Source", "btn.read-source": "Read it at the source", "btn.write": "Write the email", "btn.read-next": "Read next",
+  "missing.photo": "Photo to come", "missing.title": "Title to confirm", "missing.tbc": "To confirm", "missing.to-add": "To add",
+  "form.email": "Email address", "form.placeholder": "you@example.com",
+  "form.note": "This opens your own email app with a message ready to send to {email}.", "form.name": "Your name", "form.your-email": "Your email",
+  "form.topic": "What it is about", "form.message": "Your message",
+  "form.note-contact": "This opens your own email app with your message ready to send to {email}.",
+  "form.need-email-join": "We need a working email address, so we can add you.", "form.subject": "Join the {site} mailing list",
+  "form.sent-join": "Your email app should now be open with the message ready. Send it and we will add you. If nothing opened, write to {email}.",
+  "form.need-email": "We need a working email address, so we can reply.", "form.need-message": "Please write your message first.",
+  "form.sent": "Your email app should now be open with the message ready. Send it and it reaches us. If nothing opened, write to {email}.",
+  "item.reported": "Reported", "item.dates": "Dates:", "item.sources": "Sources", "item.about": "About", "item.next": "Next article",
+  "item.kicker-artist": "Artist", "item.articles-about": "Articles about {name}", "nf.eyebrow": "Page not found",
+  "nf.title": "That page is not here.", "nf.lede": "It may have moved, or the address may be mistyped.", "nf.home": "Go to the home page",
+  "sr.social": "Social media", "sr.photo": "Photograph to come: {what}", "sr.share": "Share this page", "sr.privacy": "Privacy", "sr.nav": "Pages",
+  "sr.menu": "Menu", "sr.links": "Links", "sr.photo-box": "Photo",
+};
+// The longest a changed word may be: short for buttons, menus and table headings, so they never break the layout.
+export function wordMax(key) { return ["menu", "btn", "table"].includes(String(key).split(".")[0]) ? 40 : 200; }
+const SLOT_WORDS = { name: "the artist's name", email: "the email address", n: "the number", total: "the total", low: "the low estimate", price: "the price",
+  lot: "the lot number", tags: "the subjects", what: "what the photograph shows", shown: "the number shown", site: "the site's name", title: "the title" };
+export const slotsOf = (t) => [...String(t).matchAll(/\{([a-z]+)\}/g)].map((m) => m[1]);
+// Cleans the changed words: plain words only, known and not locked, within their length, with every slot kept.
+export function cleanWords(site, given) {
+  const list = site.words || {}, locks = site.wordLocks || {}, out = {};
+  if (!given || typeof given !== "object" || Array.isArray(given)) return out;
+  for (const [k, v] of Object.entries(given)) {
+    if (!Object.prototype.hasOwnProperty.call(list, k) || locks[k] || typeof v !== "string") continue;
+    const t = v.replace(/<[^>]*>?/g, " ").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+    if (!t || t === list[k]) continue;
+    if (t.length > wordMax(k)) throw new Error("The words in place of \"" + list[k] + "\" are too long. Keep them to " + wordMax(k) + " letters or fewer.");
+    const need = slotsOf(list[k]), lost = need.filter((x) => !t.includes("{" + x + "}"));
+    if (lost.length) throw new Error("Keep {" + lost[0] + "} in the words in place of \"" + list[k] + "\". It is where " + (SLOT_WORDS[lost[0]] || "the site's own detail") + " goes.");
+    const odd = slotsOf(t).filter((x) => !need.includes(x));
+    if (odd.length) throw new Error("{" + odd[0] + "} is not something the site can fill in for \"" + list[k] + "\". Take it out, or use " + (need.length ? need.map((x) => "{" + x + "}").join(" or ") : "plain words") + ".");
+    out[k] = t;
+  }
+  return out;
+}
 export const FONTS = {
   "Castoro": "Castoro:ital@0;1",
   "Gloock": "Gloock",
@@ -1126,7 +1278,7 @@ export function starterSite(e) {
     want: e.want || "", registrar: e.registrar || "", todo: Array.isArray(e.todo) ? e.todo : [],
     pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
     code: { edit: ["assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs"], read: ["data/pages.json", "data/theme.json", "data/content.json"] },
-    sectionKinds: STARTER_SECTIONS, items: STARTER_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: STARTER_THEME, collections: [], lists: STARTER_LISTS,
+    sectionKinds: STARTER_SECTIONS, words: STARTER_WORDS, wordLocks: WORD_LOCKS.starter, items: STARTER_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: STARTER_THEME, collections: [], lists: STARTER_LISTS,
   };
 }
 
@@ -1507,6 +1659,11 @@ export function cleanPages(site, given, current) {
   }
   // the site's add-ons
   out.addons = cleanAddons(site, given.addons, current.addons);
+  // changed fixed words (Edit default text); none kept means no "words" in the file at all
+  if (site.words) {
+    const words = cleanWords(site, given.words === undefined ? current.words : given.words);
+    if (Object.keys(words).length) out.words = words;
+  }
   // the heading and introduction of each list page
   if (site.lists) {
     out.lists = {};
@@ -1606,7 +1763,7 @@ export const SITES = [
     ],
     pages: { file: "content/pages.json", images: "images", meta: "content/files.json", content: "content/site.json" },
     code: { edit: ["src/index.html", "tools/build_site.py"], read: ["content/pages.json", "content/theme.json", "content/site.json"] },
-    sectionKinds: WAR_SECTIONS,
+    sectionKinds: WAR_SECTIONS, words: WAR_WORDS, wordLocks: WORD_LOCKS.war,
     items: WAR_ITEMS,
     lists: WAR_LISTS,
     theme: {
@@ -1652,7 +1809,7 @@ export const SITES = [
     ],
     pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
     code: { edit: ["assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs"], read: ["data/pages.json", "data/theme.json", "data/content.json", "data/sales.json"] },
-    sectionKinds: GAM_SECTIONS,
+    sectionKinds: GAM_SECTIONS, words: GAM_WORDS, wordLocks: WORD_LOCKS.gam,
     items: GAM_ITEMS,
     gam: true,
     model: GAM_MODEL,
@@ -1702,7 +1859,7 @@ export const SITES = [
     ],
     pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
     code: { edit: ["assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs"], read: ["data/pages.json", "data/theme.json", "data/content.json"] },
-    sectionKinds: SAD_SECTIONS,
+    sectionKinds: SAD_SECTIONS, words: SAD_WORDS, wordLocks: WORD_LOCKS.sad,
     items: SAD_ITEMS,
     model: SAD_MODEL,
     builtIn: ["home", "dispatches", "urban-culture", "artists", "interventions", "exhibitions", "collecting", "about", "contact"],
