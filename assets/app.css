@@ -1419,3 +1419,24 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focu
   .bd-rec { grid-template-columns: 54px 40px 1fr 50px; gap: 8px; }
   .bd-form { padding: 16px; }
 }
+
+/* ---------- usability pass, 18 November (Version 51) ---------- */
+/* the block count beside a section opens its blocks: big enough to hit with a finger */
+.ed .sec .cnt { min-height: 28px; min-width: 32px; }
+/* View site on All sites: as easy to hit as the Open button beside it */
+.hfoot > a { display: inline-flex; align-items: center; min-height: 34px; padding: 0 6px; }
+/* a narrow window or a tablet: the settings of what is picked sit right under the list, above the preview */
+@media (max-width: 1100px) {
+  .ed > .ed-top { order: 0; }
+  .ed > .ed-left { order: 1; }
+  .ed > .ed-right { order: 2; }
+  .ed > .ed-mid { order: 3; }
+}
+/* a phone: the page picker and the other menus open across the screen instead of off its edge */
+@media (max-width: 700px) {
+  .ed-top .ed-pop, .ed-top .ed-pop.pp, .mid .ed-pop { position: fixed; left: 12px; right: 12px; top: auto; width: auto; max-width: none; transform: none; max-height: 72vh; overflow: auto; z-index: 60; }
+}
+.theme-more { margin: -6px 0 18px; max-width: 640px; }
+
+/* Version 51: the "could not be opened" card sits at its own height */
+.ed .ed-fail { align-self: start; height: auto; min-height: 0; }

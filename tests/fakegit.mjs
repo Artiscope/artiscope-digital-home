@@ -53,11 +53,11 @@ export function makeGitHub(seed) {   // seed: { "Owner/repo": { "path": "text" }
       const name = org[1] + "/" + body.name;
       if (made.has(name) || [...made].some((x) => x.toLowerCase() === name.toLowerCase())) return res(422, { message: "name already exists on this account" });
       made.add(name); const r = repoOf(name); if (body.auto_init) { const files = { "README.md": blob(r, b64("# " + body.name + "\n")) }; r.refs.main = commit(r, tree(r, files), [], "Initial commit"); }
-      r.info = { name: body.name, description: body.description, private: !!body.private }; log.push("POST orgs/" + org[1] + "/repos " + body.name);
+      r.info = { name: body.name, description: body.description, private: !!body.private, homepage: body.homepage || "" }; log.push("POST orgs/" + org[1] + "/repos " + body.name);
       return res(201, { full_name: name, html_url: "https://github.com/" + name });
     }
     const whole = url.match(/^https:\/\/api\.github\.com\/repos\/([^/]+\/[^/?]+)$/);
-    if (whole) return made.has(whole[1]) ? res(200, { full_name: whole[1] }) : res(404, { message: "Not Found" });
+    if (whole) return made.has(whole[1]) ? res(200, { full_name: whole[1], homepage: (repos[whole[1]] && repos[whole[1]].info && repos[whole[1]].info.homepage) || "" }) : res(404, { message: "Not Found" });
     const m = url.match(/^https:\/\/api\.github\.com\/repos\/([^/]+\/[^/]+)\/(.*)$/);
     if (!m) throw new Error("unexpected " + method + " " + url);
     const r = repoOf(m[1]); let [path, query = ""] = m[2].split("?"); const q = new URLSearchParams(query);

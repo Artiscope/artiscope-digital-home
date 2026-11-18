@@ -2329,7 +2329,7 @@ async function branchForWriting(site, copy, _who) {
 async function siteOverview(site, wanted = "", me = null, names = {}) {
   const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta), edits: !!site.items, practice: !!site.practice,
     pagesOn: !!site.pages, themeOn: !!site.theme, photosOn: !site.noPhotos, starter: !!site.starter, playground: !!site.playground, youAdmin: !!(me && me.admin),
-    want: site.want || "", registrar: site.registrar || "", todo: site.todo || [], buildable: !site.live && !site.repo && !site.playground };
+    want: site.want || "", registrar: site.registrar || "", todo: site.todo || [], records: dnsRecords(site.want || ""), buildable: !site.live && !site.repo && !site.playground };
   if (!site.live) return base;
   try {
     const copies = (await copiesOf(site)).filter((c) => !me || me.admin || c.kind === "live" || ownerOfCopy(c.id) === me.tag);
@@ -2659,13 +2659,13 @@ export async function starterInto(site, message, opts = {}) {
   }
   if (!tree.length) return { ok: true, unchanged: true, sha: headSha };
   const madeTree = await gh("/repos/" + site.repo + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: head.data.tree.sha, tree }) });
-  if (!madeTree.ok) return { error: writeProblem(madeTree, "GitHub did not write the starter.") };
+  if (!madeTree.ok) return { error: writeProblem(madeTree, "GitHub did not write the site's files.") };
   const commit = await gh("/repos/" + site.repo + "/git/commits", { method: "POST", body: JSON.stringify({ message, tree: madeTree.data.sha, parents: [headSha] }) });
-  if (!commit.ok) return { error: writeProblem(commit, "GitHub did not write the starter.") };
+  if (!commit.ok) return { error: writeProblem(commit, "GitHub did not write the site's files.") };
   const moved = await moveBranch(site, "main", commit.data.sha, false);
   // GitHub only lets a key write publishing steps (.github/workflows) when it has the Workflows permission.
   if (!moved.ok && withSteps && /workflow/i.test(JSON.stringify(moved.data || ""))) return { error: STEPS_HELP, steps: true };
-  if (!moved.ok) return { error: writeProblem(moved, "GitHub did not write the starter.") };
+  if (!moved.ok) return { error: writeProblem(moved, "GitHub did not write the site's files.") };
   return { ok: true, sha: commit.data.sha };
 }
 
@@ -2701,10 +2701,24 @@ export const BUILD_NEAR = {
   "exhibition-list": "exhibitions", "page-head": "heading", "page-heading": "heading",
 };
 export const GITHUB_IPS = ["185.199.108.153", "185.199.109.153", "185.199.110.153", "185.199.111.153"];
+// Endings shared by many domains, so shop.example.co.uk is seen as a subdomain of example.co.uk.
+const TWO_PART = /\.(co|org|ac|gov|me|ltd|plc|net|sch|nhs|com|edu)\.(uk|au|nz|za|jp|in|br|cn|kr|il|sg|hk|my|tr|mx|ar)$/;
+const keepParts = (d) => TWO_PART.test("." + d) ? 3 : 2;
+export function isSubdomain(d) { return String(d || "").split(".").length > keepParts(d); }
+// The records to add where the domain is registered: four A records and www for a whole domain,
+// or one CNAME record for a subdomain such as shop.example.com.
+export function dnsRecords(d) {
+  if (!d) return [];
+  const host = BUILD_ORG.toLowerCase() + ".github.io";
+  if (isSubdomain(d)) return [["CNAME", d.split(".").slice(0, -keepParts(d)).join("."), host]];
+  return GITHUB_IPS.map((ip) => ["A", "@", ip]).concat([["CNAME", "www", host]]);
+}
 export function buildSlug(name) { return String(name || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60).replace(/-+$/, ""); }
 export function cleanDomain(v) {
-  const d = String(v || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/[/?#].*$/, "").replace(/^www\./, "").replace(/\.$/, "");
+  let d = String(v || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/[/?#].*$/, "").replace(/^www\./, "").replace(/\.$/, "");
   if (!d) return "";
+  // a web address with accents (café.com) is kept in the form DNS uses (xn--caf-dma.com)
+  if (/[^\x00-\x7f]/.test(d)) { try { d = new URL("https://" + d + "/").hostname; } catch (_e) { /* refused below */ } }
   if (!/^(?=.{4,190}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/.test(d)) throw new Error("The web address should look like newsite.com, without https:// or anything after it.");
   if (/(^|\.)github\.io$|(^|\.)artiscope\.github\.io$/.test(d)) throw new Error("Give the domain you own. The GitHub address is made for you.");
   return d;
@@ -2712,8 +2726,9 @@ export function cleanDomain(v) {
 // The owner's choices, checked. card is the site being built (Site 4, or the practice build).
 export function cleanBuild(given, card) {
   const g = given && typeof given === "object" ? given : {};
-  const name = cleanText(g.name == null ? (card && card.name) || "" : g.name, 60).trim();
-  const tagline = cleanText(g.tagline || "", 120).trim();
+  const noTags = (v) => String(v || "").replace(/<[^>]*>?/g, " ").replace(/\s+/g, " ");
+  const name = cleanText(noTags(g.name == null ? (card && card.name) || "" : g.name), 60).trim();
+  const tagline = cleanText(noTags(g.tagline || ""), 120).trim();
   const email = String(g.email == null ? "info@grovegallery.com" : g.email).trim();
   if (email && !EMAIL_SHAPE.test(email)) throw new Error("The email shown on the site does not look like an email address.");
   const looks = buildLooks(), look = looks.some((l) => l.name === g.look) ? g.look : "Ink and clay";
@@ -2892,10 +2907,15 @@ export async function createSite(card, given, tag) {
   const repo = BUILD_ORG + "/" + slug;
   if (SITES.some((x) => String(x.repo || "").toLowerCase() === repo.toLowerCase())) throw new Error("Another site already uses the name " + repo + ". Choose a different site name.");
   const there = await gh("/repos/" + repo);
-  if (there.ok) throw new Error("There is already a repository called " + repo + " on GitHub. Choose a different site name.");
-  const made = await gh("/orgs/" + BUILD_ORG + "/repos", { method: "POST", body: JSON.stringify({ name: slug, description: c.tagline || c.name, private: false, auto_init: true, has_wiki: false, has_projects: false, homepage: plan.address }) });
-  if (!made.ok) return { error: made.status === 422 ? "GitHub would not make " + repo + ". Try a different site name." : MAKE_HELP };
-  done.push("Repository made: " + repo);
+  // A repository the console began for this address (it carries the address as its homepage) and that
+  // is not on the list of sites yet is one a Create site stopped half way through: carry on with it.
+  const resume = there.ok && there.data && String(there.data.homepage || "").replace(/\/$/, "") === plan.address.replace(/\/$/, "");
+  if (there.ok && !resume) throw new Error("There is already a repository called " + repo + " on GitHub. Choose a different site name.");
+  if (!resume) {
+    const made = await gh("/orgs/" + BUILD_ORG + "/repos", { method: "POST", body: JSON.stringify({ name: slug, description: c.tagline || c.name, private: false, auto_init: true, has_wiki: false, has_projects: false, homepage: plan.address }) });
+    if (!made.ok) return { error: made.status === 422 ? "GitHub would not make " + repo + ". Try a different site name." : MAKE_HELP };
+  }
+  done.push((resume ? "Carried on with the repository made last time: " : "Repository made: ") + repo);
   const site = starterSite({ id: card.id, name: c.name, domain: plan.address.replace(/^https:\/\//, "").replace(/\/$/, ""), repo, live: true });
   if (!(await waitForMain(repo))) return { error: "GitHub made " + repo + " but it is not ready yet. Wait a minute, then press Create site again with a different name, or ask for help.", done };
   if (await pagesOn(repo)) done.push("Publishing switched on"); else todo.push("pages");
@@ -2903,12 +2923,14 @@ export async function createSite(card, given, tag) {
   if (w.steps) { todo.push("steps"); w = await starterInto(site, "Start the site from Artiscope Digital Home (by " + tag + ")", { files }); }
   if (w.error) return { error: w.error, done };
   done.push("Pages, look and words written");
-  if (w.sha && await addRelease(site, [1, 0], w.sha, "First version", "The site was built in Artiscope Digital Home from the starter.\n\n<!-- by: " + tag + " -->")) done.push("Version 1.0");
+  const had = resume ? await gh("/repos/" + repo + "/releases?per_page=5") : null;
+  if (had && had.ok && Array.isArray(had.data) && had.data.some((x) => x.tag_name === "v1.0")) done.push("Version 1.0");
+  else if (w.sha && await addRelease(site, [1, 0], w.sha, "First version", "The site was built in Artiscope Digital Home from the starter.\n\n<!-- by: " + tag + " -->")) done.push("Version 1.0");
   done.push("Hidden from search engines until its own address is connected");
   const entry = { id: card.id, name: c.name, domain: site.domain, repo, kind: "starter", live: true, want: c.domain, registrar: c.registrar, todo };
   const listErr = await changeSiteList((list) => { const out = list.filter((x) => x && x.id !== card.id); out.push(entry); return out; }, "Add " + c.name + " to the list of sites (by " + tag + ")");
   if (listErr) return { error: listErr, done };
-  return { ok: true, site: card.id, address: plan.address, done, todo, want: c.domain, registrar: c.registrar };
+  return { ok: true, site: card.id, address: plan.address, done, todo, want: c.domain, registrar: c.registrar, records: dnsRecords(c.domain) };
 }
 // Finishes what Create site could not do the first time (publishing steps, or switching publishing on).
 export async function finishSite(site, tag) {
@@ -2928,18 +2950,21 @@ export async function finishSite(site, tag) {
 async function dnsAsk(name, type) {
   try {
     const r = await fetch("https://dns.google/resolve?name=" + encodeURIComponent(name) + "&type=" + type, { headers: { Accept: "application/dns-json" } });
-    const d = await r.json();
-    return (Array.isArray(d.Answer) ? d.Answer : []).map((a) => String(a.data || "").replace(/\.$/, "").toLowerCase());
+    const d = await r.json(), want = type === "A" ? 1 : type === "CNAME" ? 5 : 0;
+    // an answer can carry the steps on the way (a CNAME before the A records): keep only the kind asked for
+    return (Array.isArray(d.Answer) ? d.Answer : []).filter((a) => a.type == null || a.type === want).map((a) => String(a.data || "").replace(/\.$/, "").toLowerCase());
   } catch (_e) { return null; }
 }
 // Checks the web address the owner gave, and connects it once its records point at GitHub.
 export async function checkDomain(site, tag) {
   const want = site.want;
   if (!want) return { error: "This site has no web address to connect. Give one in Site details first." };
-  const [a, www] = await Promise.all([dnsAsk(want, "A"), dnsAsk("www." + want, "CNAME")]);
-  if (a === null) return { error: "The address could not be looked up just now. Try again in a moment." };
-  const host = BUILD_ORG.toLowerCase() + ".github.io", aOk = a.length > 0 && a.every((ip) => GITHUB_IPS.includes(ip)), wwwOk = !!(www && www.includes(host));
-  if (!aOk) return { ok: true, connected: false, found: a, wwwOk };
+  const sub = isSubdomain(want);
+  const [a, www, own] = await Promise.all([dnsAsk(want, "A"), sub ? Promise.resolve([]) : dnsAsk("www." + want, "CNAME"), sub ? dnsAsk(want, "CNAME") : Promise.resolve([])]);
+  if (a === null || own === null) return { error: "The address could not be looked up just now. Try again in a moment." };
+  const host = BUILD_ORG.toLowerCase() + ".github.io", wwwOk = !!(www && www.includes(host));
+  const aOk = sub ? own.includes(host) : a.length > 0 && a.every((ip) => GITHUB_IPS.includes(ip));
+  if (!aOk) return { ok: true, connected: false, found: sub ? own : a, wwwOk };
   const domain = want, connected = site.domain === domain;
   if (!connected) {
     const set = await gh("/repos/" + site.repo + "/pages", { method: "PUT", body: JSON.stringify({ cname: domain }) });
@@ -2974,7 +2999,7 @@ export async function handle(req) {
   if (!email) return json({ error: "Please sign in again." }, 401);
   await loadSiteList();
   let me = await personOf(email);
-  if (!me) return json({ error: "This email address does not have access." }, 403);
+  if (!me) return json({ error: "This email address does not have access yet. Ask the admin to invite you in People. If you were invited, sign in with the same email address the invitation went to." }, 403);
   if (!env("GITHUB_TOKEN")) return json({ error: "The GitHub connection has not been set up yet." }, 500);
 
   let body = {};

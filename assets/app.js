@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "50";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "51";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -135,6 +135,7 @@
         state.pg[s.id] = { version: pgd.version || "", pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageSizes: pgd.imageSizes || {}, imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false,
           site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, addonSpec: pgd.addonSpec || [], lists: pgd.lists || {}, listFields: pgd.listFields || [], at: pref.at || "", gam: !!pgd.gam, model: pgd.model || (pgd.gam ? "gam" : ""), builtIn: pgd.builtIn || null, pageFields: pgd.pageFields || null, leftPanel: pref.leftPanel || undefined, previewWaiting: !!pgd.previewWaiting };
         var made = state.pg[s.id]; if (made.at && !atKnown(made)) made.at = ""; histBase(made);
+        if (state.openPanel) { made.leftPanel = state.openPanel; made.leftHidden = false; state.openPanel = ""; }
         render();
       }
       if (state.tab === "files" && (force || !state.files[s.id])) {
@@ -144,7 +145,10 @@
       if (state.tab === "history" && (force || !state.history[s.id])) {
         var h = await api("history", { site: s.id }); state.history[s.id] = h.changes || []; render();
       }
-    } catch (e) { state.notice = { text: e.message, problem: true }; render(); }
+    } catch (e) {
+      var sf = site(); if (state.tab === "pages" && sf && !state.pg[sf.id]) state.pgFail = { site: sf.id, text: e.message };
+      state.notice = { text: e.message, problem: true }; render();
+    }
   }
 
   // ---------- copies of a site ----------
@@ -180,7 +184,9 @@
       delete state.busy[k]; render();
       await ensure(true);
     } catch (e) {
-      state.status = "live"; state.notice = (e.stale || e.clash) && state.ask ? null : { text: e.message, problem: true };
+      // a save that did not go through keeps every unsaved change on screen: say so, so nobody fears the work is gone
+      var kept = k.indexOf("pages") === 0 && pgOf() && pgOf().dirty ? " Your changes are still here and not lost: press Save again in a moment." : "";
+      state.status = "live"; state.notice = (e.stale || e.clash) && state.ask ? null : { text: e.message + kept, problem: true };
       delete state.busy[k]; render();
     }
   }
@@ -499,7 +505,7 @@
     return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><h1>' + esc(s.name) + '</h1>' +
       '<p>' + esc(s.domain) + (isAdmin() ? '. Everything for this site is here. Saves on the live site reach visitors straight away. Use a trial copy to try things first.' : '. You work on your own copy. Nothing you save is seen until you publish it.') + '</p></div>' +
       '<div class="grid-3">' +
-        (s.edits ? tile("pages", "", "Pages", "Every page, article and artist portfolio, edited beside the real page", "Open the editor")
+        (s.edits ? tile("pages", "", "Pages", "Every page, article and " + (s.starter ? "artist page" : s.id === "street-art-dispatch" ? "artist profile" : "artist portfolio") + ", edited beside the real page", "Open the editor")
           : tile("content", entries, "Content", (cols ? cols.map(function (c) { return c.label.toLowerCase(); }).join(", ") : "Articles, artists and more"), cols && cols.some(function (c) { return c.canHide; }) ? "Edit, hide or delete" : "Edit the words")) +
         (!hasScreen(s, "theme") ? "" : t ? '<button type="button" class="card lift sitecard tile" data-tab="theme"><span class="swatches" aria-hidden="true">' + t.spec.colours.map(function (c) { return '<i style="background:' + esc(t.values.colours[c.id] || c.default) + '" title="' + esc(c.label) + '"></i>'; }).join("") + '</span>' +
           '<b>Theme</b><span class="small">' + t.spec.fonts.map(function (f) { return esc(t.values.fonts[f.id] || f.default); }).join(" &nbsp;&middot;&nbsp; ") + '</span><span class="small" style="color:var(--accent);margin-top:6px">Change the look</span></button>'
@@ -678,7 +684,9 @@
     var s = site(); if (!s) return "";
     var t = themeOf();
     if (!t) return head("Theme", "Reading the theme of " + s.name + ".");
-    return head("Theme", "Colours and typefaces for " + s.name + ". Try things freely, then save. Like everything else, a saved theme waits for Publish.") +
+    var onLive = curCopy().kind === "live";
+    return head("Theme", "Colours and typefaces for " + s.name + ". Try things freely, then save. " + (onLive ? "On the live site a saved theme reaches visitors straight away; use a trial copy to try it first." : "On this trial copy nothing is seen until you make it live.")) +
+      (s.pagesOn !== false ? '<p class="small theme-more">Sizes, letter spacing, buttons, corners and social links are in Theme settings, in the page editor. <button type="button" class="linklike" data-act="theme-in-editor">Open Theme settings</button></p>' : "") +
       '<div class="theme"><div class="stack-wide" id="theme-settings">' + themeSettings(t) + '</div>' +
       '<div class="card stack pv-card"><div class="row between"><h2 class="cardh">Preview</h2>' +
         '<div class="seg" id="pv-seg"><button type="button" class="' + (t.mode === "computer" ? "on" : "") + '" data-act="pv-mode" data-mode="computer">Computer</button><button type="button" class="' + (t.mode === "phone" ? "on" : "") + '" data-act="pv-mode" data-mode="phone">Phone</button></div></div>' +
@@ -1165,6 +1173,7 @@
   }
   function viewPagesEditor(s) {
     var pgd = pgOf();
+    if (!pgd && state.pgFail && state.pgFail.site === s.id) return '<div class="ed noleft"><div class="ed-top">' + edTop(s, null) + '</div><div class="card stack ed-fail" style="grid-column:1/-1;max-width:640px;margin:24px auto" role="alert"><h2 class="cardh">The pages of ' + esc(s.name) + ' could not be opened</h2><p class="notice problem">' + esc(state.pgFail.text) + '</p><span class="small">Nothing has changed on the site. This is usually GitHub being slow for a moment.</span><div class="row"><button type="button" class="btn" data-act="ed-retry">Try again</button><button type="button" class="soft" data-act="ed-exit-fail">Back to the overview</button></div></div></div>';
     if (!pgd) return '<div class="ed noleft"><div class="ed-top">' + edTop(s, null) + '</div><p class="loading" style="grid-column:1/-1">Reading the pages of ' + esc(s.name) + '</p></div>';
     var right = edRight(pgd);
     return '<div class="' + edClass(pgd, right) + '">' +
@@ -2654,6 +2663,13 @@
     edPatch();
   }
   // Redraws the editor's panels without touching the page in the middle, which would reload it.
+  // On a tablet or a narrow window the settings sit under the list: when something new is picked,
+  // scroll them into view, so a click never seems to do nothing.
+  function edShowRight(pgd, rp) {
+    var key = rp ? JSON.stringify(pgd.sel || null) + "|" + (pgd.panel || "") + "|" + (pgd.at || "") : "";
+    if (rp && key !== state.rightKey && typeof window.innerWidth === "number" && window.innerWidth <= 1100 && rp.scrollIntoView) setTimeout(function () { try { rp.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (_e) { rp.scrollIntoView(); } }, 30);
+    state.rightKey = key;
+  }
   function edPatch() {
     if (state.ctx) ctxClose();
     var ed = app.querySelector && app.querySelector(".ed"), s = site(), pgd = pgOf();
@@ -2665,6 +2681,7 @@
     var rp = ed.querySelector(".ed-right");
     if (right) { if (!rp) { rp = document.createElement("div"); rp.className = "ed-right"; ed.appendChild(rp); } rp.innerHTML = right; }
     else if (rp) rp.remove();
+    edShowRight(pgd, right ? rp : null);
     var mid = ed.querySelector(".ed-mid"), notes = mid.querySelectorAll(".ask, .notice"); Array.prototype.forEach.call(notes, function (x) { x.remove(); });
     mid.insertAdjacentHTML("afterbegin", viewLeave() + viewAsk() + viewWaiting(pgd) + viewRemoved(pgd) + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : ""));
     var pkb = ed.querySelector("#ed-pick"); if (pkb) pkb.innerHTML = edPicker(pgd);
@@ -3901,10 +3918,14 @@
     w.classList.toggle("phone", b.view === "phone");
   }
   if (typeof window.addEventListener === "function") window.addEventListener("resize", function () { if (state.build) bdFit(); });
+  if (typeof window.addEventListener === "function") window.addEventListener("beforeunload", function (ev) { if (state.build && state.build.busy) { ev.preventDefault(); ev.returnValue = ""; } });
+  var BD_MAX = { name: 60, tagline: 120, domain: 190, email: 120 };
   function bdField(k, label, hint, ph, type) {
     var b = bdOf();
-    return '<label class="bd-lbl">' + label + '<input class="bd-in" data-bd="' + k + '" type="' + (type || "text") + '" value="' + esc(b.c[k] || "") + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : "") + ' autocomplete="off">' + (hint ? '<span class="small">' + hint + '</span>' : "") + '</label>';
+    return '<label class="bd-lbl">' + label + '<input class="bd-in" data-bd="' + k + '" type="' + (type || "text") + '" value="' + esc(b.c[k] || "") + '" maxlength="' + (BD_MAX[k] || 120) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : "") + ' autocomplete="off">' + (hint ? '<span class="small">' + hint + '</span>' : "") + '</label>';
   }
+  // The same checks the server makes, so Next never lets a mistake through to the last step.
+  function bdSlug(v) { return String(v || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, " and ").replace(/<[^>]*>?/g, " ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
   function bdSeg(k, opts) {
     var b = bdOf();
     return '<span class="seg tbs bd-seg">' + opts.map(function (o) { return '<button type="button" class="tb' + (b.c[k] === o[0] ? " on" : "") + '" data-act="bd-set" data-k="' + k + '" data-v="' + esc(o[0]) + '" aria-pressed="' + (b.c[k] === o[0]) + '">' + esc(o[1]) + '</button>'; }).join("") + '</span>';
@@ -3972,14 +3993,14 @@
   }
   // The records to add at the domain's company, and the Check button.
   function domainCard(s, r) {
-    var ips = ((state.build && state.build.spec) || {}).ips || ["185.199.108.153", "185.199.109.153", "185.199.110.153", "185.199.111.153"];
+    var recs = (s.records && s.records.length ? s.records : ["185.199.108.153", "185.199.109.153", "185.199.110.153", "185.199.111.153"].map(function (ip) { return ["A", "@", ip]; }).concat([["CNAME", "www", "artiscope.github.io"]]));
     var rec = function (t, n, v) { return '<div class="bd-rec"><span>' + t + '</span><span>' + n + '</span><code>' + esc(v) + '</code><button type="button" class="linklike" data-act="bd-copytext" data-v="' + esc(v) + '">Copy</button></div>'; };
     var res = r || (state.domain && state.domain[s.id]) || null, on = !!s.want && (s.domain === s.want || !!(res && res.connected));
     return '<div class="card stack bd-dom"><h2 class="cardh">' + (on ? "Your web address" : "Connect your web address") + '</h2>' +
       (on ? '<span><i class="lamp g" aria-hidden="true"></i> Connected: <a href="https://' + esc(s.want) + '/" target="_blank" rel="noopener">' + esc(s.want) + '</a>. Search engines can find the site now.</span>' +
           (res && res.secure === false ? '<span class="small">The padlock (https) switches on once GitHub has made the site\'s certificate, usually within an hour. Press Check again later.</span>' : "")
-        : '<span class="small">' + esc(BD_HELP[s.registrar] || BD_HELP.other) + ' Then come back and press Check. It can take up to a day to work everywhere.</span>' +
-          '<div class="bd-recs"><div class="bd-rec cap"><span>Type</span><span>Name</span><span>Value</span><span></span></div>' + ips.map(function (ip) { return rec("A", "@", ip); }).join("") + rec("CNAME", "www", "artiscope.github.io") + '</div>') +
+        : '<span class="small">' + esc((BD_HELP[s.registrar] || BD_HELP.other).replace("these records", recs.length === 1 ? "this record" : "these records")) + ' Then come back and press Check. It can take up to a day to work everywhere.</span>' +
+          '<div class="bd-recs"><div class="bd-rec cap"><span>Type</span><span>Name</span><span>Value</span><span></span></div>' + recs.map(function (r) { return rec(r[0], r[1], r[2]); }).join("") + '</div>') +
       '<div class="bd-check"><button type="button" class="btn" data-act="dom-check" data-site="' + esc(s.id) + '"' + (res && res.busy ? " disabled" : "") + '>' + (res && res.busy ? "Checking" : "Check") + '</button>' +
         (on ? "" : '<span class="bd-st"><i class="lamp a" aria-hidden="true"></i>' + (res && res.found ? (res.found.length ? "Not connected yet. " + s.want + " points at " + res.found.join(", ") + "." : "Not connected yet. " + s.want + " has no records yet.") : "Not connected yet") + '</span>') + '</div>' +
       (res && res.error ? '<p class="notice problem">' + esc(res.error) + '</p>' : "") +
@@ -3996,7 +4017,7 @@
       '<div class="bd-check"><button type="button" class="btn" data-act="bd-finish" data-site="' + esc(s.id) + '"' + (r && r.busy ? " disabled" : "") + '>' + (r && r.busy ? "Trying" : "Try again") + '</button></div></div>';
   }
   function viewBuildDone(b) {
-    var r = b.done, card = bdCard() || { id: b.site }, addr = r.address, s = Object.assign({}, card, { want: r.want || "", registrar: r.registrar || "", todo: r.todo || [], domain: addr.replace(/^https:\/\//, "").replace(/\/$/, "") });
+    var r = b.done, card = bdCard() || { id: b.site }, addr = r.address, s = Object.assign({}, card, { want: r.want || "", registrar: r.registrar || "", todo: r.todo || [], records: r.records || [], domain: addr.replace(/^https:\/\//, "").replace(/\/$/, "") });
     var tick = function (t) { return '<span class="bd-done"><span class="bd-ok">' + ic("check", 16) + '</span>' + esc(t) + '</span>'; };
     var amber = function (t) { return '<span class="bd-done"><i class="lamp a" aria-hidden="true"></i>' + esc(t) + '</span>'; };
     return '<div class="bd"><div class="bd-top ed-top"><div class="lefty"><button type="button" class="tb word" data-act="bd-close">All sites</button></div><span class="mid"></span>' +
@@ -4013,7 +4034,7 @@
     var card = bdCard() || {}, steps = [bdStep1, bdStep2, bdStep3, bdStep4];
     return '<div class="bd"><div class="bd-top ed-top"><div class="lefty"><button type="button" class="tb word" data-act="bd-close"' + (b.busy ? " disabled" : "") + '>' + ic("close", 16) + '<span>Close</span></button>' +
       '<span class="bd-name">Start building: ' + esc(b.c.name || card.name || "a new site") + '</span></div>' +
-      '<span class="mid"><span class="seg tbs bd-steps" role="tablist">' + BD_STEPS.map(function (t, i) { var n = i + 1; return '<button type="button" class="tb' + (b.step === n ? " on" : "") + '" role="tab" aria-selected="' + (b.step === n) + '" data-act="bd-step" data-n="' + n + '"' + (n > b.seen || b.busy ? " disabled" : "") + '>' + (n < b.seen && b.step !== n ? ic("check", 14) : '<b>' + n + '</b>') + '<span>' + t + '</span></button>'; }).join("") + '</span></span>' +
+      '<span class="mid"><span class="seg tbs bd-steps" role="tablist">' + BD_STEPS.map(function (t, i) { var n = i + 1; return '<button type="button" class="tb' + (b.step === n ? " on" : "") + '" role="tab" aria-selected="' + (b.step === n) + '" aria-label="Step ' + n + ': ' + t + '" data-act="bd-step" data-n="' + n + '"' + (n > b.seen || b.busy ? " disabled" : "") + '>' + (n < b.seen && b.step !== n ? ic("check", 14) : '<b>' + n + '</b>') + '<span>' + t + '</span></button>'; }).join("") + '</span></span>' +
       '<div class="righty"><button type="button" class="btn" data-act="bd-prev"' + (b.step === 1 || b.busy ? " disabled" : "") + '>Previous</button>' + (b.step < 4 ? '<button type="button" class="btn" data-act="bd-next">Next</button>' : "") + '</div></div>' +
       '<div class="bd-body"><section class="bd-form card" aria-label="' + esc(BD_STEPS[b.step - 1]) + '">' + steps[b.step - 1]() + '<p class="notice problem bd-err" role="alert"' + (b.err ? "" : " hidden") + '>' + esc(b.err || "") + '</p></section>' +
       '<aside class="bd-prev" aria-label="Preview of the home page"><div class="bd-ph"><span class="cap">Preview of the home page</span><span class="seg tbs">' +
@@ -4028,6 +4049,11 @@
   function bdCheckStep(b) {
     if (b.step === 1) {
       if (!String(b.c.name || "").trim()) return "Give the site a name.";
+      if (!(bdCard() || {}).playground && bdSlug(b.c.name).length < 2) return "Give the site a name with at least two letters or numbers. Its address on GitHub is made from them.";
+      var d = String(b.c.domain || "").trim();
+      if (d && !/^(https?:\/\/)?(www\.)?([^\s./:?#]+\.)+[^\s./:?#]{2,}\.?(\/.*)?$/i.test(d)) return "The web address should look like newsite.com, without https:// or anything after it.";
+      var em = String(b.c.email || "").trim();
+      if (em && !/^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i.test(em)) return "The email shown on the site does not look like an email address.";
       if (b.err) return b.err;
     }
     return "";
@@ -4154,6 +4180,7 @@
 
   function openSite(id) {
     var x = sites().find(function (y) { return y.id === id; }); if (!x) return;
+    state.pgFail = null;
     if (!x.live && !x.playground && isAdmin()) { startBuild(id); return; }
     if (!isAdmin() && !(x.playground && x.youAdmin) && x.live && !myCopy(x)) {
       state.status = "saving"; state.flash = ""; render();
@@ -4347,7 +4374,10 @@
     else if (a === "people-remove-no") { peopleOf().ask = ""; render(); }
     else if (a === "people-remove-yes") { var gone = el.dataset.email; peopleDo("removePerson", { email: gone }, "Removed. They can no longer sign in.", function () { var pk2 = peopleOf(); pk2.ask = ""; pk2.sel = "admin"; }); }
     else if (a === "people-resend") { peopleDo("resendInvite", { email: el.dataset.email, back: signinBack() }, function (d) { return d.emailed === false ? "The sign-in email could not be sent just now. Please try again." : "Sent again."; }); }
-    else if (a === "signout") sb.auth.signOut();
+    else if (a === "signout") { state.notice = null; sb.auth.signOut(); }
+    else if (a === "theme-in-editor") { var tq = site() && state.pg[site().id]; if (tq) { tq.leftPanel = "theme"; tq.leftHidden = false; } else state.openPanel = "theme"; go("pages"); }
+    else if (a === "ed-retry") { state.notice = null; state.pgFail = null; render(); load(); }
+    else if (a === "ed-exit-fail") { state.notice = null; state.pgFail = null; go("overview"); }
     else if (a === "signin-mode") { state.signinMode = el.dataset.mode; state.signinSent = false; state.notice = null; var em = app.querySelector("#email"); if (em) state.email = em.value.trim(); render(); }
     else if (a === "open-site") { var sid = el.dataset.site; guard(function () { openSite(sid); }); }
     else if (a === "leave-stay") { state.leave = null; if (state.tab === "pages") edPatch(); else render(); }

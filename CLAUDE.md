@@ -219,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (18 November 2026, Version 50)
+## Where things stand (18 November 2026, Version 51)
 
 Done:
 
@@ -770,6 +770,33 @@ Done:
     starts with a Text with picture section and joins the menu.
   - Checks: the step 5 block in `tests/build.mjs` and the "Articles and
     artists" area of `tests/uat.mjs`.
+
+- Usability pass (Version 51, 18 November): a walk of every screen as
+  the admin and as an editor at 1440 and 390 wide (`AUDIT=1 node
+  tests/uat.mjs`, `tests/audit.mjs`, results in `/tmp/uat/audit.json`),
+  then fixes:
+  - Picking a section on a narrow window (1100 wide or less) scrolls to
+    its settings (`edShowRight`). Each site's editor link now scrolls only
+    its own page (`window.scrollTo`), never the console around it.
+  - If the editor cannot read a site's pages it says so, with Try again
+    and Back to the overview (`state.pgFail`), instead of a blank screen.
+  - A save that fails says the changes are still there. Signing out clears
+    old messages. The access message tells people to ask the admin and to
+    use the email the invitation went to.
+  - Start building: length limits on every box, a name needs two letters
+    or numbers, the web address and email are checked at Next, and closing
+    the tab while Create runs asks first. Pressing Create again after a
+    half-made site carries on with the repository it made (matched by its
+    homepage); a repository the console did not start is never used.
+  - Web addresses: accented names are turned into their plain form; a
+    subdomain (shop.example.co.uk) is connected with one CNAME record
+    (`isSubdomain`, `dnsRecords`), shown as such on the Ready screen and
+    the Overview; lookups only count the record type asked for.
+  - Bigger block counts and footer links, pickers that fit on a phone, a
+    Theme screen line that opens Theme settings in the editor, and
+    "artist page" or "artist profile" wording per site on the Overview.
+  - Checks: the "Edge cases" area of `tests/uat.mjs` and the edge block in
+    `tests/build.mjs`.
 
 Waiting for the owner:
 

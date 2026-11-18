@@ -21,11 +21,11 @@ const hub = makeGitHub({
   "Artiscope/global-art-monitor": { "data/pages.json": rd(G_DIR, "data/pages.json") },
   "Artiscope/street-art-dispatch": { "data/pages.json": rd(sadDir(), "data/pages.json") },
 });
-const ppl = makePeople(); let signedIn = ADMIN, dns = {};
+const ppl = makePeople(); let signedIn = ADMIN, dns = {}, dnsTyped = null;
 globalThis.fetch = async (url, init = {}) => {
   url = String(url);
   if (url.includes("/auth/v1/user")) return new Response(JSON.stringify({ email: signedIn }));
-  if (url.startsWith("https://dns.google/")) { const q = new URL(url).searchParams; return new Response(JSON.stringify({ Answer: (dns[q.get("name") + " " + q.get("type")] || []).map((data) => ({ data })) })); }
+  if (url.startsWith("https://dns.google/")) { const q = new URL(url).searchParams; if (dnsTyped) return new Response(JSON.stringify({ Answer: dnsTyped[q.get("name") + " " + (q.get("type") === "A" ? 1 : 5)] || [] })); return new Response(JSON.stringify({ Answer: (dns[q.get("name") + " " + q.get("type")] || []).map((data) => ({ data })) })); }
   if (ppl.handles(url)) return ppl.fetch(url, init);
   return hub.fetch(url, init);
 };
@@ -174,6 +174,44 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   assert.ok(/href="articles\/">Articles<\/a>/.test(home) && /href="artists\/">Artists<\/a>/.test(home), "Articles and Artists join the menu once there is one");
   assert.ok(!art.includes("[Credit]") && !art.includes("[Add the sources"), "no editor placeholders on the published page");
   ok("article and artist pages, the lists and the menu are built");
+}
+// ----- edge cases found in the usability pass (Version 51) -----
+{
+  const card = { name: "Site 4" };
+  assert.equal(h.cleanBuild({ name: "<script>alert(1)</script>Gallery" }, card).name, "alert(1) Gallery", "anything that looks like code goes from a name");
+  assert.equal(h.cleanBuild({ name: "x", domain: "Café.com" }, card).domain, "xn--caf-dma.com", "a web address with accents is kept in the form DNS uses");
+  assert.equal(h.cleanBuild({ name: "x", domain: "https://WWW.Example.co.uk/shop?x=1" }, card).domain, "example.co.uk");
+  assert.throws(() => h.cleanBuild({ domain: "example.com:8080" }, card), /should look like newsite\.com/);
+  assert.deepEqual([h.isSubdomain("example.co.uk"), h.isSubdomain("shop.example.co.uk"), h.isSubdomain("example.com"), h.isSubdomain("shop.example.com")], [false, true, false, true]);
+  assert.deepEqual(h.dnsRecords("shop.example.co.uk"), [["CNAME", "shop", "artiscope.github.io"]], "a subdomain gets one CNAME record");
+  assert.equal(h.dnsRecords("example.com").length, 5, "a whole domain gets four A records and www");
+  ok("names, accented and sub domains are handled");
+  // a Create site that stopped half way can be pressed again with the same name
+  const more = read(CR, "sites.json"); more.sites.push({ id: "site-6", name: "Site 6", domain: "", repo: "", live: false });
+  hub.commitOn(CR, "main", "sites.json", JSON.stringify(more), "Add a card"); h.useSiteList(more);
+  hub.refuse(/^POST \/repos\/Artiscope\/half-made\/git\/trees/, 500, "Server Error");
+  let d = await as(ADMIN, { action: "createSite", site: "site-6", choices: { name: "Half made" } });
+  assert.equal(d.status, 502); assert.match(d.error, /site's files/); assert.ok(hub.repoMade("Artiscope/half-made"));
+  hub.allow();
+  d = await as(ADMIN, { action: "createSite", site: "site-6", choices: { name: "Half made" } });
+  assert.equal(d.status, 200, JSON.stringify(d)); assert.match(d.done[0], /Carried on with the repository made last time/);
+  assert.ok(hub.read("Artiscope/half-made", "main", "data/pages.json") && read(CR, "sites.json").sites.find((x) => x.id === "site-6").repo === "Artiscope/half-made");
+  ok("a half-made site is finished by pressing Create site again");
+  // someone else's repository with that name is never taken over
+  await hub.fetch("https://api.github.com/orgs/Artiscope/repos", { method: "POST", body: JSON.stringify({ name: "taken-name", auto_init: true, homepage: "https://example.org/" }) });
+  const more2 = read(CR, "sites.json"); more2.sites.push({ id: "site-7", name: "Site 7", domain: "", repo: "", live: false }); hub.commitOn(CR, "main", "sites.json", JSON.stringify(more2), "Add a card"); h.useSiteList(more2);
+  d = await as(ADMIN, { action: "createSite", site: "site-7", choices: { name: "Taken name" } });
+  assert.equal(d.status, 400); assert.match(d.error, /already a repository called Artiscope\/taken-name/); assert.ok(!hub.read("Artiscope/taken-name", "main", "data/pages.json"), "nothing written into it");
+  ok("a repository the console did not begin is never taken over");
+  // a subdomain connects with its CNAME record, and a lookup answer that lists the CNAME first still counts
+  const more3 = read(CR, "sites.json"); more3.sites.push({ id: "site-8", name: "Site 8", domain: "", repo: "", live: false }); hub.commitOn(CR, "main", "sites.json", JSON.stringify(more3), "Add a card"); h.useSiteList(more3);
+  d = await as(ADMIN, { action: "createSite", site: "site-8", choices: { name: "Shop site", domain: "shop.example.co.uk" } });
+  assert.deepEqual(d.records, [["CNAME", "shop", "artiscope.github.io"]]);
+  dnsTyped = { "shop.example.co.uk 5": [{ type: 5, data: "artiscope.github.io." }], "shop.example.co.uk 1": [{ type: 5, data: "artiscope.github.io." }, { type: 1, data: "185.199.108.153" }] };
+  d = await as(ADMIN, { action: "checkDomain", site: "site-8" });
+  assert.equal(d.connected, true, JSON.stringify(d)); assert.equal(hub.pagesOf("Artiscope/shop-site").cname, "shop.example.co.uk");
+  dnsTyped = null;
+  ok("a subdomain connects with its CNAME record");
 }
 h.useSiteList(h.DEFAULT_SITE_LIST);
 console.log(n + " of " + n + " passed. START BUILDING CHECKS PASSED");

@@ -206,7 +206,7 @@
     if ((block != null && block >= 0) || (bf && bi >= 0)) { var b = (bf && bi >= 0 ? tagged(el, bf, bi) : null) || (block >= 0 ? blockEls(id)[block] : null); if (b) { var bar = b.closest("[data-announce],[data-slides]"); if (bar && bar.adhShow) { bar.adhShow(b); } el.classList.add("adh-picked"); b.classList.add("adh-picked-block"); target = b; } else { el.classList.add("adh-picked-block"); } }
     else { el.classList.add("adh-picked-block"); }
     if (label) { target.setAttribute("data-adh-label", label); }
-    if (scroll) { try { target.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (x) { target.scrollIntoView(); } }
+    if (scroll) { var r0 = target.getBoundingClientRect(), y0 = window.pageYOffset + r0.top - (r0.height < window.innerHeight ? (window.innerHeight - r0.height) / 2 : 20); try { window.scrollTo({ top: Math.max(0, y0), behavior: "smooth" }); } catch (x) { window.scrollTo(0, Math.max(0, y0)); } }
   }
   window.addEventListener("message", function (e) {
     if (e.origin !== ok || !e.data) { return; }

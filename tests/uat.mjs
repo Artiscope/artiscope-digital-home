@@ -116,16 +116,24 @@ async function savedStep(which) { if (!(await page.isVisible('.svp [data-act="' 
 async function liveSave() { await page.click('[data-act="ed-save"]'); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved", { timeout: 9000 }); await settle(900); }
 async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).catch(() => {}); await page.click('[data-tab="home"]', { timeout: 1500 }).catch(() => {}); await shot("open-" + id); await page.evaluate((x) => { window.__adh.state.leave = null; }, id); await page.waitForSelector('[data-act="open-site"][data-site="' + id + '"]', { timeout: 20000 }); await page.click('[data-act="open-site"][data-site="' + id + '"]'); await page.waitForSelector('[data-tab="overview"]'); if (!(await page.isVisible(".ed-exit"))) await page.click('.navb[data-tab="pages"]'); await page.waitForSelector("#ed-sections .sec", { timeout: 12000 }); await settle(1800); }
 
+// The usability walk (AUDIT=1): every screen at computer and phone width, then stop. See tests/audit.mjs.
+if (process.env.AUDIT) {
+  const { runAudit } = await import("./audit.mjs");
+  await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 20000 });
+  const rep = await runAudit({ page, browser, consoleAt, hub, ppl, shot, settle, openSite, goTab, setSignedIn: (e) => { signedIn = e; } });
+  console.log("AUDIT: " + rep.length + " screen views written to /tmp/uat/audit.json");
+  await browser.close(); srv.kill(); process.exit(0);
+}
 // =============== 1. Getting in ===============
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all seven sites, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 7, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 50"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 51"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
   const t = await text("body"); signedIn = "tester@artiscope.co.uk";
-  must(/does not have access/i.test(t), "message was: " + t.slice(0, 120)); await page.reload(); await page.waitForSelector('[data-act="open-site"]');
+  must(/does not have access/i.test(t) && /Ask the admin to invite you/.test(t) && /same email address/.test(t), "message was: " + t.slice(0, 160)); await page.reload(); await page.waitForSelector('[data-act="open-site"]');
 });
 
 // =============== 2. World Art Review: the page editor ===============
@@ -1718,6 +1726,80 @@ await check("A new page on a site built in the console starts with a Text with p
   await liveSave();
   const pg = pbRead("data/pages.json").pages["visit-the-studio"]; must(pg && pg.path === "visit-the-studio/index.html" && pg.sections[0].type === "text-picture" && pg.sections[0].settings.heading === "Visit the studio", "page: " + JSON.stringify(pg).slice(0, 200));
   const links = pbRead("data/pages.json").shared.header.settings.links.map((l) => l[1]); must(links.includes("visit-the-studio/"), "not in the menu: " + links);
+});
+
+// =============== 13. Edge cases from the usability pass (Version 51) ===============
+area = "Edge cases";
+if (ONLY && ONLY.includes(area)) { await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 20000 }); }
+await check("Exit with unsaved changes asks first, and Stay keeps them", async () => {
+  await openSite("global-art-monitor");
+  await page.click("#ed-sections .sec:not(.blk) >> nth=2"); await settle(500);
+  await page.locator(".ed-right input[type=text], .ed-right textarea").first().fill("Edge case words"); await settle(400);
+  await page.click(".ed-exit"); await settle(500);
+  must(/not saved yet/.test(await text("body")), "no question when leaving");
+  await page.click('[data-act="leave-stay"]'); await settle(400);
+  must(await page.isVisible(".ed-exit"), "left the editor anyway");
+});
+await check("Closing the browser tab with unsaved changes warns", async () => {
+  must(await page.evaluate(() => { const e = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; }), "no warning");
+});
+await check("A save that GitHub refuses says the changes are still there", async () => {
+  breakGitHub = true; await page.click('[data-act="ed-save"]'); await settle(300); await page.click('[data-act="livesave"]').catch(() => {}); await settle(2500);
+  breakGitHub = false;
+  const n = await notice(); must(/still here and not lost/.test(n), "notice: " + n.slice(0, 200));
+  must(await page.evaluate(() => { const st = window.__adh.state; return !!(st.pg["global-art-monitor"] && st.pg["global-art-monitor"].dirty); }), "changes lost");
+  await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(600);
+  await page.evaluate(() => { const st = window.__adh.state; st.notice = null; st.leave = null; st.dirty = false; });
+});
+await check("If the editor cannot read the pages, it says so with Try again and Back", async () => {
+  await page.evaluate(() => { delete window.__adh.state.pg["street-art-dispatch"]; });
+  hub.refuse(/street-art-dispatch\/contents\/data\/pages.json/, 500, "Server Error");
+  await page.click(".ed-exit", { timeout: 800 }).catch(() => {}); await page.click('[data-tab="home"]', { timeout: 1500 }).catch(() => {});
+  await page.waitForSelector('[data-act="open-site"][data-site="street-art-dispatch"]', { timeout: 20000 }); await page.click('[data-act="open-site"][data-site="street-art-dispatch"]');
+  await page.waitForSelector('[data-tab="overview"]'); if (!(await page.isVisible(".ed-exit"))) await page.click('.navb[data-tab="pages"]');
+  await page.waitForSelector('[data-act="ed-retry"]', { timeout: 12000 }); must(await page.isVisible('[data-act="ed-exit-fail"]'), "no way back");
+  await shot("80-load-fails");
+  hub.allow(); await page.click('[data-act="ed-retry"]'); await page.waitForSelector("#ed-sections .sec", { timeout: 12000 });
+});
+await check("Settings show beside or below the list at 1024 pixels wide, without scrolling to find them", async () => {
+  await page.setViewportSize({ width: 1024, height: 768 }); await settle(600);
+  await page.click("#ed-sections .sec:not(.blk) >> nth=1"); await settle(1500);
+  const b = await page.locator(".ed-right").boundingBox(); must(b && b.y < 768 && b.y + 40 > 0, "settings at " + JSON.stringify(b));
+  await shot("81-at-1024");
+});
+await check("Block counts are big enough to press", async () => {
+  const hs = await page.$$eval(".ed .sec .cnt", (els) => els.filter((e) => e.offsetParent).map((e) => e.getBoundingClientRect().height));
+  must(hs.length && hs.every((h) => h >= 28), "heights: " + hs.slice(0, 6));
+});
+await check("On a phone, the page picker fits on the screen", async () => {
+  await page.setViewportSize({ width: 390, height: 844 }); await settle(800);
+  await page.click(".ed-pagebtn"); await settle(500);
+  const b = await page.locator(".ed-pop.pp").boundingBox(); must(b && b.x >= 0 && b.x + b.width <= 391, "picker at " + JSON.stringify(b));
+  await shot("82-phone-picker"); await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1440, height: 900 }); await settle(600);
+});
+await check("Start building turns away a name with no letters, and a web address that is not one, before anything is made", async () => {
+  await page.click(".ed-exit", { timeout: 800 }).catch(() => {}); await page.click('[data-tab="home"]', { timeout: 1500 }).catch(() => {});
+  let found = false;
+  for (const id of ["site-5", "site-4"]) {
+    await page.waitForSelector('[data-act="open-site"][data-site="' + id + '"]', { timeout: 20000 }); await page.click('[data-act="open-site"][data-site="' + id + '"]');
+    if (await page.waitForSelector('[data-bd="name"]', { timeout: 4000 }).then(() => true, () => false)) { found = true; break; }
+    await page.click('[data-tab="home"]', { timeout: 1500 }).catch(() => {});
+  }
+  must(found, "no site still to build");
+  must(await page.getAttribute('[data-bd="name"]', "maxlength") === "60", "no length limit on the name");
+  await page.fill('[data-bd="name"]', "🎨🎨"); await page.click('[data-act="bd-next"]'); await settle(300);
+  must(/at least two letters or numbers/.test(await text(".bd-err")), "emoji name went through");
+  await page.fill('[data-bd="name"]', "Edge Gallery"); await page.fill('[data-bd="domain"]', "not a web address"); await page.click('[data-act="bd-next"]'); await settle(300);
+  must(/should look like newsite.com/.test(await text(".bd-err")), "bad address went through");
+  must(!hub.repoMade("Artiscope/edge-gallery"), "a repository was made");
+  await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]');
+});
+await check("Signing out clears an old error message", async () => {
+  await page.evaluate(() => { window.__adh.state.notice = { kind: "err", text: "Old trouble" }; }); 
+  await page.click("details.acct summary"); await page.click('[data-act="signout"]'); await settle(800);
+  must(!/Old trouble/.test(await text("body")), "error still shown after signing out");
+  await page.reload(); await page.waitForSelector('[data-act="open-site"]', { timeout: 20000 });
 });
 
 // =============== results ===============
