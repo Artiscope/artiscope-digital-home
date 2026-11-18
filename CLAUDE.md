@@ -219,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (18 November 2026, Version 52)
+## Where things stand (18 November 2026, Version 53)
 
 Done:
 
@@ -835,6 +835,37 @@ Done:
   - Checks: the Edit default text block in `tests/run.mjs` and the
     "Default text" area of `tests/uat.mjs` (13 checks, edge cases
     included).
+
+- Version 53 (18 November): photos from the editor on every site, and a
+  top bar that fits.
+  - Street Art Dispatch articles and artists have a Picture part
+    (`S_PICTURE`: Photo, What the photo shows, Credit), kept in
+    `data/content.json` as `image`, `alt` and `credit` (`sadPicture` leaves
+    out empty ones, and `alt` when it repeats the frame's words from
+    `photos` or `artist_photos`). The site draws the photo on the page and
+    its cards (`picOf`, `rFigure`), or the Photo to come frame with what
+    it shows; the editor marks it `data-adh="picture"`. The opening
+    banner has a Lead photo (`image`) with `photo` as what it shows.
+    Licensed photos placed in `photo_files` or `artist_photo_files` show as
+    the item's photo in the editor (`sadShown`); changing their description
+    or credit updates that entry, changing or removing the photo replaces it
+    (`sadLicSave`), and their credit line cannot be emptied.
+  - Global Art Monitor: in the editor an artist with no picture shows
+    where it goes, and the figure is marked `data-adh="picture"`. World
+    Art Review: the editor always shows an article's picture spot
+    (`.art-hero`). Sites built in the console already had this.
+  - A missing description on an article's photo stops Save, as for
+    artists (`missingDescription`).
+  - The editor's top bar fits from 1120 to 2200 wide with changes
+    waiting: icon words only from 1920, tighter spacing and no Change or
+    copy name below 1400, Exit as an icon and a shorter page name below
+    1250, and the changes count as a number only there.
+  - Checks: the "Photos" area of `tests/uat.mjs`, the photo block in
+    `tests/run.mjs`, and the top bar check in the "Edge cases" area.
+  - The walkthrough video: `FILM=1 node tests/uat.mjs` films the console
+    (`tests/tools/film.mjs`), then `python3 tests/tools/film-make.py video`
+    makes `/tmp/film/out/console.mp4` (captions, scene cards, about five
+    minutes, no sound).
 
 Waiting for the owner:
 

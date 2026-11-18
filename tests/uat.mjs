@@ -88,7 +88,7 @@ async function check(name, fn) {
 }
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 const browser = await chromium.launch(chromeOptions());
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: process.env.FILM ? 4 / 3 : 1 });
 page.setDefaultTimeout(7000);
 const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
 await page.route("**/*", async (route) => {
@@ -117,6 +117,13 @@ async function liveSaveTry() { await page.click('[data-act="ed-save"]'); await p
 async function liveSave() { await page.click('[data-act="ed-save"]'); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved", { timeout: 9000 }); await settle(900); }
 async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).catch(() => {}); await page.click('[data-tab="home"]', { timeout: 1500 }).catch(() => {}); await shot("open-" + id); await page.evaluate((x) => { window.__adh.state.leave = null; }, id); await page.waitForSelector('[data-act="open-site"][data-site="' + id + '"]', { timeout: 20000 }); await page.click('[data-act="open-site"][data-site="' + id + '"]'); await page.waitForSelector('[data-tab="overview"]'); if (!(await page.isVisible(".ed-exit"))) await page.click('.navb[data-tab="pages"]'); await page.waitForSelector("#ed-sections .sec, .wdpanel", { timeout: 12000 }); await settle(1800); }
 
+// The walkthrough video (FILM=1): every screen filmed for the video, then stop. See tests/tools/film.mjs.
+if (process.env.FILM) {
+  const { runFilm } = await import("./tools/film.mjs");
+  await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 20000 });
+  await runFilm({ page, settle, openSite, ppl, consoleAt, hub, setSignedIn: (e) => { signedIn = e; } });
+  await browser.close(); srv.kill(); process.exit(0);
+}
 // The usability walk (AUDIT=1): every screen at computer and phone width, then stop. See tests/audit.mjs.
 if (process.env.AUDIT) {
   const { runAudit } = await import("./audit.mjs");
@@ -129,7 +136,7 @@ if (process.env.AUDIT) {
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all seven sites, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 7, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 52"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 53"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -1036,6 +1043,7 @@ await check("An artist setting in an artist template can be this artist, and Dis
 
 // =============== 8. Undo, the Changes list and publishing later ===============
 area = "Undo and changes";
+if (ONLY && ONLY.includes(area)) { await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 20000 }); await openSite("world-art-review"); }
 const eyebrow = () => page.evaluate(() => window.__adh.pgOf().doc.pages.home.sections.find((x) => x.id === "numbers").settings.eyebrow);
 await check("Undo and Redo step through this page's changes, and Save turns off once everything is undone", async () => {
   await page.selectOption(".pagepick", "home"); await settle(1200);
@@ -1060,7 +1068,7 @@ await check("Removing a section happens at once and Undo puts it back in the sam
 await check("Each page keeps its own Undo, and the Changes list shows every change in plain words, each with its own Undo", async () => {
   await page.selectOption(".pagepick", "page-standards"); await settle(1200);
   must(await page.isDisabled('[data-act="ed-undo"]'), "the home page's changes undo here");
-  const n = Number(((await text(".chg-count")).match(/(\d+) changes?/) || [])[1]); must(n >= 2, "count " + n);
+  const n = Number(((await text(".chg-count")).match(/(\d+) changes?/) || [])[1]); must(n >= 2, "count " + n + " in " + JSON.stringify(await text(".chg-count")));
   await page.click(".chg-count"); const list = await text(".chg");
   must(/: Small line above the heading changed to "Something new"/.test(list) && list.includes("Home"), "list: " + list.replace(/\n/g, " | "));
   await shot("43a-changes");
@@ -1768,6 +1776,22 @@ await check("Settings show beside or below the list at 1024 pixels wide, without
   const b = await page.locator(".ed-right").boundingBox(); must(b && b.y < 768 && b.y + 40 > 0, "settings at " + JSON.stringify(b));
   await shot("81-at-1024");
 });
+await check("The top bar fits at every computer width, with changes waiting", async () => {
+  await page.setViewportSize({ width: 1440, height: 900 }); await settle(400);
+  await page.click("#ed-sections .sec:not(.blk) >> nth=1"); await settle(400);
+  await page.locator(".ed-right input[type=text], .ed-right textarea").first().fill("Top bar check"); await settle(500);
+  const bad = [];
+  for (const w of [1120, 1200, 1280, 1366, 1440, 1500, 1600, 1700, 1800, 1920, 2200]) {
+    await page.setViewportSize({ width: w, height: 900 }); await settle(500);
+    const r = await page.evaluate(() => { const top = document.querySelector(".ed-top"), save = document.querySelector('[data-act="ed-save"]'); const b = save.getBoundingClientRect(); let far = ""; top.querySelectorAll("*").forEach((e) => { const q = e.getBoundingClientRect(); if (q.width && q.right > innerWidth + 1) far += (e.className || e.tagName) + "@" + Math.round(q.right) + " "; }); return { over: top.scrollWidth > top.clientWidth + 1, right: b.right, w: innerWidth, sw: top.scrollWidth, cw: top.clientWidth, far: far.slice(0, 200) }; });
+    if (r.over || r.right > r.w) { bad.push(w + ": " + JSON.stringify(r)); await shot("topbar-" + w); }
+  }
+  must(!bad.length, "the top bar runs off at " + bad.join(", "));
+  await page.setViewportSize({ width: 1440, height: 900 }); await settle(500);
+  await page.click('[data-act="ed-discard"]'); await settle(700);
+  must(!(await page.isVisible(".chg-count")), "the change was not put back");
+  await page.setViewportSize({ width: 1024, height: 768 }); await settle(500);
+});
 await check("Block counts are big enough to press", async () => {
   const hs = await page.$$eval(".ed .sec .cnt", (els) => els.filter((e) => e.offsetParent).map((e) => e.getBoundingClientRect().height));
   must(hs.length && hs.every((h) => h >= 28), "heights: " + hs.slice(0, 6));
@@ -1933,6 +1957,80 @@ await check("On a phone, the panel fits and the boxes are full width", async () 
   await shot("93-words-phone");
   await page.setViewportSize({ width: 1440, height: 900 }); await settle(500);
   await page.click('[data-act="wd-close"]'); await settle(300); must(await page.isVisible("#ed-sections"), "Close did not go back to the sections");
+});
+
+// =============== 15. Photos from the editor on every site (Version 53) ===============
+area = "Photos";
+if (ONLY && ONLY.includes(area)) { await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 20000 }); }
+const sadRead = (f) => read(SR, f);
+await check("Street Art Dispatch: clicking an artist's photo frame opens its Picture settings", async () => {
+  await page.click('[data-act="wd-close"]').catch(() => {});
+  await openSite("street-art-dispatch");
+  await page.selectOption(".pagepick", "artist-konn-artiss"); await settle(1800);
+  must((await SF().$$('[data-adh="picture"] .ph')).length === 1, "no Photo to come frame marked on the page");
+  await mouseIn("streetartdispatch.com", '[data-adh="picture"] .ph'); await settle(900);
+  must(await page.isVisible('[data-upload="image"], [data-act="ed-lib"]') || (await page.$('[data-upload="image"]')) !== null, "the Picture settings did not open");
+  must(await page.inputValue('.ed-right [data-pf="alt"]') === "Konn Artiss in the studio", "what the photo shows: " + await page.inputValue('.ed-right [data-pf="alt"]'));
+  await shot("100-sad-picture");
+});
+await check("Street Art Dispatch: a photo uploaded for an artist shows on the page and saves", async () => {
+  await page.setInputFiles('[data-upload="image"]', FIX + "/studio.jpg"); await page.waitForSelector(".picthumb[src^='data:image']");
+  await page.fill('.ed-right [data-pf="credit"]', "Photograph: Grove Gallery"); await settle(1500);
+  must((await SF().$$('[data-adh="picture"] img.ph-img')).length === 1, "the photo is not on the page");
+  must(/Photograph: Grove Gallery/.test(await SF().innerText('[data-adh="picture"] figcaption')), "no credit under the photo");
+  await shot("101-sad-photo");
+  await liveSave();
+  const a = sadRead("data/content.json").artists.find((x) => x.name === "Konn Artiss");
+  must(a.image && /\.jpe?g$/.test(a.image) && a.credit === "Photograph: Grove Gallery" && !("alt" in a), "saved: " + JSON.stringify({ image: a.image, alt: a.alt, credit: a.credit }));
+  must(hub.read(SR, "main", "assets/images/" + a.image) != null, "the photo file was not saved");
+});
+await check("Street Art Dispatch: the same photo can be chosen for an article, and Remove brings the frame back", async () => {
+  const name = sadRead("data/content.json").artists.find((x) => x.name === "Konn Artiss").image;
+  await page.selectOption(".pagepick", "artist-konn-artiss"); await settle(1200);
+  await mouseIn("streetartdispatch.com", '[data-adh="picture"] img'); await settle(800);
+  await page.click('.ed-right [data-act="ed-pic-none"]'); await settle(1200);
+  must((await SF().$$('[data-adh="picture"] .ph')).length === 1, "the frame did not come back");
+  await liveSave();
+  const a = sadRead("data/content.json").artists.find((x) => x.name === "Konn Artiss");
+  must(!a.image, "not removed: " + JSON.stringify({ image: a.image, credit: a.credit }));
+  const art = sadRead("data/content.json").features[0].slug;
+  await page.selectOption(".pagepick", "a-" + art); await settle(1500);
+  must((await SF().$$('[data-adh="picture"]')).length === 1, "the article has no picture spot");
+  await mouseIn("streetartdispatch.com", '[data-adh="picture"] .ph'); await settle(800);
+  await page.click('.ed-right [data-act="ed-picker"][data-path="image"]'); await settle(600);
+  await page.fill("[data-lib-q]", name.replace(/\.[a-z]+$/, "")); await settle(300);
+  await page.click(".libf:visible >> nth=0"); await settle(300);
+  await page.click('[data-act="ed-lib-done"]'); await settle(1500);
+  await shot("102-sad-article-photo");
+  must((await SF().$$('[data-adh="picture"] img.ph-img')).length === 1, "the chosen photo is not on the article");
+  await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(600);
+});
+await check("Street Art Dispatch: the home page's lead photo can be uploaded", async () => {
+  await page.selectOption(".pagepick", "home"); await settle(1500);
+  await mouseIn("streetartdispatch.com", ".hero figure .ph"); await settle(900);
+  must((await page.$('.ed-right [data-upload="image"]')) !== null && /What the lead photo shows/.test(await text(".ed-right")), "no Lead photo setting");
+  await page.setInputFiles('.ed-right [data-upload="image"]', FIX + "/tall.jpg"); await settle(1500);
+  must((await SF().$$(".hero figure img.ph-img")).length === 1, "the lead photo is not on the page");
+  await page.click('[data-act="ed-discard"]').catch(() => {}); await settle(600);
+});
+await check("Global Art Monitor: every artist profile has its picture spot in the editor, and a click opens Picture", async () => {
+  await openSite("global-art-monitor");
+  const imgs = read(GR, "data/images.json") || {}, bare = Object.keys(imgs).length ? null : null;
+  await page.selectOption(".pagepick", "artist-konn-artiss"); await settle(1800);
+  const f = frame("globalartmonitor.com"); must((await f.$$('[data-adh="picture"]')).length === 1, "no picture spot on the profile");
+  await f.evaluate(() => document.querySelector('[data-adh="picture"]').scrollIntoView({ block: "center" })); await settle(500);
+  await mouseIn("globalartmonitor.com", '[data-adh="picture"]', { x: 40, y: 40 }); await settle(900);
+  must((await page.$('.ed-right [data-upload="image"]')) !== null, "Picture did not open");
+  await shot("103-gam-picture");
+});
+await check("World Art Review: an article with no picture yet shows its spot in the editor", async () => {
+  await openSite("world-art-review");
+  const plain = read(WR, "content/site.json").articles.find((a) => !a.hidden && !a.image && !a.credit);
+  if (!plain) return "every article already has a picture";
+  await page.selectOption(".pagepick", "a-" + plain.slug); await settle(1800);
+  const f = frame("worldartreview.com"); must((await f.$$(".art-hero")).length === 1, "no picture spot on the article");
+  await mouseIn("worldartreview.com", ".art-hero"); await settle(900);
+  must(/Picture/.test(await text(".ed-right")), "Picture did not open");
 });
 
 // =============== results ===============

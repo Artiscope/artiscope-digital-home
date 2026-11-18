@@ -766,7 +766,7 @@ input[type="file"] { color: var(--muted); }
   .ed.noleft.with-right .ed-right { grid-row: 2; }
   .ed.noleft.with-right .ed-mid { grid-column: 1; grid-row: 2; }
 }
-@media (max-width: 1500px) {
+@media (max-width: 1919px) {
   .ed-top { gap: 10px; }
   .ed-top .lefty, .ed-top .righty { gap: 8px; }
   .ed-top .lbl { display: none; }
@@ -775,10 +775,20 @@ input[type="file"] { color: var(--muted); }
   .ed-sitebtn .copyname { max-width: 130px; }
   .ed-top .righty .state { max-width: 130px; }
 }
-@media (max-width: 1200px) {
+@media (max-width: 1400px) {
   .ed-sitebtn .copyname { display: none; }
   .ed-pagebtn .ch { display: none; }
   .ed-pagebtn { min-width: 0; }
+  .ed-top { gap: 8px; }
+  .ed-top .lefty, .ed-top .righty { gap: 6px; }
+}
+/* a small laptop: the page's name may shorten, and Exit keeps its icon and its spoken name */
+@media (max-width: 1250px) {
+  .ed-exit > span { display: none; }
+  .ed-pagebtn .pn { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ed-top .tb.word { padding: 0 8px; }
+  .ed-top { gap: 6px; }
+  .ed-top .chg-count .cw { display: none; }
 }
 /* a phone or a narrow window: everything in one column */
 @media (max-width: 1100px) {

@@ -871,7 +871,8 @@ const SAD_SECTIONS = {
     starter: { eyebrow: "", headline: "A heading", intro: "", button: "", button_href: "", link: "", link_href: "", photo: "Lead picture", caption: "", caption_link: "", caption_href: "" }, fields: [
     { name: "eyebrow", label: "Small line above the heading", type: "text", hint: "Leave empty to hide." }, { name: "headline", label: "Heading", type: "text" }, { name: "intro", label: "Introduction", type: "long", plain: true },
     { name: "button", label: "Button words", type: "text" }, { name: "button_href", label: "Button address", type: "text", hint: S_ADDR_HINT }, { name: "link", label: "Link words", type: "text" }, { name: "link_href", label: "Link address", type: "text", hint: S_ADDR_HINT },
-    { name: "photo", label: "The lead picture, described", type: "text", hint: "Shown in the Photo to come frame until the photo arrives." },
+    { name: "image", label: "Lead photo", type: "image", alt: "photo" },
+    { name: "photo", label: "What the lead photo shows", type: "text", hint: "Read aloud to people who cannot see it, and written in the Photo to come frame until a photo is added." },
     { name: "caption", label: "Caption", type: "text" }, { name: "caption_link", label: "Caption link words", type: "text" }, { name: "caption_href", label: "Caption link address", type: "text", hint: S_ADDR_HINT },
   ] },
   features: { label: "Article cards", about: "Cards for dispatches or Urban Culture columns, as a grid with a lead story or as a row of columns.", summary: (st) => (Array.isArray(st.which) ? st.which.length + " chosen" : { dispatches: "Every dispatch", columns: "Every column", all: "Every article" }[st.which] || ""),
@@ -937,6 +938,12 @@ const S_ARCHIVE = { name: "archive", label: "Entries", type: "rows", keep: ["rea
 const S_SHOWS = { name: "exhibitions", label: "Exhibitions", type: "rows", fields: [
   { name: "t", label: "Title", type: "text" }, { name: "sub", label: "Second line", type: "text" }, { name: "venue", label: "Venue", type: "text" }, { name: "when", label: "Dates", type: "text", hint: "Leave as To be confirmed until the venue confirms." }, { name: "status", label: "Status", type: "text" },
 ] };
+// A Street Art Dispatch article's or artist's photo: chosen or uploaded in the editor, with what it shows and its credit.
+// Until a photo is added, what it shows is written in the site's Photo to come frame.
+const S_PICTURE = (what) => ({ id: "picture", label: "Picture", about: "The photo on the " + what + " and its card, what it shows and its credit.", fields: [
+  { name: "image", label: "Photo", type: "image", alt: "alt" },
+  { name: "alt", label: "What the photo shows", type: "text", hint: "Read aloud to people who cannot see it, and written in the Photo to come frame until a photo is added." },
+  { name: "credit", label: "Credit", type: "text", hint: "Shown under the photo, such as the photographer. Without a photo the frame says it is still to be commissioned." }] });
 const SAD_ITEMS = {
   article: { label: "Article", parts: [
     { id: "words", label: "Title and summary", about: "The heading of the article and how it is listed.", fields: [
@@ -946,6 +953,7 @@ const SAD_ITEMS = {
       { name: "tags", label: "Filed under", type: "lines", hint: "One per item, shown at the foot of the article." },
       { name: "draft", label: "Show the Draft note", type: "yesno", hint: "Says that details are still being confirmed. Keep it on until the facts are confirmed." },
     ] },
+    S_PICTURE("article"),
     { id: "body", label: "Body", about: "The text of the article.", fields: [{ name: "body", label: "Text", type: "long", hint: "Type as you would in a document." }] },
     { id: "settings", label: "Settings", about: "Whether visitors can see the article.", fields: [{ name: "hidden", label: "Hidden from the site", type: "yesno", hint: "A hidden article is kept but not shown or listed. New articles start hidden." }] },
   ] },
@@ -955,6 +963,7 @@ const SAD_ITEMS = {
       { name: "summary", label: "Short summary", type: "long", plain: true }, { name: "note", label: "Note on the profile", type: "long", plain: true },
       { name: "read", label: "The story the profile links to", type: "piece", hint: "An artist with a story gets a profile page. Without one the card says Coming soon." },
     ] },
+    S_PICTURE("artist profile"),
     { id: "facts", label: "Key facts", about: "The facts in the box on the profile, each with its label.", fields: [{ name: "facts", label: "Facts", type: "rows", fields: [{ name: 0, label: "Label", type: "text" }, { name: 1, label: "Fact", type: "long", plain: true }] }], blocks: { field: "facts", label: "Fact", add: "Add a fact" } },
   ] },
   site: { label: "Issue details", parts: [
@@ -970,10 +979,42 @@ export function sadForEditor(content) {
   const c = JSON.parse(JSON.stringify(content || {})), notes = c.artist_notes || {};
   return {
     site: { desk: c.desk || "", date: c.date || "" }, photos: c.photos || {}, artist_photos: c.artist_photos || {},
-    articles: (c.features || []).map((f) => ({ ...f, section: "dispatches" })).concat((c.columns || []).map((f) => ({ ...f, section: "urban-culture" }))),
-    artists: (c.artists || []).map((a) => ({ slug: a.slug || slugOf(a.name), ...a, note: notes[a.name] || "" })),
+    articles: (c.features || []).map((f) => ({ ...f, section: "dispatches" })).concat((c.columns || []).map((f) => ({ ...f, section: "urban-culture" })))
+      .map((f) => sadShown(f, (c.photo_files || {})[f.slug], (c.photos || {})[f.slug])),
+    artists: (c.artists || []).map((a) => ({ slug: a.slug || slugOf(a.name), ...sadShown(a, (c.artist_photo_files || {})[a.name], (c.artist_photos || {})[a.name]), note: notes[a.name] || "" })),
     archive: c.archive || [], exhibitions: c.exhibitions || [], stats: c.stats || [], glossary: c.glossary || [],
   };
+}
+// A licensed photo placed in an article's or artist's space (photo_files, artist_photo_files: image, alt, caption,
+// credit, credit_href, focus). The editor shows it as the item's photo while the item has none of its own.
+const LIC_FILE = /^[A-Za-z0-9._-]{1,120}\.(png|jpe?g)$/;
+function sadLic(v) { return v && typeof v === "object" && LIC_FILE.test(String(v.image || "")) ? v : null; }
+function sadShown(x, lic, frame) {
+  const l = !x.image && sadLic(lic);
+  if (l) return { ...x, image: l.image, alt: x.alt || l.alt || frame || "", credit: x.credit || l.credit || "" };
+  return { ...x, alt: x.alt || frame || "" };
+}
+// After an edit: a licensed photo left in place keeps its entry (with any new description or credit) and nothing
+// is copied into the item; one changed or removed in the editor gives way to the item's own photo, or to none.
+function sadLicSave(out, raw, shown, files, key) {
+  const l = raw && !raw.image && sadLic(files[key]);
+  if (!l) return false;
+  if (String(out.image || "") === l.image) {
+    const n = { ...l }, alt = String(out.alt || "").trim(), credit = String(out.credit || "").trim();
+    if (alt && alt !== String(shown.alt || "")) n.alt = alt;
+    if (!credit && l.credit) throw new Error("A licensed photo keeps its credit line. Change the credit, or remove the photo.");
+    if (credit !== String(shown.credit || "").trim()) n.credit = credit;
+    for (const k of ["image", "alt", "credit"]) { if (k !== "image" && raw[k]) out[k] = raw[k]; else delete out[k]; }
+    if (canon(n) === canon(l)) return false;
+    files[key] = n; return true;
+  }
+  delete files[key]; return true;
+}
+// The photo's words are kept only where they say something: what a photo shows is not repeated when it is
+// the description the frame already had, and an empty photo, description or credit is left out.
+function sadPicture(out, frameWords) {
+  if (out.alt === (frameWords || "")) delete out.alt;
+  for (const k of ["image", "alt", "credit"]) if (k in out && !String(out[k] || "").trim()) delete out[k];
 }
 // A year is a whole number, or TBC while it is being confirmed.
 function sadYear(v) { const t = String(v == null ? "" : v).trim(); return /^\d{3,4}$/.test(t) ? Number(t) : "TBC"; }
@@ -1003,6 +1044,8 @@ export function sadFromEditor(kinds, given, content) {
   }
   // articles: dispatches and columns
   const curAll = was.articles, seen = new Set(), feats = [], cols = [];
+  const rawArt = (content.features || []).concat(content.columns || []), picFiles = { ...(content.photo_files || {}) };
+  let picsChanged = false;
   for (const g of ga) {
     const slug = String((g && g.slug) || ""), cur = curAll.find((x) => x.slug === slug);
     if (seen.has(slug)) throw new Error("Two articles have the same web address.");
@@ -1015,12 +1058,18 @@ export function sadFromEditor(kinds, given, content) {
     if (!cur) changed.push("Add article: " + next.title); else if (canon(next) !== canon(cur)) changed.push((cur.hidden === true && next.hidden !== true ? "Show article: " : next.hidden === true && cur.hidden !== true ? "Hide article: " : "Edit article: ") + next.title);
     const out = { ...next }, col = out.section === "urban-culture";
     delete out.section;
+    if (cur && sadLicSave(out, rawArt.find((x) => x.slug === slug), cur, picFiles, slug)) picsChanged = true;
+    sadPicture(out, (content.photos || {})[slug]);
     if (col) { out.column = true; cols.push(out); } else { delete out.column; feats.push(out); }
   }
   for (const cur of curAll) if (!seen.has(cur.slug)) changed.push("Delete article: " + cur.title);
+  for (const cur of curAll) if (!seen.has(cur.slug) && cur.slug in picFiles) { delete picFiles[cur.slug]; picsChanged = true; }
+  if (picsChanged) c.photo_files = picFiles;
   c.features = feats; c.columns = cols;
   // artists: their words, note and facts
   const notes = { ...(content.artist_notes || {}) }, photos = { ...(content.artist_photos || {}) }, artistsOut = [], seenR = new Set();
+  const artFiles = { ...(content.artist_photo_files || {}) };
+  let artPicsChanged = false;
   for (const g of gr) {
     const slug = String((g && g.slug) || ""), cur = was.artists.find((a) => a.slug === slug);
     if (seenR.has(slug)) throw new Error("Two artists have the same web address.");
@@ -1037,16 +1086,20 @@ export function sadFromEditor(kinds, given, content) {
       // the note, photo description and archive entries follow the artist's new name
       if (oldName in notes) { notes[name] = notes[oldName]; delete notes[oldName]; }
       if (oldName in photos) { photos[name] = photos[oldName]; delete photos[oldName]; }
+      if (oldName in artFiles) { artFiles[name] = artFiles[oldName]; delete artFiles[oldName]; artPicsChanged = true; }
       c.archive = (c.archive || []).map((x) => x.artist === oldName ? { ...x, artist: name } : x);
     }
     if (next.note) notes[name] = next.note; else delete notes[name];
     const out = { ...next }; delete out.note;
+    if (cur && sadLicSave(out, (content.artists || []).find((a) => (a.slug || slugOf(a.name)) === slug), cur, artFiles, name)) artPicsChanged = true;
+    sadPicture(out, photos[name]);
     // the web address stays as it was, even when the name changes
     if (slugOf(name) === slug) delete out.slug; else out.slug = slug;
     if (!cur) changed.push("Add artist: " + name); else if (canon(next) !== canon(cur)) changed.push("Edit artist: " + name);
     artistsOut.push(out);
   }
-  for (const cur of was.artists) if (!seenR.has(cur.slug)) { changed.push("Delete artist: " + cur.name); delete notes[cur.name]; delete photos[cur.name]; }
+  for (const cur of was.artists) if (!seenR.has(cur.slug)) { changed.push("Delete artist: " + cur.name); delete notes[cur.name]; delete photos[cur.name]; if (cur.name in artFiles) { delete artFiles[cur.name]; artPicsChanged = true; } }
+  if (artPicsChanged) c.artist_photo_files = artFiles;
   c.artists = artistsOut; c.artist_notes = notes; c.artist_photos = photos;
   // keep the file exactly as it was where nothing changed
   for (const k of ["features", "columns", "artists", "artist_notes", "artist_photos", "archive"]) if (canon(c[k]) === canon(content[k])) c[k] = content[k];

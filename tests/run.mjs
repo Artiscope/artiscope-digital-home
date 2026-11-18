@@ -389,4 +389,49 @@ globalThis.fetch = realFetch;
     assert.ok(fs.readFileSync(tmp + "/war-out/index.html", "utf8").includes('"menu.close": "Shut"'), "World Art Review carries the changed words to the page");
   });
 }
+// Photos from the editor (Version 53): Street Art Dispatch articles and artists have a Picture part
+{
+  const h = await import("./home.mjs");
+  const S = sadDir(), content = JSON.parse(fs.readFileSync(S + "/data/content.json", "utf8"));
+  const kinds = SITES.find((x) => x.id === "street-art-dispatch").items;
+  assert.ok(kinds.article.parts.some((p) => p.id === "picture") && kinds.artist.parts.some((p) => p.id === "picture"), "articles and artists have a Picture part");
+  const E = h.sadForEditor(content), konn = E.artists.find((a) => a.name === "Konn Artiss");
+  assert.equal(konn.alt, content.artist_photos["Konn Artiss"], "what the photo shows starts as the frame's own words");
+  assert.equal(h.sadFromEditor(kinds, E, content).changed.length, 0, "opening and saving changes nothing");
+  assert.deepEqual(h.sadFromEditor(kinds, E, content).content, content, "the file stays exactly as it was");
+  const withPic = JSON.parse(JSON.stringify(E)); Object.assign(withPic.artists.find((a) => a.name === "Konn Artiss"), { image: "konn.jpg", credit: "Photograph: Grove Gallery" });
+  Object.assign(withPic.articles[0], { image: "konn.jpg", alt: "Konn Artiss at work in Venice" });
+  const r = h.sadFromEditor(kinds, withPic, content), ka = r.content.artists.find((a) => a.name === "Konn Artiss"), f0 = r.content.features[0];
+  assert.equal(ka.image, "konn.jpg"); assert.equal(ka.credit, "Photograph: Grove Gallery"); assert.ok(!("alt" in ka), "the frame's own words are not repeated");
+  assert.equal(f0.image, "konn.jpg"); assert.equal(f0.alt, "Konn Artiss at work in Venice", "new words for what the photo shows are kept");
+  const back = JSON.parse(JSON.stringify(h.sadForEditor(r.content))); Object.assign(back.artists.find((a) => a.name === "Konn Artiss"), { image: "", credit: "" });
+  const r2 = h.sadFromEditor(kinds, back, r.content), kb = r2.content.artists.find((a) => a.name === "Konn Artiss");
+  assert.ok(!("image" in kb) && !("credit" in kb), "Remove leaves nothing behind");
+  const bad = JSON.parse(JSON.stringify(E)); bad.artists[0].image = "../../secret.txt";
+  assert.ok(!h.sadFromEditor(kinds, bad, content).content.artists[0].image, "only a photo file's name is kept");
+  // a licensed photo already placed (artist_photo_files, photo_files) shows as the item's photo and can be changed or removed
+  const lic = Object.keys(content.artist_photo_files || {})[0];
+  if (lic) {
+    const L = content.artist_photo_files[lic], shown = E.artists.find((a) => a.name === lic);
+    assert.equal(shown.image, L.image, "a licensed photo shows as the artist's photo in the editor");
+    assert.equal(shown.credit, L.credit, "with its credit");
+    const ed = JSON.parse(JSON.stringify(E)); ed.artists.find((a) => a.name === lic).alt = "A tall mural on a factory wall";
+    const rl = h.sadFromEditor(kinds, ed, content);
+    assert.equal(rl.content.artist_photo_files[lic].alt, "A tall mural on a factory wall", "a new description is kept with the licensed photo");
+    assert.equal(rl.content.artist_photo_files[lic].credit_href, L.credit_href, "its credit link stays");
+    assert.ok(!("image" in rl.content.artists.find((a) => a.name === lic)), "the licensed photo is not copied into the artist");
+    const nc = JSON.parse(JSON.stringify(E)); nc.artists.find((a) => a.name === lic).credit = "";
+    assert.throws(() => h.sadFromEditor(kinds, nc, content), /credit line/, "a licensed photo cannot lose its credit");
+    const rm = JSON.parse(JSON.stringify(E)); Object.assign(rm.artists.find((a) => a.name === lic), { image: "", credit: "" });
+    const rr = h.sadFromEditor(kinds, rm, content);
+    assert.ok(!(lic in rr.content.artist_photo_files) && !rr.content.artists.find((a) => a.name === lic).image, "Remove takes the licensed photo away");
+  }
+  // the site draws the photo, or the frame
+  const R = (await import("node:module")).createRequire(import.meta.url)(S + "/assets/render.js");
+  const pages = JSON.parse(fs.readFileSync(S + "/data/pages.json", "utf8"));
+  const site = R.Site(R.fromFiles(r.content), pages, "", {}), html = site.all().map((p) => p.html).join("\n");
+  assert.ok(/<img class="ph-img" src="[^"]*konn\.jpg"/.test(html) && html.includes("Photograph: Grove Gallery"), "the photo and its credit are on the site");
+  const marked = R.Site(R.fromFiles(content), pages, "", { mark: true }).all().map((p) => p.html).join("\n");
+  assert.ok(/data-adh="picture"/.test(marked), "in the editor the photo frame can be clicked");
+}
 console.log("ALL TESTS PASSED");
