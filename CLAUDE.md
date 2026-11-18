@@ -219,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (18 November 2026, Version 48)
+## Where things stand (18 November 2026, Version 49)
 
 Done:
 
@@ -681,8 +681,63 @@ Done:
     was pushed to it with the address
     `https://artiscope.github.io/practice-build/`, and both `sites.json`
     and `DEFAULT_SITE_LIST` mark it `live: true`.
+- Step 4 (Version 49, 18 November): Start building, from the approved
+  sample (https://claude.ai/artifact/Be2WCf55vjt2Wj6zR6DkXh).
+  - Console (`startBuild`, `viewBuild`, `bdAct`, `state.build`): a full
+    screen with Close, the four steps (About the site, Look, Pages, Check
+    and create), Previous and Next, and on the right a preview of the
+    home page drawn by the starter's own `starter/assets/render.js`
+    (loaded from the console's address, written into a sandboxed srcdoc
+    frame without its scripts; Computer at 1280 wide scaled, Phone at
+    390). Opening a site still to build as the admin starts it; the
+    practice build has a Start building card on its Overview. Then the
+    Ready screen (`viewBuildDone`): what was done, Open the editor, and the
+    web address records (`domainCard`) with Check.
+  - Server: `cleanBuild` (name, tagline, web address via `cleanDomain`,
+    registrar 123-reg, GoDaddy or somewhere else, email, look, pages
+    "home", "set" or "copy" with `from`), `buildLooks` (the twelve
+    `STARTER_LOOKS` with typefaces and corners from `BUILD_LOOK_TYPE`),
+    `planFiles` and `planSite` (the three data files; `nameInto` puts the
+    name and tagline in), the ready set (`BUILD_SET`: Home, About,
+    Artists, Exhibitions, Visit us, Contact), `copyLayout` (another site's
+    pages and section order; its own kinds become the nearest shared one
+    by `BUILD_NEAR`, or are left out, and both are listed). Every word not
+    given stays in square brackets; Visit us starts empty.
+  - `createSite`: for a site still to build, makes `Artiscope/<slug of
+    the name>` (POST /orgs/Artiscope/repos, auto_init), switches Pages to
+    GitHub Actions, writes the whole starter with the planned files
+    (`starterInto` with `files` and `github`), marks version 1.0 and adds
+    the site to `sites.json` (`changeSiteList`) keeping its card id
+    (site-4), with `want` (the domain to connect), `registrar` and
+    `todo`. Whatever GitHub refuses after the repository exists
+    (publishing steps without the Workflows permission, Pages) is noted
+    in `todo`; Finish setting up on the site's Overview runs
+    `finishSite`, which adds only what is missing (`starterInto` with
+    `only: ".github/"`). For the practice build it rewrites the practice
+    build in place and deletes its copies; no repository is made.
+  - `checkDomain`: asks dns.google for the domain's A records and the
+    www CNAME; once every A record is one of `GITHUB_IPS`, sets the Pages
+    custom domain and https, writes `site.address` and `indexed: true`
+    to `data/content.json` (search engines let in) and moves the site's
+    `domain` in `sites.json`. The console never touches DNS.
+  - A new site's first publish takes a minute or two: until its page
+    answers, the editor says so (`previewWaiting: "first"`).
+  - Planning, creating, Finish and Check are the admin's, except that
+    anyone given the practice build can rebuild it.
+  - Sample mode: `assets/demo-build.json`, written by
+    `tests/tools/demo-starter.mjs` from the server's own code.
+  - Checks: `tests/build.mjs` (22 checks, in `run-all`), the "Start
+    building" area of `tests/uat.mjs` (`tests/fakegit.mjs` now makes
+    repositories, keeps Pages settings, and `hub.refuse` and
+    `hub.refuseSteps` take permissions away).
+  - The GitHub key needs, for Create site: All repositories in the
+    Artiscope organisation, with Administration, Contents, Pages,
+    Workflows and Pull requests set to Read and write, and Actions Read.
 
 Waiting for the owner:
+
+- Create site needs the GitHub key widened (see step 4 above). The
+  practice build works without it.
 
 - Publish later needs its clock key: a long random key (from a password
   manager) added as SCHEDULE_KEY in Supabase (Edge Functions, Secrets)

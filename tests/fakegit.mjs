@@ -6,7 +6,7 @@ const b64 = (text) => Buffer.from(text, "utf8").toString("base64");
 
 export function makeGitHub(seed) {   // seed: { "Owner/repo": { "path": "text" } }
   const repos = {}; let clock = Date.UTC(2026, 10, 1);
-  const log = [];
+  const log = [], made = new Set(Object.keys(seed)), refuse = [];   // refuse: [{ re, status, message }], a test's way to take a permission away
   function repoOf(name) {
     if (repos[name]) return repos[name];
     const r = { blobs: {}, trees: {}, commits: {}, refs: {} };
@@ -45,6 +45,19 @@ export function makeGitHub(seed) {   // seed: { "Owner/repo": { "path": "text" }
 
   async function fetch(url, init = {}) {
     url = String(url); const method = init.method || "GET"; const body = init.body ? JSON.parse(init.body) : {};
+    const no = refuse.find((x) => x.re.test(method + " " + url.replace("https://api.github.com", "")));
+    if (no) return res(no.status, { message: no.message || "Resource not accessible by personal access token" });
+    // a new repository in the organisation, with a first commit when auto_init is asked for
+    const org = url.match(/^https:\/\/api\.github\.com\/orgs\/([^/]+)\/repos$/);
+    if (org && method === "POST") {
+      const name = org[1] + "/" + body.name;
+      if (made.has(name) || [...made].some((x) => x.toLowerCase() === name.toLowerCase())) return res(422, { message: "name already exists on this account" });
+      made.add(name); const r = repoOf(name); if (body.auto_init) { const files = { "README.md": blob(r, b64("# " + body.name + "\n")) }; r.refs.main = commit(r, tree(r, files), [], "Initial commit"); }
+      r.info = { name: body.name, description: body.description, private: !!body.private }; log.push("POST orgs/" + org[1] + "/repos " + body.name);
+      return res(201, { full_name: name, html_url: "https://github.com/" + name });
+    }
+    const whole = url.match(/^https:\/\/api\.github\.com\/repos\/([^/]+\/[^/?]+)$/);
+    if (whole) return made.has(whole[1]) ? res(200, { full_name: whole[1] }) : res(404, { message: "Not Found" });
     const m = url.match(/^https:\/\/api\.github\.com\/repos\/([^/]+\/[^/]+)\/(.*)$/);
     if (!m) throw new Error("unexpected " + method + " " + url);
     const r = repoOf(m[1]); let [path, query = ""] = m[2].split("?"); const q = new URLSearchParams(query);
@@ -68,6 +81,10 @@ export function makeGitHub(seed) {   // seed: { "Owner/repo": { "path": "text" }
     if ((x = path.match(/^git\/matching-refs\/heads\/(.*)$/))) return res(200, Object.keys(r.refs).filter((n) => n.startsWith(x[1])).map((n) => ({ ref: "refs/heads/" + n, object: { sha: r.refs[n] } })));
     if ((x = path.match(/^git\/ref\/heads\/(.+)$/))) return r.refs[x[1]] ? res(200, { object: { sha: r.refs[x[1]] } }) : res(404);
     if (path === "git/refs" && method === "POST") { const n = body.ref.replace("refs/heads/", ""); if (r.refs[n] || !r.commits[body.sha]) return res(422); r.refs[n] = body.sha; return res(201); }
+    if ((x = path.match(/^git\/refs\/heads\/(.+)$/)) && method === "PATCH" && r.refuseSteps) {
+      const files = r.trees[r.commits[body.sha] && r.commits[body.sha].tree] || {};
+      if (Object.keys(files).some((p) => p.startsWith(".github/workflows/") && files[p] !== (filesAt(r, r.refs[x[1]])[p]))) return res(422, { message: "refusing to allow a Personal Access Token to create or update workflow `.github/workflows/pages.yml` without `workflow` scope" });
+    }
     if ((x = path.match(/^git\/refs\/heads\/(.+)$/))) {
       if (!r.refs[x[1]]) return res(422);
       if (method === "DELETE") { delete r.refs[x[1]]; return res(204); }
@@ -86,6 +103,11 @@ export function makeGitHub(seed) {   // seed: { "Owner/repo": { "path": "text" }
       if (r.releases.some((x) => x.tag_name === body.tag_name) || !r.commits[body.target_commitish]) return res(422, { message: "Validation Failed" });
       const rel = { id: r.releases.length + 1, tag_name: body.tag_name, name: body.name, body: body.body, target_commitish: body.target_commitish, created_at: new Date(clock).toISOString(), published_at: new Date(clock).toISOString() };
       r.releases.unshift(rel); return res(201, rel);
+    }
+    if (path === "pages") {
+      if (method === "POST") { if (r.pages) return res(409, { message: "already enabled" }); r.pages = { build_type: body.build_type, cname: null, https_enforced: false }; return res(201, r.pages); }
+      if (method === "PUT") { if (!r.pages) return res(404); Object.assign(r.pages, body); return res(204); }
+      return r.pages ? res(200, r.pages) : res(404);
     }
     if (path === "releases" && method === "GET") return res(200, (r.releases || []).slice(0, Number(q.get("per_page") || 30)));
     if (path === "merges" && method === "POST") {
@@ -129,6 +151,11 @@ export function makeGitHub(seed) {   // seed: { "Owner/repo": { "path": "text" }
   return {
     setRun(repo, branch, conclusion) { const r = repoOf(repo); r.runs = r.runs || []; r.runs.push({ workflow: "check-copy.yml", head_branch: branch, head_sha: r.refs[branch], status: conclusion ? "completed" : "in_progress", conclusion: conclusion || null, html_url: "https://github.com/" + repo + "/actions/runs/" + (r.runs.length + 1) }); },
     fetch, log,
+    refuse(re, status, message) { refuse.push({ re, status: status || 403, message }); },
+    allow() { refuse.length = 0; for (const r of Object.values(repos)) r.refuseSteps = false; },
+    refuseSteps(repo) { repoOf(repo).refuseSteps = true; },
+    repoMade(repo) { return made.has(repo); },
+    pagesOf(repo) { return repoOf(repo).pages || null; },
     read(repo, ref, file) { const r = repoOf(repo), s = resolve(r, ref), f = s && filesAt(r, s)[file]; return f ? Buffer.from(r.blobs[f], "base64").toString("utf8") : null; },
     refs(repo) { return { ...repoOf(repo).refs }; },
     releases(repo) { return [...(repoOf(repo).releases || [])]; },

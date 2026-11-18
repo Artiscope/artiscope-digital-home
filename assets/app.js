@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "48";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "49";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -508,7 +508,9 @@
           (isAdmin() ? tile("history", "", "History", "Every change made to the site, and who made it", "See the history") : "")
         : s.files ? tile("files", state.files[s.id] ? state.files[s.id].files.length : "", "Files", "Every photo on the site, what it shows and where it is used", "Upload and describe")
           : tile("photos", empty, "Photos", empty + " empty " + (empty === 1 ? "spot" : "spots") + ", " + waiting + " on the way", "Add photos")) +
-      '</div>' + (s.playground && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start the practice build again</h2><span class="small">Every page, the look, the words, the photos and any code changes go, and so do its copies. It becomes the starter again, ready for the next person to build from.</span><div class="row"><button type="button" class="soft" data-act="ask-startagain">Start again</button></div></div>' : "") +
+      '</div>' + (s.playground && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start building</h2><span class="small">Try the steps for a new site here: a name, a look and the starting pages. The practice build is rebuilt with your choices, and no new repository is made.</span><div class="row"><button type="button" class="soft" data-act="bd-start" data-site="' + esc(s.id) + '">Start building</button></div></div>' : "") +
+      (s.starter && !s.playground && isAdmin() ? finishCard(s) + (s.want ? '<div style="max-width:820px;margin-top:22px">' + domainCard(s) + '</div>' : "") : "") +
+      (s.playground && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start the practice build again</h2><span class="small">Every page, the look, the words, the photos and any code changes go, and so do its copies. It becomes the starter again, ready for the next person to build from.</span><div class="row"><button type="button" class="soft" data-act="ask-startagain">Start again</button></div></div>' : "") +
       (s.practice && !s.playground && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start the Practice site again</h2><span class="small">Its words, pages, theme and photos become World Art Review\'s as they are now. Its versions stay in the list. Anyone practising is asked to bring their copy up to date.</span><div class="row"><button type="button" class="soft" data-act="ask-resetpractice">Start again from World Art Review</button></div></div>' : "") +
       (isAdmin() ? viewCopies() : viewMyCopy());
   }
@@ -2531,7 +2533,8 @@
     pgd.what = (cbk.add || "Add a " + cbk.label.toLowerCase()) + " in " + ps.kind.label; pgMark(pgd); pgd.scrollNext = true; edPatch(); pushPreview();
   }
   // A new copy's own preview takes a minute or two to be built. Until then its pages are drawn on top of the live site.
-  function viewWaiting(pgd) { return pgd && pgd.previewWaiting ? '<p class="notice ed-wait" role="status">This copy\'s own preview is still being made, so your changes show on top of the live site for now. Reload the page in a minute or two to see the copy itself.</p>' : ""; }
+  function viewWaiting(pgd) { if (pgd && pgd.previewWaiting === "first") return '<p class="notice ed-wait" role="status">The site is being published for the first time. It appears here in a minute or two: reload the page then. You can work on it in the meantime.</p>';
+    return pgd && pgd.previewWaiting ? '<p class="notice ed-wait" role="status">This copy\'s own preview is still being made, so your changes show on top of the live site for now. Reload the page in a minute or two to see the copy itself.</p>' : ""; }
   function viewRemoved(pgd) {
     var r = pgd && pgd.removed; if (!r) return "";
     return '<div class="notice putback" role="status"><span>Removed <b>' + esc(r.label) + '</b>.</span><button type="button" class="linklike" data-act="ed-putback">Put it back</button></div>';
@@ -3819,6 +3822,236 @@
     return true;
   }
   if (typeof window.addEventListener === "function") window.addEventListener("beforeunload", function (ev) { var cd = state.code; if (cd && codeChanged(cd).length) { ev.preventDefault(); ev.returnValue = ""; } });
+
+  // ---------- Start building: a new site, or the practice build, from the starter ----------
+  // Four steps (About the site, Look, Pages, Check and create) beside a preview of the home page,
+  // drawn by the starter's own drawing program, then the Ready screen with the web address records.
+  var BD_STEPS = ["About the site", "Look", "Pages", "Check and create"];
+  var BD_HELP = {
+    "123-reg": "In 123-reg, open the domain, then its DNS settings (sometimes called Advanced DNS), and add these records.",
+    godaddy: "In GoDaddy, open My Products, then DNS beside the domain, and add these records.",
+    other: "Where you bought the domain, open its DNS settings and add these records."
+  };
+  function bdOf() { return state.build || null; }
+  function startBuild(id) {
+    var x = sites().find(function (y) { return y.id === id; }); if (!x) return;
+    state.build = { site: id, step: 1, seen: 1, view: "computer", plan: null, spec: null, err: "", notes: null, busy: false, done: null,
+      c: { name: x.playground ? "" : x.name, tagline: "", domain: "", registrar: "123-reg", email: "info@grovegallery.com", look: "Ink and clay", pages: "home", from: "world-art-review" } };
+    render(); bdPlan(true);
+  }
+  function bdCard() { var b = bdOf(); return b && sites().find(function (y) { return y.id === b.site; }); }
+  // Asks the server for the plan (the same files Create site will write) and redraws the preview.
+  function bdPlan(now) {
+    var b = bdOf(); if (!b) return;
+    clearTimeout(state.bdTimer);
+    state.bdTimer = setTimeout(function () {
+      var mine = JSON.stringify(b.c); b.asked = mine;
+      api("planSite", { site: b.site, choices: b.c }).then(function (d) {
+        if (state.build !== b || b.asked !== mine) return;
+        var first = !b.spec; b.plan = d.plan; b.spec = d.spec; b.err = "";
+        if (first || b.step === 3 || b.step === 4) render(); else { bdDraw(); bdHead(); }
+      }, function (e) { if (state.build === b) { b.err = e.message; bdNote(); } });
+    }, now ? 0 : 280);
+  }
+  // Updates only the parts a keystroke changes, so the cursor stays where it is.
+  function bdHead() { var b = bdOf(), t = app.querySelector(".bd-name"); if (b && t) t.textContent = "Start building: " + (b.c.name || (bdCard() || {}).name || "a new site"); }
+  function bdNote() { var b = bdOf(), n = app.querySelector(".bd-err"); if (n) { n.textContent = b && b.err ? b.err : ""; n.hidden = !(b && b.err); } }
+  function bdThemeHead(t) {
+    var out = "";
+    (t.font_links || []).forEach(function (l) { if (/^https:\/\/fonts\.googleapis\.com\/css2\?/.test(l) && !/["<>\s]/.test(l)) out += '<link href="' + l.replace(/&/g, "&amp;") + '" rel="stylesheet">'; });
+    if (t.css && /^:root\{[^<>{}]*\}$/.test(t.css)) out += '<style id="theme">' + t.css + "</style>";
+    if (typeof t.rules === "string" && t.rules.trim() && t.rules.indexOf("<") < 0) out += '<style id="theme-rules">' + t.rules + "</style>";
+    return out;
+  }
+  function bdStarter(then) {
+    if (window.STARTER) return then();
+    if (state.bdLoading) { state.bdLoading.push(then); return; }
+    state.bdLoading = [then];
+    var sc = document.createElement("script"); sc.src = "starter/assets/render.js?v=" + VERSION;
+    sc.onload = function () { var l = state.bdLoading || []; state.bdLoading = null; l.forEach(function (f) { f(); }); };
+    sc.onerror = function () { state.bdLoading = null; };
+    document.head.appendChild(sc);
+  }
+  // The home page as the new site will publish it, without its scripts, its links switched off.
+  function bdDraw() {
+    var b = bdOf(), f = app.querySelector("#bd-if"); if (!b || !b.plan || !f) return;
+    bdStarter(function () {
+      var p = b.plan, S = window.STARTER; if (!S || !app.querySelector("#bd-if")) return;
+      var html = S.Site(S.fromFiles(p.content), p.pages, bdThemeHead(p.theme), {}).sectionsPage("home").html;
+      var base = new URL("starter/", location.href).href;
+      html = html.replace(/<script\b[\s\S]*?<\/script>/gi, "").replace(/<head>/i, '<head><base href="' + base + '"><style>a{pointer-events:none}</style>');
+      var fr = app.querySelector("#bd-if"); if (fr.getAttribute("data-html") !== html) { fr.setAttribute("data-html", html); fr.srcdoc = html; }
+      bdFit();
+    });
+  }
+  function bdFit() {
+    var w = app.querySelector && app.querySelector(".bd-frame"), f = w && w.querySelector("iframe"), b = bdOf(); if (!w || !f || !b) return;
+    var lay = b.view === "phone" ? 390 : 1280, k = Math.min(1, (w.clientWidth - (b.view === "phone" ? 24 : 0)) / lay);
+    f.style.width = lay + "px"; f.style.height = Math.ceil(w.clientHeight / k) + "px"; f.style.transform = "scale(" + k + ")";
+    w.classList.toggle("phone", b.view === "phone");
+  }
+  if (typeof window.addEventListener === "function") window.addEventListener("resize", function () { if (state.build) bdFit(); });
+  function bdField(k, label, hint, ph, type) {
+    var b = bdOf();
+    return '<label class="bd-lbl">' + label + '<input class="bd-in" data-bd="' + k + '" type="' + (type || "text") + '" value="' + esc(b.c[k] || "") + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : "") + ' autocomplete="off">' + (hint ? '<span class="small">' + hint + '</span>' : "") + '</label>';
+  }
+  function bdSeg(k, opts) {
+    var b = bdOf();
+    return '<span class="seg tbs bd-seg">' + opts.map(function (o) { return '<button type="button" class="tb' + (b.c[k] === o[0] ? " on" : "") + '" data-act="bd-set" data-k="' + k + '" data-v="' + esc(o[0]) + '" aria-pressed="' + (b.c[k] === o[0]) + '">' + esc(o[1]) + '</button>'; }).join("") + '</span>';
+  }
+  function bdLookCard(l) {
+    var b = bdOf(), on = b.c.look === l.name, cols = ["page", "band", "accent", "ink"];
+    return '<button type="button" class="bd-look' + (on ? " on" : "") + '" data-act="bd-set" data-k="look" data-v="' + esc(l.name) + '" aria-pressed="' + on + '">' +
+      '<span class="bd-lrow"><span class="bd-aa" style="font-family:\'' + esc(l.fonts.display) + '\',Georgia,serif" aria-hidden="true">Aa</span><span class="bd-sw" aria-hidden="true">' +
+      cols.map(function (c) { return '<i style="background:' + esc(l.colours[c]) + '"></i>'; }).join("") + '</span>' + (on ? '<span class="bd-tick">' + ic("check", 16) + '</span>' : "") + '</span>' +
+      '<b>' + esc(l.name) + '</b><span class="small">' + esc(l.fonts.display + " and " + l.fonts.text + ", " + (l.corners === "round" ? "rounded" : "square") + " corners") + '</span></button>';
+  }
+  function bdOpt(v, title, about, extra) {
+    var b = bdOf(), on = b.c.pages === v;
+    return '<button type="button" class="bd-opt' + (on ? " on" : "") + '" data-act="bd-set" data-k="pages" data-v="' + v + '" role="radio" aria-checked="' + on + '"><span class="bd-dot" aria-hidden="true">' + (on ? "<i></i>" : "") + '</span>' +
+      '<span class="bd-ot"><b>' + title + '</b><span class="small">' + about + '</span>' + (extra || "") + '</span></button>';
+  }
+  function bdChips(list) { return '<span class="bd-chips">' + list.map(function (t) { return '<span class="bd-chip">' + esc(t) + '</span>'; }).join("") + '</span>'; }
+  function bdStep1() {
+    var b = bdOf(), sp = b.spec || { registrars: [["123-reg", "123-reg"], ["godaddy", "GoDaddy"], ["other", "Somewhere else"]] }, pg = (bdCard() || {}).playground;
+    return '<h2 class="bd-h">About the site</h2><span class="small bd-sub">The basics. Every one of these can be changed later in the editor.</span>' +
+      bdField("name", "Site name", "Shown at the top of every page and in the browser tab." + (pg ? "" : " The site's repository on GitHub is named after it."), "", "") +
+      bdField("tagline", "Tagline", "", "A short line that says what the site is") +
+      (pg ? '<p class="small bd-quiet">The practice build keeps its own address, artiscope.github.io/practice-build, and never gets a web address of its own.</p>'
+        : bdField("domain", "Web address", "The domain you own for this site. Until you connect it, the site sits at a GitHub address, hidden from search engines.", "for example, newsite.com") +
+          '<div class="bd-lbl">Where the domain is registered' + bdSeg("registrar", sp.registrars) + '<span class="small">So the steps for connecting it later match the screens you will see there.</span></div>') +
+      bdField("email", "Email shown on the site", "Forms open the visitor's own email app, ready to send here.", "", "email");
+  }
+  function bdStep2() {
+    var b = bdOf(), looks = (b.spec && b.spec.looks) || [];
+    return '<h2 class="bd-h">Starting look</h2><span class="small bd-sub">Colours, typefaces and corners to start from. Theme settings in the editor change any of it afterwards.</span>' +
+      '<span class="cap">From your sites</span><div class="bd-looks">' + looks.filter(function (l) { return l.mine; }).map(bdLookCard).join("") + '</div>' +
+      '<span class="cap">Ready-made looks</span><div class="bd-looks">' + looks.filter(function (l) { return !l.mine; }).map(bdLookCard).join("") + '</div>';
+  }
+  function bdStep3() {
+    var b = bdOf(), sp = b.spec || { set: [], from: [], kinds: [] }, notes = b.plan && b.c.pages === "copy" ? b.plan.notes : null;
+    var from = '<label class="bd-lbl bd-from">Copy from<select class="bd-in" data-bd="from">' + sp.from.map(function (x) { return '<option value="' + esc(x.id) + '"' + (b.c.from === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></label>';
+    return '<h2 class="bd-h">Starting pages</h2><span class="small bd-sub">What the site has on day one. Every page starts with placeholder words in square brackets, never made-up facts.</span>' +
+      '<div class="bd-opts" role="radiogroup" aria-label="Starting pages">' +
+      bdOpt("home", "Just a home page", "A picture banner, three cards and a sign-up. Add pages as you go.") +
+      bdOpt("set", "A ready set of pages", "Built from the sections every site shares.", bdChips(sp.set)) +
+      bdOpt("copy", "Copy another site's page layout", "Same pages and sections, in the same order, with placeholder words. Sections only that site has are swapped for the nearest shared section, or left out and listed below.") +
+      '</div>' + (b.c.pages === "copy" ? from : "") +
+      (notes && (notes.swapped.length || notes.left.length) ? '<div class="bd-notes">' +
+        (notes.swapped.length ? '<span class="cap">Swapped for a shared section</span><ul>' + notes.swapped.map(function (x) { return '<li>' + esc(x.page + ": " + x.from + " becomes " + x.to) + '</li>'; }).join("") + '</ul>' : "") +
+        (notes.left.length ? '<span class="cap">Left out, with no shared version</span><ul>' + notes.left.map(function (x) { return '<li>' + esc(x.page + ": " + x.label) + '</li>'; }).join("") + '</ul><span class="small">Add another section in their place in the editor if you need one.</span>' : "") + '</div>' : "") +
+      '<span class="cap">Ready to add from day one</span>' + bdChips(sp.kinds) +
+      '<span class="small">Plus theme settings, the four add-ons, templates, Undo, Publish later, Versions and Edit code, the same as your other sites.</span>';
+  }
+  function bdPagesWords(b) {
+    if (b.c.pages === "set") return "A ready set of six pages";
+    if (b.c.pages === "copy") { var f = ((b.spec && b.spec.from) || []).find(function (x) { return x.id === b.c.from; }); return "The page layout of " + (f ? f.name : "another site") + (b.plan ? ", " + Object.keys(b.plan.pages.pages).length + " pages" : ""); }
+    return "Just a home page";
+  }
+  function bdStep4() {
+    var b = bdOf(), card = bdCard() || {}, pg = card.playground, addr = b.plan ? b.plan.address.replace(/^https:\/\//, "").replace(/\/$/, "") : "";
+    var row = function (label, v, n) { return '<div class="bd-row"><span class="bd-rl">' + label + '</span><span class="bd-rv">' + esc(v) + '</span><button type="button" class="linklike" data-act="bd-step" data-n="' + n + '">Change</button></div>'; };
+    return '<h2 class="bd-h">Check and create</h2>' +
+      '<div class="bd-rows">' + row("Site name", b.c.name || "Not given yet", 1) + (pg ? "" : row("Web address", b.c.domain || "Not given yet, connect it later", 1)) + row("Email shown", b.c.email, 1) + row("Starting look", b.c.look, 2) + row("Starting pages", bdPagesWords(b), 3) + '</div>' +
+      '<div class="bd-box"><span class="cap">When you press ' + (pg ? "Rebuild the practice build" : "Create site") + '</span>' +
+      (pg ? '<span>The practice build is rebuilt with these pages, this look and these words. Whatever was there goes, and so do its trial copies.</span><span>It stays at ' + esc(addr) + ', hidden from search engines.</span>'
+        : '<span>A new repository, ' + esc(b.plan ? b.plan.repo : "") + ', is made on GitHub with your pages, look and words.</span><span>It is published at ' + esc(addr) + ', hidden from search engines until its own address is connected.</span><span>It opens in the page editor, ready to work on, with Versions starting at 1.0.</span>') +
+      '<span class="small">' + (pg ? "Takes under a minute." : "Takes about two minutes. Nothing changes on your other sites.") + '</span></div>' +
+      (b.busy ? '<p class="notice">' + (pg ? "Rebuilding the practice build" : "Creating " + esc(b.c.name)) + '. Keep this page open.</p>' : "") +
+      '<div class="bd-go"><button type="button" class="btn key" data-act="bd-create"' + (b.busy || !b.plan ? " disabled" : "") + '>' + (pg ? "Rebuild the practice build" : "Create site") + '</button><button type="button" class="btn" data-act="bd-prev"' + (b.busy ? " disabled" : "") + '>Previous</button></div>';
+  }
+  // The records to add at the domain's company, and the Check button.
+  function domainCard(s, r) {
+    var ips = ((state.build && state.build.spec) || {}).ips || ["185.199.108.153", "185.199.109.153", "185.199.110.153", "185.199.111.153"];
+    var rec = function (t, n, v) { return '<div class="bd-rec"><span>' + t + '</span><span>' + n + '</span><code>' + esc(v) + '</code><button type="button" class="linklike" data-act="bd-copytext" data-v="' + esc(v) + '">Copy</button></div>'; };
+    var res = r || (state.domain && state.domain[s.id]) || null, on = !!s.want && (s.domain === s.want || !!(res && res.connected));
+    return '<div class="card stack bd-dom"><h2 class="cardh">' + (on ? "Your web address" : "Connect your web address") + '</h2>' +
+      (on ? '<span><i class="lamp g" aria-hidden="true"></i> Connected: <a href="https://' + esc(s.want) + '/" target="_blank" rel="noopener">' + esc(s.want) + '</a>. Search engines can find the site now.</span>' +
+          (res && res.secure === false ? '<span class="small">The padlock (https) switches on once GitHub has made the site\'s certificate, usually within an hour. Press Check again later.</span>' : "")
+        : '<span class="small">' + esc(BD_HELP[s.registrar] || BD_HELP.other) + ' Then come back and press Check. It can take up to a day to work everywhere.</span>' +
+          '<div class="bd-recs"><div class="bd-rec cap"><span>Type</span><span>Name</span><span>Value</span><span></span></div>' + ips.map(function (ip) { return rec("A", "@", ip); }).join("") + rec("CNAME", "www", "artiscope.github.io") + '</div>') +
+      '<div class="bd-check"><button type="button" class="btn" data-act="dom-check" data-site="' + esc(s.id) + '"' + (res && res.busy ? " disabled" : "") + '>' + (res && res.busy ? "Checking" : "Check") + '</button>' +
+        (on ? "" : '<span class="bd-st"><i class="lamp a" aria-hidden="true"></i>' + (res && res.found ? (res.found.length ? "Not connected yet. " + s.want + " points at " + res.found.join(", ") + "." : "Not connected yet. " + s.want + " has no records yet.") : "Not connected yet") + '</span>') + '</div>' +
+      (res && res.error ? '<p class="notice problem">' + esc(res.error) + '</p>' : "") +
+      '<span class="small">Once it answers, the console sets the address on GitHub, switches on the padlock and lets search engines in. You add the records yourself; the console never touches your domain\'s settings.</span></div>';
+  }
+  function finishCard(s) {
+    var t = s.todo || [], r = state.domain && state.domain["finish:" + s.id];
+    if (!t.length) return "";
+    return '<div class="card stack bd-dom"><h2 class="cardh">Finish setting up</h2>' +
+      (t.indexOf("steps") >= 0 ? '<span><i class="lamp a" aria-hidden="true"></i> The site\'s publishing steps are missing, so changes are not published yet. The GitHub key needs Workflows set to Read and write.</span>' : "") +
+      (t.indexOf("pages") >= 0 ? '<span><i class="lamp a" aria-hidden="true"></i> Publishing is not switched on yet. The GitHub key needs Pages set to Read and write.</span>' : "") +
+      '<span class="small">Change that in the key\'s settings on GitHub, then press Try again.</span>' +
+      (r && r.error ? '<p class="notice problem">' + esc(r.error) + '</p>' : "") +
+      '<div class="bd-check"><button type="button" class="btn" data-act="bd-finish" data-site="' + esc(s.id) + '"' + (r && r.busy ? " disabled" : "") + '>' + (r && r.busy ? "Trying" : "Try again") + '</button></div></div>';
+  }
+  function viewBuildDone(b) {
+    var r = b.done, card = bdCard() || { id: b.site }, addr = r.address, s = Object.assign({}, card, { want: r.want || "", registrar: r.registrar || "", todo: r.todo || [], domain: addr.replace(/^https:\/\//, "").replace(/\/$/, "") });
+    var tick = function (t) { return '<span class="bd-done"><span class="bd-ok">' + ic("check", 16) + '</span>' + esc(t) + '</span>'; };
+    var amber = function (t) { return '<span class="bd-done"><i class="lamp a" aria-hidden="true"></i>' + esc(t) + '</span>'; };
+    return '<div class="bd"><div class="bd-top ed-top"><div class="lefty"><button type="button" class="tb word" data-act="bd-close">All sites</button></div><span class="mid"></span>' +
+      '<div class="righty"><button type="button" class="btn key" data-act="bd-open">Open the editor</button></div></div>' +
+      '<div class="bd-body done"><section class="bd-form card"><h2 class="bd-h">' + esc((b.c.name || "The site") + (r.practice ? " is on the practice build" : " is ready")) + '</h2>' +
+      '<span><i class="lamp g" aria-hidden="true"></i> Live at <a href="' + esc(addr) + '" target="_blank" rel="noopener">' + esc(addr.replace(/^https:\/\//, "").replace(/\/$/, "")) + '</a></span>' +
+      '<div class="bd-box">' + r.done.map(tick).join("") + (r.todo || []).map(function (t) { return amber(t === "steps" ? "Publishing steps not added yet: the GitHub key needs Workflows" : "Publishing not switched on yet: the GitHub key needs Pages"); }).join("") +
+        (!r.practice && r.want ? amber("Web address not connected yet") : "") + '</div>' +
+      '<span class="small">Open the editor to fill in the words and add photos. Pages you have not touched still show their placeholder words in square brackets. The first publish takes a minute or two to appear.</span></section>' +
+      '<section class="bd-side">' + ((r.todo || []).length ? finishCard(s) : "") + (!r.practice && r.want ? domainCard(s) : !r.practice ? '<div class="card stack bd-dom"><h2 class="cardh">Web address</h2><span class="small">No web address was given. When you have one, add it to this site and connect it from its Overview.</span></div>' : "") + '</section></div></div>';
+  }
+  function viewBuild() {
+    var b = bdOf(); if (b.done) return viewBuildDone(b);
+    var card = bdCard() || {}, steps = [bdStep1, bdStep2, bdStep3, bdStep4];
+    return '<div class="bd"><div class="bd-top ed-top"><div class="lefty"><button type="button" class="tb word" data-act="bd-close"' + (b.busy ? " disabled" : "") + '>' + ic("close", 16) + '<span>Close</span></button>' +
+      '<span class="bd-name">Start building: ' + esc(b.c.name || card.name || "a new site") + '</span></div>' +
+      '<span class="mid"><span class="seg tbs bd-steps" role="tablist">' + BD_STEPS.map(function (t, i) { var n = i + 1; return '<button type="button" class="tb' + (b.step === n ? " on" : "") + '" role="tab" aria-selected="' + (b.step === n) + '" data-act="bd-step" data-n="' + n + '"' + (n > b.seen || b.busy ? " disabled" : "") + '>' + (n < b.seen && b.step !== n ? ic("check", 14) : '<b>' + n + '</b>') + '<span>' + t + '</span></button>'; }).join("") + '</span></span>' +
+      '<div class="righty"><button type="button" class="btn" data-act="bd-prev"' + (b.step === 1 || b.busy ? " disabled" : "") + '>Previous</button>' + (b.step < 4 ? '<button type="button" class="btn" data-act="bd-next">Next</button>' : "") + '</div></div>' +
+      '<div class="bd-body"><section class="bd-form card" aria-label="' + esc(BD_STEPS[b.step - 1]) + '">' + steps[b.step - 1]() + '<p class="notice problem bd-err" role="alert"' + (b.err ? "" : " hidden") + '>' + esc(b.err || "") + '</p></section>' +
+      '<aside class="bd-prev" aria-label="Preview of the home page"><div class="bd-ph"><span class="cap">Preview of the home page</span><span class="seg tbs">' +
+        '<button type="button" class="tb' + (b.view === "computer" ? " on" : "") + '" data-act="bd-view" data-v="computer">' + ic("monitor", 15) + '<span>Computer</span></button><button type="button" class="tb' + (b.view === "phone" ? " on" : "") + '" data-act="bd-view" data-v="phone">' + ic("phone", 15) + '<span>Phone</span></button></span></div>' +
+        '<div class="bd-frame">' + (b.plan ? '<iframe id="bd-if" title="Preview of the new site\'s home page" tabindex="-1" sandbox="allow-same-origin"></iframe>' : '<p class="loading">Drawing the home page</p>') + '</div></aside></div></div>';
+  }
+  function mountBuild() {
+    var b = bdOf(); if (!b) return;
+    if (!document.getElementById("bd-fonts")) { var l = document.createElement("link"); l.id = "bd-fonts"; l.rel = "stylesheet"; l.href = "https://fonts.googleapis.com/css2?family=Gloock&family=Libre+Caslon+Display&display=swap"; document.head.appendChild(l); }
+    if (!b.done) { var f = app.querySelector("#bd-if"); if (f) { f.removeAttribute("data-html"); bdDraw(); } }
+  }
+  function bdCheckStep(b) {
+    if (b.step === 1) {
+      if (!String(b.c.name || "").trim()) return "Give the site a name.";
+      if (b.err) return b.err;
+    }
+    return "";
+  }
+  function bdAct(a, el) {
+    var b = bdOf();
+    if (a === "bd-close") { if (b && b.busy) return; state.build = null; if (b && !b.done) { state.inSite = false; go("home"); } else { state.inSite = false; state.tab = "home"; load(); } return; }
+    if (!b) return;
+    if (a === "bd-set") { b.c[el.dataset.k] = el.dataset.v; render(); bdPlan(true); return; }
+    if (a === "bd-view") { b.view = el.dataset.v; render(); return; }
+    if (a === "bd-step") { var n = +el.dataset.n; if (n <= b.seen) { b.step = n; render(); } return; }
+    if (a === "bd-prev") { if (b.step > 1 && !b.busy) { b.step--; render(); } return; }
+    if (a === "bd-next") {
+      var why = bdCheckStep(b); if (why) { b.err = why; bdNote(); return; }
+      b.step = Math.min(4, b.step + 1); b.seen = Math.max(b.seen, b.step); render(); return;
+    }
+    if (a === "bd-create") {
+      if (b.busy) return; b.busy = true; b.err = ""; render();
+      api("createSite", { site: b.site, choices: b.c }).then(function (r) { b.busy = false; b.done = r; render(); }, function (e) { b.busy = false; b.err = e.message; render(); });
+      return;
+    }
+    if (a === "bd-open") { var id = b.site; state.build = null; state.inSite = false; state.tab = "home"; load().then(function () { openSite(id); }); return; }
+  }
+  // The domain check and Try again work from the Ready screen and from the site's Overview.
+  function domainAct(a, el) {
+    var id = el.dataset.site, k = a === "bd-finish" ? "finish:" + id : id; state.domain = state.domain || {};
+    state.domain[k] = { busy: true }; render();
+    api(a === "bd-finish" ? "finishSite" : "checkDomain", { site: id }).then(function (r) {
+      state.domain[k] = r;
+      if (state.build && state.build.done) { if (a === "bd-finish") state.build.done.todo = []; }
+      if ((a === "dom-check" && r.connected) || a === "bd-finish") { load(); } else render();
+    }, function (e) { state.domain[k] = { error: e.message }; render(); });
+  }
+
   function render() {
     snapshot();
     if (!demo && !state.session) { app.innerHTML = viewSignin(); return; }
@@ -3829,6 +4062,7 @@
       return;
     }
     var views = { home: viewHome, overview: viewOverview, content: viewContent, theme: viewTheme, photos: viewPhotos, files: viewFiles, history: viewHistory, people: viewPeople, versions: viewVersions };
+    if (state.build) { app.innerHTML = viewBuild(); mountBuild(); return; }
     var s = site(), unbuilt = state.inSite && !s && state.site;
     if (state.inSite && s && state.tab === "pages" && codeOf()) { app.innerHTML = viewCode(s); mountCode(); return; }
     if (state.inSite && s && state.tab === "pages") { app.innerHTML = viewPagesEditor(s); mountRich(); mountPages(); return; }
@@ -3906,6 +4140,7 @@
 
   function openSite(id) {
     var x = sites().find(function (y) { return y.id === id; }); if (!x) return;
+    if (!x.live && !x.playground && isAdmin()) { startBuild(id); return; }
     if (!isAdmin() && !(x.playground && x.youAdmin) && x.live && !myCopy(x)) {
       state.status = "saving"; state.flash = ""; render();
       api("makeCopy", { site: id, copy: "" }).then(refreshCopies).then(function () { state.status = "live"; if (myCopy(x) || myCopy(sites().find(function (y) { return y.id === id; }))) openSite(id); else { state.notice = { text: "Your copy could not be made just now. Please try again.", problem: true }; render(); } },
@@ -4045,6 +4280,11 @@
     var rnm = ev.target.closest && ev.target.closest("#ed-rename"); if (rnm && rnm.id === "ed-rename") return;
     if (state.ctx && !(ev.target.closest && ev.target.closest(".ctxm"))) { ctxClose(); return; }
     var el = ev.target.closest("[data-tab],[data-act]");
+    if (el && el.dataset.act && el.disabled) return;
+    if (el && el.dataset.act && /^bd-(?!finish|copytext|start)/.test(el.dataset.act)) { bdAct(el.dataset.act, el); return; }
+    if (el && (el.dataset.act === "dom-check" || el.dataset.act === "bd-finish")) { domainAct(el.dataset.act, el); return; }
+    if (el && el.dataset.act === "bd-start") { startBuild(el.dataset.site); return; }
+    if (el && el.dataset.act === "bd-copytext") { var cv = el.dataset.v; try { navigator.clipboard.writeText(cv); } catch (_e) { /* no clipboard here */ } el.textContent = "Copied"; setTimeout(function () { el.textContent = "Copy"; }, 1500); return; }
     var cdk = codeOf();
     if (cdk) {
       if (cdk.pop && !ev.target.closest(".code-pop") && !(el && el.dataset.act === "code-pop")) { cdk.pop = ""; if (!el) { codeRedraw(); return; } }
@@ -4375,7 +4615,13 @@
     } catch (e) { state.notice = { text: e.message, problem: true }; edPatch(); }
   }
 
+  app.addEventListener("input", function (ev) {
+    var t = ev.target, b = state.build; if (!b || !t || !t.dataset || !t.dataset.bd || t.tagName === "SELECT") return;
+    b.c[t.dataset.bd] = t.value; b.err = ""; bdNote(); bdHead(); bdPlan();
+  });
   app.addEventListener("change", function (ev) {
+    var bt = ev.target, bb = state.build;
+    if (bb && bt && bt.dataset && bt.dataset.bd && bt.tagName === "SELECT") { bb.c[bt.dataset.bd] = bt.value; render(); bdPlan(true); return; }
     var t = ev.target, kind = t.dataset.change;
     if (t.dataset && t.dataset.upload) { uploadInto(t); return; }
     if (t.dataset && t.dataset.dt) { dtChanged(t.dataset.dt); return; }
@@ -4735,7 +4981,34 @@
     var pv = demoVersionsOf(id), pn = demoNext(pv, false); pv.forEach(function (x) { x.live = false; }); pv.unshift({ number: pn, title: "", by: "You", when: new Date().toISOString(), live: true, big: false, notes: "Published by the admin.\n\nWhat changed:\nCode changes" });
     return Promise.resolve({ ok: true, version: pn });
   }
+  var demoBuild = null; // Start building in sample mode, from assets/demo-build.json (planned by the server's own code)
+  function demoNameInto(pages, c) {
+    var p = JSON.parse(JSON.stringify(pages)), hd = p.shared.header.settings, ft = p.shared.footer.settings;
+    hd.name = c.name || "[Site name]"; hd.tagline = c.tagline || "[A short line about the site]"; ft.tagline = c.tagline || "[A short line about the site]";
+    if (p.pages.home) { p.pages.home.title = c.name || "[Site name]"; var bn = (p.pages.home.sections || []).find(function (x) { return x.id === "banner"; }); if (bn && c.tagline) bn.settings.text = c.tagline; }
+    return p;
+  }
+  function demoBuildApi(body) {
+    if (!demoBuild) return fetch("assets/demo-build.json").then(function (r) { return r.json(); }).then(function (d) { demoBuild = d; return demoBuildApi(body); });
+    var c = Object.assign({}, body.choices || {}), card = demoData.sites.find(function (x) { return x.id === body.site; }) || {};
+    var slug = String(c.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    if (c.domain && !/^(https?:\/\/)?(www\.)?([a-z0-9-]+\.)+[a-z]{2,}\/?$/i.test(String(c.domain).trim())) return Promise.reject(new Error("The web address should look like newsite.com, without https:// or anything after it."));
+    c.domain = String(c.domain || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    var key = c.pages === "copy" ? "copy:" + (c.from || "world-art-review") : c.pages === "set" ? "set" : "home", pl = demoBuild.plans[key];
+    var address = card.playground ? "https://artiscope.github.io/practice-build/" : "https://artiscope.github.io/" + slug + "/";
+    var plan = { choices: c, address: address, repo: card.playground ? "Artiscope/practice-build" : "Artiscope/" + slug, pages: demoNameInto(pl.pages, c), theme: demoBuild.themes[c.look] || demoBuild.themes["Ink and clay"], content: { site: { email: c.email, address: address, indexed: false } }, notes: pl.notes };
+    if (body.action === "planSite") return Promise.resolve({ ok: true, plan: plan, spec: demoBuild.spec });
+    if (!c.name) return Promise.reject(new Error("Give the site a name."));
+    if (card.playground) { demoStarter = null; return Promise.resolve({ ok: true, site: card.id, address: address, practice: true, done: ["Pages, look and words written", "Published to artiscope.github.io/practice-build", "Hidden from search engines"], todo: [] }); }
+    Object.assign(card, { name: c.name, domain: "artiscope.github.io/" + slug, live: true, starter: true, edits: true, files: true, want: c.domain, registrar: c.registrar, todo: [], inbox: [], slots: [], artists: [] });
+    return Promise.resolve({ ok: true, site: card.id, address: address, want: c.domain, registrar: c.registrar, todo: [], done: ["Repository made: Artiscope/" + slug, "Publishing switched on", "Pages, look and words written", "Version 1.0", "Hidden from search engines until its own address is connected"] });
+  }
   function demoApi(body) {
+    if (body.action === "planSite" || body.action === "createSite") return demoBuildApi(body);
+    // a site built in sample mode opens like the practice build
+    if (/^site-\d$/.test(body.site || "") && demoData.sites.some(function (x) { return x.id === body.site && x.starter; })) body = Object.assign({}, body, { site: "practice-build" });
+    if (body.action === "checkDomain") return Promise.resolve({ ok: true, connected: false, found: [] });
+    if (body.action === "finishSite") return Promise.resolve({ ok: true });
     if (body.action === "pages" && body.site === "global-art-monitor") {
       if (!demoGam) return fetch("assets/demo-gam.json").then(function (r) { return r.json(); }).then(function (d) { demoGam = d; return demoApi(body); }, function () { return Promise.reject(new Error("The sample could not be read.")); });
       return Promise.resolve(JSON.parse(JSON.stringify(Object.assign({}, demoGam, { preview: params.get("gampreview") || "https://globalartmonitor.com/", imageBase: (params.get("gampreview") || "https://globalartmonitor.com/") + "assets/images/" }))));

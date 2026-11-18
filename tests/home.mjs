@@ -1049,6 +1049,7 @@ export const STARTER_DIR = "starter";
 export function starterSite(e) {
   return {
     id: e.id, name: e.name, domain: e.domain, repo: e.repo, live: !!e.live, starter: true, playground: !!e.playground, practice: !!e.playground, artists: [],
+    want: e.want || "", registrar: e.registrar || "", todo: Array.isArray(e.todo) ? e.todo : [],
     pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
     code: { edit: ["assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs"], read: ["data/pages.json", "data/theme.json", "data/content.json"] },
     sectionKinds: STARTER_SECTIONS, items: STARTER_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: STARTER_THEME, collections: [],
@@ -1677,7 +1678,9 @@ export function cleanSiteList(given) {
     seen.add(e.id);
     const repo = REPO_NAME.test(String(e.repo || "")) ? String(e.repo) : "", domain = DOMAIN_OK.test(String(e.domain || "")) ? String(e.domain) : "";
     const name = cleanText(e.name, 60) || e.id, built = repo && e.kind === "starter";
-    out.push({ id: e.id, name, domain, repo, kind: built ? "starter" : "", playground: !!e.playground && built, live: !!e.live && !!built && !!domain });
+    let want = ""; try { want = cleanDomain(e.want); } catch (_e) { want = ""; }
+    const registrar = ["123-reg", "godaddy", "other"].includes(e.registrar) ? e.registrar : "", todo = Array.isArray(e.todo) ? e.todo.filter((t) => t === "pages" || t === "steps") : [];
+    out.push({ id: e.id, name, domain, repo, kind: built ? "starter" : "", playground: !!e.playground && built, live: !!e.live && !!built && !!domain, ...(built ? { want, registrar, todo } : {}) });
   }
   return out;
 }
@@ -2251,7 +2254,8 @@ async function branchForWriting(site, copy, _who) {
 
 async function siteOverview(site, wanted = "", me = null, names = {}) {
   const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta), edits: !!site.items, practice: !!site.practice,
-    pagesOn: !!site.pages, themeOn: !!site.theme, photosOn: !site.noPhotos, starter: !!site.starter, playground: !!site.playground, youAdmin: !!(me && me.admin) };
+    pagesOn: !!site.pages, themeOn: !!site.theme, photosOn: !site.noPhotos, starter: !!site.starter, playground: !!site.playground, youAdmin: !!(me && me.admin),
+    want: site.want || "", registrar: site.registrar || "", todo: site.todo || [], buildable: !site.live && !site.repo && !site.playground };
   if (!site.live) return base;
   try {
     const copies = (await copiesOf(site)).filter((c) => !me || me.admin || c.kind === "live" || ownerOfCopy(c.id) === me.tag);
@@ -2548,21 +2552,23 @@ export async function runLater(now) {
 // Puts the starter (the console repository's starter/ folder) into a site's main branch as one commit,
 // with the site's own web address in its details. Files the starter does not have are removed, except the
 // publishing steps under .github, which only GitHub itself may change.
-export async function starterInto(site, message) {
-  const prefix = STARTER_DIR + "/";
+export async function starterInto(site, message, opts = {}) {
+  const prefix = STARTER_DIR + "/", own = opts.files || {}, withSteps = !!opts.github, only = opts.only || "";
   const [src, headSha] = await Promise.all([gh("/repos/" + CONSOLE_REPO + "/git/trees/main?recursive=1"), mainSha(site)]);
   if (!src.ok || !Array.isArray(src.data && src.data.tree)) return { error: "The starter could not be read from GitHub just now." };
   const head = headSha ? await gh("/repos/" + site.repo + "/git/commits/" + headSha) : null;
   const have = headSha ? await gh("/repos/" + site.repo + "/git/trees/" + headSha + "?recursive=1") : null;
   if (!head || !head.ok || !have || !have.ok) return { error: "The practice build could not be read from GitHub just now." };
-  const inStarter = (t) => t.type === "blob" && t.path.startsWith(prefix) && !t.path.startsWith(prefix + ".github/");
+  const inStarter = (t) => t.type === "blob" && t.path.startsWith(prefix + only) && (withSteps || !t.path.startsWith(prefix + ".github/"));
   const wanted = src.data.tree.filter(inStarter).map((t) => ({ path: t.path.slice(prefix.length), sha: t.sha, mode: t.mode || "100644" }));
   const names = new Set(wanted.map((t) => t.path)), had = {};
-  for (const t of have.data.tree) if (t.type === "blob" && !t.path.startsWith(".github/")) had[t.path] = t.sha;
-  const tree = Object.keys(had).filter((pth) => !names.has(pth)).map((pth) => ({ path: pth, mode: "100644", type: "blob", sha: null }));
+  for (const t of have.data.tree) if (t.type === "blob" && (withSteps || !t.path.startsWith(".github/"))) had[t.path] = t.sha;
+  const tree = Object.keys(had).filter((pth) => !names.has(pth) && pth.startsWith(only)).map((pth) => ({ path: pth, mode: "100644", type: "blob", sha: null }));
   for (const t of wanted) {
     let content = null;
-    if (t.path === "data/content.json") {
+    if (own[t.path] != null) {
+      content = { content: encodeBase64Utf8(typeof own[t.path] === "string" ? own[t.path] : JSON.stringify(own[t.path], null, 2) + "\n"), encoding: "base64" };
+    } else if (t.path === "data/content.json") {
       const b = await gh("/repos/" + CONSOLE_REPO + "/git/blobs/" + t.sha);
       let c = {}; try { c = JSON.parse(decodeBase64Utf8(String((b.data || {}).content || "").replace(/\n/g, ""))); } catch (_e) { c = {}; }
       c.site = { ...(c.site || {}), address: "https://" + site.domain + "/", indexed: false };
@@ -2577,14 +2583,298 @@ export async function starterInto(site, message) {
     if (!made.ok) return { error: writeProblem(made, "GitHub did not copy " + t.path + ".") };
     if (had[t.path] !== made.data.sha) tree.push({ path: t.path, mode: t.mode === "100755" ? "100755" : "100644", type: "blob", sha: made.data.sha });
   }
-  if (!tree.length) return { ok: true, unchanged: true };
+  if (!tree.length) return { ok: true, unchanged: true, sha: headSha };
   const madeTree = await gh("/repos/" + site.repo + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: head.data.tree.sha, tree }) });
-  if (!madeTree.ok) return { error: writeProblem(madeTree, "GitHub did not start the practice build again.") };
+  if (!madeTree.ok) return { error: writeProblem(madeTree, "GitHub did not write the starter.") };
   const commit = await gh("/repos/" + site.repo + "/git/commits", { method: "POST", body: JSON.stringify({ message, tree: madeTree.data.sha, parents: [headSha] }) });
-  if (!commit.ok) return { error: writeProblem(commit, "GitHub did not start the practice build again.") };
+  if (!commit.ok) return { error: writeProblem(commit, "GitHub did not write the starter.") };
   const moved = await moveBranch(site, "main", commit.data.sha, false);
-  if (!moved.ok) return { error: writeProblem(moved, "GitHub did not start the practice build again.") };
-  return { ok: true };
+  // GitHub only lets a key write publishing steps (.github/workflows) when it has the Workflows permission.
+  if (!moved.ok && withSteps && /workflow/i.test(JSON.stringify(moved.data || ""))) return { error: STEPS_HELP, steps: true };
+  if (!moved.ok) return { error: writeProblem(moved, "GitHub did not write the starter.") };
+  return { ok: true, sha: commit.data.sha };
+}
+
+// ---------- building a new site from the console (Start building) ----------
+// A new site is the starter with the owner's choices written into its data files.
+// Nothing here makes up facts: every word the owner has not given stays in square brackets.
+export const BUILD_ORG = "Artiscope";
+const STEPS_HELP = "GitHub did not let the console add the site's publishing steps. The GitHub key needs Workflows set to Read and write (GitHub, the key's settings, Repository permissions). Then press Try again.";
+const MAKE_HELP = "GitHub did not let the console make a new repository. The GitHub key needs access to All repositories in the Artiscope organisation, with Administration, Contents, Pages and Workflows set to Read and write. Change that in the key's settings on GitHub, then press Create site again.";
+const PAGES_HELP = "GitHub did not switch publishing on. The GitHub key needs Pages set to Read and write. Then press Try again.";
+const LIST_HELP = "The site was made, but the console could not add it to its list of sites. The GitHub key needs Contents set to Read and write on artiscope-digital-home. Then press Try again.";
+// Typefaces and corners for each starting look; every other look uses Castoro and Literata with square corners.
+const BUILD_LOOK_TYPE = {
+  "Like Global Art Monitor": ["Libre Caslon Display", "Libre Franklin", "round"],
+  "Sand and navy": ["Libre Caslon Display", "Libre Franklin", "round"],
+  "Like Street Art Dispatch": ["Gloock", "Source Serif 4", ""],
+  "Brick and soot": ["Gloock", "Source Serif 4", ""],
+  "Concrete and cobalt": ["Libre Caslon Display", "Libre Franklin", ""],
+};
+export function buildLooks() {
+  return STARTER_LOOKS.map((l) => {
+    const t = BUILD_LOOK_TYPE[l.name] || ["Castoro", "Literata", ""];
+    return { name: l.name, colours: { ...l.colours }, fonts: { display: t[0], text: t[1], sans: "Libre Franklin" }, corners: t[2], mine: /^Like /.test(l.name) };
+  });
+}
+export const BUILD_REGISTRARS = [["123-reg", "123-reg"], ["godaddy", "GoDaddy"], ["other", "Somewhere else"]];
+export const BUILD_SET = [["home", "Home"], ["about", "About"], ["artists", "Artists"], ["exhibitions", "Exhibitions"], ["visit", "Visit us"], ["contact", "Contact"]];
+export const BUILD_FROM = ["world-art-review", "global-art-monitor", "street-art-dispatch"];
+// The other sites' own sections, and the shared section that takes each one's place when a layout is copied.
+export const BUILD_NEAR = {
+  hero: "picture-banner", features: "columns", featured: "columns", profiles: "columns", "section-list": "columns", "page-links": "columns", collecting: "columns",
+  prose: "text-picture", "long-text": "text-picture", "text-page": "text-picture", words: "text-picture", explained: "text-picture", method: "text-picture", panel: "text-picture",
+  "exhibition-list": "exhibitions", "page-head": "heading", "page-heading": "heading",
+};
+export const GITHUB_IPS = ["185.199.108.153", "185.199.109.153", "185.199.110.153", "185.199.111.153"];
+export function buildSlug(name) { return String(name || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60).replace(/-+$/, ""); }
+export function cleanDomain(v) {
+  const d = String(v || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/[/?#].*$/, "").replace(/^www\./, "").replace(/\.$/, "");
+  if (!d) return "";
+  if (!/^(?=.{4,190}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/.test(d)) throw new Error("The web address should look like newsite.com, without https:// or anything after it.");
+  if (/(^|\.)github\.io$|(^|\.)artiscope\.github\.io$/.test(d)) throw new Error("Give the domain you own. The GitHub address is made for you.");
+  return d;
+}
+// The owner's choices, checked. card is the site being built (Site 4, or the practice build).
+export function cleanBuild(given, card) {
+  const g = given && typeof given === "object" ? given : {};
+  const name = cleanText(g.name == null ? (card && card.name) || "" : g.name, 60).trim();
+  const tagline = cleanText(g.tagline || "", 120).trim();
+  const email = String(g.email == null ? "info@grovegallery.com" : g.email).trim();
+  if (email && !EMAIL_SHAPE.test(email)) throw new Error("The email shown on the site does not look like an email address.");
+  const looks = buildLooks(), look = looks.some((l) => l.name === g.look) ? g.look : "Ink and clay";
+  const pages = ["home", "set", "copy"].includes(g.pages) ? g.pages : "home";
+  const from = BUILD_FROM.includes(g.from) ? g.from : BUILD_FROM[0];
+  const registrar = BUILD_REGISTRARS.some((r) => r[0] === g.registrar) ? g.registrar : "other";
+  return { name, tagline, domain: cleanDomain(g.domain), registrar, email: email || "info@grovegallery.com", look, pages, from };
+}
+const BUILD_SEC = (id, kind, over) => ({ id, type: kind, visible: true, settings: { ...JSON.parse(JSON.stringify(STARTER_SECTIONS[kind].starter || {})), ...(over || {}) } });
+const BUILD_WORDS = "[One or two sentences about this page, for search results]";
+function buildPage(key, title, sections) {
+  return { path: key === "home" ? "index.html" : key + "/index.html", title, description: BUILD_WORDS, ...(key === "home" ? { home: true } : {}), sections };
+}
+function buildHome() {
+  return [
+    BUILD_SEC("banner", "picture-banner", { alt: "[What the opening picture shows]", eyebrow: "[A small line above the heading]", heading: "[Your opening heading]", text: "[A sentence or two that says what the site is for]", colour: undefined }),
+    BUILD_SEC("cards", "columns", { heading: "[A heading for three cards]", numbered: false, columns: [1, 2, 3].map(() => ({ title: "[Card heading]", text: "[A short line of placeholder words]", link: "", href: "" })) }),
+    BUILD_SEC("signup", "signup", { text: "[A line on what people will receive]" }),
+  ];
+}
+function buildSet() {
+  const cards = (title, text) => [1, 2, 3].map(() => ({ title, text, link: "", href: "" }));
+  return {
+    home: buildHome(),
+    about: [BUILD_SEC("about", "text-picture", { heading: "[About us]", body: "[Who you are and what the site is for]" }), BUILD_SEC("quote", "quote")],
+    artists: [BUILD_SEC("artists", "columns", { heading: "[Artists]", numbered: false, columns: cards("[Artist name]", "[A few words about their work]") })],
+    exhibitions: [BUILD_SEC("exhibitions", "exhibitions")],
+    visit: [BUILD_SEC("visit", "visit")],
+    contact: [BUILD_SEC("contact", "contact-form")],
+  };
+}
+const human = (k) => { const t = String(k).replace(/[-_]+/g, " ").trim(); return t ? t[0].toUpperCase() + t.slice(1) : "Page"; };
+// Copies another site's pages and the order of their sections, with placeholder words.
+// Sections only that site has are swapped for the nearest shared section, or left out and listed.
+export function copyLayout(doc, from) {
+  const src = (doc && doc.pages) || {}, kinds = (from && from.sectionKinds) || {}, out = {}, swapped = [], left = [], labels = [];
+  const keys = Object.keys(src).filter((k) => src[k] && Array.isArray(src[k].sections));
+  const order = (keys.includes("home") ? ["home"] : []).concat(keys.filter((k) => k !== "home")).slice(0, 12);
+  for (const key of order) {
+    const k2 = key === "home" ? "home" : buildSlug(key);
+    if (!k2 || out[k2]) continue;
+    const title = key === "home" ? "Home" : human(key), secs = [], used = {};
+    for (const s of src[key].sections) {
+      if (!s || typeof s !== "object" || s.visible === false) continue;
+      const label = String((kinds[s.type] && kinds[s.type].label) || human(s.type));
+      const same = STARTER_KINDS.includes(s.type) && s.type !== "signup-popup", near = same ? s.type : BUILD_NEAR[s.type];
+      if (!near) { left.push({ page: title, label }); continue; }
+      if (!same) swapped.push({ page: title, from: label, to: near === "heading" ? "Columns, with a heading only" : STARTER_SECTIONS[near].label });
+      const kind = near === "heading" ? "columns" : near, n = (used[kind] = (used[kind] || 0) + 1), id = kind + (n > 1 ? "-" + n : "");
+      secs.push(near === "heading" ? BUILD_SEC(id, "columns", { heading: "[Page heading]", columns: [], numbered: false }) : BUILD_SEC(id, kind));
+    }
+    if (!secs.length) secs.push(BUILD_SEC("words", "text-picture"));
+    out[k2] = secs; labels.push([k2, title]);
+  }
+  if (!out.home) { out.home = buildHome(); labels.unshift(["home", "Home"]); }
+  return { sections: out, labels, swapped, left };
+}
+// Puts the site's name and tagline where they belong. The console does the same in sample mode.
+export function nameInto(pages, c) {
+  const p = JSON.parse(JSON.stringify(pages)), hd = p.shared.header.settings, ft = p.shared.footer.settings;
+  hd.name = c.name || "[Site name]"; hd.tagline = c.tagline || "[A short line about the site]"; ft.tagline = c.tagline || "[A short line about the site]";
+  if (p.pages.home) {
+    p.pages.home.title = c.name || "[Site name]";
+    const b = (p.pages.home.sections || []).find((x) => x.id === "banner");
+    if (b && c.tagline) b.settings.text = c.tagline;
+  }
+  return p;
+}
+function buildPagesDoc(list) {
+  const links = list.labels.slice(0, 7).map(([k, t]) => [t, k === "home" ? "./" : k + "/"]), pages = {};
+  for (const [k, t] of list.labels) pages[k] = buildPage(k, t, list.sections[k]);
+  return {
+    _how_to_edit: "This file is edited in Artiscope Digital Home. Each page is a list of sections; words in square brackets are placeholders waiting for real words.",
+    shared: {
+      header: { type: "header", visible: true, settings: { name: "[Site name]", tagline: "[A short line about the site]", links, button: "", button_href: "", logos: [] } },
+      footer: { type: "footer", visible: true, settings: { tagline: "[A short line about the site]", links_heading: "", links, legal: "[Small print, such as the year and the site's name]" } },
+    },
+    groups: { top: [], popups: [], bottom: [] }, pages, addons: {},
+  };
+}
+// The three data files a new site starts with, and notes on anything copied that had to change.
+export function planFiles(c, address, copied) {
+  let list, notes = { swapped: [], left: [] };
+  if (c.pages === "set") { const set = buildSet(); list = { sections: set, labels: BUILD_SET.slice() }; }
+  else if (c.pages === "copy" && copied) { list = copied; notes = { swapped: copied.swapped, left: copied.left }; }
+  else list = { sections: { home: buildHome() }, labels: [["home", "Home"]] };
+  const pages = nameInto(buildPagesDoc(list), c);
+  const look = buildLooks().find((l) => l.name === c.look) || buildLooks()[0];
+  const v = cleanTheme(STARTER_THEME, { colours: look.colours, fonts: look.fonts, settings: { corners: look.corners === "round" ? "round" : "" } });
+  const theme = themeFile({ pages: { images: "assets/images" } }, STARTER_THEME, v);
+  const content = { site: { email: c.email, address, indexed: false } };
+  return { pages, theme, content, notes };
+}
+const buildCopies = {};
+async function copiedFrom(id) {
+  const from = SITES.find((x) => x.id === id && x.live && x.pages);
+  if (!from) return null;
+  const hit = buildCopies[id];
+  if (hit && Date.now() - hit.at < 120000) return hit.copy;
+  const got = await getText(from.repo, from.pages.file);
+  let doc = null; try { doc = got ? JSON.parse(got.text) : null; } catch (_e) { doc = null; }
+  if (!doc) return null;
+  const copy = copyLayout(doc, from);
+  buildCopies[id] = { at: Date.now(), copy };
+  return copy;
+}
+export function buildSpec() {
+  return { looks: buildLooks(), registrars: BUILD_REGISTRARS, set: BUILD_SET.map((x) => x[1]), from: BUILD_FROM.map((id) => ({ id, name: (SITES.find((x) => x.id === id) || {}).name || id })),
+    kinds: STARTER_KINDS.map((k) => STARTER_SECTIONS[k].label), ips: GITHUB_IPS, org: BUILD_ORG };
+}
+// Where a new site will be until its own web address is connected.
+function buildAddress(card, c) { return card.playground ? "https://" + card.domain + "/" : "https://" + BUILD_ORG.toLowerCase() + ".github.io/" + buildSlug(c.name) + "/"; }
+export async function planSite(card, given) {
+  const c = cleanBuild(given, card);
+  const copied = c.pages === "copy" ? await copiedFrom(c.from) : null;
+  if (c.pages === "copy" && !copied) throw new Error("That site's pages could not be read from GitHub just now. Try again in a moment.");
+  return { choices: c, address: buildAddress(card, c), repo: card.playground ? card.repo : BUILD_ORG + "/" + buildSlug(c.name), ...planFiles(c, buildAddress(card, c), copied) };
+}
+// The list of sites in sites.json, changed and saved. Returns an error message or "".
+async function changeSiteList(change, message) {
+  for (let i = 0; i < 2; i++) {
+    const r = await gh("/repos/" + CONSOLE_REPO + "/contents/sites.json?ref=main");
+    let list = DEFAULT_SITE_LIST.map((x) => ({ ...x })), sha;
+    if (r.ok && r.data && r.data.content) { try { const d = JSON.parse(decodeBase64Utf8(String(r.data.content).replace(/\n/g, ""))); list = Array.isArray(d.sites) ? d.sites : list; } catch (_e) { /* the defaults */ } sha = r.data.sha; }
+    else if (r.status !== 404) return LIST_HELP;
+    list = change(list);
+    const doc = { about: "The sites Artiscope Digital Home runs beyond the five built into it. Start building adds to this list.", sites: list };
+    const w = await gh("/repos/" + CONSOLE_REPO + "/contents/sites.json", { method: "PUT", body: JSON.stringify({ message, content: encodeBase64Utf8(JSON.stringify(doc, null, 2) + "\n"), ...(sha ? { sha } : {}), branch: "main" }) });
+    if (w.ok) { useSiteList(doc); siteListAt = Date.now(); siteListSha = ""; return ""; }
+    if (w.status !== 409 && w.status !== 422) return LIST_HELP;
+  }
+  return LIST_HELP;
+}
+async function waitForMain(repo) {
+  for (let i = 0; i < 6; i++) {
+    const r = await gh("/repos/" + repo + "/git/ref/heads/main");
+    if (r.ok && r.data && r.data.object) return r.data.object.sha;
+    await new Promise((ok) => setTimeout(ok, 700));
+  }
+  return "";
+}
+async function pagesOn(repo) {
+  const r = await gh("/repos/" + repo + "/pages", { method: "POST", body: JSON.stringify({ build_type: "workflow" }) });
+  if (r.ok || r.status === 409) return true;
+  const now = await gh("/repos/" + repo + "/pages");
+  return !!(now.ok && now.data && now.data.build_type === "workflow");
+}
+// Publishes again by moving main to a new commit with the same files, so the publishing steps run.
+async function publishAgain(site, message) {
+  const head = await mainSha(site), c = head ? await gh("/repos/" + site.repo + "/git/commits/" + head) : null;
+  if (!c || !c.ok) return false;
+  const made = await gh("/repos/" + site.repo + "/git/commits", { method: "POST", body: JSON.stringify({ message, tree: c.data.tree.sha, parents: [head] }) });
+  return !!(made.ok && (await moveBranch(site, "main", made.data.sha, false)).ok);
+}
+// Creates the site: a new repository (or the practice build rewritten), publishing switched on,
+// the files written, version 1.0, and its place in the list of sites. Each part is reported.
+export async function createSite(card, given, tag) {
+  const plan = await planSite(card, given), c = plan.choices, done = [], todo = [];
+  const files = { "data/pages.json": plan.pages, "data/theme.json": plan.theme, "data/content.json": plan.content };
+  if (!c.name) throw new Error("Give the site a name.");
+  if (card.playground) {
+    const w = await starterInto(card, "Start building: " + c.name + " (by " + tag + ")", { files });
+    if (w.error) return { error: w.error };
+    const found = await gh("/repos/" + card.repo + "/git/matching-refs/heads/adh/");
+    for (const ref of Array.isArray(found.data) ? found.data : []) await gh("/repos/" + card.repo + "/git/" + String(ref.ref).replace(/^refs\//, "refs/"), { method: "DELETE" });
+    done.push("Pages, look and words written", "Published to " + plan.address.replace(/^https:\/\//, "").replace(/\/$/, ""), "Hidden from search engines");
+    return { ok: true, site: card.id, address: plan.address, done, todo, practice: true };
+  }
+  const slug = buildSlug(c.name);
+  if (!slug || slug.length < 2) throw new Error("Give the site a name with at least two letters or numbers.");
+  const repo = BUILD_ORG + "/" + slug;
+  if (SITES.some((x) => String(x.repo || "").toLowerCase() === repo.toLowerCase())) throw new Error("Another site already uses the name " + repo + ". Choose a different site name.");
+  const there = await gh("/repos/" + repo);
+  if (there.ok) throw new Error("There is already a repository called " + repo + " on GitHub. Choose a different site name.");
+  const made = await gh("/orgs/" + BUILD_ORG + "/repos", { method: "POST", body: JSON.stringify({ name: slug, description: c.tagline || c.name, private: false, auto_init: true, has_wiki: false, has_projects: false, homepage: plan.address }) });
+  if (!made.ok) return { error: made.status === 422 ? "GitHub would not make " + repo + ". Try a different site name." : MAKE_HELP };
+  done.push("Repository made: " + repo);
+  const site = starterSite({ id: card.id, name: c.name, domain: plan.address.replace(/^https:\/\//, "").replace(/\/$/, ""), repo, live: true });
+  if (!(await waitForMain(repo))) return { error: "GitHub made " + repo + " but it is not ready yet. Wait a minute, then press Create site again with a different name, or ask for help.", done };
+  if (await pagesOn(repo)) done.push("Publishing switched on"); else todo.push("pages");
+  let w = await starterInto(site, "Start the site from Artiscope Digital Home (by " + tag + ")", { files, github: true });
+  if (w.steps) { todo.push("steps"); w = await starterInto(site, "Start the site from Artiscope Digital Home (by " + tag + ")", { files }); }
+  if (w.error) return { error: w.error, done };
+  done.push("Pages, look and words written");
+  if (w.sha && await addRelease(site, [1, 0], w.sha, "First version", "The site was built in Artiscope Digital Home from the starter.\n\n<!-- by: " + tag + " -->")) done.push("Version 1.0");
+  done.push("Hidden from search engines until its own address is connected");
+  const entry = { id: card.id, name: c.name, domain: site.domain, repo, kind: "starter", live: true, want: c.domain, registrar: c.registrar, todo };
+  const listErr = await changeSiteList((list) => { const out = list.filter((x) => x && x.id !== card.id); out.push(entry); return out; }, "Add " + c.name + " to the list of sites (by " + tag + ")");
+  if (listErr) return { error: listErr, done };
+  return { ok: true, site: card.id, address: plan.address, done, todo, want: c.domain, registrar: c.registrar };
+}
+// Finishes what Create site could not do the first time (publishing steps, or switching publishing on).
+export async function finishSite(site, tag) {
+  const todo = (site.todo || []).slice(), left = [];
+  for (const t of todo) {
+    if (t === "pages") { if (await pagesOn(site.repo)) { await publishAgain(site, "Publish now that publishing is on (by " + tag + ")"); } else left.push(t); }
+    if (t === "steps") {
+      const w = await starterInto(site, "Add the publishing steps (by " + tag + ")", { github: true, only: ".github/" });
+      if (w.error) left.push(t);
+    }
+  }
+  const err = await changeSiteList((list) => list.map((x) => x && x.id === site.id ? { ...x, todo: left } : x), "Set up " + site.name + " (by " + tag + ")");
+  if (err) return { error: err };
+  return left.length ? { error: left.includes("steps") ? STEPS_HELP : PAGES_HELP, todo: left } : { ok: true };
+}
+// Asks a public DNS service what an address points at.
+async function dnsAsk(name, type) {
+  try {
+    const r = await fetch("https://dns.google/resolve?name=" + encodeURIComponent(name) + "&type=" + type, { headers: { Accept: "application/dns-json" } });
+    const d = await r.json();
+    return (Array.isArray(d.Answer) ? d.Answer : []).map((a) => String(a.data || "").replace(/\.$/, "").toLowerCase());
+  } catch (_e) { return null; }
+}
+// Checks the web address the owner gave, and connects it once its records point at GitHub.
+export async function checkDomain(site, tag) {
+  const want = site.want;
+  if (!want) return { error: "This site has no web address to connect. Give one in Site details first." };
+  const [a, www] = await Promise.all([dnsAsk(want, "A"), dnsAsk("www." + want, "CNAME")]);
+  if (a === null) return { error: "The address could not be looked up just now. Try again in a moment." };
+  const host = BUILD_ORG.toLowerCase() + ".github.io", aOk = a.length > 0 && a.every((ip) => GITHUB_IPS.includes(ip)), wwwOk = !!(www && www.includes(host));
+  if (!aOk) return { ok: true, connected: false, found: a, wwwOk };
+  const domain = want, connected = site.domain === domain;
+  if (!connected) {
+    const set = await gh("/repos/" + site.repo + "/pages", { method: "PUT", body: JSON.stringify({ cname: domain }) });
+    if (!set.ok) return { error: PAGES_HELP.replace(" Then press Try again.", " Then press Check again.") };
+    const got = await getText(site.repo, "data/content.json");
+    let content = {}; try { content = JSON.parse(got ? got.text : "{}"); } catch (_e) { content = {}; }
+    content.site = { ...(content.site || {}), address: "https://" + domain + "/", indexed: true };
+    const put = await gh("/repos/" + site.repo + "/contents/data/content.json", { method: "PUT", body: JSON.stringify({ message: "Connect " + domain + " and let search engines in (by " + tag + ")", content: encodeBase64Utf8(JSON.stringify(content, null, 2) + "\n"), ...(got ? { sha: got.sha } : {}), branch: "main" }) });
+    if (!put.ok) return { error: writeProblem(put, "The site's address could not be saved.") };
+    const err = await changeSiteList((list) => list.map((x) => x && x.id === site.id ? { ...x, domain } : x), "Connect " + domain + " (by " + tag + ")");
+    if (err) return { error: err };
+  }
+  const secure = (await gh("/repos/" + site.repo + "/pages", { method: "PUT", body: JSON.stringify({ cname: domain, https_enforced: true }) })).ok;
+  return { ok: true, connected: true, secure, wwwOk, found: a };
 }
 
 export async function handle(req) {
@@ -2660,6 +2950,19 @@ export async function handle(req) {
     const r = await db("people?email=eq." + encodeURIComponent(who), { method: "DELETE" });
     if (!r.ok) return json({ error: "The person could not be removed. Please try again." }, 502);
     return json({ ok: true });
+  }
+
+  // ----- Start building: a site still to build, or the practice build -----
+  if (action === "planSite" || action === "createSite") {
+    const card = SITES.find((x) => x.id === String(body.site || ""));
+    if (!card || !me.sites.includes(card.id)) return json({ error: "That site is not available." }, 400);
+    const allowed = card.playground ? asOn(me, card).admin && card.live : me.admin && !card.live && !card.repo;
+    if (!allowed) return json({ error: card.playground ? "The practice build is not ready yet." : card.live ? "That site is already built." : "Only the admin can start building a site." }, 403);
+    try {
+      if (action === "planSite") return json({ ok: true, plan: await planSite(card, body.choices), spec: buildSpec() });
+      const r = await createSite(card, body.choices, me.tag || "admin");
+      return json(r, r.error ? 502 : 200);
+    } catch (e) { return json({ error: String(e && e.message || e) }, 400); }
   }
 
   const site = liveSite(String(body.site || ""));
@@ -2799,6 +3102,8 @@ export async function handle(req) {
       // draws the copy's pages on top of the live site, rather than showing GitHub's "not found" page.
       let preview = copy.kind === "trial" ? copy.preview : "https://" + site.domain + "/", previewWaiting = false;
       if (copy.kind === "trial" && await pageMissing(preview)) { preview = "https://" + site.domain + "/"; previewWaiting = true; }
+      // a site just made in the console: its first publish takes a minute or two to appear
+      else if (copy.kind !== "trial" && site.starter && await pageMissing(preview)) previewWaiting = "first";
       const pictures = c ? pictureSpots(c.data).filter((x) => x.kind !== "work").map(publicSpot) : [];
       const imageMeta = meta && meta.data && meta.data.files && typeof meta.data.files === "object" ? meta.data.files : {};
       let doc = f.data; try { doc = cleanPages(pctx, f.data, f.data); } catch (_e) { /* shown as it is */ }
@@ -3114,6 +3419,12 @@ export async function handle(req) {
   // The admin starts the Practice site again: its words, pages, theme and photos become World Art Review's.
   // The practice build starts again from the starter: every page, the look, the words, the photos and any
   // code changes go, and so do its copies. Its publishing steps (.github) stay as they are.
+  if (action === "checkDomain" || action === "finishSite") {
+    if (!site.starter || site.playground) return json({ error: "Only a site built in the console can do that." }, 400);
+    if (!me.admin) return json({ error: "Only the admin can do that." }, 403);
+    const r = action === "checkDomain" ? await checkDomain(site, me.tag || "admin") : await finishSite(site, me.tag || "admin");
+    return json(r, r.error ? 502 : 200);
+  }
   if (action === "startAgain") {
     if (!site.playground) return json({ error: "Only the practice build can be started again like this." }, 400);
     if (!me.admin) return json({ error: "Only someone given the practice build can start it again." }, 403);

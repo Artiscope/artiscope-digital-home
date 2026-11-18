@@ -50,9 +50,10 @@ const hub = makeGitHub({
   [GR]: { ...files(GAMDIR, ["data/content.json", "data/sales.json", "data/images.json", "data/pages.json", "data/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(GAMDIR, "assets/images") },
 });
 let breakGitHub = false;
-let previewGone = false;   // a new copy whose own preview is not built yet: GitHub answers 404 for it
+let previewGone = false, dnsAnswers = {};   // a new copy whose own preview is not built yet: GitHub answers 404 for it
 globalThis.fetch = async (url, init = {}) => {
   if (String(url).includes("/auth/v1/user")) return new Response(JSON.stringify({ email: signedIn }));
+  if (String(url).startsWith("https://dns.google/")) { const q = new URL(String(url)).searchParams; return new Response(JSON.stringify({ Answer: (dnsAnswers[q.get("name") + " " + q.get("type")] || []).map((data) => ({ data })) })); }
   if (init.method === "HEAD") return new Response(null, { status: previewGone && String(url).includes("/preview/") ? 404 : 200 });
   if (ppl.handles(url)) return ppl.fetch(url, init);
   if (breakGitHub && (init.method || "GET") !== "GET") return new Response(JSON.stringify({ message: "Server Error" }), { status: 500 });
@@ -102,6 +103,7 @@ await page.route("**/*", async (route) => {
   if (url.startsWith("https://globalartmonitor.com/")) return serveSite("/tmp/uat-gam", route, url);
   if (url.startsWith("https://streetartdispatch.com/")) return serveSite("/tmp/uat-sad", route, url);
   if (url.startsWith("https://artiscope.github.io/practice-build/")) return serveSite("/tmp/uat-pb", route, url.replace("https://artiscope.github.io/practice-build/", "https://pb.local/"));
+  if (url.startsWith("https://artiscope.github.io/grove-prints/") && fs.existsSync("/tmp/uat-new")) return serveSite("/tmp/uat-new", route, url.replace("https://artiscope.github.io/grove-prints/", "https://new.local/"));
   return route.abort();
 });
 const shot = (n) => page.screenshot({ path: OUT + "shots/" + n + ".png" });
@@ -118,8 +120,8 @@ async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).cat
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all seven sites, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 7, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 48"), "no version"));
-await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await goTab(page, "home"); });
+await check("Version number is shown", async () => must((await text("body")).includes("Version 49"), "no version"));
+await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
   const t = await text("body"); signedIn = "tester@artiscope.co.uk";
@@ -1577,6 +1579,88 @@ await check("Changes are signed by admin, with no email address in GitHub", asyn
 await check("No sideways scrolling on a phone: the editor and the overview", async () => {
   await page.evaluate(() => window.__adh.go("pages")); await settle(2000); const a = await sadWide(); await page.evaluate(() => window.__adh.go("overview")); await settle(800); const b = await sadWide();
   must(a <= 392 && b <= 392, a + ", " + b + " pixels wide");
+});
+
+// =============== 11. Start building: a new site from the starter ===============
+area = "Start building";
+const NEW = "Artiscope/grove-prints";
+const bdFrame = async () => { const el = await page.$("#bd-if"); return el ? await el.contentFrame() : null; };
+const bdText = async () => { const f = await bdFrame(); return f ? await f.innerText("body").catch(() => "") : ""; };
+await check("Start building opens on About the site, with the new home page drawn beside it", async () => {
+  await page.setViewportSize({ width: 1440, height: 900 }); await goHome();
+  await page.click('[data-act="open-site"][data-site="site-4"]'); await page.waitForSelector('[data-bd="name"]'); await settle(2500);
+  must((await bdText()).includes("[Your opening heading]"), "no preview: " + (await bdText()).slice(0, 80));
+  await page.fill('[data-bd="name"]', ""); await page.click('[data-act="bd-next"]'); await settle(300);
+  must(/Give the site a name/.test(await text(".bd-err")), "an empty name went through");
+  await page.fill('[data-bd="name"]', "Grove Prints"); await page.fill('[data-bd="tagline"]', "Prints from the Grove studio"); await page.fill('[data-bd="domain"]', "www.groveprints"); await settle(1200);
+  await page.click('[data-act="bd-next"]'); await settle(300);
+  must(/should look like newsite\.com/.test(await text(".bd-err")), "a wrong web address went through: " + await text(".bd-err"));
+  await page.fill('[data-bd="domain"]', "https://www.groveprints.co.uk/"); await page.click('[data-act="bd-set"][data-v="godaddy"]'); await settle(1500);
+  const t = await bdText(); must(t.includes("Grove Prints") && t.includes("Prints from the Grove studio"), "the name and tagline are not in the preview");
+  await shot("60-build-about");
+});
+await check("Look: the chosen look recolours the preview, Phone shows it at phone width", async () => {
+  await page.click('[data-act="bd-next"]'); await settle(500);
+  must((await page.locator(".bd-look").count()) === 12, "not twelve looks");
+  await page.click('.bd-look[data-v="Like Street Art Dispatch"]'); await settle(1500);
+  const css = await (await bdFrame()).evaluate(() => (document.getElementById("theme") || {}).textContent || "");
+  must(css.includes("#163A30") && css.includes("Gloock"), "the look is not in the preview: " + css.slice(0, 120));
+  await page.click('[data-act="bd-view"][data-v="phone"]'); await settle(900);
+  must((await page.$eval("#bd-if", (f) => f.style.width)) === "390px", "phone width"); await shot("61-build-look-phone");
+  await page.click('[data-act="bd-view"][data-v="computer"]'); await settle(500);
+});
+await check("Pages: copying a layout lists what was swapped and what was left out", async () => {
+  await page.click('[data-act="bd-next"]'); await settle(500);
+  await page.click('.bd-opt[data-v="copy"]'); await settle(1500);
+  await page.selectOption('select[data-bd="from"]', "global-art-monitor"); await settle(1800);
+  const n = await text(".bd-notes"); must(n.includes("Left out") && n.includes("Status line"), "no list: " + n.slice(0, 160));
+  must((await bdText()).includes("Auction results"), "the copied pages are not in the menu");
+  await shot("62-build-copy");
+  await page.click('.bd-opt[data-v="set"]'); await settle(1500);
+  must(!(await page.$(".bd-notes")), "notes left after leaving the copy");
+  const menu = await bdText(); must(["About", "Artists", "Exhibitions", "Visit us", "Contact"].every((w) => menu.includes(w)), "the ready set is not in the menu");
+});
+await check("Check and create: the summary, then Create site makes the repository and opens the Ready screen", async () => {
+  await page.click('[data-act="bd-next"]'); await settle(500);
+  const sum = await text(".bd-rows"); must(sum.includes("groveprints.co.uk") && sum.includes("Like Street Art Dispatch") && sum.includes("six pages"), "summary: " + sum);
+  must((await text(".bd-box")).includes(NEW), "the repository's name is not shown");
+  await shot("63-build-check");
+  await page.click('[data-act="bd-create"]'); await page.waitForSelector("text=Grove Prints is ready", { timeout: 15000 }); await settle(500);
+  must(hub.repoMade(NEW) && hub.pagesOf(NEW).build_type === "workflow", "no repository, or publishing is off");
+  must(read(NEW, "data/pages.json").pages.contact && read(NEW, "data/theme.json").colours.band === "#163A30", "the files are not the choices");
+  must(hub.releases(NEW)[0].tag_name === "v1.0", "no version 1.0");
+  const entry = read(CR, "sites.json").sites.find((x) => x.id === "site-4"); must(entry.repo === NEW && entry.live && entry.want === "groveprints.co.uk" && entry.registrar === "godaddy", "list of sites: " + JSON.stringify(entry));
+  must((await text(".bd-dom")).includes("In GoDaddy") && (await text(".bd-dom")).includes("185.199.108.153"), "no records for GoDaddy");
+  await shot("64-build-ready");
+});
+await check("Check: records not pointing at GitHub yet say so; once they do, the address is connected", async () => {
+  dnsAnswers = { "groveprints.co.uk A": ["217.160.0.1"] };
+  await page.click('[data-act="dom-check"]'); await page.waitForSelector("text=points at 217.160.0.1", { timeout: 9000 });
+  dnsAnswers = { "groveprints.co.uk A": ["185.199.108.153", "185.199.109.153", "185.199.110.153", "185.199.111.153"], "www.groveprints.co.uk CNAME": ["artiscope.github.io."] };
+  await page.click('[data-act="dom-check"]'); await page.waitForSelector("text=Connected:", { timeout: 9000 }); await settle(800);
+  must(hub.pagesOf(NEW).cname === "groveprints.co.uk" && read(NEW, "data/content.json").site.indexed === true, "not connected on GitHub");
+  await shot("65-build-connected");
+});
+await check("Open the editor: the new site opens with its six pages", async () => {
+  fs.rmSync("/tmp/uat-new-src", { recursive: true, force: true }); fs.rmSync("/tmp/uat-new", { recursive: true, force: true }); fs.cpSync("starter", "/tmp/uat-new-src", { recursive: true });
+  for (const f of ["data/pages.json", "data/theme.json"]) fs.writeFileSync("/tmp/uat-new-src/" + f, hub.read(NEW, "main", f));
+  const cn = read(NEW, "data/content.json"); cn.site.address = "https://artiscope.github.io/grove-prints/"; fs.writeFileSync("/tmp/uat-new-src/data/content.json", JSON.stringify(cn));
+  execFileSync("python3", ["/tmp/uat-new-src/tools/build.py", "/tmp/uat-new"]);
+  fs.writeFileSync("/tmp/uat-new/assets/site.js", fs.readFileSync("/tmp/uat-new/assets/site.js", "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
+  await page.click('[data-act="bd-open"]'); await page.waitForSelector("#ed-sections .sec", { timeout: 15000 }); await settle(2000);
+  const opts = await page.$$eval(".pagepick option", (o) => o.map((x) => x.value)); must(["home", "page-about", "page-contact"].every((k) => opts.includes(k)), "pages: " + opts.join(","));
+  await shot("66-build-editor");
+});
+await check("The practice build: Start building rebuilds it with the choices, and no repository is made", async () => {
+  await openSite("practice-build"); await page.click(".ed-exit").catch(() => {}); await goTab(page, "overview"); await settle(500);
+  await page.click('[data-act="bd-start"]'); await page.waitForSelector('[data-bd="name"]'); await settle(1200);
+  must(!(await page.$('[data-bd="domain"]')), "the practice build asks for a web address");
+  await page.fill('[data-bd="name"]', "Tess tries it"); await settle(600);
+  for (let i = 0; i < 3; i++) { await page.click('[data-act="bd-next"]'); await settle(500); }
+  must((await text(".bd-go")).includes("Rebuild the practice build"), "not the practice build's words");
+  await page.click('[data-act="bd-create"]'); await page.waitForSelector("text=is on the practice build", { timeout: 15000 });
+  must(read(PB, "data/pages.json").shared.header.settings.name === "Tess tries it" && !hub.repoMade("Artiscope/tess-tries-it"), "not rebuilt in place");
+  await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]');
 });
 
 // =============== results ===============
