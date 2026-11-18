@@ -927,12 +927,140 @@ const SAD_MODEL = {
   spots: () => [],
 };
 
+// ----- Sites built from the starter (the console repository's starter/ folder) -----
+// Every new site begins as a copy of it: the shared 20 sections, drawn by its own assets/render.js
+// from data/pages.json, data/theme.json and data/content.json, in the colours of its theme.
+const ST_ADDR_HINT = "A page on this site such as about/, ./ for the home page, or a full web address starting https://.";
+const ST_SRC = (f) => f.name === "href" ? { ...f, hint: ST_ADDR_HINT + " Leave empty for no link." } : f;
+const ST_LOOK = (f, name) => f.name === name ? { ...f, dflt: "band", options: [["band", "Dark band"], ["page", "Page colour"]] } : f;
+// A new site's sample words go in square brackets, so nobody takes them for real words. Addresses, pictures,
+// descriptions of pictures, button words and small labels such as Contact stay as they are.
+const ST_KEEP = ["href", "image", "alt", "map", "map_words", "email", "button", "eyebrow"];
+function ST_BRACKET(fields, st, kind) {
+  const out = { ...(st || {}) };
+  for (const f of fields || []) {
+    const v = out[f.name];
+    if (f.type === "rows" && Array.isArray(v)) out[f.name] = v.map((row) => row && typeof row === "object" && !Array.isArray(row) ? ST_BRACKET(f.fields.filter((g) => !(kind === "visit" && g.name === "title")), row, kind) : row);
+    else if ((f.type === "text" || f.type === "long") && typeof v === "string" && v.trim() && !ST_KEEP.includes(f.name) && !/^\[.*\]$/.test(v.trim())) out[f.name] = "[" + v.trim().replace(/\.$/, "") + "]";
+  }
+  return out;
+}
+export const STARTER_KINDS = ["announcement", "columns", "space", "quote", "faq", "button", "picture-banner", "slideshow", "gallery", "logo-row", "picture", "text-picture",
+  "artworks", "exhibitions", "career", "press", "signup", "visit", "contact-form", "signup-popup"];
+export const STARTER_SECTIONS = {
+  header: { label: "Menu bar", about: "The name and tagline, the links along the top of every page, an optional button, and the menu on a phone.",
+    summary: (st) => ((st.links || []).length + " links" + ((st.logos || []).length ? ", " + st.logos.length + (st.logos.length === 1 ? " logo" : " logos") : "")),
+    blocks: [{ field: "links", label: "Menu link", add: "Add a menu link", about: "A link in the menu bar and the phone menu." }, LOGO_BLOCK], fields: [
+    { name: "name", label: "Site name", type: "text" }, { name: "tagline", label: "Tagline", type: "text", hint: "Small words beside the name. Leave empty to hide." },
+    { ...LINK_ROWS, fields: [LINK_ROWS.fields[0], { ...ADDRESS, hint: ST_ADDR_HINT }] },
+    { name: "button", label: "Button words", type: "text", hint: "A button at the right of the menu bar. Leave empty for none." }, { name: "button_href", label: "Button address", type: "text", hint: ST_ADDR_HINT },
+    { ...LOGO_ROWS, fields: LOGO_ROWS.fields.map((g) => g.name === "href" ? { ...g, hint: ST_ADDR_HINT + " Leave empty for no link." } : g) },
+  ] },
+  footer: { label: "Footer", about: "The name, a few links and the small print at the bottom of every page.", summary: (st) => ((st.links || []).length + " links"),
+    blocks: { field: "links", label: "Link", add: "Add a link", title: (b) => b[0] }, fields: [
+    { name: "tagline", label: "Line under the name", type: "text" }, { name: "links_heading", label: "Heading over the links", type: "text", hint: "Leave empty to hide." },
+    { ...LINK_ROWS, fields: [LINK_ROWS.fields[0], { ...ADDRESS, hint: ST_ADDR_HINT }] }, { name: "legal", label: "Small print", type: "text" },
+  ] },
+};
+for (const k of STARTER_KINDS) {
+  const from = SAD_SECTIONS[k];
+  let def = { ...from };
+  if (k === "announcement") def = { ...def, fields: from.fields.map((f) => ST_LOOK(f, "style")).map((f) => f.name === "messages" ? { ...f, fields: f.fields.map(ST_SRC) } : f), starter: { ...def.starter, style: "band" } };
+  if (k === "picture-banner") def = { ...def, fields: from.fields.map((f) => ST_LOOK(f, "box")).map(ST_SRC), starter: { ...def.starter, box: "band", href: "", label: "" } };
+  if (k === "button") def = { ...def, about: "A heading, a line and one button, in a dark band or on the page.", starter: { ...def.starter, href: "./" },
+    fields: from.fields.map((f) => f.name === "panel" ? { ...f, label: "In a dark band" } : ST_SRC(f)) };
+  if (k === "columns" || k === "artworks" || k === "logo-row") def = { ...def, fields: def.fields.map((f) => f.type === "rows" ? { ...f, fields: f.fields.map(ST_SRC) } : f) };
+  if (k === "text-picture") def = { ...def, fields: def.fields.map(ST_SRC) };
+  if (k === "signup") def = { ...def, about: "An email box and one button, for visitors to ask to join a mailing list." + FORM_HONEST, starter: { heading: "[A heading for the sign-up]", text: "", button: "Ask to join", pitch: "" } };
+  if (k === "contact-form") def = { ...def, starter: { eyebrow: "Contact", heading: "[Write to us]", text: "", topics: ["A question", "Something else"], button: "Write the email" } };
+  if (k === "exhibitions") def = { ...def, about: "Exhibitions added by hand, each in a card with its dates and a source." };
+  if (k === "visit") def = { ...def, starter: { ...def.starter, heading: "Visit us" } };
+  if (def.starter) def = { ...def, starter: ST_BRACKET(def.fields, def.starter, k) };
+  STARTER_SECTIONS[k] = def;
+}
+const STARTER_ITEMS = {
+  site: { label: "Site details", parts: [
+    { id: "details", label: "Site details", about: "The email address the forms open a message to.", fields: [
+      { name: "site.email", label: "Email shown on the site", type: "text", hint: "Every form opens the visitor's own email app with a message ready to send here." },
+    ] },
+  ] },
+};
+const EMAIL_SHAPE = /^[^\s@<>"(),;:]{1,64}@[a-z0-9.-]{1,190}\.[a-z]{2,24}$/i;
+export function starterForEditor(content) {
+  const s = (content && content.site) || {};
+  // no articles or artists on a new site yet: they come in a later step
+  return { site: { email: String(s.email || ""), address: String(s.address || ""), indexed: s.indexed === true }, articles: [], artists: [] };
+}
+export function starterFromEditor(given, content) {
+  if (!given || typeof given !== "object") throw new Error("The site details could not be read.");
+  const c = JSON.parse(JSON.stringify(content || {})), was = starterForEditor(content), want = String(((given.site || {}).email) ?? was.site.email).trim();
+  if (want === was.site.email) return { content: c, changed: [] };
+  if (want && !EMAIL_SHAPE.test(want)) throw new Error("The email shown on the site does not look like an email address.");
+  c.site = { ...(c.site || {}), email: want };
+  return { content: c, changed: ["Edit site details"] };
+}
+const STARTER_MODEL = {
+  id: "starter",
+  async load(loadJson) {
+    const content = await loadJson("data/content.json");
+    return content ? { content: content.data, shas: [content.sha] } : null;
+  },
+  forEditor: (n) => starterForEditor(n.content),
+  fromEditor(_kinds, given, n) {
+    const r = starterFromEditor(given, n.content);
+    return { files: r.changed.length ? [["data/content.json", r.content]] : [], changed: r.changed };
+  },
+  spots: () => [],
+};
+// The looks a new site can start from: the nine ready-made ones and the three sites' own.
+export const STARTER_LOOKS = [
+  { name: "Ink and clay", colours: { page: "#F1EEE8", band: "#22304A", accent: "#A4572F", ink: "#1B1D22" } },
+  { name: "Bark and moss", colours: { page: "#EFEAE4", band: "#3B2F2A", accent: "#5F7A3C", ink: "#1F1B19" } },
+  { name: "Stone and plum", colours: { page: "#ECEAE6", band: "#4A2A3F", accent: "#9A4B2E", ink: "#1E1B1D" } },
+  { name: "Sand and navy", colours: { page: "#EADFCB", band: "#1F2A44", accent: "#B07A1E", ink: "#1F2A44" } },
+  { name: "Mist and forest", colours: { page: "#DCE5DF", band: "#1E3329", accent: "#B5652A", ink: "#1E3329" } },
+  { name: "Paper and ink", colours: { page: "#EDEAE4", band: "#232326", accent: "#D9532F", ink: "#232326" } },
+  { name: "Brick and soot", colours: { page: "#EDE6DE", band: "#2A2624", accent: "#C2412D", ink: "#2A2624" } },
+  { name: "Concrete and cobalt", colours: { page: "#E9E8E4", band: "#1F2B44", accent: "#E3462F", ink: "#1F2B44" } },
+  { name: "Paper and moss", colours: { page: "#EEEBE2", band: "#2D3B23", accent: "#D2422B", ink: "#2D3B23" } },
+  { name: "Like World Art Review", colours: { page: "#EEE5D4", band: "#1D4A35", accent: "#B5392B", ink: "#1D1D1B" } },
+  { name: "Like Global Art Monitor", colours: { page: "#F3C3C8", band: "#2A2A2F", accent: "#1F7A5C", ink: "#2A2A2F" } },
+  { name: "Like Street Art Dispatch", colours: { page: "#EFE6D3", band: "#163A30", accent: "#F0283C", ink: "#163A30" } },
+];
+const STARTER_THEME = {
+  file: "data/theme.json",
+  look: { head: "h1, h2, h3, h4", body: "p, li, dd", nav: ".nav-links a", bodyFont: "var(--text)", headFont: "var(--display)", buttons: ".btn", band: "var(--band)",
+    round: ".btn, .ph, .ph-img, .lcard, .qa, .ecard, .pb-box, .supop, .field input, .field select, .nl input, .mf textarea, main img, .ao-top, .ao-privacy" },
+  colours: [
+    { id: "page", role: "bg", label: "Page background", use: "Pages and cards", var: "--page", default: "#F1EEE8", derived: [] },
+    { id: "band", role: "band", label: "Bands and buttons", use: "Dark bands, buttons and the footer", var: "--band", default: "#22304A", on: "page", min: 4.5, derived: [] },
+    { id: "accent", role: "accent", label: "Highlights", use: "Link lines, small markers and the reading bar", var: "--accent", default: "#A4572F", on: "page", min: 3, derived: [] },
+    { id: "ink", role: "text", label: "Text", use: "All reading text", var: "--ink", default: "#1B1D22", on: "page", min: 4.5, derived: [] },
+  ],
+  fonts: [
+    { id: "display", role: "display", label: "Headlines", use: "Site name and titles", var: "--display", default: "Castoro", fallback: "Georgia, serif", options: ["Gloock", ...HEADLINE_FONTS] },
+    { id: "text", role: "body", label: "Reading text", use: "Paragraphs and introductions", var: "--text", default: "Literata", fallback: "Georgia, serif", options: READING_FONTS },
+    { id: "sans", role: "small", label: "Small text", use: "Buttons, labels and menus", var: "--sans", default: "Libre Franklin", fallback: "Arial, sans-serif", options: SMALL_FONTS },
+  ],
+  looks: STARTER_LOOKS,
+};
+export const STARTER_DIR = "starter";
+// A site from the list of sites, built from the starter.
+export function starterSite(e) {
+  return {
+    id: e.id, name: e.name, domain: e.domain, repo: e.repo, live: !!e.live, starter: true, playground: !!e.playground, practice: !!e.playground, artists: [],
+    pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
+    code: { edit: ["assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs"], read: ["data/pages.json", "data/theme.json", "data/content.json"] },
+    sectionKinds: STARTER_SECTIONS, items: STARTER_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: STARTER_THEME, collections: [],
+  };
+}
+
 function cleanField(f, v, site) {
   const t = f.type;
   if (t === "text") {
     if (f.none && (v === false || /^\s*none\s*$/i.test(String(v == null ? "" : v)))) return false;
     const x = String(v == null ? "" : v).replace(/ *— */g, ", ").replace(/, ,/g, ",").slice(0, 400);
-    if (f.addr) { const a = x.trim().replace(/[<>"\s]/g, ""); return /^(#|\/|[a-z0-9-]+\/|https?:\/\/|mailto:)/i.test(a) ? a.slice(0, 300) : ""; }
+    if (f.addr) { const a = x.trim().replace(/[<>"\s]/g, ""); return /^(\.\/$|#|\/|[a-z0-9-]+\/|https?:\/\/|mailto:)/i.test(a) ? a.slice(0, 300) : ""; }
     return f.nullable && !x.trim() ? null : x;
   }
   if (t === "long") { const x = safeMarks(String(v == null ? "" : v).replace(/ *— */g, ", ").replace(/, ,/g, ",").slice(0, 60000)); return f.nullable && !x.trim() ? null : x; }
@@ -1527,13 +1655,49 @@ export const SITES = [
     collections: [],
   },
 
-  { id: "site-4", name: "Site 4", domain: "", repo: "", live: false, artists: [], collections: [] },
-  { id: "site-5", name: "Site 5", domain: "", repo: "", live: false, artists: [], collections: [] },
 ];
 // The Practice site: a copy of World Art Review for trying things out, at an unlisted address that
 // search engines are told to ignore. The website agents never work on it. The admin can start it
 // again from World Art Review at any time.
 SITES.push({ ...SITES[0], id: "practice-site", name: "Practice site", domain: "artiscope.github.io/practice-site", repo: "Artiscope/practice-site", practice: true, from: "world-art-review" });
+const BUILT_IN = SITES.length;
+// The rest of the sites come from the list file sites.json in the console's own repository, so a new site
+// can be added from the console without a change to this code. Each is built from the starter, or not built yet.
+export const CONSOLE_REPO = "Artiscope/artiscope-digital-home";
+const SITE_ID = /^[a-z][a-z0-9-]{1,40}$/, REPO_NAME = /^Artiscope\/[A-Za-z0-9._-]{1,100}$/, DOMAIN_OK = /^[a-z0-9.-]{3,190}(\/[a-z0-9._-]{1,100})?$/;
+export const DEFAULT_SITE_LIST = [
+  { id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: "Artiscope/practice-build", kind: "starter", playground: true, live: false },
+  { id: "site-4", name: "Site 4", domain: "", repo: "", live: false },
+  { id: "site-5", name: "Site 5", domain: "", repo: "", live: false },
+];
+export function cleanSiteList(given) {
+  const list = Array.isArray(given && given.sites) ? given.sites : Array.isArray(given) ? given : [], out = [], seen = new Set(SITES.slice(0, BUILT_IN).map((x) => x.id));
+  for (const e of list.slice(0, 40)) {
+    if (!e || typeof e !== "object" || !SITE_ID.test(String(e.id || "")) || seen.has(e.id)) continue;
+    seen.add(e.id);
+    const repo = REPO_NAME.test(String(e.repo || "")) ? String(e.repo) : "", domain = DOMAIN_OK.test(String(e.domain || "")) ? String(e.domain) : "";
+    const name = cleanText(e.name, 60) || e.id, built = repo && e.kind === "starter";
+    out.push({ id: e.id, name, domain, repo, kind: built ? "starter" : "", playground: !!e.playground && built, live: !!e.live && !!built && !!domain });
+  }
+  return out;
+}
+export function useSiteList(list) {
+  SITES.splice(BUILT_IN, SITES.length - BUILT_IN);
+  for (const e of cleanSiteList(list)) SITES.push(e.kind === "starter" ? starterSite(e) : { id: e.id, name: e.name, domain: e.domain, repo: e.repo, live: false, artists: [], collections: [], playground: e.playground });
+}
+useSiteList(DEFAULT_SITE_LIST);
+let siteListAt = 0, siteListSha = "";
+async function loadSiteList() {
+  if (Date.now() - siteListAt < 30000) return;
+  siteListAt = Date.now();
+  try {
+    const r = await gh("/repos/" + CONSOLE_REPO + "/contents/sites.json?ref=main");
+    if (!r.ok || !r.data || !r.data.content) return;
+    if (r.data.sha === siteListSha) return;
+    useSiteList(JSON.parse(decodeBase64Utf8(r.data.content)));
+    siteListSha = r.data.sha;
+  } catch (_e) { /* keep the list already known */ }
+}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -2087,7 +2251,7 @@ async function branchForWriting(site, copy, _who) {
 
 async function siteOverview(site, wanted = "", me = null, names = {}) {
   const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta), edits: !!site.items, practice: !!site.practice,
-    pagesOn: !!site.pages, themeOn: !!site.theme, photosOn: !site.noPhotos };
+    pagesOn: !!site.pages, themeOn: !!site.theme, photosOn: !site.noPhotos, starter: !!site.starter, playground: !!site.playground, youAdmin: !!(me && me.admin) };
   if (!site.live) return base;
   try {
     const copies = (await copiesOf(site)).filter((c) => !me || me.admin || c.kind === "live" || ownerOfCopy(c.id) === me.tag);
@@ -2222,7 +2386,9 @@ export const PEOPLE_SQL = `create table if not exists public.people (
   invited_at timestamptz not null default now(),
   last_seen timestamptz
 );
-alter table public.people enable row level security;`;
+alter table public.people enable row level security;
+grant usage on schema public to service_role;
+grant select, insert, update, delete on table public.people to service_role;`;
 // Supabase gives the function two kinds of key. The newer kind ("sb_secret_...") goes in the apikey
 // header only; the older kind is a token that also goes in Authorization. If one is refused, the other
 // is tried, so the people list works on old and new projects alike.
@@ -2249,6 +2415,19 @@ async function db(path, init = {}) {
   }
   return last;
 }
+// Whether a published page is still missing (GitHub answers 404). Anything else, or no answer, counts as there.
+async function pageMissing(url) {
+  try {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 2500);
+    const r = await fetch(url, { method: "HEAD", signal: ctl.signal, redirect: "follow" });
+    clearTimeout(t);
+    return r.status === 404;
+  } catch (_e) { return false; }
+}
+// Supabase refusing the table itself (code 42501) means the server was never given the right to use it.
+function dbRefused(r) { return !!(r && r.data && typeof r.data === "object" && String(r.data.code || "") === "42501"); }
+export const GRANT_HELP = "Supabase does not let the console's server use the people table yet. In Supabase, open SQL Editor, New query, and run these two lines: " +
+  "grant usage on schema public to service_role; grant select, insert, update, delete on table public.people to service_role; Then press Refresh here.";
 // Supabase's own words about a refusal. They never include a key.
 function dbSaid(r) {
   const d = r && r.data && typeof r.data === "object" ? r.data : {};
@@ -2265,6 +2444,9 @@ export async function personOf(email) {
   if (!p || !EDITOR_TAG.test(String(p.id))) return null;
   return { email, admin: false, name: String(p.name || ""), tag: String(p.id), sites: (Array.isArray(p.sites) ? p.sites : []).map(String).filter((id) => SITES.some((s) => s.id === id)) };
 }
+// On the practice build, a test user given it can do everything the admin can, there only.
+// Their changes still carry their own code, so History says who did what.
+export function asOn(me, site) { return site && site.playground && me && !me.admin ? { ...me, admin: true, tester: true } : me; }
 // Each editor's names, by tag, to show who made a change. The admin also sees addresses.
 async function namesFor(me) {
   const r = await db("people?select=id,name,email");
@@ -2363,6 +2545,48 @@ export async function runLater(now) {
   return { ok: true, done };
 }
 
+// Puts the starter (the console repository's starter/ folder) into a site's main branch as one commit,
+// with the site's own web address in its details. Files the starter does not have are removed, except the
+// publishing steps under .github, which only GitHub itself may change.
+export async function starterInto(site, message) {
+  const prefix = STARTER_DIR + "/";
+  const [src, headSha] = await Promise.all([gh("/repos/" + CONSOLE_REPO + "/git/trees/main?recursive=1"), mainSha(site)]);
+  if (!src.ok || !Array.isArray(src.data && src.data.tree)) return { error: "The starter could not be read from GitHub just now." };
+  const head = headSha ? await gh("/repos/" + site.repo + "/git/commits/" + headSha) : null;
+  const have = headSha ? await gh("/repos/" + site.repo + "/git/trees/" + headSha + "?recursive=1") : null;
+  if (!head || !head.ok || !have || !have.ok) return { error: "The practice build could not be read from GitHub just now." };
+  const inStarter = (t) => t.type === "blob" && t.path.startsWith(prefix) && !t.path.startsWith(prefix + ".github/");
+  const wanted = src.data.tree.filter(inStarter).map((t) => ({ path: t.path.slice(prefix.length), sha: t.sha, mode: t.mode || "100644" }));
+  const names = new Set(wanted.map((t) => t.path)), had = {};
+  for (const t of have.data.tree) if (t.type === "blob" && !t.path.startsWith(".github/")) had[t.path] = t.sha;
+  const tree = Object.keys(had).filter((pth) => !names.has(pth)).map((pth) => ({ path: pth, mode: "100644", type: "blob", sha: null }));
+  for (const t of wanted) {
+    let content = null;
+    if (t.path === "data/content.json") {
+      const b = await gh("/repos/" + CONSOLE_REPO + "/git/blobs/" + t.sha);
+      let c = {}; try { c = JSON.parse(decodeBase64Utf8(String((b.data || {}).content || "").replace(/\n/g, ""))); } catch (_e) { c = {}; }
+      c.site = { ...(c.site || {}), address: "https://" + site.domain + "/", indexed: false };
+      content = { content: encodeBase64Utf8(JSON.stringify(c, null, 2) + "\n"), encoding: "base64" };
+    } else if (had[t.path] === t.sha) continue;   // already the same
+    if (!content) {
+      const b = await gh("/repos/" + CONSOLE_REPO + "/git/blobs/" + t.sha);
+      if (!b.ok) return { error: "GitHub did not give the starter's " + t.path + "." };
+      content = { content: String(b.data.content || "").replace(/\n/g, ""), encoding: "base64" };
+    }
+    const made = await gh("/repos/" + site.repo + "/git/blobs", { method: "POST", body: JSON.stringify(content) });
+    if (!made.ok) return { error: writeProblem(made, "GitHub did not copy " + t.path + ".") };
+    if (had[t.path] !== made.data.sha) tree.push({ path: t.path, mode: t.mode === "100755" ? "100755" : "100644", type: "blob", sha: made.data.sha });
+  }
+  if (!tree.length) return { ok: true, unchanged: true };
+  const madeTree = await gh("/repos/" + site.repo + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: head.data.tree.sha, tree }) });
+  if (!madeTree.ok) return { error: writeProblem(madeTree, "GitHub did not start the practice build again.") };
+  const commit = await gh("/repos/" + site.repo + "/git/commits", { method: "POST", body: JSON.stringify({ message, tree: madeTree.data.sha, parents: [headSha] }) });
+  if (!commit.ok) return { error: writeProblem(commit, "GitHub did not start the practice build again.") };
+  const moved = await moveBranch(site, "main", commit.data.sha, false);
+  if (!moved.ok) return { error: writeProblem(moved, "GitHub did not start the practice build again.") };
+  return { ok: true };
+}
+
 export async function handle(req) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return json({ error: "Use POST." }, 405);
@@ -2373,12 +2597,14 @@ export async function handle(req) {
     const want = env("SCHEDULE_KEY");
     if (!want || want.length < 24 || !sameText(clockKey, want)) return json({ error: "Not allowed." }, 403);
     if (!env("GITHUB_TOKEN")) return json({ error: "The GitHub connection has not been set up yet." }, 500);
+    await loadSiteList();
     return json(await runLater(new Date()));
   }
 
   const email = await signedInEmail(req);
   if (!email) return json({ error: "Please sign in again." }, 401);
-  const me = await personOf(email);
+  await loadSiteList();
+  let me = await personOf(email);
   if (!me) return json({ error: "This email address does not have access." }, 403);
   if (!env("GITHUB_TOKEN")) return json({ error: "The GitHub connection has not been set up yet." }, 500);
 
@@ -2395,7 +2621,7 @@ export async function handle(req) {
     const names = await namesFor(me);
     if (!me.admin) await db("people?email=eq." + encodeURIComponent(email), { method: "PATCH", body: JSON.stringify({ last_seen: new Date().toISOString() }) });
     const mine = SITES.filter((s) => me.sites.includes(s.id));
-    const sites = await Promise.all(mine.map((s) => siteOverview(s, String(wanted[s.id] || ""), me, names)));
+    const sites = await Promise.all(mine.map((s) => siteOverview(s, String(wanted[s.id] || ""), asOn(me, s), names)));
     return json({ user: { email, admin: me.admin, name: me.name }, sites });
   }
 
@@ -2406,7 +2632,7 @@ export async function handle(req) {
     const sites = SITES.map((s) => ({ id: s.id, name: s.name, live: s.live }));
     if (action === "people") {
       const r = await db("people?select=email,name,sites,invited_at,last_seen&order=invited_at.asc");
-      if (!r.ok) return json({ error: r.status === 404 ? "People are not set up yet. Run the setup line in Supabase first." : "The list of people could not be read." + dbSaid(r) }, 502);
+      if (!r.ok) return json({ error: r.status === 404 ? "People are not set up yet. Run the setup line in Supabase first." : dbRefused(r) ? GRANT_HELP : "The list of people could not be read." + dbSaid(r) }, 502);
       return json({ people: r.data.map((p) => ({ email: p.email, name: p.name, sites: p.sites, invited: p.invited_at, lastSeen: p.last_seen })), sites });
     }
     const who = String(body.email || "").trim().toLowerCase();
@@ -2416,7 +2642,7 @@ export async function handle(req) {
       const p = cleanPerson(body);
       const r = await db("people", { method: "POST", body: JSON.stringify({ email: who, id: newTag(), name: p.name, sites: p.sites }) });
       if (r.status === 409) return json({ error: "That person is already in People." }, 409);
-      if (!r.ok) return json({ error: "The person could not be added." + dbSaid(r) }, 502);
+      if (!r.ok) return json({ error: dbRefused(r) ? GRANT_HELP : "The person could not be added." + dbSaid(r) }, 502);
       return json({ ok: true, emailed: await sendSignIn(who, body.back) });
     }
     if (action === "updatePerson") {
@@ -2439,6 +2665,8 @@ export async function handle(req) {
   const site = liveSite(String(body.site || ""));
   if (!site) return json({ error: "That site is not available." }, 400);
   if (!me.sites.includes(site.id)) return json({ error: "That site is not one of yours." }, 403);
+  // On the practice build, everyone given it works as the admin does: it is there to try things.
+  me = asOn(me, site);
 
   // ----- content -----
   const col = (site.collections || []).find((c) => c.id === body.collection) || null;
@@ -2567,13 +2795,16 @@ export async function handle(req) {
       ]);
       const files = Array.isArray(imgs.data) ? imgs.data.filter((x) => x.type === "file" && /\.(jpe?g|png|webp|mp4)$/i.test(x.name)) : [];
       const images = files.map((x) => x.name), imageSizes = Object.fromEntries(files.map((x) => [x.name, x.size || 0]));
-      const preview = copy.kind === "trial" ? copy.preview : "https://" + site.domain + "/";
+      // A copy's own preview is built a minute or two after the copy is made. Until then the editor
+      // draws the copy's pages on top of the live site, rather than showing GitHub's "not found" page.
+      let preview = copy.kind === "trial" ? copy.preview : "https://" + site.domain + "/", previewWaiting = false;
+      if (copy.kind === "trial" && await pageMissing(preview)) { preview = "https://" + site.domain + "/"; previewWaiting = true; }
       const pictures = c ? pictureSpots(c.data).filter((x) => x.kind !== "work").map(publicSpot) : [];
       const imageMeta = meta && meta.data && meta.data.files && typeof meta.data.files === "object" ? meta.data.files : {};
       let doc = f.data; try { doc = cleanPages(pctx, f.data, f.data); } catch (_e) { /* shown as it is */ }
       const extra = editorNow ? { site: editorNow, itemKinds: site.items, lists: Object.fromEntries(Object.entries(site.lists || {}).map(([k, l]) => [k, { label: l.label, section: l.section || "" }])), listFields: LIST_FIELDS, gam: !!site.model, model: site.model ? site.model.id : "", builtIn: site.builtIn || null,
         pageFields: site.model ? [{ name: "title", label: "Title in the browser tab and search results", type: "text" }, { name: "description", label: "Description for search engines", type: "long", plain: true, hint: "One or two sentences. Not shown on the page." }] : null } : {};
-      return json({ pages: doc, addonSpec: ADDONS.map((a) => ({ id: a.id, label: a.label, about: a.about, icon: a.icon, fields: a.fields })), kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageSizes, imageMeta, pictures, imageBase: preview + ps.images + "/", artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, version, ...extra });
+      return json({ pages: doc, addonSpec: ADDONS.map((a) => ({ id: a.id, label: a.label, about: a.about, icon: a.icon, fields: a.fields })), kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageSizes, imageMeta, pictures, imageBase: preview + ps.images + "/", previewWaiting, artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, version, ...extra });
     }
     // the page fields may refer to artists and articles added in this same save
     const sctx = body.content && typeof body.content === "object" ? pageCtx(body.content) : pctx;
@@ -2881,6 +3112,17 @@ export async function handle(req) {
 
   // ----- copies: trial copies, undo and redo, publish -----
   // The admin starts the Practice site again: its words, pages, theme and photos become World Art Review's.
+  // The practice build starts again from the starter: every page, the look, the words, the photos and any
+  // code changes go, and so do its copies. Its publishing steps (.github) stay as they are.
+  if (action === "startAgain") {
+    if (!site.playground) return json({ error: "Only the practice build can be started again like this." }, 400);
+    if (!me.admin) return json({ error: "Only someone given the practice build can start it again." }, 403);
+    const r = await starterInto(site, "Start again from the starter" + who);
+    if (r.error) return json({ error: r.error }, 502);
+    const found = await gh("/repos/" + site.repo + "/git/matching-refs/heads/adh/");
+    for (const ref of Array.isArray(found.data) ? found.data : []) await gh("/repos/" + site.repo + "/git/" + String(ref.ref).replace(/^refs\//, "refs/"), { method: "DELETE" });
+    return json({ ok: true });
+  }
   if (action === "resetPractice") {
     if (!me.admin) return json({ error: "Only the admin can start the Practice site again." }, 403);
     if (!site.practice) return json({ error: "Only the Practice site can be started again." }, 400);

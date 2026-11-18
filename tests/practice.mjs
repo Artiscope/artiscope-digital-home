@@ -24,7 +24,7 @@ const P = "practice-site";
 // it is a site like World Art Review, at its own unlisted address
 const ps = SITES.find((s) => s.id === P); assert.equal(ps.repo, PR); assert.equal(ps.domain, "artiscope.github.io/practice-site"); assert.equal(ps.sectionKinds, SITES[0].sectionKinds);
 let d = await as(ADMIN, { action: "overview" }); const card = d.sites.find((s) => s.id === P);
-assert.equal(card.practice, true); assert.equal(d.sites.length, 6);
+assert.equal(card.practice, true); assert.equal(d.sites.length, 7);
 
 // someone given only the Practice site works there, and never reaches the real sites
 await as(ADMIN, { action: "invitePerson", email: "trainee@example.org", name: "Tess Trainee", sites: [P] });

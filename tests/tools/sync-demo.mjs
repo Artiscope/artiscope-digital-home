@@ -4,5 +4,5 @@
 import fs from "node:fs"; import { C_DIR } from "../where.mjs";
 fs.copyFileSync(C_DIR + "/supabase/functions/home/index.ts", C_DIR + "/tests/home.mjs");
 console.log("Copied the server into tests/home.mjs");
-for (const f of ["demo-war-kinds.mjs", "demo-war-site.mjs", "demo-gam.mjs", "demo-sad.mjs"]) await import(new URL("./" + f, import.meta.url));
+for (const f of ["demo-war-kinds.mjs", "demo-war-site.mjs", "demo-gam.mjs", "demo-sad.mjs", "demo-starter.mjs"]) await import(new URL("./" + f, import.meta.url));
 console.log("Sample data refreshed");

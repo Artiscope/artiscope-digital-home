@@ -219,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (17 November 2026, Version 47)
+## Where things stand (18 November 2026, Version 48)
 
 Done:
 
@@ -610,7 +610,7 @@ Done:
   ice blue (#8EC5FF, words #0E1A26), with no halo.
 - Next, agreed on 17 November: building a new site from the console.
   Step 2 is a sample of the Start building screens, then step 3 a starter
-  site (Artiscope/site-starter) drawing every shared section and block,
+  site (kept as `starter/` in this repository) drawing every shared section and block,
   with the list of sites kept where the console can add to it; step 4 the
   Start building screens (name, tagline, web address, contact email,
   starting look from the ready-made looks or an existing site, starting
@@ -629,15 +629,59 @@ Done:
   building and do everything there an admin can (Save, publish,
   Versions, Theme, Edit code), and Start again, after one question,
   wipes it back to empty. It never gets a web address and stays hidden
-  from search engines. Step 3 (the starter, the list of sites in a list
-  file instead of the code, the practice build, the People fix below)
-  waits for the owner's go ahead, planned for 18 November.
-- People screen: "permission denied for table people" (42501) means the
-  table lacks grants. The owner runs, in Supabase's SQL Editor:
-  `grant usage on schema public to service_role;` and
-  `grant select, insert, update, delete on table public.people to
-  service_role;`. Step 3 adds these lines to `PEOPLE_SQL` and makes the
-  console say so plainly when Supabase refuses.
+  from search engines.
+- Step 3 (Version 48, 18 November): the starter, the list of sites, the
+  practice build and the People fix.
+  - The starter lives in `starter/` in this repository (this session
+    cannot make repositories; step 4 copies it into each new one). It is a
+    site in the Street Art Dispatch pattern: `assets/render.js` (the
+    STARTER module, used by the build and the console preview),
+    `assets/site.css` (colours and typefaces from the theme only, through
+    `--page`, `--band`, `--accent`, `--ink`, `--display`, `--text`,
+    `--sans`), `assets/site.js` (editor link, menu, sign-up, add-ons),
+    `tools/build.mjs` run by `tools/build.py <folder>`, `data/` (pages,
+    content with `site.email`, `site.address` and `site.indexed`, theme,
+    files) and `.github/workflows` (pages, check-copy, preview). Its
+    `package.json` says commonjs, because this repository's says module.
+    Every page carries noindex and robots.txt says Disallow until
+    `site.indexed` is true; CNAME is written only then, and never for a
+    github.io address. It offers the shared 20 only (`STARTER_KINDS` on
+    the server, `KINDS` in its build), with every sample word in square
+    brackets (`ST_BRACKET`).
+  - Server: `STARTER_SECTIONS`, `STARTER_ITEMS`, `STARTER_MODEL`
+    (`starterForEditor`, `starterFromEditor`: only the email for now),
+    `STARTER_LOOKS`, `STARTER_THEME`, `starterSite(e)`.
+  - The list of sites: the four built-in sites and the Practice site stay
+    in the code (`BUILT_IN`); every other site comes from `sites.json` at
+    the top of this repository (`CONSOLE_REPO`), read by `loadSiteList`
+    at most every 30 seconds and checked by `cleanSiteList` (`id`, `name`,
+    `domain`, `repo`, `kind: "starter"`, `playground`, `live`; a site
+    without a repository is never live). Without the file the console
+    uses `DEFAULT_SITE_LIST`: the practice build (not live), Site 4 and
+    Site 5.
+  - The practice build (`playground: true`, repository
+    Artiscope/practice-build, address artiscope.github.io/practice-build):
+    `asOn` makes anyone given it in People the admin there, and only
+    there (`youAdmin` on the site; the console's `isAdmin` and
+    `openSite` follow it). Start again (`startAgain`, a card on its
+    Overview, asks once) puts the starter back with `starterInto`, keeps
+    its address and `.github`, and deletes every `adh/` copy.
+  - People: `PEOPLE_SQL` now ends with the two grant lines, and a 42501
+    from Supabase shows `GRANT_HELP` in plain words.
+  - Previews of new copies: each site's `preview.yml` also runs on
+    `create`, so a copy's preview is built when the copy is made. Until it
+    exists (`pageMissing`, a quick check for a 404), the editor shows the
+    live site with the unsaved changes on top, and a line saying the
+    copy's own preview is still being made (`previewWaiting`,
+    `viewWaiting`).
+  - Checks: the "Practice build" area of `tests/uat.mjs`, and the step 3
+    block in `tests/run.mjs`.
+  - To finish the practice build the owner makes an empty public
+    repository Artiscope/practice-build, adds it to the GitHub key
+    (Contents and Pull requests read and write, Actions read) and sets
+    its Pages source to GitHub Actions. Then the starter is pushed to it
+    with the address `https://artiscope.github.io/practice-build/`, and
+    `sites.json` switches it to `live: true`.
 
 Waiting for the owner:
 

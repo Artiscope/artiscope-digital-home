@@ -1,0 +1,112 @@
+{
+  "_how_to_edit": "This file is edited in Artiscope Digital Home. Each page is a list of sections; words in square brackets are placeholders waiting for real words.",
+  "shared": {
+    "header": {
+      "type": "header",
+      "visible": true,
+      "settings": {
+        "name": "[Site name]",
+        "tagline": "[A short line about the site]",
+        "links": [
+          [
+            "Home",
+            "./"
+          ]
+        ],
+        "button": "",
+        "button_href": "",
+        "logos": []
+      }
+    },
+    "footer": {
+      "type": "footer",
+      "visible": true,
+      "settings": {
+        "tagline": "[A short line about the site]",
+        "links_heading": "",
+        "links": [
+          [
+            "Home",
+            "./"
+          ]
+        ],
+        "legal": "[Small print, such as the year and the site's name]"
+      }
+    }
+  },
+  "groups": {
+    "top": [],
+    "popups": [],
+    "bottom": []
+  },
+  "pages": {
+    "home": {
+      "path": "index.html",
+      "title": "[Site name]",
+      "description": "[One or two sentences about the site, for search results]",
+      "home": true,
+      "sections": [
+        {
+          "id": "banner",
+          "type": "picture-banner",
+          "visible": true,
+          "settings": {
+            "image": "",
+            "alt": "[What the opening picture shows]",
+            "eyebrow": "[A small line above the heading]",
+            "heading": "[Your opening heading]",
+            "text": "[A sentence or two that says what the site is for]",
+            "label": "",
+            "href": "",
+            "place": "L",
+            "box": "band",
+            "fit": "fill"
+          }
+        },
+        {
+          "id": "cards",
+          "type": "columns",
+          "visible": true,
+          "settings": {
+            "eyebrow": "",
+            "heading": "[A heading for three cards]",
+            "columns": [
+              {
+                "title": "[Card heading]",
+                "text": "[A short line of placeholder words]",
+                "link": "",
+                "href": ""
+              },
+              {
+                "title": "[Card heading]",
+                "text": "[A short line of placeholder words]",
+                "link": "",
+                "href": ""
+              },
+              {
+                "title": "[Card heading]",
+                "text": "[A short line of placeholder words]",
+                "link": "",
+                "href": ""
+              }
+            ],
+            "per_row": "3",
+            "numbered": false
+          }
+        },
+        {
+          "id": "signup",
+          "type": "signup",
+          "visible": true,
+          "settings": {
+            "heading": "[A heading for the sign-up]",
+            "text": "[A line on what people will receive]",
+            "button": "Ask to join",
+            "pitch": ""
+          }
+        }
+      ]
+    }
+  },
+  "addons": {}
+}

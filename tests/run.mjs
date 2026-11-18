@@ -293,4 +293,48 @@ globalThis.fetch = realFetch;
     assert.ok(home.includes("Up again &lt;b&gt;") && /ao-top[^"]*left/.test(home) && home.includes("No tracking here."), dir + ": add-ons built into the pages");
   }
 }
+// new sites, step 3: the starter, the list of sites, the practice build and the People fix
+{
+  const h = await import("./home.mjs"); const { execFileSync } = await import("node:child_process");
+  const shared = ["announcement", "columns", "space", "quote", "faq", "button", "picture-banner", "slideshow", "gallery", "logo-row", "picture", "text-picture", "artworks", "exhibitions", "career", "press", "signup", "visit", "contact-form", "signup-popup"];
+  assert.deepEqual([...h.STARTER_KINDS].sort(), [...shared].sort(), "the starter offers the shared 20 and nothing else");
+  for (const k of shared) assert.ok(h.STARTER_SECTIONS[k], "the server has no starter section " + k);
+  // the list of sites
+  const keep = SITES.slice();
+  const l = h.cleanSiteList({ sites: [
+    { id: "world-art-review", name: "Taken" }, { id: "Bad Id!" }, { id: "pb", name: "Practice <b>build</b>", repo: "Artiscope/practice-build", kind: "starter", playground: true, live: true, domain: "artiscope.github.io/practice-build" },
+    { id: "plain", name: "Plain", playground: true, live: true }, { id: "pb", name: "Twice" } ] });
+  assert.deepEqual(l.map((x) => x.id), ["pb", "plain"], "built-in ids, bad ids and repeats are dropped");
+  assert.ok(!l[0].name.includes("<"), "names are plain words");
+  assert.equal(l[0].playground && l[0].live && l[0].kind, "starter");
+  assert.equal(l[1].playground || l[1].live, false, "a site with no repository is never live or a practice build");
+  h.useSiteList(l);
+  const pb = SITES.find((x) => x.id === "pb");
+  assert.ok(pb && pb.repo === "Artiscope/practice-build" && pb.model && pb.model.id === "starter", "the practice build is drawn by the starter");
+  assert.ok(SITES.find((x) => x.id === "world-art-review").name === "World Art Review", "the built-in sites stay as they are");
+  const tess = { email: "t@example.org", admin: false, sites: ["pb"] };
+  assert.equal(h.asOn(tess, pb).admin, true, "a test user works as the admin on the practice build");
+  assert.equal(h.asOn(tess, SITES.find((x) => x.id === "world-art-review")).admin, false, "and as an editor everywhere else");
+  SITES.splice(0, SITES.length, ...keep);
+  // site details
+  assert.deepEqual(h.starterForEditor({ site: { email: "a@b.org", address: "https://x.org/" } }).site, { email: "a@b.org", address: "https://x.org/", indexed: false });
+  assert.throws(() => h.starterFromEditor({ site: { email: "nope" } }, { site: { email: "a@b.org" } }), /does not look like an email/);
+  assert.equal(h.starterFromEditor({ site: { email: "c@d.org" } }, { site: { email: "a@b.org", address: "https://x.org/" } }).content.site.address, "https://x.org/", "only the email changes");
+  // the starter builds, hidden from search engines
+  const tmp = "/tmp/run-starter"; fs.rmSync(tmp, { recursive: true, force: true }); fs.cpSync(C_DIR + "/starter", tmp + "/src", { recursive: true });
+  execFileSync("python3", ["tools/build.py", tmp + "/out"], { cwd: tmp + "/src", stdio: "pipe" });
+  const home = fs.readFileSync(tmp + "/out/index.html", "utf8");
+  assert.ok(/<meta name="robots" content="noindex, nofollow">/.test(home), "the starter's pages are hidden from search engines");
+  assert.ok(/Disallow: \//.test(fs.readFileSync(tmp + "/out/robots.txt", "utf8")), "robots.txt keeps search engines out");
+  assert.ok(!fs.existsSync(tmp + "/out/CNAME"), "the practice build never gets a web address");
+  assert.ok(fs.existsSync(tmp + "/out/404.html"), "it has a Page not found page");
+  // People: the grants and the plain message
+  assert.ok(h.PEOPLE_SQL.includes("grant usage on schema public to service_role;") && h.PEOPLE_SQL.includes("grant select, insert, update, delete on table public.people to service_role;"), "the setup lines give the server use of the table");
+  assert.ok(/SQL Editor/.test(h.GRANT_HELP) && !/42501/.test(h.GRANT_HELP), "the message is in plain words");
+  // every site builds a new copy's preview when the copy is made
+  for (const dir of [W_DIR, G_DIR, sadDir()]) {
+    const wf = fs.readFileSync(dir + "/.github/workflows/preview.yml", "utf8");
+    assert.ok(/\n\s+create:/.test(wf) && /ref_type == 'branch'/.test(wf), dir + ": the preview is built when a copy is made");
+  }
+}
 console.log("ALL TESTS PASSED");

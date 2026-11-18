@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "47";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "48";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -66,7 +66,7 @@
   function liveSites() { return sites().filter(function (s) { return s.live; }); }
   function site() { return liveSites().find(function (s) { return s.id === state.site; }) || null; }
   function initials(name) { return String(name).split(/\s+/).map(function (w) { return w.charAt(0); }).join("").slice(0, 3).toUpperCase(); }
-  var COLOURS = { "world-art-review": ["#1D4A35", "#EEE5D4"], "global-art-monitor": ["#F3C3C8", "#2A2A2F"], "practice-site": ["#F1E6FC", "#52057B"], "street-art-dispatch": ["#163A30", "#EFE6D3"] };
+  var COLOURS = { "world-art-review": ["#1D4A35", "#EEE5D4"], "global-art-monitor": ["#F3C3C8", "#2A2A2F"], "practice-site": ["#F1E6FC", "#52057B"], "street-art-dispatch": ["#163A30", "#EFE6D3"], "practice-build": ["#22304A", "#F1EEE8"] };
   function colours(id) { return COLOURS[id] || ["#EDE8F3", "#5D5866"]; }
 
   // ---------- talking to the server ----------
@@ -133,7 +133,7 @@
         var pics = {}; (pgd.pictures || []).forEach(function (p) { pics[p.key] = p; });
         if (pgd.pages) { pgd.pages.groups = pgd.pages.groups || {}; ["top", "popups", "bottom"].forEach(function (w) { if (!pgd.pages.groups[w]) pgd.pages.groups[w] = []; }); tplNormal(pgd.pages, pgd.itemKinds); }
         state.pg[s.id] = { version: pgd.version || "", pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageSizes: pgd.imageSizes || {}, imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false,
-          site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, addonSpec: pgd.addonSpec || [], lists: pgd.lists || {}, listFields: pgd.listFields || [], at: pref.at || "", gam: !!pgd.gam, model: pgd.model || (pgd.gam ? "gam" : ""), builtIn: pgd.builtIn || null, pageFields: pgd.pageFields || null, leftPanel: pref.leftPanel || undefined };
+          site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, addonSpec: pgd.addonSpec || [], lists: pgd.lists || {}, listFields: pgd.listFields || [], at: pref.at || "", gam: !!pgd.gam, model: pgd.model || (pgd.gam ? "gam" : ""), builtIn: pgd.builtIn || null, pageFields: pgd.pageFields || null, leftPanel: pref.leftPanel || undefined, previewWaiting: !!pgd.previewWaiting };
         var made = state.pg[s.id]; if (made.at && !atKnown(made)) made.at = ""; histBase(made);
         render();
       }
@@ -277,7 +277,8 @@
   var NAV_FILES = ["files", "Files", "M4 6a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z", "M8 15l2.5-2.5 2 2 1.5-1.5 2 2"];
   var NAV_PEOPLE = ["people", "People", "M9 5.3a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4zM3.5 19.5c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5", "M16.8 7a2.5 2.5 0 1 1 0 5M16.5 14.6c2.2.1 3.7 1.6 4.1 4.4"];
   // The admin sees everything; an editor sees only their own sites and their own copy.
-  function isAdmin() { return !state.data || !state.data.user || state.data.user.admin !== false; }
+  // The admin, or a test user on the practice build, where everyone given it can do what the admin does.
+  function isAdmin() { if (!state.data || !state.data.user || state.data.user.admin !== false) return true; var s = state.inSite ? site() : null; return !!(s && s.playground && s.youAdmin); }
   // An editor's own copy of a site. Editors always work on it, never on the live site.
   function myCopy(s) { return copiesOf(s).find(function (c) { return c.mine; }) || null; }
   function navItems() {
@@ -370,6 +371,10 @@
       title = "Delete the trial copy \u201C" + c.name + "\u201D?";
       text = "Its changes are lost. The live site is not affected. This cannot be undone.";
       yes = "Delete the copy"; act = "deletecopy";
+    } else if (q.kind === "startagain") {
+      title = "Start the practice build again?";
+      text = "Every page, the look, the words, the photos and any code changes are replaced by the starter, and its copies are deleted. Nothing on the other sites is touched. This cannot be undone, though earlier versions stay in the list.";
+      yes = "Start again"; act = "startagain";
     } else if (q.kind === "resetpractice") {
       title = "Start the Practice site again from World Art Review?";
       text = "Everything practised on its live copy is replaced by World Art Review as it is now. World Art Review itself is not touched. This cannot be undone, though earlier versions stay in the list.";
@@ -451,9 +456,9 @@
   function siteAddr(x) { return x.domain ? "https://" + String(x.domain).replace(/^https?:\/\//, "").replace(/\/+$/, "") + "/" : ""; }
   function siteLamp(x) { var list = copiesOf(x), live = list[0]; return x.practice ? "q" : live && live.ahead ? "a" : "g"; }
   function viewHome() {
-    var all = sites(), live = all.filter(function (x) { return x.live && !x.practice; }), rest = all.filter(function (x) { return !x.live || x.practice; }).sort(function (a, b) { return (b.practice ? 1 : 0) - (a.practice ? 1 : 0); });
-    var nLive = live.length, nBuild = all.filter(function (x) { return !x.live; }).length, nPrac = all.filter(function (x) { return x.practice; }).length;
-    var badge = function (x) { var c = colours(x.live ? x.id : ""); return '<span class="hbadge" aria-hidden="true" style="background:' + c[0] + ";color:" + c[1] + '">' + esc(x.practice ? "P" : x.live ? initials(x.name) : x.name.replace(/\D/g, "")) + '</span>'; };
+    var all = sites(), live = all.filter(function (x) { return x.live && !x.practice; }), rest = all.filter(function (x) { return !x.live || x.practice; }).sort(function (a, b) { var r = function (x) { return x.practice && !x.playground ? 3 : x.playground ? 2 : 0; }; return r(b) - r(a); });
+    var nLive = live.length, nBuild = all.filter(function (x) { return !x.live && !x.playground; }).length, nPrac = all.filter(function (x) { return x.practice || x.playground; }).length;
+    var badge = function (x) { var c = colours(x.live || x.playground ? x.id : ""); return '<span class="hbadge" aria-hidden="true" style="background:' + c[0] + ";color:" + c[1] + '">' + esc(x.playground ? "PB" : x.practice ? "P" : x.live ? initials(x.name) : x.name.replace(/\D/g, "")) + '</span>'; };
     var card = function (x) {
       var addr = siteAddr(x), pic = demo && x.id === "world-art-review" && params.get("preview") ? params.get("preview") : demo && x.id === "global-art-monitor" && params.get("gampreview") ? params.get("gampreview") : demo && x.id === "street-art-dispatch" && params.get("sadpreview") ? params.get("sadpreview") : addr;
       return '<div class="card hcard">' +
@@ -465,9 +470,9 @@
     };
     var quiet = function (x) {
       return '<div class="card hquiet">' +
-        '<span class="hname">' + badge(x) + '<span><b>' + esc(x.name) + '</b><span class="small">' + esc(x.practice ? "Private copy of World Art Review" : x.live ? x.domain : "Domain owned") + '</span></span></span>' +
-        '<span class="small hnote">' + esc(x.practice ? "Try anything here. Nobody outside the team can see it, and nothing you do reaches the real site." : x.live ? statusLine(x) : "Not built yet. The domain is ready when you are.") + '</span>' +
-        '<span class="hfoot">' + (x.practice ? '<span class="hstate"><i class="lamp q" aria-hidden="true"></i>Private</span>' : "") +
+        '<span class="hname">' + badge(x) + '<span><b>' + esc(x.name) + '</b><span class="small">' + esc(x.playground ? "A whole site to build and try things on" : x.practice ? "Private copy of World Art Review" : x.live ? x.domain : "Domain owned") + '</span></span></span>' +
+        '<span class="small hnote">' + esc(x.playground ? (x.live ? "Everyone you give it to can do everything here. Start again wipes it for the next person." : "Waiting to be set up on GitHub.") : x.practice ? "Try anything here. Nobody outside the team can see it, and nothing you do reaches the real site." : x.live ? statusLine(x) : "Not built yet. The domain is ready when you are.") + '</span>' +
+        '<span class="hfoot">' + (x.practice && x.live ? '<span class="hstate"><i class="lamp q" aria-hidden="true"></i>Private</span>' : "") +
           '<button type="button" class="btn slim" data-act="open-site" data-site="' + esc(x.id) + '">' + (x.live ? "Open" : "Start building") + '</button></span></div>';
     };
     return '<div class="page-head hhead"><div><span class="cap">' + esc(today()) + '</span><h1>' + greeting() + '</h1>' +
@@ -479,7 +484,8 @@
   }
   function viewUnbuilt(x) {
     return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><h1>' + esc(x.name) + '</h1>' +
-      '<p>Not built yet. The domain is ready when you are. Building a new site from here, with every section, block and look the other sites have, is the next step.</p></div>';
+      (x.playground ? '<p>Not ready yet. The practice build opens here once its repository, Artiscope/practice-build, is set up on GitHub and filled with the starter.</p></div>'
+        : '<p>Not built yet. The domain is ready when you are. Building a new site from here, with every section, block and look the other sites have, is the next step.</p></div>');
   }
   function viewOverview() {
     var s = site(); if (!s) return viewHome();
@@ -502,7 +508,8 @@
           (isAdmin() ? tile("history", "", "History", "Every change made to the site, and who made it", "See the history") : "")
         : s.files ? tile("files", state.files[s.id] ? state.files[s.id].files.length : "", "Files", "Every photo on the site, what it shows and where it is used", "Upload and describe")
           : tile("photos", empty, "Photos", empty + " empty " + (empty === 1 ? "spot" : "spots") + ", " + waiting + " on the way", "Add photos")) +
-      '</div>' + (s.practice && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start the Practice site again</h2><span class="small">Its words, pages, theme and photos become World Art Review\'s as they are now. Its versions stay in the list. Anyone practising is asked to bring their copy up to date.</span><div class="row"><button type="button" class="soft" data-act="ask-resetpractice">Start again from World Art Review</button></div></div>' : "") +
+      '</div>' + (s.playground && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start the practice build again</h2><span class="small">Every page, the look, the words, the photos and any code changes go, and so do its copies. It becomes the starter again, ready for the next person to build from.</span><div class="row"><button type="button" class="soft" data-act="ask-startagain">Start again</button></div></div>' : "") +
+      (s.practice && !s.playground && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start the Practice site again</h2><span class="small">Its words, pages, theme and photos become World Art Review\'s as they are now. Its versions stay in the list. Anyone practising is asked to bring their copy up to date.</span><div class="row"><button type="button" class="soft" data-act="ask-resetpractice">Start again from World Art Review</button></div></div>' : "") +
       (isAdmin() ? viewCopies() : viewMyCopy());
   }
   // An editor's own copy, and what is waiting on it.
@@ -1159,7 +1166,7 @@
     return '<div class="' + edClass(pgd, right) + '">' +
       '<div class="ed-top">' + edTop(s, pgd) + '</div>' +
       '<div class="ed-left">' + edLeft(pgd) + '</div>' +
-      '<div class="ed-mid">' + viewLeave() + viewAsk() + viewRemoved(pgd) + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
+      '<div class="ed-mid">' + viewLeave() + viewAsk() + viewWaiting(pgd) + viewRemoved(pgd) + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
         '<div class="ed-frame ' + esc(pgd.mode) + '"><iframe id="ed-frame" title="The page being edited" src="' + esc(edFrameSrc(pgd)) + '"></iframe></div><div id="ed-pick">' + edPicker(pgd) + '</div><div id="ed-fbar">' + edFloatBar(pgd) + '</div></div>' +
       (right ? '<div class="ed-right">' + right + '</div>' : "") + '</div>';
   }
@@ -1170,7 +1177,8 @@
     g.push({ id: "pages", label: "Pages", icon: "doc", items: Object.keys(pgd.doc.pages).map(function (k) { return o(k === "home" ? "home" : "page-" + k, shortTitle(pgd, pgd.doc.pages[k].title) || k); }).concat([o("not-found", "Page not found")]) });
     var lists = Object.keys(pgd.lists).map(function (k) { return o(k, pgd.lists[k].label); });
     if (lists.length) g.push({ id: "lists", label: "Lists", icon: "list", items: lists });
-    if (pgd.site) {
+    if (pgd.site && pgd.model === "starter") g.push({ id: "site", label: "Across the site", icon: "gear", items: [o("site-details", "Site details")] });
+    else if (pgd.site) {
       var arts = pgd.site.articles.slice().sort(function (a, b) { return String(a.title).localeCompare(String(b.title)); });
       g.push({ id: "articles", label: "Articles", icon: "book", items: arts.map(function (a) { return o("a-" + a.slug, a.title + (a.hidden ? " (hidden)" : "")); }) });
       g.push({ id: "artists", label: artistsWord(pgd), icon: "person", items: pgd.site.artists.map(function (a) { return o("artist-" + a.slug, a.name + (pgd.gam || a.published ? "" : " (not published)")); }) });
@@ -1188,7 +1196,7 @@
   function pageIcon(pgd) { var k = atKind(pgd); return k === "page" ? (atKey(pgd) === "home" ? "home" : "doc") : { list: "list", article: "book", artist: "person", site: "gear" }[k] || "doc"; }
   // The page picker: a search box, the kinds of page, then the pages of one kind.
   // Kinds of page the sites do not have yet. Shown greyed, used by none, until they are built.
-  function laterKinds(pgd) { var out = [["frame", "Artworks"], ["gallery", "Collections of works"], ["calendar", "Exhibitions"]]; if (pgd.gam && pgd.model !== "sad") out.push(["table", "Auction results"]); return out; }
+  function laterKinds(pgd) { if (pgd.model === "starter") return [["book", "Articles"], ["person", "Artists"], ["frame", "Artworks"], ["calendar", "Exhibitions"]]; var out = [["frame", "Artworks"], ["gallery", "Collections of works"], ["calendar", "Exhibitions"]]; if (pgd.gam && pgd.model !== "sad") out.push(["table", "Auction results"]); return out; }
   function pagePop(pgd) {
     var cur = atHash(pgd), groups = pageGroups(pgd), g = groups.find(function (x) { return x.id === state.ppGroup; }), tk = tplKinds(pgd);
     var item = function (grp) { return function (x) {
@@ -1850,7 +1858,7 @@
   // Making something new: a page, an article, an artist or a source.
   var NEW_WHAT = [["page", "Page"], ["article", "Article"], ["artist", "Artist"], ["source", "Source"]];
   function edNew(pgd) {
-    var w = pgd.newWhat || "page", ok = function (x) { return x === "page" || (!!pgd.site && !(pgd.gam && x === "source")); };
+    var w = pgd.newWhat || "page", ok = function (x) { return x === "page" || (!!pgd.site && pgd.model !== "starter" && !(pgd.gam && x === "source")); };
     if (!ok(w)) w = "page";
     var tabs = '<div class="seg mini">' + NEW_WHAT.filter(function (x) { return ok(x[0]); }).map(function (x) { return '<button type="button" class="' + (w === x[0] ? "on" : "") + '" data-act="ed-new" data-what="' + x[0] + '">' + x[1] + '</button>'; }).join("") + '</div>';
     var f = function (id, label, hint, extra) { return '<div class="field"><label for="nw-' + id + '">' + esc(label) + '</label><input type="text" id="nw-' + id + '" name="' + id + '" maxlength="160"' + (extra || "") + '>' + (hint ? '<span class="small">' + esc(hint) + '</span>' : "") + '</div>'; };
@@ -2117,7 +2125,7 @@
     var out = [], site2 = pgd.site || { articles: [], artists: [] };
     var push = function (id, label, items) { if (items.length) out.push({ id: id, label: label, items: items }); };
     if (pgd.gam) {
-      var pages = []; Object.keys(pgd.doc.pages).forEach(function (k) { var pg = pgd.doc.pages[k], at = String(pg.path || "").replace(/index\.html$/, ""); if (k !== "home" && at) pages.push({ label: shortTitle(pgd, pg.title) || k, href: at }); });
+      var pages = pgd.model === "starter" ? [{ label: "Home page", href: "./" }] : []; Object.keys(pgd.doc.pages).forEach(function (k) { var pg = pgd.doc.pages[k], at = String(pg.path || "").replace(/index\.html$/, ""); if (k !== "home" && at) pages.push({ label: shortTitle(pgd, pg.title) || k, href: at }); });
       push("pages", "Pages", pages);
       push("artists", artistsWord(pgd), (site2.artists || []).map(function (a) { return { label: a.name, href: "artists/" + a.slug + "/", pic: a.image }; }));
       push("articles", "Articles", (site2.articles || []).filter(function (a) { return !a.hidden; }).map(function (a) { return { label: a.title, href: (pgd.model === "sad" ? (a.section || "dispatches") : "research") + "/" + a.slug + "/" }; }));
@@ -2522,6 +2530,8 @@
     pgd.open = pgd.open || {}; pgd.open[d.where + ":" + d.id + ":" + (d.bf || "") + ":" + d.block] = true;
     pgd.what = (cbk.add || "Add a " + cbk.label.toLowerCase()) + " in " + ps.kind.label; pgMark(pgd); pgd.scrollNext = true; edPatch(); pushPreview();
   }
+  // A new copy's own preview takes a minute or two to be built. Until then its pages are drawn on top of the live site.
+  function viewWaiting(pgd) { return pgd && pgd.previewWaiting ? '<p class="notice ed-wait" role="status">This copy\'s own preview is still being made, so your changes show on top of the live site for now. Reload the page in a minute or two to see the copy itself.</p>' : ""; }
   function viewRemoved(pgd) {
     var r = pgd && pgd.removed; if (!r) return "";
     return '<div class="notice putback" role="status"><span>Removed <b>' + esc(r.label) + '</b>.</span><button type="button" class="linklike" data-act="ed-putback">Put it back</button></div>';
@@ -2643,7 +2653,7 @@
     if (right) { if (!rp) { rp = document.createElement("div"); rp.className = "ed-right"; ed.appendChild(rp); } rp.innerHTML = right; }
     else if (rp) rp.remove();
     var mid = ed.querySelector(".ed-mid"), notes = mid.querySelectorAll(".ask, .notice"); Array.prototype.forEach.call(notes, function (x) { x.remove(); });
-    mid.insertAdjacentHTML("afterbegin", viewLeave() + viewAsk() + viewRemoved(pgd) + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : ""));
+    mid.insertAdjacentHTML("afterbegin", viewLeave() + viewAsk() + viewWaiting(pgd) + viewRemoved(pgd) + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : ""));
     var pkb = ed.querySelector("#ed-pick"); if (pkb) pkb.innerHTML = edPicker(pgd);
     var fb = ed.querySelector("#ed-fbar"); if (fb) fb.innerHTML = edFloatBar(pgd);
     mountRich(); mountDrag(); edFitWatch();
@@ -3896,7 +3906,7 @@
 
   function openSite(id) {
     var x = sites().find(function (y) { return y.id === id; }); if (!x) return;
-    if (!isAdmin() && x.live && !myCopy(x)) {
+    if (!isAdmin() && !(x.playground && x.youAdmin) && x.live && !myCopy(x)) {
       state.status = "saving"; state.flash = ""; render();
       api("makeCopy", { site: id, copy: "" }).then(refreshCopies).then(function () { state.status = "live"; if (myCopy(x) || myCopy(sites().find(function (y) { return y.id === id; }))) openSite(id); else { state.notice = { text: "Your copy could not be made just now. Please try again.", problem: true }; render(); } },
         function (e) { state.status = "live"; state.notice = { text: e.message, problem: true }; render(); });
@@ -4062,6 +4072,8 @@
     else if (a === "v-archive") { var va = state.versions[state.site]; if (va) { va.archive = !va.archive; render(); } }
     else if (a === "v-seen") { markSeen(el.dataset.site, el.dataset.v); render(); }
     else if (a === "v-open") { var vo = el.dataset.site; guard(function () { openSite(vo); go("versions"); }); }
+    else if (a === "ask-startagain") { state.ask = { kind: "startagain" }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
+    else if (a === "startagain") { var sa = site(); if (sa) { delete state.pg[sa.id]; change(key("startagain", sa.id), function () { return api("startAgain", { site: sa.id }); }, null, "The practice build starts again from the starter. Live in about two minutes"); } }
     else if (a === "ask-resetpractice") { state.ask = { kind: "resetpractice" }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
     else if (a === "resetpractice") { var rp = site(); if (rp) change(key("reset", rp.id), function () { return api("resetPractice", { site: rp.id }); }, null, "The Practice site starts again from World Art Review. Live in about two minutes"); }
     else if (a === "ask-goback") { state.ask = { kind: "goback", version: el.dataset.v }; render(); if (typeof window.scrollTo === "function") window.scrollTo(0, 0); }
@@ -4652,6 +4664,7 @@
     { id: "street-art-dispatch", name: "Street Art Dispatch", domain: "streetartdispatch.com", live: true, files: true, edits: true, artists: [], inbox: [], slots: [] },
     { id: "site-4", name: "Site 4", domain: "", live: false }, { id: "site-5", name: "Site 5", domain: "", live: false },
     { id: "practice-site", name: "Practice site", domain: "artiscope.github.io/practice-site", live: true, files: true, edits: true, practice: true, artists: [], inbox: [], slots: [] },
+    { id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", live: true, files: true, edits: true, practice: true, playground: true, starter: true, youAdmin: true, artists: [], inbox: [], slots: [] },
   ] };
   var demoHistory = [
     { sha: "a".repeat(40), what: "Edit article: [Sample] How to look at a painting", when: new Date().toISOString(), by: "you", canUndo: true },
@@ -4693,6 +4706,7 @@
   var demoSite = null;   // the sample site's articles, artists and sources, read once from assets/demo-site.json
   var demoGam = null;    // Global Art Monitor's sample, from assets/demo-gam.json
   var demoSad = null;    // Street Art Dispatch's lists, from assets/demo-sad.json
+  var demoStarter = null; // the practice build, from assets/demo-starter.json (the starter as it is)
   // Sample mode's Edit code: a few short sample files, a copy that is "built" a moment after each save.
   var demoCodes = {};
   function demoCode(body) {
@@ -4742,6 +4756,14 @@
       return Promise.resolve({ imageBase: sb, spots: [], files: ((demoSad || {}).images || []).map(function (n) { return { name: n, size: 120000, alt: "", caption: "", used: [] }; }) });
     }
     if (body.action === "savePages" && body.site === "street-art-dispatch" && demoSad) { demoSad.pages = JSON.parse(JSON.stringify(body.pages)); if (body.content) demoSad.site = JSON.parse(JSON.stringify(body.content)); return Promise.resolve({ ok: true }); }
+    if (body.action === "pages" && body.site === "practice-build") {
+      if (!demoStarter) return fetch("assets/demo-starter.json").then(function (r) { return r.json(); }).then(function (d) { demoStarter = d; return demoApi(body); }, function () { return Promise.reject(new Error("The sample could not be read.")); });
+      var pbp = params.get("pbpreview") || "https://artiscope.github.io/practice-build/";
+      return Promise.resolve(JSON.parse(JSON.stringify(Object.assign({}, demoStarter, { preview: pbp, imageBase: pbp + "assets/images/" }))));
+    }
+    if (body.action === "files" && body.site === "practice-build") return Promise.resolve({ imageBase: (params.get("pbpreview") || "https://artiscope.github.io/practice-build/") + "assets/images/", spots: [], files: [] });
+    if (body.action === "savePages" && body.site === "practice-build" && demoStarter) { demoStarter.pages = JSON.parse(JSON.stringify(body.pages)); if (body.content) demoStarter.site = JSON.parse(JSON.stringify(body.content)); return Promise.resolve({ ok: true }); }
+    if (body.action === "startAgain") { demoStarter = null; return Promise.resolve({ ok: true }); }
     if (body.action === "codeOpen" || body.action === "codeSave" || body.action === "codeStatus" || (body.action === "publish" && body.copy === CODE_COPY)) return demoCode(body);
     if (body.action === "pages" && !demoSite) return fetch("assets/demo-site.json").then(function (r) { return r.json(); }).then(function (d) { demoSite = d; if (!demoPages.lists) demoPages.lists = d.pageLists; return demoApi(body); }, function () { demoSite = { site: null, itemKinds: null, lists: {}, listFields: [] }; return demoApi(body); });
     return new Promise(function (resolve, reject) {

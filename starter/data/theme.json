@@ -1,0 +1,15 @@
+{
+  "colours": {
+    "page": "#F1EEE8",
+    "band": "#22304A",
+    "accent": "#A4572F",
+    "ink": "#1B1D22"
+  },
+  "fonts": {
+    "display": "Castoro",
+    "text": "Literata",
+    "sans": "Libre Franklin"
+  },
+  "css": "",
+  "font_links": []
+}

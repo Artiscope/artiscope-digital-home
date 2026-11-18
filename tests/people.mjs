@@ -35,7 +35,7 @@ assert.deepEqual(cleanPerson({ name: "Sam — Taylor<b>", sites: ["world-art-rev
 let d = await as("stranger@x.com", { action: "overview" }); assert.equal(d.status, 403);
 
 // the admin invites an editor: a row is added and the normal sign-in email is sent
-d = await as(ADMIN, { action: "people" }); assert.deepEqual(d.people, []); assert.equal(d.sites.length, 6);
+d = await as(ADMIN, { action: "people" }); assert.deepEqual(d.people, []); assert.equal(d.sites.length, 7);
 d = await as(ADMIN, { action: "invitePerson", email: " Sam@Example.org ", name: "Sam Taylor", sites: [site], back: "https://artiscope.github.io/artiscope-digital-home/" });
 assert.equal(d.ok, true); assert.equal(d.emailed, true);
 assert.deepEqual(mails.at(-1), { to: "sam@example.org", back: "https://artiscope.github.io/artiscope-digital-home/" });
@@ -133,10 +133,10 @@ envKeys.SUPABASE_SERVICE_ROLE_KEY = "eyJold"; ppl.refuse = ["sb_secret_abc"];
 d = await as(ADMIN, { action: "people" }); assert.equal(d.status, 200); assert.equal(dbKeys.at(-1), "eyJold + Authorization", "the older key is tried, as a token");
 ppl.refuse = ["sb_secret_abc", "eyJold"];
 d = await as(ADMIN, { action: "people" }); assert.equal(d.status, 502);
-assert.equal(d.error, "The list of people could not be read. Supabase said: permission denied for table people. (code 403, 42501)");
+assert.ok(/SQL Editor/.test(d.error) && d.error.includes("grant select, insert, update, delete on table public.people to service_role;") && !/42501/.test(d.error), "a refusal is explained in plain words: " + d.error);
 ppl.refuse = []; delete envKeys.SUPABASE_SECRET_KEYS;
 
 // with no database key, the admin still works and editors are simply not there
-envKeys.SUPABASE_SERVICE_ROLE_KEY = ""; d = await as(ADMIN, { action: "overview" }); assert.equal(d.status, 200); assert.equal(d.sites.length, 6);
+envKeys.SUPABASE_SERVICE_ROLE_KEY = ""; d = await as(ADMIN, { action: "overview" }); assert.equal(d.status, 200); assert.equal(d.sites.length, 7);
 assert.equal((await as(ADMIN, { action: "people" })).status, 500);
 console.log("PEOPLE CHECKS PASSED");

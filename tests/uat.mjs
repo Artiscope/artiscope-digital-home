@@ -20,11 +20,23 @@ fs.writeFileSync("/tmp/uat-gam/assets/site.js", fs.readFileSync("/tmp/uat-gam/as
 fs.rmSync("/tmp/uat-sad", { recursive: true, force: true }); execFileSync("python3", [sadDir() + "/tools/build.py", "/tmp/uat-sad"]);
 fs.writeFileSync("/tmp/uat-sad/assets/site.js", fs.readFileSync("/tmp/uat-sad/assets/site.js", "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
 
+// the practice build: the starter, filled in as the console fills it, and built as publishing builds it
+const STARTER = C_DIR + "/starter/", walk = (dir, at = "") => fs.readdirSync(dir + at, { withFileTypes: true }).flatMap((d) => d.isDirectory() ? walk(dir, at + d.name + "/") : [at + d.name]);
+const starterFiles = Object.fromEntries(walk(STARTER).map((f) => [f, fs.readFileSync(STARTER + f, "utf8")]));
+const pbContent = JSON.parse(starterFiles["data/content.json"]); pbContent.site.address = "https://artiscope.github.io/practice-build/";
+const pbFiles = { ...starterFiles, "data/content.json": JSON.stringify(pbContent, null, 2) + "\n" };
+fs.rmSync("/tmp/uat-pb-src", { recursive: true, force: true }); fs.rmSync("/tmp/uat-pb", { recursive: true, force: true });
+for (const [f, t] of Object.entries(pbFiles)) { fs.mkdirSync(path.dirname("/tmp/uat-pb-src/" + f), { recursive: true }); fs.writeFileSync("/tmp/uat-pb-src/" + f, t); }
+execFileSync("python3", ["/tmp/uat-pb-src/tools/build.py", "/tmp/uat-pb"]);
+fs.writeFileSync("/tmp/uat-pb/assets/site.js", fs.readFileSync("/tmp/uat-pb/assets/site.js", "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
+const CR = "Artiscope/artiscope-digital-home", PB = "Artiscope/practice-build";
+const siteList = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4" }, { id: "site-5", name: "Site 5" }] };
+
 // ----- the server, with GitHub in memory -----
 let signedIn = "tester@artiscope.co.uk";
 globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "tester@artiscope.co.uk", SUPABASE_URL: "https://s", SUPABASE_SERVICE_ROLE_KEY: "k", SCHEDULE_KEY: "a-long-random-key-for-the-clock-0123456789" }[k] || "") }, serve() {} };
 const { makePeople } = await import("./fakepeople.mjs"); const ppl = makePeople();
-const { handle } = await import("./home.mjs");
+const { handle, STARTER_KINDS } = await import("./home.mjs");
 const { makeGitHub } = await import("./fakegit.mjs");
 const files = (dir, list) => Object.fromEntries(list.filter((f) => fs.existsSync(dir + f)).map((f) => [f, fs.readFileSync(dir + f, "utf8")]));
 const pics = (dir, sub) => Object.fromEntries(fs.readdirSync(dir + sub).map((f) => [sub + "/" + f, "picture"]));
@@ -33,11 +45,15 @@ const SADDIR = sadDir() + "/", sad0 = JSON.parse(fs.readFileSync(SADDIR + "data/
 const hub = makeGitHub({
   [WR]: { ...files(WARDIR, ["src/index.html", "tools/build_site.py", "content/site.json", "content/pages.json", "content/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(WARDIR, "images") },
   [SR]: files(SADDIR, ["data/content.json", "data/pages.json", "data/theme.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]),
+  [CR]: { "sites.json": JSON.stringify(siteList), ...Object.fromEntries(Object.entries(starterFiles).map(([f, t]) => ["starter/" + f, t])) },
+  [PB]: pbFiles,
   [GR]: { ...files(GAMDIR, ["data/content.json", "data/sales.json", "data/images.json", "data/pages.json", "data/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(GAMDIR, "assets/images") },
 });
 let breakGitHub = false;
+let previewGone = false;   // a new copy whose own preview is not built yet: GitHub answers 404 for it
 globalThis.fetch = async (url, init = {}) => {
   if (String(url).includes("/auth/v1/user")) return new Response(JSON.stringify({ email: signedIn }));
+  if (init.method === "HEAD") return new Response(null, { status: previewGone && String(url).includes("/preview/") ? 404 : 200 });
   if (ppl.handles(url)) return ppl.fetch(url, init);
   if (breakGitHub && (init.method || "GET") !== "GET") return new Response(JSON.stringify({ message: "Server Error" }), { status: 500 });
   return hub.fetch(url, init);
@@ -85,6 +101,7 @@ await page.route("**/*", async (route) => {
   if (url.startsWith("https://worldartreview.com/")) return serveSite("/tmp/uat-war", route, url);
   if (url.startsWith("https://globalartmonitor.com/")) return serveSite("/tmp/uat-gam", route, url);
   if (url.startsWith("https://streetartdispatch.com/")) return serveSite("/tmp/uat-sad", route, url);
+  if (url.startsWith("https://artiscope.github.io/practice-build/")) return serveSite("/tmp/uat-pb", route, url.replace("https://artiscope.github.io/practice-build/", "https://pb.local/"));
   return route.abort();
 });
 const shot = (n) => page.screenshot({ path: OUT + "shots/" + n + ".png" });
@@ -100,8 +117,8 @@ async function openSite(id) { await page.click(".ed-exit", { timeout: 800 }).cat
 // =============== 1. Getting in ===============
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
-await check("Signed-in console opens on All sites, with all six sites, the Practice site among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 6, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 47"), "no version"));
+await check("Signed-in console opens on All sites, with all seven sites, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 7, n + " sites shown"); await shot("01-home"); });
+await check("Version number is shown", async () => must((await text("body")).includes("Version 48"), "no version"));
 await check("An unbuilt site opens to Not built yet", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).toLowerCase().includes("not built yet"), "no message"); await goTab(page, "home"); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -273,7 +290,8 @@ await check("Saving on a trial copy does not ask and does not touch the live sit
   await page.waitForSelector("text=Saved on this copy", { timeout: 9000 }); must(!JSON.stringify(read(WR, "content/pages.json")).includes("Spring numbers"), "reached live");
 });
 await check("A second copy is allowed, a third is not", async () => {
-  await page.click('.ed-top [data-tab="overview"]'); await page.fill("#copy-name", "Summer look"); await page.click('form[data-form="copy"] button[type=submit]'); await settle(2500);
+  await page.click('.ed-top [data-tab="overview"]'); await page.fill("#copy-name", "Summer look"); await page.click('form[data-form="copy"] button[type=submit]');
+  await page.waitForSelector("text=Two trial copies", { timeout: 9000 }).catch(() => {}); await settle(600);
   must((await text("body")).includes("Two trial copies"), "a third could be made");
 });
 await check("Make live puts the copy's changes on the live site", async () => {
@@ -1144,6 +1162,75 @@ await check("Edit code is the admin's only: an editor sees it switched off", asy
   await page.click('[data-act="ed-pop"][data-menu="more"]'); const m = await text(".ed-pop");
   await page.evaluate(() => { const w = window.__adh; w.state.data.user.admin = true; w.state.edMenu = ""; w.render(); });
   must(/Edit code\s*Admin only/.test(m) && !(await page.isVisible('[data-act="code-open"]')), "menu: " + m.replace(/\n/g, " | "));
+});
+
+// =============== 9b. The practice build (new sites, step 3) ===============
+area = "Practice build";
+const pbRead = (f) => { const t = hub.read(PB, "main", f); return t == null ? null : JSON.parse(t); };
+const pbHome = async () => { await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); await settle(600); };
+const pbFrame = () => frame("artiscope.github.io/practice-build");
+await check("The practice build opens in the page editor, drawn by the starter, and offers exactly the shared sections", async () => {
+  await openSite("practice-build");
+  must(pbFrame() && (await pbFrame().innerText("main")).includes("[A heading for three cards]"), "the starter's home page is not in the preview");
+  must((await text(".ed-top")).includes("Live"), "the admin is not on the live practice build");
+  await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); await settle(400);
+  const keys = await page.$$eval(".pk-item[data-key]", (xs) => [...new Set(xs.map((x) => x.dataset.key))].sort());
+  const want = STARTER_KINDS.filter((k) => k !== "signup-popup").sort();
+  must(JSON.stringify(keys) === JSON.stringify(want), "offered " + keys.join(", ")); await shot("50-pb-picker");
+  await page.keyboard.press("Escape"); await settle(200);
+});
+await check("A section added and saved goes onto the practice build, in square brackets until it gets real words", async () => {
+  await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); await page.click('.pk-item[data-key="quote"]'); await settle(700);
+  must((await pbFrame().innerText("main")).includes("[A line worth remembering]"), "the new quote is not in the preview");
+  await liveSave();
+  const doc = pbRead("data/pages.json"), q = doc.pages.home.sections.find((x) => x.type === "quote");
+  must(q && q.settings.text === "[A line worth remembering]", "not saved: " + JSON.stringify(q));
+  await shot("51-pb-quote");
+});
+await check("Site details: the email every form opens a message to", async () => {
+  await page.selectOption(".pagepick", "site-details"); await settle(1000); await page.click('.sec[data-where="item"][data-id="details"]');
+  await page.fill('[data-pf="site.email"]', "not an address"); await page.click('[data-act="ed-save"]'); await page.click('[data-act="livesave"]'); await settle(1500);
+  const n = await notice(); must(/does not look like an email/i.test(n), "notice: " + n);
+  await page.fill('[data-pf="site.email"]', "hello@example.org"); await liveSave();
+  must(pbRead("data/content.json").site.email === "hello@example.org" && pbRead("data/content.json").site.address === "https://artiscope.github.io/practice-build/", "saved " + JSON.stringify(pbRead("data/content.json")));
+});
+await check("A test user given the practice build works there as the admin does, and as an editor on their other sites", async () => {
+  ppl.table.push({ email: "tess@example.org", id: "0a1b2c3d4e", name: "Tess", sites: ["practice-build", "world-art-review"], invited_at: new Date().toISOString(), last_seen: null });
+  signedIn = "tess@example.org";
+  try {
+    await pbHome(); must((await page.locator('[data-act="open-site"]').count()) === 2, "Tess should see two sites");
+    await shot("54-pb-tess-home"); await openSite("practice-build");
+    must((await text(".ed-top")).includes("Live"), "Tess is not on the live practice build: " + (await text(".ed-top")).slice(0, 120));
+    await page.click('[data-act="ed-pop"][data-menu="more"]'); must(await page.isVisible('[data-act="code-open"]'), "Edit code is off for a test user on the practice build"); await page.keyboard.press("Escape");
+    await page.click('#ed-sections .sec[data-id="cards"]:not(.blk)'); await settle(400); await page.fill('[data-pf="heading"]', "Tess was here"); await settle(300); await liveSave();
+    must(pbRead("data/pages.json").pages.home.sections.find((x) => x.id === "cards").settings.heading === "Tess was here", "Tess's change is not live");
+    must(hub.commitLog(PB).some((c) => /\(by 0a1b2c3d4e\)/.test(c.message)), "the change does not carry Tess's code");
+    await openSite("world-art-review"); must(/Your copy/.test(await text(".ed-top")), "on World Art Review Tess is not on her own copy");
+  } finally { signedIn = "tester@artiscope.co.uk"; ppl.table.splice(0, ppl.table.length, ...ppl.table.filter((x) => x.email !== "tess@example.org")); await pbHome(); }
+});
+await check("A new copy whose own preview is not built yet is shown on top of the live site, with a line saying so", async () => {
+  previewGone = true;
+  try {
+    await openSite("practice-build");
+    await page.click('.ed-top [data-tab="overview"]'); await page.waitForSelector("#copy-name");
+    await page.fill("#copy-name", "Try it"); await page.click('form[data-form="copy"] button[type=submit]'); await page.waitForSelector("text=You are working on this", { timeout: 9000 }); await settle(600);
+    await goTab(page, "pages"); await page.waitForSelector("#ed-sections .sec", { timeout: 9000 }); await settle(1500);
+    await page.waitForSelector(".ed-wait", { timeout: 9000 });
+    must(/still being made/.test(await text(".ed-wait")), "no line about the preview");
+    must(pbFrame() && !pbFrame().url().includes("/preview/"), "the preview is not the live site: " + (pbFrame() && pbFrame().url()));
+    await shot("52-pb-waiting");
+  } finally { previewGone = false; }
+});
+await check("Start again puts the practice build back to the starter, after one question, and deletes its copies", async () => {
+  await page.click(".ed-exit").catch(() => {}); await goTab(page, "overview"); await settle(600);
+  await page.click('[data-act="ask-startagain"]'); await settle(300);
+  must((await text("body")).includes("Start the practice build again?"), "no question");
+  await page.click('[data-act="startagain"]'); await page.waitForSelector("text=starts again from the starter", { timeout: 9000 }); await settle(600);
+  const doc = pbRead("data/pages.json"), want = JSON.parse(starterFiles["data/pages.json"]);
+  must(JSON.stringify(doc.pages.home.sections.map((x) => x.id)) === JSON.stringify(want.pages.home.sections.map((x) => x.id)), "pages are not the starter's: " + doc.pages.home.sections.map((x) => x.id));
+  must(pbRead("data/content.json").site.email === "info@grovegallery.com" && pbRead("data/content.json").site.address === "https://artiscope.github.io/practice-build/", "details: " + JSON.stringify(pbRead("data/content.json")));
+  must(!Object.keys(hub.refs(PB)).some((r) => r.startsWith("adh/")), "copies are left: " + Object.keys(hub.refs(PB)));
+  await shot("53-pb-startagain");
 });
 
 // =============== 6c. New sections, batch 1 ===============
