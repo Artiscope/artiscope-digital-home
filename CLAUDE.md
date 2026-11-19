@@ -889,7 +889,9 @@ Done:
   keeps it never live in the editor, `siteOverview` sends `outside` and
   `repo`, and `viewHome` shows it with the live sites (picture, "Live. Not
   in the editor yet", View site and GitHub, no Open). The owner chose to
-  convert it to the console's pattern later, in steps with a sample first;
+  convert it to the console's pattern later, in six steps with a sample
+  first (plan: https://claude.ai/artifact/Hd329iyEdJF4o5g3mtXjpd, with four
+  decisions for the owner before step 1);
   another session builds it, so only one session changes its repository
   at a time. Checks: the outside lines in `tests/run.mjs` and the last
   check of the "Shortcuts and full width" area.
