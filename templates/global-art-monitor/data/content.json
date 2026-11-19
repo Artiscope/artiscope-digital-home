@@ -1,0 +1,44 @@
+{
+  "site": {
+    "name": "[Site name]",
+    "tagline": "[A short line about the site]",
+    "headline": "[Your opening heading]",
+    "intro": "[A sentence or two that says what the site is for]",
+    "email": "info@grovegallery.com",
+    "disclosure": "[Who publishes this site, and any interest it has in the artists it covers]",
+    "address": "https://example.org/",
+    "indexed": false
+  },
+  "published": "",
+  "published_text": "[Date of the latest update]",
+  "sections": [
+    [
+      "market-intelligence",
+      "Market Intelligence",
+      "[A line about this section]"
+    ],
+    [
+      "auction-results",
+      "Auction Results",
+      "[A line about this section]"
+    ],
+    [
+      "artists",
+      "Artist Market Profiles",
+      "[A line about this section]"
+    ],
+    [
+      "research",
+      "Research Reports",
+      "[A line about this section]"
+    ],
+    [
+      "collecting-valuation",
+      "Collecting & Valuation",
+      "[A line about this section]"
+    ]
+  ],
+  "bios": {},
+  "features": [],
+  "glossary": []
+}

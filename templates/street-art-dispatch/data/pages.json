@@ -343,6 +343,14 @@
               {
                 "term": "[Disclosure]",
                 "text": "[Words]"
+              },
+              {
+                "term": "[Image rights]",
+                "text": "[Words]"
+              },
+              {
+                "term": "[Legality]",
+                "text": "[Words]"
               }
             ],
             "end_heading": "[Get in touch]",
@@ -373,6 +381,14 @@
               },
               {
                 "term": "[Corrections]",
+                "text": "[Words]"
+              },
+              {
+                "term": "[The Intervention Archive]",
+                "text": "[Words]"
+              },
+              {
+                "term": "[Suggest an artist]",
                 "text": "[Words]"
               }
             ],

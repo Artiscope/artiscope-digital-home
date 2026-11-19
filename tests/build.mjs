@@ -13,11 +13,12 @@ const walk = (dir, base = "") => fs.readdirSync(dir, { withFileTypes: true }).fl
 const starter = Object.fromEntries(walk(C_DIR + "/starter").filter(([f]) => !f.endsWith(".gitkeep")));
 // and the Street Art Dispatch template beside it
 const TSAD = Object.fromEntries(walk(C_DIR + "/templates/street-art-dispatch").filter(([f]) => !f.endsWith(".gitkeep")));
+const TGAM = Object.fromEntries(walk(C_DIR + "/templates/global-art-monitor").filter(([f]) => !f.endsWith(".gitkeep")));
 const CR = "Artiscope/artiscope-digital-home", PB = "Artiscope/practice-build";
-const list = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4", domain: "", repo: "", live: false }, { id: "site-5", name: "Site 5", domain: "", repo: "", live: false }, { id: "site-9", name: "Site 9", domain: "", repo: "", live: false }] };
+const list = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4", domain: "", repo: "", live: false }, { id: "site-5", name: "Site 5", domain: "", repo: "", live: false }, { id: "site-9", name: "Site 9", domain: "", repo: "", live: false }, { id: "site-12", name: "Site 12", domain: "", repo: "", live: false }] };
 const rd = (dir, f) => fs.readFileSync(dir + "/" + f, "utf8");
 const hub = makeGitHub({
-  [CR]: { "sites.json": JSON.stringify(list), ...Object.fromEntries(Object.entries(starter).map(([f, t]) => ["starter/" + f, t])), ...Object.fromEntries(Object.entries(TSAD).map(([f, t]) => ["templates/street-art-dispatch/" + f, t])) },
+  [CR]: { "sites.json": JSON.stringify(list), ...Object.fromEntries(Object.entries(starter).map(([f, t]) => ["starter/" + f, t])), ...Object.fromEntries(Object.entries(TSAD).map(([f, t]) => ["templates/street-art-dispatch/" + f, t])), ...Object.fromEntries(Object.entries(TGAM).map(([f, t]) => ["templates/global-art-monitor/" + f, t])) },
   [PB]: { ...Object.fromEntries(Object.entries(starter).filter(([f]) => !f.startsWith(".github/"))), ".github/workflows/pages.yml": starter[".github/workflows/pages.yml"] },
   "Artiscope/World-art-review": { "content/pages.json": rd(W_DIR, "content/pages.json") },
   "Artiscope/global-art-monitor": { "data/pages.json": rd(G_DIR, "data/pages.json") },
@@ -145,7 +146,7 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   const SAD_OWN = /Street Art Dispatch|streetartdispatch|Konn|Banksy|Invader|Fairey|Grove Gallery roster|sad-tile|sad-mark|assets\/brand/;
   let d = await as(ADMIN, { action: "planSite", site: "site-9", choices: { name: "Wall Notes", tagline: "Walls and what is on them", email: "hello@wallnotes.org", template: T } });
   assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
-  const tp = d.spec.templates; assert.deepEqual(tp.filter((x) => x.ready).map((x) => x.id), ["starter", T]); assert.ok(tp.find((x) => x.id === "the-art-correspondent").later); ok("five templates are offered, two of them ready");
+  const tp = d.spec.templates; assert.deepEqual(tp.filter((x) => x.ready).map((x) => x.id), ["starter", T, "global-art-monitor"]); assert.ok(tp.find((x) => x.id === "the-art-correspondent").later); ok("five templates are offered, three of them ready");
   let plan = d.plan; assert.equal(plan.choices.template, T); assert.equal(plan.choices.pages, "template"); assert.equal(plan.choices.look, "Street Art Dispatch's own");
   assert.equal(d.spec.looks[0].own, true); assert.ok(!d.spec.looks.some((l) => l.name === "Like Street Art Dispatch"), "no second copy of its own look"); ok("the template's own look comes first");
   assert.deepEqual(Object.keys(plan.pages.pages).sort(), ["about", "artists", "collecting", "contact", "dispatches", "exhibitions", "home", "interventions", "urban-culture"]);
@@ -203,6 +204,44 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   assert.equal(hub.read(PB, "main", "assets/render.js"), starter["assets/render.js"]); assert.ok(!hub.files(PB).includes("data/files.json") || true);
   assert.ok(!("template" in read(CR, "sites.json").sites.find((x) => x.id === "practice-build"))); assert.equal(h.SITES.find((x) => x.id === "practice-build").model.id, "starter");
   ok("Start again puts the practice build back on the starter");
+}
+
+// ----- templates: a new site from the Global Art Monitor design -----
+{
+  const T = "global-art-monitor", TR = "Artiscope/sale-notes";
+  const GAM_OWN = /Global Art Monitor|globalartmonitor|Konn|Zara|Tate Ward|Grove Gallery sells|MONITOR|market note|gam-tile|gam-mark/;
+  let d = await as(ADMIN, { action: "planSite", site: "site-12", choices: { name: "Sale Notes", tagline: "Prices, kept honest", email: "hello@salenotes.org", template: T } });
+  assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
+  assert.deepEqual(d.spec.templates.filter((x) => x.ready).map((x) => x.id), ["starter", "street-art-dispatch", T]);
+  let plan = d.plan; assert.equal(plan.choices.look, "Global Art Monitor's own");
+  assert.deepEqual(Object.keys(plan.pages.pages).sort(), ["about", "artists", "auction-results", "collecting-valuation", "contact", "home", "market-intelligence", "research"]);
+  assert.equal(plan.pages.pages.home.intro, true); assert.equal(plan.pages.pages["auction-results"].current, "auction-results");
+  assert.deepEqual([plan.content.site.name, plan.content.site.tagline, plan.content.site.email, plan.content.site.address], ["Sale Notes", "Prices, kept honest", "hello@salenotes.org", "https://artiscope.github.io/sale-notes/"]);
+  assert.match(plan.content.site.disclosure, /^\[.*\]$/); assert.deepEqual([plan.content.features, plan.content.glossary, plan.content.bios], [[], [], {}]);
+  assert.ok(!GAM_OWN.test(JSON.stringify({ ...plan.pages, _how_to_edit: "" }) + JSON.stringify(plan.content)), "nothing of Global Art Monitor's own content");
+  assert.ok(plan.pages.shared.footer.settings.legal.startsWith("{disclosure}"), "the footer still tells readers who publishes the site");
+  ok("the Global Art Monitor plan is its eight pages, with placeholders, empty tables and its disclosure kept as a placeholder");
+  d = await as(ADMIN, { action: "planSite", site: "site-12", choices: { name: "Sale Notes", template: T, look: "Paper and ink" } });
+  assert.deepEqual(d.plan.theme.colours, { blush: "#EDEAE4", ink: "#232326", mint: "#D9532F" }); ok("a look is put into its page, ink and highlight colours");
+  d = await as(ADMIN, { action: "createSite", site: "site-12", choices: { name: "Sale Notes", tagline: "Prices, kept honest", email: "hello@salenotes.org", template: T } });
+  assert.equal(d.status, 200, JSON.stringify(d));
+  const files = hub.files(TR);
+  assert.equal(hub.read(TR, "main", "assets/render.js"), TGAM["assets/render.js"]); assert.deepEqual(read(TR, "data/sales.json").sales, []); assert.deepEqual(read(TR, "data/images.json"), {});
+  assert.ok(!files.some((f) => /^assets\/brand\/|favicon|CLAUDE\.md|AGENT-LOG|VOICE|image-slots|place_photos|assemble\.sh|CNAME|index\.html$/.test(f)), "nothing of the original's own: " + files.join(", "));
+  assert.equal(read(CR, "sites.json").sites.find((x) => x.id === "site-12").template, T);
+  const card = h.SITES.find((x) => x.id === "site-12"); assert.equal(card.model.id, "gam"); assert.equal(card.gam, true); assert.ok(card.sectionKinds.timeline && card.sectionKinds["results-table"]);
+  assert.ok(!JSON.stringify(card.sectionKinds.visit.starter).includes("Grove")); assert.ok(card.wordLocks["item.who"], "the disclosure heading stays locked");
+  d = await as(ADMIN, { action: "pages", site: "site-12" }); assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300)); assert.equal(d.model, "gam"); assert.equal(d.site.site.name, "Sale Notes");
+  ok("Create site copies the Global Art Monitor design and its empty sales and pictures, and it opens in the editor as such a site");
+  const tmp = "/tmp/build-tgam"; fs.rmSync(tmp, { recursive: true, force: true }); fs.cpSync(C_DIR + "/templates/" + T, tmp, { recursive: true });
+  for (const f of ["data/pages.json", "data/theme.json", "data/content.json"]) fs.writeFileSync(tmp + "/" + f, hub.read(TR, "main", f));
+  execFileSync("python3", [tmp + "/tools/build.py", tmp + "/_site"]);
+  const home = fs.readFileSync(tmp + "/_site/index.html", "utf8");
+  assert.ok(home.includes('content="noindex, nofollow"') && home.includes("Sale Notes") && home.includes("[Sales appear here once you add them]") && home.includes(">NOTES<"));
+  const nf = fs.readFileSync(tmp + "/_site/404.html", "utf8"); assert.ok(nf.includes('href="/sale-notes/auction-results/"') && nf.includes('href="/sale-notes/assets/site.css"'), "the page for a wrong address finds its way home");
+  assert.equal(fs.readFileSync(tmp + "/_site/robots.txt", "utf8"), "User-agent: *\nDisallow: /\n"); assert.ok(!fs.existsSync(tmp + "/_site/CNAME"));
+  for (const f of fs.readdirSync(tmp + "/_site", { recursive: true }).filter((x) => String(x).endsWith(".html"))) assert.ok(!GAM_OWN.test(fs.readFileSync(tmp + "/_site/" + f, "utf8")), f + " has the original's words");
+  ok("the new site builds, hidden from search engines, with its own name, empty tables and nothing of the original");
 }
 
 // ----- step 5: articles and artists on a site built from the starter -----

@@ -1,0 +1,507 @@
+{
+  "_how_to_edit": "This file is edited in Artiscope Digital Home. Each page is a list of sections; words in square brackets are placeholders waiting for real words.",
+  "shared": {
+    "header": {
+      "type": "header",
+      "visible": true,
+      "settings": {
+        "name": "[Site name]",
+        "subscribe": "[Subscribe]",
+        "subscribe_href": "about/#newsletter",
+        "menu_extra": [
+          [
+            "About and method",
+            "about/"
+          ],
+          [
+            "Contact",
+            "contact/"
+          ]
+        ],
+        "menu_tagline": "[Line at the foot of the menu]"
+      }
+    },
+    "footer": {
+      "type": "footer",
+      "visible": true,
+      "settings": {
+        "heading": "[Heading]",
+        "button": "[Subscribe by email]",
+        "button_href": "about/#newsletter",
+        "blurb": "[Short description of the site]",
+        "about_links": [
+          [
+            "Method",
+            "about/#method"
+          ],
+          [
+            "Sources",
+            "about/#sources"
+          ],
+          [
+            "Corrections",
+            "about/#corrections"
+          ],
+          [
+            "Contact",
+            "contact/"
+          ]
+        ],
+        "legal": "{disclosure} [Small print, such as the year and the site's name]",
+        "legal_link": [
+          "[More about who we are]",
+          "about/#disclosure"
+        ]
+      }
+    }
+  },
+  "pages": {
+    "home": {
+      "path": "index.html",
+      "title": "[Site name]",
+      "description": "[One or two sentences about this page, for search results]",
+      "current": "",
+      "intro": true,
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "visible": true,
+          "settings": {
+            "eyebrow": "{tagline}",
+            "headline": "{headline}",
+            "lede": "{intro}",
+            "buttons": [
+              [
+                "[Read the latest analysis]",
+                "research/",
+                "mint"
+              ],
+              [
+                "[Browse auction results]",
+                "auction-results/",
+                "ink"
+              ]
+            ],
+            "result_card": true,
+            "result_label": "[Latest documented result]",
+            "result_link": "[See the full timeline]",
+            "watermark": ""
+          }
+        },
+        {
+          "id": "status",
+          "type": "status",
+          "visible": true,
+          "settings": {
+            "items": [
+              "[Facts]"
+            ],
+            "clock": "[Published in London]"
+          }
+        },
+        {
+          "id": "timeline",
+          "type": "timeline",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[Artist auction timeline]",
+            "heading": "[Heading]",
+            "intro": "[Introduction]",
+            "artist": "",
+            "button": "[See every documented result]",
+            "button_href": "auction-results/"
+          }
+        },
+        {
+          "id": "words",
+          "type": "words",
+          "visible": true,
+          "settings": {
+            "label": "[Description for screen readers]",
+            "words": [
+              {
+                "word": "[Hammer]",
+                "text": "[Line]",
+                "href": "collecting-valuation/#hammer-price",
+                "style": "ink"
+              },
+              {
+                "word": "[Premium]",
+                "text": "[Line]",
+                "href": "collecting-valuation/#buyer-s-premium",
+                "style": "light"
+              },
+              {
+                "word": "[Estimate]",
+                "text": "[Line]",
+                "href": "collecting-valuation/#estimate",
+                "style": "mint"
+              },
+              {
+                "word": "[Currency]",
+                "text": "[Line]",
+                "href": "about/#method",
+                "style": "ghost"
+              }
+            ]
+          }
+        },
+        {
+          "id": "features",
+          "type": "features",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[Research and features]",
+            "heading": "[Heading]",
+            "which": "all",
+            "numbered": true,
+            "big": 2
+          }
+        },
+        {
+          "id": "profiles",
+          "type": "profiles",
+          "visible": true,
+          "settings": {
+            "heading": "[Artist market profiles]",
+            "artists": [],
+            "more_card": true
+          }
+        },
+        {
+          "id": "sections",
+          "type": "page-links",
+          "visible": true,
+          "settings": {
+            "heading": "[Where to start]"
+          }
+        },
+        {
+          "id": "method",
+          "type": "method",
+          "visible": true,
+          "settings": {}
+        }
+      ]
+    },
+    "auction-results": {
+      "path": "auction-results/index.html",
+      "title": "Auction Results",
+      "description": "[One or two sentences about this page, for search results]",
+      "current": "auction-results",
+      "intro": false,
+      "sections": [
+        {
+          "id": "head",
+          "type": "page-head",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[Auction Results]",
+            "headline": "[Heading]",
+            "lede": "[Introduction]",
+            "wide": true
+          }
+        },
+        {
+          "id": "results",
+          "type": "results-table",
+          "visible": true,
+          "settings": {
+            "all_artists": "[All artists]",
+            "all_houses": "[All houses]",
+            "empty": "[When no sale matches]"
+          }
+        },
+        {
+          "id": "words",
+          "type": "words",
+          "visible": true,
+          "settings": {
+            "label": "[Description for screen readers]",
+            "words": [
+              {
+                "word": "[Hammer]",
+                "text": "[Line]",
+                "href": "collecting-valuation/#hammer-price",
+                "style": "ink"
+              },
+              {
+                "word": "[Premium]",
+                "text": "[Line]",
+                "href": "collecting-valuation/#buyer-s-premium",
+                "style": "light"
+              },
+              {
+                "word": "[Estimate]",
+                "text": "[Line]",
+                "href": "collecting-valuation/#estimate",
+                "style": "mint"
+              },
+              {
+                "word": "[Currency]",
+                "text": "[Line]",
+                "href": "about/#method",
+                "style": "ghost"
+              }
+            ]
+          }
+        },
+        {
+          "id": "reading",
+          "type": "features",
+          "visible": true,
+          "settings": {
+            "eyebrow": "",
+            "heading": "[Reading the results]",
+            "which": [],
+            "numbered": false,
+            "big": 2
+          }
+        },
+        {
+          "id": "method",
+          "type": "method",
+          "visible": true,
+          "settings": {}
+        }
+      ]
+    },
+    "artists": {
+      "path": "artists/index.html",
+      "title": "Artist Market Profiles",
+      "description": "[One or two sentences about this page, for search results]",
+      "current": "artists",
+      "intro": false,
+      "sections": [
+        {
+          "id": "head",
+          "type": "page-head",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[Artist Market Profiles]",
+            "headline": "[Heading]",
+            "lede": "[Introduction]",
+            "wide": true
+          }
+        },
+        {
+          "id": "profiles",
+          "type": "profiles",
+          "visible": true,
+          "settings": {
+            "heading": "",
+            "artists": [],
+            "more_card": true
+          }
+        },
+        {
+          "id": "method",
+          "type": "method",
+          "visible": true,
+          "settings": {}
+        }
+      ]
+    },
+    "research": {
+      "path": "research/index.html",
+      "title": "Research Reports",
+      "description": "[One or two sentences about this page, for search results]",
+      "current": "research",
+      "intro": false,
+      "sections": [
+        {
+          "id": "head",
+          "type": "page-head",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[Research Reports]",
+            "headline": "[Heading]",
+            "lede": "[Introduction]",
+            "wide": true
+          }
+        },
+        {
+          "id": "features",
+          "type": "features",
+          "visible": true,
+          "settings": {
+            "eyebrow": "",
+            "heading": "",
+            "which": "all",
+            "numbered": true,
+            "big": 2
+          }
+        },
+        {
+          "id": "method",
+          "type": "method",
+          "visible": true,
+          "settings": {}
+        }
+      ]
+    },
+    "market-intelligence": {
+      "path": "market-intelligence/index.html",
+      "title": "Market Intelligence",
+      "description": "[One or two sentences about this page, for search results]",
+      "current": "market-intelligence",
+      "intro": false,
+      "sections": [
+        {
+          "id": "head",
+          "type": "page-head",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[Market Intelligence]",
+            "headline": "[Heading]",
+            "lede": "[Introduction]",
+            "wide": true
+          }
+        },
+        {
+          "id": "features",
+          "type": "features",
+          "visible": true,
+          "settings": {
+            "eyebrow": "",
+            "heading": "",
+            "which": "tag:market-intelligence",
+            "numbered": false,
+            "big": 0
+          }
+        },
+        {
+          "id": "latest",
+          "type": "latest-result",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[Latest documented result]",
+            "text": "[Text]",
+            "button": "[Open the full timeline]"
+          }
+        },
+        {
+          "id": "method",
+          "type": "method",
+          "visible": true,
+          "settings": {}
+        }
+      ]
+    },
+    "collecting-valuation": {
+      "path": "collecting-valuation/index.html",
+      "title": "Collecting & Valuation",
+      "description": "[One or two sentences about this page, for search results]",
+      "current": "collecting-valuation",
+      "intro": false,
+      "sections": [
+        {
+          "id": "head",
+          "type": "page-head",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[Collecting &amp; Valuation]",
+            "headline": "[Heading]",
+            "lede": "[Introduction]",
+            "wide": true
+          }
+        },
+        {
+          "id": "guides",
+          "type": "features",
+          "visible": true,
+          "settings": {
+            "eyebrow": "",
+            "heading": "[Guides]",
+            "which": "tag:collecting-valuation",
+            "numbered": false,
+            "big": 0,
+            "compact": true
+          }
+        },
+        {
+          "id": "glossary",
+          "type": "glossary",
+          "visible": true,
+          "settings": {
+            "heading": "[Heading]"
+          }
+        },
+        {
+          "id": "valuation",
+          "type": "panel",
+          "visible": true,
+          "settings": {
+            "heading": "[Need a valuation?]",
+            "text": "[Text]"
+          }
+        }
+      ]
+    },
+    "about": {
+      "path": "about/index.html",
+      "title": "About, Method and Sources",
+      "description": "[One or two sentences about this page, for search results]",
+      "current": "",
+      "intro": false,
+      "sections": [
+        {
+          "id": "head",
+          "type": "page-head",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[About]",
+            "headline": "[Heading]",
+            "lede": "[Introduction]",
+            "wide": true
+          }
+        },
+        {
+          "id": "text",
+          "type": "prose",
+          "visible": true,
+          "settings": {
+            "html": "<h2 id=\"disclosure\" style=\"margin-top:0\">[Who publishes this]</h2>\n<p>{disclosure}</p>\n<p>[A paragraph on how you handle that interest]</p>\n\n<h2 id=\"method\">[Method]</h2>\n<p>[How you record a sale]</p>\n<ul>\n<li><strong>[First rule.]</strong> [A sentence on it]</li>\n<li><strong>[Second rule.]</strong> [A sentence on it]</li>\n</ul>\n\n<h2 id=\"sources\">[Sources]</h2>\n<p>[Where your figures come from]</p>\n\n<h2 id=\"corrections\">[Corrections]</h2>\n<p>[How to send a correction to] <a href=\"mailto:{email}?subject=Correction\">{email}</a>.</p>\n\n<h2 id=\"newsletter\">[The mailing list]</h2>\n<p>[What the list sends, and how often. To join, email] <a href=\"mailto:{email}?subject=Subscribe\">{email}</a>.</p>\n\n<h2 id=\"contact\">[Contact]</h2>\n<p>[For anything else, use the] <a href=\"@@contact/\">[contact page]</a>.</p>\n\n<h2 id=\"advice\">[Not advice]</h2>\n<p>[A sentence saying the site is not advice]</p>",
+            "aside": "<div class=\"mini\"><h2>[On this page]</h2><ul><li><a href=\"#disclosure\">[Who publishes this]</a></li><li><a href=\"#method\">[Method]</a></li><li><a href=\"#sources\">[Sources]</a></li><li><a href=\"#corrections\">[Corrections]</a></li><li><a href=\"#newsletter\">[The mailing list]</a></li><li><a href=\"@@contact/\">[Contact]</a></li></ul></div>\n<div class=\"mini\"><h2>[Last updated]</h2><p>{published}</p></div>"
+          }
+        }
+      ]
+    },
+    "contact": {
+      "path": "contact/index.html",
+      "title": "Contact",
+      "description": "[One or two sentences about this page, for search results]",
+      "current": "",
+      "intro": false,
+      "sections": [
+        {
+          "id": "head",
+          "type": "page-head",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[Contact]",
+            "headline": "[Ask us something]",
+            "lede": "[Introduction]",
+            "wide": true
+          }
+        },
+        {
+          "id": "form",
+          "type": "contact-form",
+          "visible": true,
+          "settings": {
+            "html": "<form class=\"form\" id=\"contact-form\" data-email=\"{email}\" data-reveal>\n<div class=\"field\"><label for=\"cf-name\">Your name</label><input id=\"cf-name\" name=\"name\" type=\"text\" autocomplete=\"name\" required></div>\n<div class=\"field\"><label for=\"cf-email\">Your email</label><input id=\"cf-email\" name=\"email\" type=\"email\" autocomplete=\"email\" required></div>\n<div class=\"field\"><label for=\"cf-topic\">What is it about?</label>\n<select id=\"cf-topic\" name=\"topic\">\n<option>[General question]</option>\n<option>[Correction]</option>\n<option>[Something else]</option>\n</select></div>\n<div class=\"field\"><label for=\"cf-message\">Your message</label><textarea id=\"cf-message\" name=\"message\" rows=\"7\" required></textarea></div>\n<div class=\"form-foot\"><button class=\"pill pill-ink\" type=\"submit\">[Send your message]</button>\n<p class=\"quiet\" id=\"contact-status\" role=\"status\">This opens your email app with the message ready to send.</p></div>\n<noscript><p class=\"quiet\">This form needs scripts switched on. You can also write to {email}.</p></noscript>\n</form>",
+            "aside": "<div class=\"mini\"><h2>[Email us directly]</h2><p><a href=\"mailto:{email}\">{email}</a></p></div>\n<div class=\"mini\"><h2>[A heading]</h2><p>[A line of help for people writing in]</p></div>"
+          }
+        }
+      ]
+    }
+  },
+  "groups": {
+    "top": [],
+    "popups": [],
+    "bottom": []
+  },
+  "addons": {}
+}

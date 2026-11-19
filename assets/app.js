@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "56";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "57";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -4095,7 +4095,7 @@
     return '<button type="button" class="bd-look' + (on ? " on" : "") + '" data-act="bd-set" data-k="look" data-v="' + esc(l.name) + '" aria-pressed="' + on + '">' +
       '<span class="bd-lrow"><span class="bd-aa" style="font-family:\'' + esc(l.fonts.display) + '\',Georgia,serif" aria-hidden="true">Aa</span><span class="bd-sw" aria-hidden="true">' +
       cols.map(function (c) { return '<i style="background:' + esc(l.colours[c]) + '"></i>'; }).join("") + '</span>' + (on ? '<span class="bd-tick">' + ic("check", 16) + '</span>' : "") + '</span>' +
-      '<b>' + esc(l.name) + '</b><span class="small">' + esc(l.fonts.display + " and " + l.fonts.text + ", " + (l.corners === "round" ? "rounded" : "square") + " corners") + '</span></button>';
+      '<b>' + esc(l.name) + '</b><span class="small">' + esc(l.fonts.display + " and " + l.fonts.text + ", " + (l.corners === "round" ? "rounded corners" : bdTpl(b).id === "starter" ? "square corners" : "the template's own corners")) + '</span></button>';
   }
   function bdOpt(v, title, about, extra) {
     var b = bdOf(), on = b.c.pages === v;
@@ -5251,7 +5251,8 @@
     var address = card.playground ? "https://artiscope.github.io/practice-build/" : "https://artiscope.github.io/" + slug + "/";
     var looks = (demoBuild.specs ? demoBuild.specs[tid] : demoBuild.spec).looks; if (!looks.some(function (l) { return l.name === c.look; })) c.look = looks[0].name;
     var theme = tid !== "starter" ? demoBuild.themes[tid + "|" + c.look] : demoBuild.themes[c.look] || demoBuild.themes["Ink and clay"];
-    var content = Object.assign({}, tid !== "starter" ? JSON.parse(JSON.stringify(demoBuild.contents[tid])) : {}, { site: { email: c.email, address: address, indexed: false } });
+    var content = tid !== "starter" ? JSON.parse(JSON.stringify(demoBuild.contents[tid])) : {}, was = content.site || {};
+    content.site = Object.assign({}, was, "name" in was ? { name: c.name || "[Site name]" } : {}, "tagline" in was && c.tagline ? { tagline: c.tagline } : {}, { email: c.email, address: address, indexed: false });
     var plan = { choices: c, address: address, repo: card.playground ? "Artiscope/practice-build" : "Artiscope/" + slug, pages: demoNameInto(pl.pages, c), theme: theme, content: content, notes: pl.notes };
     if (body.action === "planSite") return Promise.resolve({ ok: true, plan: plan, spec: demoBuild.specs ? demoBuild.specs[tid] : demoBuild.spec });
     if (!c.name) return Promise.reject(new Error("Give the site a name."));

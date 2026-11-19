@@ -1,0 +1,13 @@
+{
+  "colours": {
+    "blush": "#F3C3C8",
+    "ink": "#2A2A2F",
+    "mint": "#22E3A2"
+  },
+  "fonts": {
+    "serif": "Libre Caslon Display",
+    "sans": "Libre Franklin"
+  },
+  "css": "",
+  "font_links": []
+}

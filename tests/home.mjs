@@ -34,6 +34,7 @@ export const WORD_LOCKS = {
   sad: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK, "missing.date": "Stays until confirmed facts are given, by the site's rules.", "item.draft": "Stays until confirmed facts are given, by the site's rules." },
   starter: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
   tsad: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
+  tgam: { "form.note": NOTE_LOCK, "item.who": "The heading of the publisher disclosure stays as it is: readers are always told who publishes the site." },
 };
 export const WAR_WORDS = {
   "menu.close": "Close", "menu.artists": "Artists A to Z", "menu.reviews": "Reviews", "menu.explained": "Art Explained",
@@ -1348,6 +1349,10 @@ const TSAD_ITEMS = Object.fromEntries(Object.entries(SAD_ITEMS).map(([k, v]) => 
 TSAD_ITEMS.site = { ...TSAD_ITEMS.site, label: "Site details", parts: TSAD_ITEMS.site.parts.map((part, i) => i ? part : { ...part, label: "Site details", about: "The byline and date on every article, and the email address the forms open a message to.",
   fields: part.fields.concat([{ name: "site.email", label: "Email shown on the site", type: "text", hint: "Every form opens the visitor's own email app with a message ready to send here." }]) }) };
 export const TSAD_WORDS = Object.fromEntries(Object.entries({ ...SAD_WORDS, "form.subject": "Join the {site} mailing list" }).filter(([k]) => k !== "item.draft"));
+// The Global Art Monitor template: its sections with bracketed starting words, and a plain hint on the disclosure.
+const TGAM_SECTIONS = Object.fromEntries(Object.entries(GAM_SECTIONS).map(([k, v]) => [k, v.starter ? { ...v, starter: ST_BRACKET(v.fields, k === "visit" ? { ...v.starter, heading: "Visit us" } : v.starter, k) } : v]));
+const TGAM_ITEMS = Object.fromEntries(Object.entries(GAM_ITEMS).map(([k, v]) => [k, { ...v, parts: v.parts.map((part) => part.fields ? { ...part, fields: part.fields.map((f) => f.name === "site.disclosure" ? { ...f, hint: "Who publishes the site, and any interest it has in the artists it covers. Readers are always told." } : f) } : part) }]));
+export const TGAM_WORDS = { ...GAM_WORDS, "loading.line": "Loading the latest figures.", "form.subject": "Please add me to the mailing list" };
 export const SITE_TEMPLATES = [
   { id: "starter", name: "The starter", dir: STARTER_DIR, global: "STARTER", ready: true, line: "Simple and flexible. The design every new site has had so far.",
     own: "None of its own", pages: "Articles and artist pages", stays: "Nothing: it has no content of its own" },
@@ -1355,7 +1360,9 @@ export const SITE_TEMPLATES = [
     own: "7 of its own: Opening banner, Article cards, Artist cards, Intervention archive, Exhibition listings, Collecting band and Page text", pages: "Articles, columns, artist profiles and the archive",
     stays: "Its stories, artists, archive entries, licensed photos, the stamp logo and the Draft notes. The archive, exhibitions and collecting figures arrive empty" },
   { id: "world-art-review", name: "World Art Review", ready: false, line: "Editorial, with artist portfolios, reviews and guides.", later: "Comes in a later step" },
-  { id: "global-art-monitor", name: "Global Art Monitor", ready: false, line: "Data-led, with tables, figures and timelines.", later: "Comes in a later step" },
+  { id: "global-art-monitor", name: "Global Art Monitor", dir: "templates/global-art-monitor", global: "GAM", ready: true, line: "Data-led, with tables, figures and timelines.",
+    own: "14 of its own, such as the artist auction timeline, Latest result, All auction results, Words explained and the glossary", pages: "Articles, artist market profiles with their sales, and auction results",
+    stays: "Its sales and figures, artists, articles, glossary, photos and the G logo. The tables, profiles and glossary arrive empty" },
   { id: "the-art-correspondent", name: "The Art Correspondent", ready: false, line: "Quiet and text-led, with story lists by section and subject.", later: "Ready after its conversion" },
 ];
 export const templateOf = (id) => SITE_TEMPLATES.find((t) => t.id === id && t.ready) || SITE_TEMPLATES[0];
@@ -1367,6 +1374,10 @@ export function starterSite(e) {
     pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
     code: { edit: ["assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs"], read: ["data/pages.json", "data/theme.json", "data/content.json"] },
   };
+  if (t.id === "global-art-monitor") {
+    const gam = SITES.find((x) => x.id === "global-art-monitor");
+    return { ...base, code: { ...base.code, read: base.code.read.concat(["data/sales.json"]) }, sectionKinds: TGAM_SECTIONS, words: TGAM_WORDS, wordLocks: WORD_LOCKS.tgam, items: TGAM_ITEMS, model: GAM_MODEL, gam: true, builtIn: gam.builtIn, theme: gam.theme, collections: [] };
+  }
   if (t.id === "street-art-dispatch") {
     const sad = SITES.find((x) => x.id === "street-art-dispatch");
     return { ...base, sectionKinds: TSAD_SECTIONS, words: TSAD_WORDS, wordLocks: WORD_LOCKS.tsad, items: TSAD_ITEMS, model: SAD_MODEL, builtIn: sad.builtIn, theme: sad.theme, collections: [] };
@@ -2953,7 +2964,12 @@ export function buildLooks(template = "starter") {
 function lookInto(spec, look) {
   const colours = {}, fonts = {}, C = { bg: "page", band: "band", accent: "accent", text: "ink" }, T = { display: "display", body: "text", small: "sans" };
   for (const c of spec.colours) if (C[c.role] && look.colours[C[c.role]]) colours[c.id] = look.colours[C[c.role]];
-  for (const f of spec.fonts) if (T[f.role] && look.fonts[T[f.role]]) fonts[f.id] = look.fonts[T[f.role]];
+  // a typeface goes where the theme's list allows it: a theme with one text face takes the reading face, or else the small one
+  for (const f of spec.fonts) {
+    const tries = f.role === "body" && !spec.fonts.some((g) => g.role === "small") ? [look.fonts.text, look.fonts.sans] : [look.fonts[T[f.role]]];
+    const pick = tries.find((x) => x && (!Array.isArray(f.options) || f.options.includes(x)));
+    if (pick) fonts[f.id] = pick;
+  }
   return { colours, fonts, settings: { corners: look.corners === "round" ? "round" : "" } };
 }
 export const BUILD_REGISTRARS = [["123-reg", "123-reg"], ["godaddy", "GoDaddy"], ["other", "Somewhere else"]];
@@ -3087,7 +3103,10 @@ export function planFiles(c, address, copied, tpl) {
     if (!tpl) throw new Error("The template could not be read from GitHub just now. Try again in a moment.");
     const spec = starterSite({ template: c.template }).theme, look = buildLooks(c.template).find((l) => l.name === c.look) || buildLooks(c.template)[0];
     const theme = themeFile({ pages: { images: "assets/images" } }, spec, cleanTheme(spec, lookInto(spec, look)));
-    const content = { ...JSON.parse(JSON.stringify(tpl.content || {})), site: { email: c.email, address, indexed: false } };
+    const t0 = JSON.parse(JSON.stringify(tpl.content || {})), was = t0.site || {};
+    // a template whose details carry the site's name and tagline (Global Art Monitor's) gets them there too
+    const named = { ...("name" in was ? { name: c.name || "[Site name]" } : {}), ...("tagline" in was ? { tagline: c.tagline || was.tagline } : {}) };
+    const content = { ...t0, site: { ...was, ...named, email: c.email, address, indexed: false } };
     return { pages: nameInto(tpl.pages, c), theme, content, notes: { swapped: [], left: [] } };
   }
   let list, notes = { swapped: [], left: [] };

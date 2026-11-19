@@ -219,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (19 November 2026, Version 56)
+## Where things stand (19 November 2026, Version 57)
 
 Done:
 
@@ -907,10 +907,10 @@ Done:
     original never reach it. Nothing of the original's content comes
     across (articles, artists, figures, photos, logos, email addresses),
     and every word starts in square brackets.
-  - Ready: the starter and Street Art Dispatch
-    (`templates/street-art-dispatch`). World Art Review and Global Art
-    Monitor show "Comes in a later step" (steps 3 and 4); The Art
-    Correspondent "Ready after its conversion" (step 5).
+  - Ready: the starter, Street Art Dispatch
+    (`templates/street-art-dispatch`) and, since Version 57, Global Art
+    Monitor. World Art Review shows "Comes in a later step" (step 4); The
+    Art Correspondent "Ready after its conversion" (step 5).
   - The Street Art Dispatch template: SAD's render.js, site.js, site.css
     and build with its name, stamp logo, favicon, Draft note, licensed
     photo credits and own addresses taken out; the site's address and
@@ -940,6 +940,38 @@ Done:
     has `specs`, `contents` and `tpl:<id>` plans.
   - Checks: the templates block in `tests/build.mjs`, the `tsad` words in
     `tests/run.mjs`, the "Start building" and "Edge cases" areas of
+    `tests/uat.mjs`.
+
+- Version 57 (19 November): the Global Art Monitor template, step 3 of 6.
+  - `templates/global-art-monitor`: GAM's render.js, site.js, site.css and
+    build, with its name, G logo, favicon, "MONITOR" words, Grove Gallery
+    lines, its method words and links to its own articles taken out. The
+    name comes from the menu bar (`NAME()`), the big word behind the
+    opening and in the footer is the name's last word (`bigWord`, none
+    while the name is a placeholder), the address from `site.address`
+    (`addressOf`, `ROOT` for the page for a wrong address), noindex until
+    `indexed`. The build writes into a folder like the starter's (no
+    pages kept in the repository) and uses the starter's workflows. Empty
+    tables and article lists show "[Sales appear here once you add
+    them]" and "[Articles appear here once you add them]". Hard-coded
+    GAM colours in site.css follow the theme.
+  - Its data files from `node tests/tools/make-template.mjs
+    global-art-monitor`: the eight pages with `current` and `intro`, the
+    About and Contact passages written by hand as structure with
+    placeholders (`BY_HAND`), `{disclosure}`, `{email}` and the other
+    slots kept, the footer's small print still opening with
+    `{disclosure}`, empty `sales.json` and `images.json`, and Site
+    details with placeholder headline, introduction and disclosure.
+  - Server: `TGAM_SECTIONS`, `TGAM_ITEMS` (a plain disclosure hint),
+    `TGAM_WORDS`, `WORD_LOCKS.tgam` (the disclosure heading stays locked),
+    `GAM_MODEL` with `gam: true`. `planFiles` puts the name and tagline
+    into a template's Site details when it has them. `lookInto` gives a
+    theme with one text face the look's reading face, or its small face,
+    whichever the theme's list allows.
+  - Console: look cards on a template other than the starter say "the
+    template's own corners" instead of "square corners".
+  - Checks: the Global Art Monitor block in `tests/build.mjs`, the `tgam`
+    words in `tests/run.mjs`, the first "Start building" check in
     `tests/uat.mjs`.
 
 Waiting for the owner:
