@@ -219,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (19 November 2026, Version 55)
+## Where things stand (19 November 2026, Version 56)
 
 Done:
 
@@ -895,6 +895,52 @@ Done:
   another session builds it, so only one session changes its repository
   at a time. Checks: the outside lines in `tests/run.mjs` and the last
   check of the "Shortcuts and full width" area.
+
+- Version 56 (19 November): site templates in Start building, step 2 of 6
+  (plan approved 19 November, sample
+  https://claude.ai/artifact/87cdGt5x9oqQW7dCEdaQx7). Start building now
+  opens on a Template step (five steps: Template, About the site, Look,
+  Pages, Check and create).
+  - A template is a folder in this repository: `starter/` and
+    `templates/<id>/`, each a copy of a site's design code with placeholder
+    data files. A new site gets its own copy, so later changes to the
+    original never reach it. Nothing of the original's content comes
+    across (articles, artists, figures, photos, logos, email addresses),
+    and every word starts in square brackets.
+  - Ready: the starter and Street Art Dispatch
+    (`templates/street-art-dispatch`). World Art Review and Global Art
+    Monitor show "Comes in a later step" (steps 3 and 4); The Art
+    Correspondent "Ready after its conversion" (step 5).
+  - The Street Art Dispatch template: SAD's render.js, site.js, site.css
+    and build with its name, stamp logo, favicon, Draft note, licensed
+    photo credits and own addresses taken out; the site's address and
+    email come from `site` in `data/content.json` (`addressOf`, noindex
+    until `indexed`, CNAME only then); hard-coded SAD colours in site.css
+    now follow the theme; empty lists say "[Articles appear here once you
+    add them]". Its data files come from
+    `node tests/tools/make-template.mjs street-art-dispatch` (placeholders
+    by field, links only to its own kinds of page, refuses to write if a
+    word of the original is left). The design code is kept by hand.
+  - Server: `SITE_TEMPLATES`, `templateOf`; `starterSite(e)` builds a
+    site of its template (SAD's: `TSAD_SECTIONS`, `TSAD_ITEMS` with no
+    Draft and an email in Site details, `TSAD_WORDS`, `WORD_LOCKS.tsad`,
+    `SAD_MODEL`, SAD's theme). `sites.json` entries keep `template`
+    (absent means the starter). `starterInto` copies the site's own
+    template folder (`site.dir`). `cleanBuild` has `template` (pages
+    "template" for anything but the starter), `buildLooks(template)` puts
+    the template's own look first, `lookInto` maps a look onto the
+    template's colours and typefaces by what each is for, `planFiles`
+    reads the template's pages and content (`templateFiles`, kept two
+    minutes). The practice build can start from any ready template and is
+    then run as a site of it; Start again puts it back on the starter.
+  - Console: `bdStep0` (template rows with their look, what stays
+    behind), `bdTpl`, `bdStarter` loads each template's render.js once
+    (`bdModules`), the Look step's "From the template" group, the Pages
+    step lists the template's pages. Sample mode: `assets/demo-build.json`
+    has `specs`, `contents` and `tpl:<id>` plans.
+  - Checks: the templates block in `tests/build.mjs`, the `tsad` words in
+    `tests/run.mjs`, the "Start building" and "Edge cases" areas of
+    `tests/uat.mjs`.
 
 Waiting for the owner:
 

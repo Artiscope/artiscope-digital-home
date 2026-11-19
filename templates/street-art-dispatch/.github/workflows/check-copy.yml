@@ -1,0 +1,23 @@
+name: Check a working copy
+
+# Builds a working copy made in Artiscope Digital Home (a branch named
+# adh/<name>) the same way publishing builds the site, and publishes
+# nothing. The console reads the result: a copy with code changes can be
+# made live only once this has passed for its latest save.
+
+on:
+  push:
+    branches: ['adh/**']
+    paths-ignore: ['inbox/**']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build it as publishing would
+        run: python3 tools/build.py /tmp/check-out

@@ -349,7 +349,8 @@ globalThis.fetch = realFetch;
   const h = await import("./home.mjs"); const { wordsIn } = await import("./tools/site-words.mjs"); const { execFileSync } = await import("node:child_process");
   const S = sadDir();
   const sets = { war: [[W_DIR + "/src/index.html"], h.WAR_WORDS], gam: [[G_DIR + "/assets/render.js", G_DIR + "/assets/site.js"], h.GAM_WORDS],
-    sad: [[S + "/assets/render.js", S + "/assets/site.js"], h.SAD_WORDS], starter: [[C_DIR + "/starter/assets/render.js", C_DIR + "/starter/assets/site.js"], h.STARTER_WORDS] };
+    sad: [[S + "/assets/render.js", S + "/assets/site.js"], h.SAD_WORDS], starter: [[C_DIR + "/starter/assets/render.js", C_DIR + "/starter/assets/site.js"], h.STARTER_WORDS],
+    tsad: [[C_DIR + "/templates/street-art-dispatch/assets/render.js", C_DIR + "/templates/street-art-dispatch/assets/site.js"], h.TSAD_WORDS] };
   for (const [id, [files, list]] of Object.entries(sets)) {
     const found = wordsIn(files);
     assert.deepEqual(found.clash, [], id + ": one key, one set of words");

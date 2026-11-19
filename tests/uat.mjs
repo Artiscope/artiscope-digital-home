@@ -23,6 +23,7 @@ fs.writeFileSync("/tmp/uat-sad/assets/site.js", fs.readFileSync("/tmp/uat-sad/as
 // the practice build: the starter, filled in as the console fills it, and built as publishing builds it
 const STARTER = C_DIR + "/starter/", walk = (dir, at = "") => fs.readdirSync(dir + at, { withFileTypes: true }).flatMap((d) => d.isDirectory() ? walk(dir, at + d.name + "/") : [at + d.name]);
 const starterFiles = Object.fromEntries(walk(STARTER).map((f) => [f, fs.readFileSync(STARTER + f, "utf8")]));
+const TSAD = C_DIR + "/templates/street-art-dispatch/", tsadFiles = Object.fromEntries(walk(TSAD).map((f) => ["templates/street-art-dispatch/" + f, fs.readFileSync(TSAD + f, "utf8")]));
 const pbContent = JSON.parse(starterFiles["data/content.json"]); pbContent.site.address = "https://artiscope.github.io/practice-build/";
 const pbFiles = { ...starterFiles, "data/content.json": JSON.stringify(pbContent, null, 2) + "\n" };
 fs.rmSync("/tmp/uat-pb-src", { recursive: true, force: true }); fs.rmSync("/tmp/uat-pb", { recursive: true, force: true });
@@ -45,7 +46,7 @@ const SADDIR = sadDir() + "/", sad0 = JSON.parse(fs.readFileSync(SADDIR + "data/
 const hub = makeGitHub({
   [WR]: { ...files(WARDIR, ["src/index.html", "tools/build_site.py", "content/site.json", "content/pages.json", "content/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(WARDIR, "images") },
   [SR]: files(SADDIR, ["data/content.json", "data/pages.json", "data/theme.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]),
-  [CR]: { "sites.json": JSON.stringify(siteList), ...Object.fromEntries(Object.entries(starterFiles).map(([f, t]) => ["starter/" + f, t])) },
+  [CR]: { "sites.json": JSON.stringify(siteList), ...Object.fromEntries(Object.entries(starterFiles).map(([f, t]) => ["starter/" + f, t])), ...tsadFiles },
   [PB]: pbFiles,
   [GR]: { ...files(GAMDIR, ["data/content.json", "data/sales.json", "data/images.json", "data/pages.json", "data/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(GAMDIR, "assets/images") },
 });
@@ -136,7 +137,7 @@ if (process.env.AUDIT) {
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all seven sites, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 7, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 55"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 56"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -1603,10 +1604,21 @@ area = "Start building";
 const NEW = "Artiscope/grove-prints";
 const bdFrame = async () => { const el = await page.$("#bd-if"); return el ? await el.contentFrame() : null; };
 const bdText = async () => { const f = await bdFrame(); return f ? await f.innerText("body").catch(() => "") : ""; };
-await check("Start building opens on About the site, with the new home page drawn beside it", async () => {
+await check("Start building opens on Template: each template draws its own home page beside it", async () => {
   await page.setViewportSize({ width: 1440, height: 900 }); await goHome();
-  await page.click('[data-act="open-site"][data-site="site-4"]'); await page.waitForSelector('[data-bd="name"]'); await settle(2500);
-  must((await bdText()).includes("[Your opening heading]"), "no preview: " + (await bdText()).slice(0, 80));
+  await page.click('[data-act="open-site"][data-site="site-4"]'); await page.waitForSelector(".bd-tpl"); await settle(2500);
+  must((await page.locator(".bd-tpl").count()) === 5 && (await page.locator(".bd-tpl[disabled]").count()) === 3, "not five templates, three of them still to come");
+  must((await bdText()).includes("[Your opening heading]"), "no starter preview: " + (await bdText()).slice(0, 80));
+  await page.click('.bd-tpl[data-v="street-art-dispatch"]'); await settle(2500);
+  const tt = await bdText(); must(tt.includes("[The Intervention Archive]") && tt.includes("[Articles appear here once you add them]") && !/Konn|Banksy|Street Art Dispatch/.test(tt), "not the template's own home page: " + tt.slice(0, 160));
+  must((await text(".bd-tinfo")).includes("Stays behind"), "no word on what stays behind");
+  await shot("59-build-template");
+  await page.click('[data-act="bd-next"]'); await settle(400); await page.click('[data-act="bd-next"]'); await settle(900);
+  must((await text(".bd-form")).includes("From the template") && (await page.locator(".bd-look").first().getAttribute("data-v")) === "Street Art Dispatch's own", "the template's own look is not first");
+  await page.click('[data-act="bd-step"][data-n="1"]'); await settle(400);
+  await page.click('.bd-tpl[data-v="starter"]'); await settle(2500);
+  must((await bdText()).includes("[Your opening heading]"), "the starter does not come back");
+  await page.click('[data-act="bd-next"]'); await page.waitForSelector('[data-bd="name"]'); await settle(500);
   await page.fill('[data-bd="name"]', ""); await page.click('[data-act="bd-next"]'); await settle(300);
   must(/Give the site a name/.test(await text(".bd-err")), "an empty name went through");
   await page.fill('[data-bd="name"]', "Grove Prints"); await page.fill('[data-bd="tagline"]', "Prints from the Grove studio"); await page.fill('[data-bd="domain"]', "www.groveprints"); await settle(1200);
@@ -1670,7 +1682,8 @@ await check("Open the editor: the new site opens with its six pages", async () =
 });
 await check("The practice build: Start building rebuilds it with the choices, and no repository is made", async () => {
   await openSite("practice-build"); await page.click(".ed-exit").catch(() => {}); await goTab(page, "overview"); await settle(500);
-  await page.click('[data-act="bd-start"]'); await page.waitForSelector('[data-bd="name"]'); await settle(1200);
+  await page.click('[data-act="bd-start"]'); await page.waitForSelector(".bd-tpl"); await settle(1200);
+  await page.click('[data-act="bd-next"]'); await page.waitForSelector('[data-bd="name"]'); await settle(600);
   must(!(await page.$('[data-bd="domain"]')), "the practice build asks for a web address");
   await page.fill('[data-bd="name"]', "Tess tries it"); await settle(600);
   for (let i = 0; i < 3; i++) { await page.click('[data-act="bd-next"]'); await settle(500); }
@@ -1808,7 +1821,7 @@ await check("Start building turns away a name with no letters, and a web address
   let found = false;
   for (const id of ["site-5", "site-4"]) {
     await page.waitForSelector('[data-act="open-site"][data-site="' + id + '"]', { timeout: 20000 }); await page.click('[data-act="open-site"][data-site="' + id + '"]');
-    if (await page.waitForSelector('[data-bd="name"]', { timeout: 4000 }).then(() => true, () => false)) { found = true; break; }
+    if (await page.waitForSelector(".bd-tpl", { timeout: 4000 }).then(() => true, () => false)) { await settle(800); await page.click('[data-act="bd-next"]'); await page.waitForSelector('[data-bd="name"]'); found = true; break; }
     await page.click('[data-tab="home"]', { timeout: 1500 }).catch(() => {});
   }
   must(found, "no site still to build");
@@ -1818,6 +1831,11 @@ await check("Start building turns away a name with no letters, and a web address
   await page.fill('[data-bd="name"]', "Edge Gallery"); await page.fill('[data-bd="domain"]', "not a web address"); await page.click('[data-act="bd-next"]'); await settle(300);
   must(/should look like newsite.com/.test(await text(".bd-err")), "bad address went through");
   must(!hub.repoMade("Artiscope/edge-gallery"), "a repository was made");
+  // a template carries through to Check and create
+  await page.fill('[data-bd="domain"]', ""); await page.click('[data-act="bd-step"][data-n="1"]'); await settle(400);
+  await page.click('.bd-tpl[data-v="street-art-dispatch"]'); await settle(1800);
+  for (let i = 0; i < 4; i++) { await page.click('[data-act="bd-next"]'); await settle(600); }
+  const sum = await text(".bd-rows"); must(sum.includes("Street Art Dispatch") && sum.includes("9 of them") && sum.includes("Street Art Dispatch's own"), "summary: " + sum);
   await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]');
 });
 await check("Signing out clears an old error message", async () => {
@@ -2096,8 +2114,12 @@ await check("Pointing at a section or block on the page lights up its row in the
   for (const [id, host, sel] of [["global-art-monitor", "globalartmonitor.com", "[data-adh]"], ["street-art-dispatch", "streetartdispatch.com", "[data-adh]"]]) {
     await openSite(id); await page.selectOption(".pagepick", "home").catch(() => {}); await settle(1500);
     const sid = await frame(host).evaluate((q) => { const els = Array.from(document.querySelectorAll(q)); const e = els.find((x) => x.getBoundingClientRect().height > 40); return e ? e.getAttribute("data-adh") : ""; }, sel);
-    await hoverOn(host, '[data-adh="' + sid + '"]'); await settle(500);
-    const lit = await page.evaluate(() => Array.from(document.querySelectorAll(".ed-left .sec.over")).map((r) => r.dataset.id));
+    // the preview may still be settling after the page change: point again a few times before giving up
+    let lit = [];
+    for (let i = 0; i < 4 && !(lit.length === 1 && lit[0] === sid); i++) {
+      await hoverOn(host, '[data-adh="' + sid + '"]').catch(() => {}); await settle(500 + i * 700);
+      lit = await page.evaluate(() => Array.from(document.querySelectorAll(".ed-left .sec.over")).map((r) => r.dataset.id));
+    }
     must(lit.length === 1 && lit[0] === sid, id + ": lit " + lit.join(",") + " for " + sid);
   }
 });

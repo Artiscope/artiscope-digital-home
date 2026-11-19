@@ -33,6 +33,7 @@ export const WORD_LOCKS = {
   gam: { "form.note": NOTE_LOCK, "item.who": "The heading of the publisher disclosure stays as it is, by the site's rules." },
   sad: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK, "missing.date": "Stays until confirmed facts are given, by the site's rules.", "item.draft": "Stays until confirmed facts are given, by the site's rules." },
   starter: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
+  tsad: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
 };
 export const WAR_WORDS = {
   "menu.close": "Close", "menu.artists": "Artists A to Z", "menu.reviews": "Reviews", "menu.explained": "Art Explained",
@@ -978,7 +979,8 @@ const SAD_ITEMS = {
 export function sadForEditor(content) {
   const c = JSON.parse(JSON.stringify(content || {})), notes = c.artist_notes || {};
   return {
-    site: { desk: c.desk || "", date: c.date || "" }, photos: c.photos || {}, artist_photos: c.artist_photos || {},
+    // a site from the Street Art Dispatch template also keeps the email its forms write to
+    site: { desk: c.desk || "", date: c.date || "", ...(c.site && typeof c.site === "object" ? { email: String(c.site.email || "") } : {}) }, photos: c.photos || {}, artist_photos: c.artist_photos || {},
     articles: (c.features || []).map((f) => ({ ...f, section: "dispatches" })).concat((c.columns || []).map((f) => ({ ...f, section: "urban-culture" })))
       .map((f) => sadShown(f, (c.photo_files || {})[f.slug], (c.photos || {})[f.slug])),
     artists: (c.artists || []).map((a) => ({ slug: a.slug || slugOf(a.name), ...sadShown(a, (c.artist_photo_files || {})[a.name], (c.artist_photos || {})[a.name]), note: notes[a.name] || "" })),
@@ -1028,7 +1030,13 @@ export function sadFromEditor(kinds, given, content) {
   let siteChanged = false;
   for (const f of kinds.site.parts[0].fields) {
     const k = f.name.slice(5), r = keepOrClean(f, was.site[k], (given.site || {})[k], ctx);
-    if (!r.same) { c[k] = r.v; siteChanged = true; }
+    if (r.same) continue;
+    if (k === "email") {
+      const em = String(r.v || "").trim();
+      if (em && !EMAIL_SHAPE.test(em)) throw new Error("The email shown on the site does not look like an email address.");
+      c.site = { ...(c.site || {}), email: em };
+    } else c[k] = r.v;
+    siteChanged = true;
   }
   if (siteChanged) changed.push("Edit issue details");
   const lists = [["archive", S_ARCHIVE, "Edit the archive"], ["exhibitions", S_SHOWS, "Edit the exhibition listings"], ["stats", kinds.site.parts[3].fields[0], "Edit the collecting figures"], ["glossary", kinds.site.parts[4].fields[0], "Edit the glossary"]];
@@ -1329,15 +1337,41 @@ const STARTER_THEME = {
   looks: STARTER_LOOKS,
 };
 export const STARTER_DIR = "starter";
-// A site from the list of sites, built from the starter.
+// ----- Site templates: the design a new site starts from -----
+// Each template is a folder in this repository (starter/, templates/<id>/) holding a copy of a site's design
+// code with placeholder data files. A new site gets its own copy of the folder, so later changes to the
+// original site never reach it. Nothing of the original's content comes across: no articles, artists,
+// figures, photos, logos or email addresses, and every word starts in square brackets.
+// The Street Art Dispatch template: its sections with bracketed starting words, and no Draft note.
+const TSAD_SECTIONS = Object.fromEntries(Object.entries(SAD_SECTIONS).map(([k, v]) => [k, v.starter ? { ...v, starter: ST_BRACKET(v.fields, k === "collecting" ? { ...v.starter, heading: "Collecting" } : v.starter, k) } : v]));
+const TSAD_ITEMS = Object.fromEntries(Object.entries(SAD_ITEMS).map(([k, v]) => [k, { ...v, parts: v.parts.map((part) => part.fields ? { ...part, fields: part.fields.filter((f) => f.name !== "draft") } : part) }]));
+TSAD_ITEMS.site = { ...TSAD_ITEMS.site, label: "Site details", parts: TSAD_ITEMS.site.parts.map((part, i) => i ? part : { ...part, label: "Site details", about: "The byline and date on every article, and the email address the forms open a message to.",
+  fields: part.fields.concat([{ name: "site.email", label: "Email shown on the site", type: "text", hint: "Every form opens the visitor's own email app with a message ready to send here." }]) }) };
+export const TSAD_WORDS = Object.fromEntries(Object.entries({ ...SAD_WORDS, "form.subject": "Join the {site} mailing list" }).filter(([k]) => k !== "item.draft"));
+export const SITE_TEMPLATES = [
+  { id: "starter", name: "The starter", dir: STARTER_DIR, global: "STARTER", ready: true, line: "Simple and flexible. The design every new site has had so far.",
+    own: "None of its own", pages: "Articles and artist pages", stays: "Nothing: it has no content of its own" },
+  { id: "street-art-dispatch", name: "Street Art Dispatch", dir: "templates/street-art-dispatch", global: "SAD", ready: true, line: "A magazine, with story cards and a dated archive.",
+    own: "7 of its own: Opening banner, Article cards, Artist cards, Intervention archive, Exhibition listings, Collecting band and Page text", pages: "Articles, columns, artist profiles and the archive",
+    stays: "Its stories, artists, archive entries, licensed photos, the stamp logo and the Draft notes. The archive, exhibitions and collecting figures arrive empty" },
+  { id: "world-art-review", name: "World Art Review", ready: false, line: "Editorial, with artist portfolios, reviews and guides.", later: "Comes in a later step" },
+  { id: "global-art-monitor", name: "Global Art Monitor", ready: false, line: "Data-led, with tables, figures and timelines.", later: "Comes in a later step" },
+  { id: "the-art-correspondent", name: "The Art Correspondent", ready: false, line: "Quiet and text-led, with story lists by section and subject.", later: "Ready after its conversion" },
+];
+export const templateOf = (id) => SITE_TEMPLATES.find((t) => t.id === id && t.ready) || SITE_TEMPLATES[0];
+// A site from the list of sites, built from the starter or from a template.
 export function starterSite(e) {
-  return {
+  const t = templateOf(e.template), base = {
     id: e.id, name: e.name, domain: e.domain, repo: e.repo, live: !!e.live, starter: true, playground: !!e.playground, practice: !!e.playground, artists: [],
-    want: e.want || "", registrar: e.registrar || "", todo: Array.isArray(e.todo) ? e.todo : [],
+    want: e.want || "", registrar: e.registrar || "", todo: Array.isArray(e.todo) ? e.todo : [], template: t.id, dir: t.dir,
     pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
     code: { edit: ["assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs"], read: ["data/pages.json", "data/theme.json", "data/content.json"] },
-    sectionKinds: STARTER_SECTIONS, words: STARTER_WORDS, wordLocks: WORD_LOCKS.starter, items: STARTER_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: STARTER_THEME, collections: [], lists: STARTER_LISTS,
   };
+  if (t.id === "street-art-dispatch") {
+    const sad = SITES.find((x) => x.id === "street-art-dispatch");
+    return { ...base, sectionKinds: TSAD_SECTIONS, words: TSAD_WORDS, wordLocks: WORD_LOCKS.tsad, items: TSAD_ITEMS, model: SAD_MODEL, builtIn: sad.builtIn, theme: sad.theme, collections: [] };
+  }
+  return { ...base, sectionKinds: STARTER_SECTIONS, words: STARTER_WORDS, wordLocks: WORD_LOCKS.starter, items: STARTER_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: STARTER_THEME, collections: [], lists: STARTER_LISTS };
 }
 
 function cleanField(f, v, site) {
@@ -1971,7 +2005,8 @@ export function cleanSiteList(given) {
     const registrar = ["123-reg", "godaddy", "other"].includes(e.registrar) ? e.registrar : "", todo = Array.isArray(e.todo) ? e.todo.filter((t) => t === "pages" || t === "steps") : [];
     // A site made outside the console (its own hand-written pages): a card with its picture and links, never opened in the editor.
     if (e.kind === "outside" && repo && domain) { out.push({ id: e.id, name, domain, repo, kind: "outside", playground: false, live: false }); continue; }
-    out.push({ id: e.id, name, domain, repo, kind: built ? "starter" : "", playground: !!e.playground && built, live: !!e.live && !!built && !!domain, ...(built ? { want, registrar, todo } : {}) });
+    const template = templateOf(e.template).id;
+    out.push({ id: e.id, name, domain, repo, kind: built ? "starter" : "", playground: !!e.playground && built, live: !!e.live && !!built && !!domain, ...(built ? { want, registrar, todo, ...(template !== "starter" ? { template } : {}) } : {}) });
   }
   return out;
 }
@@ -2545,7 +2580,7 @@ async function branchForWriting(site, copy, _who) {
 
 async function siteOverview(site, wanted = "", me = null, names = {}) {
   const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta), edits: !!site.items, practice: !!site.practice,
-    pagesOn: !!site.pages, themeOn: !!site.theme, photosOn: !site.noPhotos, starter: !!site.starter, playground: !!site.playground, youAdmin: !!(me && me.admin),
+    pagesOn: !!site.pages, themeOn: !!site.theme, photosOn: !site.noPhotos, starter: !!site.starter, template: site.starter ? site.template || "starter" : undefined, playground: !!site.playground, youAdmin: !!(me && me.admin),
     want: site.want || "", registrar: site.registrar || "", todo: site.todo || [], records: dnsRecords(site.want || ""), buildable: !site.live && !site.repo && !site.playground, outside: !!site.outside, repo: site.outside ? site.repo : undefined };
   if (!site.live) return base;
   try {
@@ -2844,9 +2879,9 @@ export async function runLater(now) {
 // with the site's own web address in its details. Files the starter does not have are removed, except the
 // publishing steps under .github, which only GitHub itself may change.
 export async function starterInto(site, message, opts = {}) {
-  const prefix = STARTER_DIR + "/", own = opts.files || {}, withSteps = !!opts.github, only = opts.only || "";
+  const prefix = (opts.dir || site.dir || STARTER_DIR) + "/", own = opts.files || {}, withSteps = !!opts.github, only = opts.only || "";
   const [src, headSha] = await Promise.all([gh("/repos/" + CONSOLE_REPO + "/git/trees/main?recursive=1"), mainSha(site)]);
-  if (!src.ok || !Array.isArray(src.data && src.data.tree)) return { error: "The starter could not be read from GitHub just now." };
+  if (!src.ok || !Array.isArray(src.data && src.data.tree)) return { error: "The site's design could not be read from GitHub just now." };
   const head = headSha ? await gh("/repos/" + site.repo + "/git/commits/" + headSha) : null;
   const have = headSha ? await gh("/repos/" + site.repo + "/git/trees/" + headSha + "?recursive=1") : null;
   if (!head || !head.ok || !have || !have.ok) return { error: "The practice build could not be read from GitHub just now." };
@@ -2867,7 +2902,7 @@ export async function starterInto(site, message, opts = {}) {
     } else if (had[t.path] === t.sha) continue;   // already the same
     if (!content) {
       const b = await gh("/repos/" + CONSOLE_REPO + "/git/blobs/" + t.sha);
-      if (!b.ok) return { error: "GitHub did not give the starter's " + t.path + "." };
+      if (!b.ok) return { error: "GitHub did not give the design's " + t.path + "." };
       content = { content: String(b.data.content || "").replace(/\n/g, ""), encoding: "base64" };
     }
     const made = await gh("/repos/" + site.repo + "/git/blobs", { method: "POST", body: JSON.stringify(content) });
@@ -2902,11 +2937,24 @@ const BUILD_LOOK_TYPE = {
   "Brick and soot": ["Gloock", "Source Serif 4", ""],
   "Concrete and cobalt": ["Libre Caslon Display", "Libre Franklin", ""],
 };
-export function buildLooks() {
-  return STARTER_LOOKS.map((l) => {
+// A template's own look comes first, then the others (but not "Like" the template's own site, which is the same).
+export function buildLooks(template = "starter") {
+  const all = STARTER_LOOKS.map((l) => {
     const t = BUILD_LOOK_TYPE[l.name] || ["Castoro", "Literata", ""];
     return { name: l.name, colours: { ...l.colours }, fonts: { display: t[0], text: t[1], sans: "Libre Franklin" }, corners: t[2], mine: /^Like /.test(l.name) };
   });
+  const t = templateOf(template);
+  if (t.id === "starter") return all;
+  const spec = starterSite({ template: t.id }).theme, col = (role) => ((spec.colours.find((c) => c.role === role) || {}).default || ""), font = (role) => ((spec.fonts.find((f) => f.role === role) || {}).default || "");
+  const own = { name: t.name + "'s own", colours: { page: col("bg"), band: col("band"), accent: col("accent"), ink: col("text") || col("band") }, fonts: { display: font("display"), text: font("body"), sans: font("small") || "Libre Franklin" }, corners: "", mine: false, own: true };
+  return [own].concat(all.filter((l) => l.name !== "Like " + t.name));
+}
+// A look put into a theme's own colours and typefaces, by what each is for.
+function lookInto(spec, look) {
+  const colours = {}, fonts = {}, C = { bg: "page", band: "band", accent: "accent", text: "ink" }, T = { display: "display", body: "text", small: "sans" };
+  for (const c of spec.colours) if (C[c.role] && look.colours[C[c.role]]) colours[c.id] = look.colours[C[c.role]];
+  for (const f of spec.fonts) if (T[f.role] && look.fonts[T[f.role]]) fonts[f.id] = look.fonts[T[f.role]];
+  return { colours, fonts, settings: { corners: look.corners === "round" ? "round" : "" } };
 }
 export const BUILD_REGISTRARS = [["123-reg", "123-reg"], ["godaddy", "GoDaddy"], ["other", "Somewhere else"]];
 export const BUILD_SET = [["home", "Home"], ["about", "About"], ["artists", "Artists"], ["exhibitions", "Exhibitions"], ["visit", "Visit us"], ["contact", "Contact"]];
@@ -2948,11 +2996,12 @@ export function cleanBuild(given, card) {
   const tagline = cleanText(noTags(g.tagline || ""), 120).trim();
   const email = String(g.email == null ? "info@grovegallery.com" : g.email).trim();
   if (email && !EMAIL_SHAPE.test(email)) throw new Error("The email shown on the site does not look like an email address.");
-  const looks = buildLooks(), look = looks.some((l) => l.name === g.look) ? g.look : "Ink and clay";
-  const pages = ["home", "set", "copy"].includes(g.pages) ? g.pages : "home";
+  const template = templateOf(g.template).id, looks = buildLooks(template), look = looks.some((l) => l.name === g.look) ? g.look : looks[0].name;
+  // a template brings its own pages; the starter offers a home page, the ready set or another site's layout
+  const pages = template !== "starter" ? "template" : ["home", "set", "copy"].includes(g.pages) ? g.pages : "home";
   const from = BUILD_FROM.includes(g.from) ? g.from : BUILD_FROM[0];
   const registrar = BUILD_REGISTRARS.some((r) => r[0] === g.registrar) ? g.registrar : "other";
-  return { name, tagline, domain: cleanDomain(g.domain), registrar, email: email || "info@grovegallery.com", look, pages, from };
+  return { name, tagline, domain: cleanDomain(g.domain), registrar, email: email || "info@grovegallery.com", template, look, pages, from };
 }
 const BUILD_SEC = (id, kind, over) => ({ id, type: kind, visible: true, settings: { ...JSON.parse(JSON.stringify(STARTER_SECTIONS[kind].starter || {})), ...(over || {}) } });
 const BUILD_WORDS = "[One or two sentences about this page, for search results]";
@@ -3032,7 +3081,15 @@ function buildPagesDoc(list) {
   };
 }
 // The three data files a new site starts with, and notes on anything copied that had to change.
-export function planFiles(c, address, copied) {
+export function planFiles(c, address, copied, tpl) {
+  // from a template: its own pages, with the name and tagline put in, and its own empty content
+  if (c.template && c.template !== "starter") {
+    if (!tpl) throw new Error("The template could not be read from GitHub just now. Try again in a moment.");
+    const spec = starterSite({ template: c.template }).theme, look = buildLooks(c.template).find((l) => l.name === c.look) || buildLooks(c.template)[0];
+    const theme = themeFile({ pages: { images: "assets/images" } }, spec, cleanTheme(spec, lookInto(spec, look)));
+    const content = { ...JSON.parse(JSON.stringify(tpl.content || {})), site: { email: c.email, address, indexed: false } };
+    return { pages: nameInto(tpl.pages, c), theme, content, notes: { swapped: [], left: [] } };
+  }
   let list, notes = { swapped: [], left: [] };
   if (c.pages === "set") { const set = buildSet(); list = { sections: set, labels: BUILD_SET.slice() }; }
   else if (c.pages === "copy" && copied) { list = copied; notes = { swapped: copied.swapped, left: copied.left }; }
@@ -3057,8 +3114,19 @@ async function copiedFrom(id) {
   buildCopies[id] = { at: Date.now(), copy };
   return copy;
 }
-export function buildSpec() {
-  return { looks: buildLooks(), registrars: BUILD_REGISTRARS, set: BUILD_SET.map((x) => x[1]), from: BUILD_FROM.map((id) => ({ id, name: (SITES.find((x) => x.id === id) || {}).name || id })),
+// A template's pages and content, read from its folder in this repository (kept two minutes).
+const tplFiles = {};
+async function templateFiles(id) {
+  const t = templateOf(id), hit = tplFiles[t.id];
+  if (hit && Date.now() - hit.at < 120000) return hit.files;
+  const [p, c] = await Promise.all([getText(CONSOLE_REPO, t.dir + "/data/pages.json"), getText(CONSOLE_REPO, t.dir + "/data/content.json")]);
+  let files = null; try { files = p && c ? { pages: JSON.parse(p.text), content: JSON.parse(c.text) } : null; } catch (_e) { files = null; }
+  if (files) tplFiles[t.id] = { at: Date.now(), files };
+  return files;
+}
+export function buildSpec(template = "starter") {
+  return { looks: buildLooks(template), templates: SITE_TEMPLATES.map((t) => ({ id: t.id, name: t.name, ready: !!t.ready, dir: t.dir || "", global: t.global || "", line: t.line, own: t.own || "", pages: t.pages || "", stays: t.stays || "", later: t.later || "",
+      look: buildLooks(t.ready ? t.id : "starter")[0] })), registrars: BUILD_REGISTRARS, set: BUILD_SET.map((x) => x[1]), from: BUILD_FROM.map((id) => ({ id, name: (SITES.find((x) => x.id === id) || {}).name || id })),
     kinds: STARTER_KINDS.map((k) => STARTER_SECTIONS[k].label), ips: GITHUB_IPS, org: BUILD_ORG };
 }
 // Where a new site will be until its own web address is connected.
@@ -3067,7 +3135,8 @@ export async function planSite(card, given) {
   const c = cleanBuild(given, card);
   const copied = c.pages === "copy" ? await copiedFrom(c.from) : null;
   if (c.pages === "copy" && !copied) throw new Error("That site's pages could not be read from GitHub just now. Try again in a moment.");
-  return { choices: c, address: buildAddress(card, c), repo: card.playground ? card.repo : BUILD_ORG + "/" + buildSlug(c.name), ...planFiles(c, buildAddress(card, c), copied) };
+  const tpl = c.template !== "starter" ? await templateFiles(c.template) : null;
+  return { choices: c, address: buildAddress(card, c), repo: card.playground ? card.repo : BUILD_ORG + "/" + buildSlug(c.name), ...planFiles(c, buildAddress(card, c), copied, tpl) };
 }
 // The list of sites in sites.json, changed and saved. Returns an error message or "".
 async function changeSiteList(change, message) {
@@ -3112,8 +3181,14 @@ export async function createSite(card, given, tag) {
   const files = { "data/pages.json": plan.pages, "data/theme.json": plan.theme, "data/content.json": plan.content };
   if (!c.name) throw new Error("Give the site a name.");
   if (card.playground) {
-    const w = await starterInto(card, "Start building: " + c.name + " (by " + tag + ")", { files });
+    const w = await starterInto({ ...card, dir: templateOf(c.template).dir }, "Start building: " + c.name + (c.template !== "starter" ? ", from the " + templateOf(c.template).name + " template" : "") + " (by " + tag + ")", { files });
     if (w.error) return { error: w.error };
+    // the practice build is now run as a site of that template
+    if ((card.template || "starter") !== c.template) {
+      const err = await changeSiteList((list) => { const had = list.some((x) => x && x.id === card.id), base = had ? list : list.concat(DEFAULT_SITE_LIST.filter((x) => x.id === card.id));
+        return base.map((x) => { if (!x || x.id !== card.id) return x; const n = { ...x }; if (c.template === "starter") delete n.template; else n.template = c.template; return n; }); }, "The practice build now uses the " + templateOf(c.template).name + " design (by " + tag + ")");
+      if (err) return { error: err };
+    }
     const found = await gh("/repos/" + card.repo + "/git/matching-refs/heads/adh/");
     for (const ref of Array.isArray(found.data) ? found.data : []) await gh("/repos/" + card.repo + "/git/" + String(ref.ref).replace(/^refs\//, "refs/"), { method: "DELETE" });
     done.push("Pages, look and words written", "Published to " + plan.address.replace(/^https:\/\//, "").replace(/\/$/, ""), "Hidden from search engines");
@@ -3133,7 +3208,7 @@ export async function createSite(card, given, tag) {
     if (!made.ok) return { error: made.status === 422 ? "GitHub would not make " + repo + ". Try a different site name." : MAKE_HELP };
   }
   done.push((resume ? "Carried on with the repository made last time: " : "Repository made: ") + repo);
-  const site = starterSite({ id: card.id, name: c.name, domain: plan.address.replace(/^https:\/\//, "").replace(/\/$/, ""), repo, live: true });
+  const site = starterSite({ id: card.id, name: c.name, domain: plan.address.replace(/^https:\/\//, "").replace(/\/$/, ""), repo, live: true, template: c.template });
   if (!(await waitForMain(repo))) return { error: "GitHub made " + repo + " but it is not ready yet. Wait a minute, then press Create site again with a different name, or ask for help.", done };
   if (await pagesOn(repo)) done.push("Publishing switched on"); else todo.push("pages");
   let w = await starterInto(site, "Start the site from Artiscope Digital Home (by " + tag + ")", { files, github: true });
@@ -3142,9 +3217,9 @@ export async function createSite(card, given, tag) {
   done.push("Pages, look and words written");
   const had = resume ? await gh("/repos/" + repo + "/releases?per_page=5") : null;
   if (had && had.ok && Array.isArray(had.data) && had.data.some((x) => x.tag_name === "v1.0")) done.push("Version 1.0");
-  else if (w.sha && await addRelease(site, [1, 0], w.sha, "First version", "The site was built in Artiscope Digital Home from the starter.\n\n<!-- by: " + tag + " -->")) done.push("Version 1.0");
+  else if (w.sha && await addRelease(site, [1, 0], w.sha, "First version", "The site was built in Artiscope Digital Home from " + (c.template === "starter" ? "the starter" : "the " + templateOf(c.template).name + " template") + ".\n\n<!-- by: " + tag + " -->")) done.push("Version 1.0");
   done.push("Hidden from search engines until its own address is connected");
-  const entry = { id: card.id, name: c.name, domain: site.domain, repo, kind: "starter", live: true, want: c.domain, registrar: c.registrar, todo };
+  const entry = { id: card.id, name: c.name, domain: site.domain, repo, kind: "starter", live: true, want: c.domain, registrar: c.registrar, todo, ...(c.template !== "starter" ? { template: c.template } : {}) };
   const listErr = await changeSiteList((list) => { const out = list.filter((x) => x && x.id !== card.id); out.push(entry); return out; }, "Add " + c.name + " to the list of sites (by " + tag + ")");
   if (listErr) return { error: listErr, done };
   return { ok: true, site: card.id, address: plan.address, done, todo, want: c.domain, registrar: c.registrar, records: dnsRecords(c.domain) };
@@ -3280,7 +3355,7 @@ export async function handle(req) {
     const allowed = card.playground ? asOn(me, card).admin && card.live : me.admin && !card.live && !card.repo;
     if (!allowed) return json({ error: card.playground ? "The practice build is not ready yet." : card.live ? "That site is already built." : "Only the admin can start building a site." }, 403);
     try {
-      if (action === "planSite") return json({ ok: true, plan: await planSite(card, body.choices), spec: buildSpec() });
+      if (action === "planSite") { const plan = await planSite(card, body.choices); return json({ ok: true, plan, spec: buildSpec(plan.choices.template) }); }
       const r = await createSite(card, body.choices, me.tag || "admin");
       return json(r, r.error ? 502 : 200);
     } catch (e) { return json({ error: String(e && e.message || e) }, 400); }
@@ -3749,8 +3824,12 @@ export async function handle(req) {
   if (action === "startAgain") {
     if (!site.playground) return json({ error: "Only the practice build can be started again like this." }, 400);
     if (!me.admin) return json({ error: "Only someone given the practice build can start it again." }, 403);
-    const r = await starterInto(site, "Start again from the starter" + who);
+    const r = await starterInto({ ...site, dir: STARTER_DIR }, "Start again from the starter" + who);
     if (r.error) return json({ error: r.error }, 502);
+    if (site.template && site.template !== "starter") {
+      const err = await changeSiteList((list) => list.map((x) => { if (!x || x.id !== site.id) return x; const n = { ...x }; delete n.template; return n; }), "The practice build starts again from the starter" + who);
+      if (err) return json({ error: err }, 502);
+    }
     const found = await gh("/repos/" + site.repo + "/git/matching-refs/heads/adh/");
     for (const ref of Array.isArray(found.data) ? found.data : []) await gh("/repos/" + site.repo + "/git/" + String(ref.ref).replace(/^refs\//, "refs/"), { method: "DELETE" });
     return json({ ok: true });

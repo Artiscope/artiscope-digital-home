@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "55";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "56";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -509,7 +509,7 @@
     return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><h1>' + esc(s.name) + '</h1>' +
       '<p>' + esc(s.domain) + (isAdmin() ? '. Everything for this site is here. Saves on the live site reach visitors straight away. Use a trial copy to try things first.' : '. You work on your own copy. Nothing you save is seen until you publish it.') + '</p></div>' +
       '<div class="grid-3">' +
-        (s.edits ? tile("pages", "", "Pages", "Every page, article and " + (s.starter ? "artist page" : s.id === "street-art-dispatch" ? "artist profile" : "artist portfolio") + ", edited beside the real page", "Open the editor")
+        (s.edits ? tile("pages", "", "Pages", "Every page, article and " + (s.starter && (s.template || "starter") === "starter" ? "artist page" : s.id === "street-art-dispatch" || s.template === "street-art-dispatch" ? "artist profile" : "artist portfolio") + ", edited beside the real page", "Open the editor")
           : tile("content", entries, "Content", (cols ? cols.map(function (c) { return c.label.toLowerCase(); }).join(", ") : "Articles, artists and more"), cols && cols.some(function (c) { return c.canHide; }) ? "Edit, hide or delete" : "Edit the words")) +
         (!hasScreen(s, "theme") ? "" : t ? '<button type="button" class="card lift sitecard tile" data-tab="theme"><span class="swatches" aria-hidden="true">' + t.spec.colours.map(function (c) { return '<i style="background:' + esc(t.values.colours[c.id] || c.default) + '" title="' + esc(c.label) + '"></i>'; }).join("") + '</span>' +
           '<b>Theme</b><span class="small">' + t.spec.fonts.map(function (f) { return esc(t.values.fonts[f.id] || f.default); }).join(" &nbsp;&middot;&nbsp; ") + '</span><span class="small" style="color:var(--accent);margin-top:6px">Change the look</span></button>'
@@ -4003,10 +4003,10 @@
   }
   if (typeof window.addEventListener === "function") window.addEventListener("beforeunload", function (ev) { var cd = state.code; if (cd && codeChanged(cd).length) { ev.preventDefault(); ev.returnValue = ""; } });
 
-  // ---------- Start building: a new site, or the practice build, from the starter ----------
-  // Four steps (About the site, Look, Pages, Check and create) beside a preview of the home page,
-  // drawn by the starter's own drawing program, then the Ready screen with the web address records.
-  var BD_STEPS = ["About the site", "Look", "Pages", "Check and create"];
+  // ---------- Start building: a new site, or the practice build, from a template ----------
+  // Five steps (Template, About the site, Look, Pages, Check and create) beside a preview of the home page,
+  // drawn by the template's own drawing program, then the Ready screen with the web address records.
+  var BD_STEPS = ["Template", "About the site", "Look", "Pages", "Check and create"];
   var BD_HELP = {
     "123-reg": "In 123-reg, open the domain, then its DNS settings (sometimes called Advanced DNS), and add these records.",
     godaddy: "In GoDaddy, open My Products, then DNS beside the domain, and add these records.",
@@ -4016,7 +4016,7 @@
   function startBuild(id) {
     var x = sites().find(function (y) { return y.id === id; }); if (!x) return;
     state.build = { site: id, step: 1, seen: 1, view: "computer", plan: null, spec: null, err: "", notes: null, busy: false, done: null,
-      c: { name: x.playground ? "" : x.name, tagline: "", domain: "", registrar: "123-reg", email: "info@grovegallery.com", look: "Ink and clay", pages: "home", from: "world-art-review" } };
+      c: { name: x.playground ? "" : x.name, tagline: "", domain: "", registrar: "123-reg", email: "info@grovegallery.com", template: "starter", look: "Ink and clay", pages: "home", from: "world-art-review" } };
     render(); bdPlan(true);
   }
   function bdCard() { var b = bdOf(); return b && sites().find(function (y) { return y.id === b.site; }); }
@@ -4029,7 +4029,7 @@
       api("planSite", { site: b.site, choices: b.c }).then(function (d) {
         if (state.build !== b || b.asked !== mine) return;
         var first = !b.spec; b.plan = d.plan; b.spec = d.spec; b.err = "";
-        if (first || b.step === 3 || b.step === 4) render(); else { bdDraw(); bdHead(); }
+        if (first || b.step === 1 || b.step === 4 || b.step === 5) render(); else { bdDraw(); bdHead(); }
       }, function (e) { if (state.build === b) { b.err = e.message; bdNote(); } });
     }, now ? 0 : 280);
   }
@@ -4043,26 +4043,33 @@
     if (typeof t.rules === "string" && t.rules.trim() && t.rules.indexOf("<") < 0) out += '<style id="theme-rules">' + t.rules + "</style>";
     return out;
   }
-  function bdStarter(then) {
-    if (window.STARTER) return then();
-    if (state.bdLoading) { state.bdLoading.push(then); return; }
-    state.bdLoading = [then];
-    var sc = document.createElement("script"); sc.src = "starter/assets/render.js?v=" + VERSION;
-    sc.onload = function () { var l = state.bdLoading || []; state.bdLoading = null; l.forEach(function (f) { f(); }); };
-    sc.onerror = function () { state.bdLoading = null; };
+  // The chosen template, as the server describes it.
+  function bdTpl(b) { var all = (b && b.spec && b.spec.templates) || []; return all.find(function (t) { return t.id === b.c.template; }) || { id: "starter", name: "The starter", dir: "starter", global: "STARTER" }; }
+  // Each template's drawing program, loaded once from its folder in the console's own address.
+  // Each is kept under its own name, so two templates that use the same name never mix.
+  var bdModules = {};
+  function bdStarter(then, t) {
+    t = t || { dir: "starter", global: "STARTER" };
+    var m = bdModules[t.dir]; if (m && m.mod) return then(m.mod);
+    if (m) { m.wait.push(then); return; }
+    m = bdModules[t.dir] = { wait: [then], mod: null };
+    var had = window[t.global], sc = document.createElement("script"); sc.src = t.dir + "/assets/render.js?v=" + VERSION;
+    sc.onload = function () { m.mod = window[t.global]; if (had) window[t.global] = had; var l = m.wait; m.wait = []; l.forEach(function (f) { f(m.mod); }); };
+    sc.onerror = function () { delete bdModules[t.dir]; };
     document.head.appendChild(sc);
   }
   // The home page as the new site will publish it, without its scripts, its links switched off.
   function bdDraw() {
     var b = bdOf(), f = app.querySelector("#bd-if"); if (!b || !b.plan || !f) return;
-    bdStarter(function () {
-      var p = b.plan, S = window.STARTER; if (!S || !app.querySelector("#bd-if")) return;
+    var t = bdTpl(b); if (b.plan.choices && b.plan.choices.template && b.plan.choices.template !== t.id) return;
+    bdStarter(function (S) {
+      var p = b.plan; if (!S || !app.querySelector("#bd-if") || state.build !== b || bdTpl(b).id !== t.id) return;
       var html = S.Site(S.fromFiles(p.content), p.pages, bdThemeHead(p.theme), {}).sectionsPage("home").html;
-      var base = new URL("starter/", location.href).href;
+      var base = new URL(t.dir + "/", location.href).href;
       html = html.replace(/<script\b[\s\S]*?<\/script>/gi, "").replace(/<head>/i, '<head><base href="' + base + '"><style>a{pointer-events:none}</style>');
       var fr = app.querySelector("#bd-if"); if (fr.getAttribute("data-html") !== html) { fr.setAttribute("data-html", html); fr.srcdoc = html; }
       bdFit();
-    });
+    }, t);
   }
   function bdFit() {
     var w = app.querySelector && app.querySelector(".bd-frame"), f = w && w.querySelector("iframe"), b = bdOf(); if (!w || !f || !b) return;
@@ -4096,6 +4103,18 @@
       '<span class="bd-ot"><b>' + title + '</b><span class="small">' + about + '</span>' + (extra || "") + '</span></button>';
   }
   function bdChips(list) { return '<span class="bd-chips">' + list.map(function (t) { return '<span class="bd-chip">' + esc(t) + '</span>'; }).join("") + '</span>'; }
+  function bdTplRow(t) {
+    var b = bdOf(), on = b.c.template === t.id, l = t.look || { colours: {}, fonts: {} }, cols = ["page", "band", "accent", "ink"];
+    return '<button type="button" class="bd-opt bd-tpl' + (on ? " on" : "") + (t.ready ? "" : " later") + '" data-act="bd-set" data-k="template" data-v="' + esc(t.id) + '" role="radio" aria-checked="' + on + '"' + (t.ready ? "" : " disabled") + '>' +
+      '<span class="bd-dot" aria-hidden="true">' + (on ? "<i></i>" : "") + '</span><span class="bd-ot"><b>' + esc(t.name) + '</b><span class="small">' + esc(t.ready ? t.line : t.later) + '</span></span>' +
+      (t.ready ? '<span class="bd-tlook" aria-hidden="true"><span class="bd-aa" style="font-family:\'' + esc(l.fonts.display || "Castoro") + '\',Georgia,serif">Aa</span><span class="bd-sw">' + cols.map(function (c) { return l.colours[c] ? '<i style="background:' + esc(l.colours[c]) + '"></i>' : ""; }).join("") + '</span></span>' : "") + '</button>';
+  }
+  function bdStep0() {
+    var b = bdOf(), all = (b.spec && b.spec.templates) || [], t = bdTpl(b);
+    return '<h2 class="bd-h">Start from a template</h2><span class="small bd-sub">The design the new site begins with: its layouts, cards and kinds of page. Every word starts in square brackets. Nothing from the original site comes across, and later changes to it never reach yours.</span>' +
+      '<div class="bd-opts" role="radiogroup" aria-label="Template">' + all.map(bdTplRow).join("") + '</div>' +
+      (t.own ? '<div class="bd-notes bd-tinfo"><span class="cap">' + esc(t.name) + '</span><span><b>Sections:</b> ' + esc(t.own) + (t.id === "starter" ? "" : ", plus the shared 20") + '.</span><span><b>Kinds of page:</b> ' + esc(t.pages) + '.</span><span><b>Stays behind:</b> ' + esc(t.stays) + '.</span></div>' : "");
+  }
   function bdStep1() {
     var b = bdOf(), sp = b.spec || { registrars: [["123-reg", "123-reg"], ["godaddy", "GoDaddy"], ["other", "Somewhere else"]] }, pg = (bdCard() || {}).playground;
     return '<h2 class="bd-h">About the site</h2><span class="small bd-sub">The basics. Every one of these can be changed later in the editor.</span>' +
@@ -4108,12 +4127,22 @@
   }
   function bdStep2() {
     var b = bdOf(), looks = (b.spec && b.spec.looks) || [];
-    return '<h2 class="bd-h">Starting look</h2><span class="small bd-sub">Colours, typefaces and corners to start from. Theme settings in the editor change any of it afterwards.</span>' +
+    var t = bdTpl(b), own = looks.filter(function (l) { return l.own; });
+    return '<h2 class="bd-h">Starting look</h2><span class="small bd-sub">Colours, typefaces and corners to start from' + (t.id === "starter" ? "" : ": the layout stays the " + esc(t.name) + " template's") + '. Theme settings in the editor change any of it afterwards.</span>' +
+      (own.length ? '<span class="cap">From the template</span><div class="bd-looks">' + own.map(bdLookCard).join("") + '</div>' : "") +
       '<span class="cap">From your sites</span><div class="bd-looks">' + looks.filter(function (l) { return l.mine; }).map(bdLookCard).join("") + '</div>' +
-      '<span class="cap">Ready-made looks</span><div class="bd-looks">' + looks.filter(function (l) { return !l.mine; }).map(bdLookCard).join("") + '</div>';
+      '<span class="cap">Ready-made looks</span><div class="bd-looks">' + looks.filter(function (l) { return !l.mine && !l.own; }).map(bdLookCard).join("") + '</div>';
   }
   function bdStep3() {
-    var b = bdOf(), sp = b.spec || { set: [], from: [], kinds: [] }, notes = b.plan && b.c.pages === "copy" ? b.plan.notes : null;
+    var b = bdOf(), t = bdTpl(b);
+    if (t.id !== "starter") {
+      var pgs = b.plan ? Object.keys(b.plan.pages.pages).map(function (k) { var x = b.plan.pages.pages[k]; return k === "home" ? "Home" : String(x.title || k).replace(/^\[(.*)\]$/, "$1"); }) : [];
+      return '<h2 class="bd-h">Starting pages</h2><span class="small bd-sub">The ' + esc(t.name) + ' template brings its own pages, in its own order, each with placeholder words in square brackets, never made-up facts.</span>' +
+        '<span class="cap">The template\'s pages</span>' + bdChips(pgs) +
+        '<div class="bd-notes"><span class="cap">Arrives empty, ready for your own</span><span>' + esc(t.stays) + '.</span><span class="small">Add articles, artists and entries in the editor. Hide or remove any page you do not need.</span></div>' +
+        '<span class="small">Plus the shared 20 sections, theme settings, the four add-ons, templates, Undo, Publish later, Versions and Edit code, the same as your other sites.</span>';
+    }
+    var sp = b.spec || { set: [], from: [], kinds: [] }, notes = b.plan && b.c.pages === "copy" ? b.plan.notes : null;
     var from = '<label class="bd-lbl bd-from">Copy from<select class="bd-in" data-bd="from">' + sp.from.map(function (x) { return '<option value="' + esc(x.id) + '"' + (b.c.from === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></label>';
     return '<h2 class="bd-h">Starting pages</h2><span class="small bd-sub">What the site has on day one. Every page starts with placeholder words in square brackets, never made-up facts.</span>' +
       '<div class="bd-opts" role="radiogroup" aria-label="Starting pages">' +
@@ -4128,6 +4157,7 @@
       '<span class="small">Plus theme settings, the four add-ons, templates, Undo, Publish later, Versions and Edit code, the same as your other sites.</span>';
   }
   function bdPagesWords(b) {
+    if (bdTpl(b).id !== "starter") return "The template's own pages" + (b.plan ? ", " + Object.keys(b.plan.pages.pages).length + " of them" : "");
     if (b.c.pages === "set") return "A ready set of six pages";
     if (b.c.pages === "copy") { var f = ((b.spec && b.spec.from) || []).find(function (x) { return x.id === b.c.from; }); return "The page layout of " + (f ? f.name : "another site") + (b.plan ? ", " + Object.keys(b.plan.pages.pages).length + " pages" : ""); }
     return "Just a home page";
@@ -4136,9 +4166,9 @@
     var b = bdOf(), card = bdCard() || {}, pg = card.playground, addr = b.plan ? b.plan.address.replace(/^https:\/\//, "").replace(/\/$/, "") : "";
     var row = function (label, v, n) { return '<div class="bd-row"><span class="bd-rl">' + label + '</span><span class="bd-rv">' + esc(v) + '</span><button type="button" class="linklike" data-act="bd-step" data-n="' + n + '">Change</button></div>'; };
     return '<h2 class="bd-h">Check and create</h2>' +
-      '<div class="bd-rows">' + row("Site name", b.c.name || "Not given yet", 1) + (pg ? "" : row("Web address", b.c.domain || "Not given yet, connect it later", 1)) + row("Email shown", b.c.email, 1) + row("Starting look", b.c.look, 2) + row("Starting pages", bdPagesWords(b), 3) + '</div>' +
+      '<div class="bd-rows">' + row("Template", bdTpl(b).name, 1) + row("Site name", b.c.name || "Not given yet", 2) + (pg ? "" : row("Web address", b.c.domain || "Not given yet, connect it later", 2)) + row("Email shown", b.c.email, 2) + row("Starting look", b.c.look, 3) + row("Starting pages", bdPagesWords(b), 4) + '</div>' +
       '<div class="bd-box"><span class="cap">When you press ' + (pg ? "Rebuild the practice build" : "Create site") + '</span>' +
-      (pg ? '<span>The practice build is rebuilt with these pages, this look and these words. Whatever was there goes, and so do its trial copies.</span><span>It stays at ' + esc(addr) + ', hidden from search engines.</span>'
+      (pg ? '<span>The practice build is rebuilt from the ' + esc(bdTpl(b).id === "starter" ? "starter" : bdTpl(b).name + " template") + ' with these pages, this look and these words. Whatever was there goes, and so do its trial copies.</span><span>It stays at ' + esc(addr) + ', hidden from search engines.</span>'
         : '<span>A new repository, ' + esc(b.plan ? b.plan.repo : "") + ', is made on GitHub with your pages, look and words.</span><span>It is published at ' + esc(addr) + ', hidden from search engines until its own address is connected.</span><span>It opens in the page editor, ready to work on, with Versions starting at 1.0.</span>') +
       '<span class="small">' + (pg ? "Takes under a minute." : "Takes about two minutes. Nothing changes on your other sites.") + '</span></div>' +
       (b.busy ? '<p class="notice">' + (pg ? "Rebuilding the practice build" : "Creating " + esc(b.c.name)) + '. Keep this page open.</p>' : "") +
@@ -4184,11 +4214,11 @@
   }
   function viewBuild() {
     var b = bdOf(); if (b.done) return viewBuildDone(b);
-    var card = bdCard() || {}, steps = [bdStep1, bdStep2, bdStep3, bdStep4];
+    var card = bdCard() || {}, steps = [bdStep0, bdStep1, bdStep2, bdStep3, bdStep4];
     return '<div class="bd"><div class="bd-top ed-top"><div class="lefty"><button type="button" class="tb word" data-act="bd-close"' + (b.busy ? " disabled" : "") + '>' + ic("close", 16) + '<span>Close</span></button>' +
       '<span class="bd-name">Start building: ' + esc(b.c.name || card.name || "a new site") + '</span></div>' +
       '<span class="mid"><span class="seg tbs bd-steps" role="tablist">' + BD_STEPS.map(function (t, i) { var n = i + 1; return '<button type="button" class="tb' + (b.step === n ? " on" : "") + '" role="tab" aria-selected="' + (b.step === n) + '" aria-label="Step ' + n + ': ' + t + '" data-act="bd-step" data-n="' + n + '"' + (n > b.seen || b.busy ? " disabled" : "") + '>' + (n < b.seen && b.step !== n ? ic("check", 14) : '<b>' + n + '</b>') + '<span>' + t + '</span></button>'; }).join("") + '</span></span>' +
-      '<div class="righty"><button type="button" class="btn" data-act="bd-prev"' + (b.step === 1 || b.busy ? " disabled" : "") + '>Previous</button>' + (b.step < 4 ? '<button type="button" class="btn" data-act="bd-next">Next</button>' : "") + '</div></div>' +
+      '<div class="righty"><button type="button" class="btn" data-act="bd-prev"' + (b.step === 1 || b.busy ? " disabled" : "") + '>Previous</button>' + (b.step < 5 ? '<button type="button" class="btn" data-act="bd-next">Next</button>' : "") + '</div></div>' +
       '<div class="bd-body"><section class="bd-form card" aria-label="' + esc(BD_STEPS[b.step - 1]) + '">' + steps[b.step - 1]() + '<p class="notice problem bd-err" role="alert"' + (b.err ? "" : " hidden") + '>' + esc(b.err || "") + '</p></section>' +
       '<aside class="bd-prev" aria-label="Preview of the home page"><div class="bd-ph"><span class="cap">Preview of the home page</span><span class="seg tbs">' +
         '<button type="button" class="tb' + (b.view === "computer" ? " on" : "") + '" data-act="bd-view" data-v="computer">' + ic("monitor", 15) + '<span>Computer</span></button><button type="button" class="tb' + (b.view === "phone" ? " on" : "") + '" data-act="bd-view" data-v="phone">' + ic("phone", 15) + '<span>Phone</span></button></span></div>' +
@@ -4200,7 +4230,8 @@
     if (!b.done) { var f = app.querySelector("#bd-if"); if (f) { f.removeAttribute("data-html"); bdDraw(); } }
   }
   function bdCheckStep(b) {
-    if (b.step === 1) {
+    if (b.step === 1 && !(((b.spec && b.spec.templates) || []).find(function (t) { return t.id === b.c.template && t.ready; }) || b.c.template === "starter")) return "Choose a template that is ready.";
+    if (b.step === 2) {
       if (!String(b.c.name || "").trim()) return "Give the site a name.";
       if (!(bdCard() || {}).playground && bdSlug(b.c.name).length < 2) return "Give the site a name with at least two letters or numbers. Its address on GitHub is made from them.";
       var d = String(b.c.domain || "").trim();
@@ -4215,13 +4246,18 @@
     var b = bdOf();
     if (a === "bd-close") { if (b && b.busy) return; state.build = null; if (b && !b.done) { state.inSite = false; go("home"); } else { state.inSite = false; state.tab = "home"; load(); } return; }
     if (!b) return;
-    if (a === "bd-set") { b.c[el.dataset.k] = el.dataset.v; render(); bdPlan(true); return; }
+    if (a === "bd-set") {
+      b.c[el.dataset.k] = el.dataset.v;
+      // a new template starts in its own look, with its own pages
+      if (el.dataset.k === "template") { var nt = bdTpl(b); b.c.look = nt.look ? nt.look.name : "Ink and clay"; if (nt.id === "starter") b.c.pages = "home"; b.plan = null; }
+      render(); bdPlan(true); return;
+    }
     if (a === "bd-view") { b.view = el.dataset.v; render(); return; }
     if (a === "bd-step") { var n = +el.dataset.n; if (n <= b.seen) { b.step = n; render(); } return; }
     if (a === "bd-prev") { if (b.step > 1 && !b.busy) { b.step--; render(); } return; }
     if (a === "bd-next") {
       var why = bdCheckStep(b); if (why) { b.err = why; bdNote(); return; }
-      b.step = Math.min(4, b.step + 1); b.seen = Math.max(b.seen, b.step); render(); return;
+      b.step = Math.min(5, b.step + 1); b.seen = Math.max(b.seen, b.step); render(); return;
     }
     if (a === "bd-create") {
       if (b.busy) return; b.busy = true; b.err = ""; render();
@@ -5210,10 +5246,14 @@
     var slug = String(c.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     if (c.domain && !/^(https?:\/\/)?(www\.)?([a-z0-9-]+\.)+[a-z]{2,}\/?$/i.test(String(c.domain).trim())) return Promise.reject(new Error("The web address should look like newsite.com, without https:// or anything after it."));
     c.domain = String(c.domain || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
-    var key = c.pages === "copy" ? "copy:" + (c.from || "world-art-review") : c.pages === "set" ? "set" : "home", pl = demoBuild.plans[key];
+    var tid = demoBuild.specs && demoBuild.specs[c.template] ? c.template : "starter"; c.template = tid;
+    var key = tid !== "starter" ? "tpl:" + tid : c.pages === "copy" ? "copy:" + (c.from || "world-art-review") : c.pages === "set" ? "set" : "home", pl = demoBuild.plans[key];
     var address = card.playground ? "https://artiscope.github.io/practice-build/" : "https://artiscope.github.io/" + slug + "/";
-    var plan = { choices: c, address: address, repo: card.playground ? "Artiscope/practice-build" : "Artiscope/" + slug, pages: demoNameInto(pl.pages, c), theme: demoBuild.themes[c.look] || demoBuild.themes["Ink and clay"], content: { site: { email: c.email, address: address, indexed: false } }, notes: pl.notes };
-    if (body.action === "planSite") return Promise.resolve({ ok: true, plan: plan, spec: demoBuild.spec });
+    var looks = (demoBuild.specs ? demoBuild.specs[tid] : demoBuild.spec).looks; if (!looks.some(function (l) { return l.name === c.look; })) c.look = looks[0].name;
+    var theme = tid !== "starter" ? demoBuild.themes[tid + "|" + c.look] : demoBuild.themes[c.look] || demoBuild.themes["Ink and clay"];
+    var content = Object.assign({}, tid !== "starter" ? JSON.parse(JSON.stringify(demoBuild.contents[tid])) : {}, { site: { email: c.email, address: address, indexed: false } });
+    var plan = { choices: c, address: address, repo: card.playground ? "Artiscope/practice-build" : "Artiscope/" + slug, pages: demoNameInto(pl.pages, c), theme: theme, content: content, notes: pl.notes };
+    if (body.action === "planSite") return Promise.resolve({ ok: true, plan: plan, spec: demoBuild.specs ? demoBuild.specs[tid] : demoBuild.spec });
     if (!c.name) return Promise.reject(new Error("Give the site a name."));
     if (card.playground) { demoStarter = null; return Promise.resolve({ ok: true, site: card.id, address: address, practice: true, done: ["Pages, look and words written", "Published to artiscope.github.io/practice-build", "Hidden from search engines"], todo: [] }); }
     Object.assign(card, { name: c.name, domain: "artiscope.github.io/" + slug, live: true, starter: true, edits: true, files: true, want: c.domain, registrar: c.registrar, todo: [], inbox: [], slots: [], artists: [] });

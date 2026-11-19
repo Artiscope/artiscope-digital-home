@@ -1,0 +1,21 @@
+{
+  "site": {
+    "email": "info@grovegallery.com",
+    "address": "https://example.org/",
+    "indexed": false
+  },
+  "desk": "[Writer or desk name]",
+  "date": "[Month and year]",
+  "features": [],
+  "columns": [],
+  "artists": [],
+  "artist_notes": {},
+  "archive": [],
+  "exhibitions": [],
+  "stats": [],
+  "glossary": [],
+  "photos": {},
+  "artist_photos": {},
+  "photo_files": {},
+  "artist_photo_files": {}
+}

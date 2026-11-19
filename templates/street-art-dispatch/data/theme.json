@@ -1,0 +1,14 @@
+{
+  "colours": {
+    "linen": "#EFE6D3",
+    "pine": "#163A30",
+    "ruby": "#F0283C"
+  },
+  "fonts": {
+    "display": "Gloock",
+    "text": "Source Serif 4",
+    "sans": "Libre Franklin"
+  },
+  "css": "",
+  "font_links": []
+}

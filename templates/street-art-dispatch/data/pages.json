@@ -1,0 +1,392 @@
+{
+  "_how_to_edit": "This file is edited in Artiscope Digital Home. Each page is a list of sections; words in square brackets are placeholders waiting for real words.",
+  "shared": {
+    "header": {
+      "type": "header",
+      "visible": true,
+      "settings": {
+        "name": "[Site name]",
+        "tagline": "[A short line about the site]",
+        "links": [
+          [
+            "Dispatches",
+            "dispatches/"
+          ],
+          [
+            "Artists",
+            "artists/"
+          ],
+          [
+            "Interventions",
+            "interventions/"
+          ],
+          [
+            "Urban Culture",
+            "urban-culture/"
+          ],
+          [
+            "Exhibitions",
+            "exhibitions/"
+          ],
+          [
+            "Collecting",
+            "collecting/"
+          ]
+        ],
+        "subscribe": "[Subscribe]",
+        "subscribe_href": "#newsletter",
+        "logos": []
+      }
+    },
+    "footer": {
+      "type": "footer",
+      "visible": true,
+      "settings": {
+        "tagline": "[A short line about the site]",
+        "sections_heading": "[Sections]",
+        "about_heading": "[About]",
+        "about_links": [
+          [
+            "About and standards",
+            "about/"
+          ],
+          [
+            "Contact",
+            "contact/"
+          ],
+          [
+            "Subscribe",
+            "#newsletter"
+          ]
+        ],
+        "legal": "[Small print, such as the year and the site's name]"
+      }
+    }
+  },
+  "pages": {
+    "home": {
+      "path": "index.html",
+      "title": "[Site name]",
+      "description": "[One or two sentences about this page, for search results]",
+      "home": true,
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[From the editors]",
+            "headline": "[Heading]",
+            "intro": "[Introduction]",
+            "button": "[Read Issue 01]",
+            "button_href": "dispatches/",
+            "link": "[Search the archive]",
+            "link_href": "interventions/",
+            "photo": "[What the opening photo shows]",
+            "caption": "[Caption]",
+            "caption_link": "[Read the profile]",
+            "caption_href": ""
+          }
+        },
+        {
+          "id": "dispatches",
+          "type": "features",
+          "visible": true,
+          "settings": {
+            "heading": "[Dispatches]",
+            "intro": "[Line under the heading]",
+            "which": "dispatches",
+            "look": "grid",
+            "top": false,
+            "flush": true
+          }
+        },
+        {
+          "id": "artists",
+          "type": "profiles",
+          "visible": true,
+          "settings": {
+            "heading": "[Artists]",
+            "intro": "[Line under the heading]",
+            "artists": [],
+            "top": false,
+            "flush": true
+          }
+        },
+        {
+          "id": "interventions",
+          "type": "archive",
+          "visible": true,
+          "settings": {
+            "heading": "[The Intervention Archive]",
+            "intro": "[Line under the heading]",
+            "show": "recent",
+            "count": 6,
+            "button": "[Search all {count} interventions]",
+            "button_href": "interventions/",
+            "search_hint": "",
+            "note": "",
+            "note_link": "",
+            "top": false,
+            "flush": true
+          }
+        },
+        {
+          "id": "culture",
+          "type": "features",
+          "visible": true,
+          "settings": {
+            "heading": "[Urban Culture]",
+            "intro": "[Line under the heading]",
+            "which": "columns",
+            "look": "list",
+            "top": false,
+            "flush": true
+          }
+        },
+        {
+          "id": "exhibitions",
+          "type": "exhibition-list",
+          "visible": true,
+          "settings": {
+            "heading": "[Exhibitions]",
+            "intro": "[Line under the heading]",
+            "top": false,
+            "flush": true
+          }
+        },
+        {
+          "id": "collecting",
+          "type": "collecting",
+          "visible": true,
+          "settings": {
+            "heading": "[Collecting Street Art]",
+            "intro": "[Line under the heading]",
+            "primer_heading": "[A collector’s primer]",
+            "primer": "[Primer]",
+            "button": "[Read the collecting guide]",
+            "button_href": "collecting/",
+            "top": false
+          }
+        },
+        {
+          "id": "newsletter",
+          "type": "signup",
+          "visible": true,
+          "settings": {
+            "heading": "[Heading]",
+            "text": "[Text]",
+            "button": "[Subscribe]",
+            "pitch": "[Pitches, tips and press:]"
+          }
+        }
+      ]
+    },
+    "dispatches": {
+      "path": "dispatches/index.html",
+      "title": "Dispatches",
+      "description": "[One or two sentences about this page, for search results]",
+      "sections": [
+        {
+          "id": "dispatches",
+          "type": "features",
+          "visible": true,
+          "settings": {
+            "heading": "[Dispatches]",
+            "intro": "[Line under the heading]",
+            "which": "dispatches",
+            "look": "grid",
+            "top": true,
+            "flush": false
+          }
+        }
+      ]
+    },
+    "urban-culture": {
+      "path": "urban-culture/index.html",
+      "title": "Urban Culture",
+      "description": "[One or two sentences about this page, for search results]",
+      "sections": [
+        {
+          "id": "culture",
+          "type": "features",
+          "visible": true,
+          "settings": {
+            "heading": "[Urban Culture]",
+            "intro": "[Line under the heading]",
+            "which": "columns",
+            "look": "list",
+            "top": true,
+            "flush": false
+          }
+        }
+      ]
+    },
+    "artists": {
+      "path": "artists/index.html",
+      "title": "Artists",
+      "description": "[One or two sentences about this page, for search results]",
+      "sections": [
+        {
+          "id": "artists",
+          "type": "profiles",
+          "visible": true,
+          "settings": {
+            "heading": "[Artists]",
+            "intro": "[Line under the heading]",
+            "artists": [],
+            "top": true,
+            "flush": false
+          }
+        }
+      ]
+    },
+    "interventions": {
+      "path": "interventions/index.html",
+      "title": "The Intervention Archive",
+      "description": "[One or two sentences about this page, for search results]",
+      "sections": [
+        {
+          "id": "archive",
+          "type": "archive",
+          "visible": true,
+          "settings": {
+            "heading": "[The Intervention Archive]",
+            "intro": "[Line under the heading]",
+            "show": "all",
+            "count": 0,
+            "button": "",
+            "button_href": "",
+            "search_hint": "[Words in the empty search box]",
+            "note": "[Note under the archive]",
+            "note_link": "[Words of the link to send an entry]",
+            "top": true,
+            "flush": false
+          }
+        }
+      ]
+    },
+    "exhibitions": {
+      "path": "exhibitions/index.html",
+      "title": "Exhibitions",
+      "description": "[One or two sentences about this page, for search results]",
+      "sections": [
+        {
+          "id": "exhibitions",
+          "type": "exhibition-list",
+          "visible": true,
+          "settings": {
+            "heading": "[Exhibitions]",
+            "intro": "[Line under the heading]",
+            "top": true,
+            "flush": false
+          }
+        }
+      ]
+    },
+    "collecting": {
+      "path": "collecting/index.html",
+      "title": "Collecting Street Art",
+      "description": "[One or two sentences about this page, for search results]",
+      "sections": [
+        {
+          "id": "collecting",
+          "type": "collecting",
+          "visible": true,
+          "settings": {
+            "heading": "[Collecting Street Art]",
+            "intro": "[Line under the heading]",
+            "primer_heading": "[A collector’s primer]",
+            "primer": "[Primer]",
+            "button": "",
+            "button_href": "",
+            "top": true
+          }
+        },
+        {
+          "id": "guide",
+          "type": "features",
+          "visible": true,
+          "settings": {
+            "heading": "[The collecting guide]",
+            "intro": "",
+            "which": [],
+            "look": "grid",
+            "top": false,
+            "flush": false
+          }
+        }
+      ]
+    },
+    "about": {
+      "path": "about/index.html",
+      "title": "About and standards",
+      "description": "[One or two sentences about this page, for search results]",
+      "sections": [
+        {
+          "id": "text",
+          "type": "text-page",
+          "visible": true,
+          "settings": {
+            "heading": "[About and standards]",
+            "stand": "[Opening line]",
+            "intro": [
+              "[Paragraphs]"
+            ],
+            "list_heading": "[Editorial standards]",
+            "list_anchor": "standards",
+            "items": [
+              {
+                "term": "[Accuracy]",
+                "text": "[Words]"
+              },
+              {
+                "term": "[Disclosure]",
+                "text": "[Words]"
+              }
+            ],
+            "end_heading": "[Get in touch]",
+            "end_text": "[Closing words]"
+          }
+        }
+      ]
+    },
+    "contact": {
+      "path": "contact/index.html",
+      "title": "Contact",
+      "description": "[One or two sentences about this page, for search results]",
+      "sections": [
+        {
+          "id": "text",
+          "type": "text-page",
+          "visible": true,
+          "settings": {
+            "heading": "[Contact]",
+            "stand": "[Opening line]",
+            "intro": [],
+            "list_heading": "",
+            "list_anchor": "",
+            "items": [
+              {
+                "term": "[Pitches, tips and press]",
+                "text": "[Words]"
+              },
+              {
+                "term": "[Corrections]",
+                "text": "[Words]"
+              }
+            ],
+            "end_heading": "",
+            "end_text": ""
+          }
+        }
+      ]
+    }
+  },
+  "groups": {
+    "top": [],
+    "popups": [],
+    "bottom": []
+  },
+  "addons": {}
+}

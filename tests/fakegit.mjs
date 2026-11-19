@@ -158,6 +158,7 @@ export function makeGitHub(seed) {   // seed: { "Owner/repo": { "path": "text" }
     pagesOf(repo) { return repoOf(repo).pages || null; },
     read(repo, ref, file) { const r = repoOf(repo), s = resolve(r, ref), f = s && filesAt(r, s)[file]; return f ? Buffer.from(r.blobs[f], "base64").toString("utf8") : null; },
     refs(repo) { return { ...repoOf(repo).refs }; },
+    files(repo, ref = "main") { const r = repoOf(repo), at = resolve(r, ref); return at ? Object.keys(filesAt(r, at)) : []; },
     releases(repo) { return [...(repoOf(repo).releases || [])]; },
     commitLog(repo) { return Object.values(repoOf(repo).commits).map((c) => ({ sha: c.sha, message: c.message })); },
     addPull(repo, number, branch, title) { const r = repoOf(repo); (r.pulls = r.pulls || {})[number] = { number, title, state: "open", head: { ref: branch }, user: { login: "agent" }, html_url: "https://github.com/" + repo + "/pull/" + number, body: "", created_at: new Date(clock).toISOString() }; },

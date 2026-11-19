@@ -1,0 +1,55 @@
+name: Publish to GitHub Pages
+
+# Builds the pages from the data files and publishes the website only.
+# The working files (data and tools) stay in the repository and off the
+# public site.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['inbox/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the pages
+        run: python3 tools/build.py _site
+      - name: Add the previews of work not yet published
+        # Artiscope Digital Home works on copies of the site, kept as branches named adh/<name>.
+        # Each copy is built with its own tools/build.py into preview/<name>/, and every preview
+        # page is marked so search engines ignore it. A copy that does not build is left out.
+        run: |
+          git fetch --quiet --depth=1 origin '+refs/heads/adh/*:refs/remotes/origin/adh/*' || true
+          for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/adh/); do
+            name="${ref#origin/adh/}"
+            case "$name" in *[!a-z0-9-]*|"") continue;; esac
+            git worktree add --quiet --detach "/tmp/preview-src/$name" "$ref"
+            if python3 "/tmp/preview-src/$name/tools/build.py" "/tmp/preview-out/$name"; then
+              rm -f "/tmp/preview-out/$name/CNAME" "/tmp/preview-out/$name/sitemap.xml" "/tmp/preview-out/$name/robots.txt"
+              find "/tmp/preview-out/$name" -name '*.html' -exec sed -i '0,/<head>/s//<head><meta name="robots" content="noindex, nofollow">/' {} +
+              mkdir -p _site/preview && mv "/tmp/preview-out/$name" "_site/preview/$name"
+            else
+              echo "The preview of $name could not be built and was left out."
+            fi
+          done
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
