@@ -137,7 +137,7 @@ if (process.env.AUDIT) {
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all seven sites, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 7, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 57"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 58"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -1607,7 +1607,9 @@ const bdText = async () => { const f = await bdFrame(); return f ? await f.inner
 await check("Start building opens on Template: each template draws its own home page beside it", async () => {
   await page.setViewportSize({ width: 1440, height: 900 }); await goHome();
   await page.click('[data-act="open-site"][data-site="site-4"]'); await page.waitForSelector(".bd-tpl"); await settle(2500);
-  must((await page.locator(".bd-tpl").count()) === 5 && (await page.locator(".bd-tpl[disabled]").count()) === 2, "not five templates, two of them still to come");
+  must((await page.locator(".bd-tpl").count()) === 5 && (await page.locator(".bd-tpl[disabled]").count()) === 1, "not five templates, one of them still to come");
+  await page.click('.bd-tpl[data-v="world-art-review"]'); await settle(4500);
+  const tw = await bdText(); must(tw.includes("[Discover]") && tw.includes("[Artist name]") && !/Konn|Zara|World Art Review|Frieze/.test(tw), "not the World Art Review template's home page: " + tw.slice(0, 160));
   await page.click('.bd-tpl[data-v="global-art-monitor"]'); await settle(2500);
   const tg = await bdText(); must(tg.includes("[Sales appear here once you add them]") && tg.includes("[Your opening heading]") && !/Konn|Zara|Global Art Monitor|Tate Ward/.test(tg), "not the Global Art Monitor template's home page: " + tg.slice(0, 160));
   must((await bdText()).includes("[Your opening heading]"), "no starter preview: " + (await bdText()).slice(0, 80));

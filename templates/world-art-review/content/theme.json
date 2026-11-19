@@ -1,0 +1,15 @@
+{
+  "colours": {
+    "paper": "#EEE5D4",
+    "green": "#1D4A35",
+    "brick": "#B5392B",
+    "ink": "#1D1D1B"
+  },
+  "fonts": {
+    "display": "Castoro",
+    "text": "Literata",
+    "sans": "Libre Franklin"
+  },
+  "css": "",
+  "font_links": []
+}

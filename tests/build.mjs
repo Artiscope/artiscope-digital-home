@@ -14,11 +14,12 @@ const starter = Object.fromEntries(walk(C_DIR + "/starter").filter(([f]) => !f.e
 // and the Street Art Dispatch template beside it
 const TSAD = Object.fromEntries(walk(C_DIR + "/templates/street-art-dispatch").filter(([f]) => !f.endsWith(".gitkeep")));
 const TGAM = Object.fromEntries(walk(C_DIR + "/templates/global-art-monitor").filter(([f]) => !f.endsWith(".gitkeep")));
+const TWAR = Object.fromEntries(walk(C_DIR + "/templates/world-art-review").filter(([f]) => !f.endsWith(".gitkeep")));
 const CR = "Artiscope/artiscope-digital-home", PB = "Artiscope/practice-build";
-const list = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4", domain: "", repo: "", live: false }, { id: "site-5", name: "Site 5", domain: "", repo: "", live: false }, { id: "site-9", name: "Site 9", domain: "", repo: "", live: false }, { id: "site-12", name: "Site 12", domain: "", repo: "", live: false }] };
+const list = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4", domain: "", repo: "", live: false }, { id: "site-5", name: "Site 5", domain: "", repo: "", live: false }, { id: "site-9", name: "Site 9", domain: "", repo: "", live: false }, { id: "site-12", name: "Site 12", domain: "", repo: "", live: false }, { id: "site-13", name: "Site 13", domain: "", repo: "", live: false }] };
 const rd = (dir, f) => fs.readFileSync(dir + "/" + f, "utf8");
 const hub = makeGitHub({
-  [CR]: { "sites.json": JSON.stringify(list), ...Object.fromEntries(Object.entries(starter).map(([f, t]) => ["starter/" + f, t])), ...Object.fromEntries(Object.entries(TSAD).map(([f, t]) => ["templates/street-art-dispatch/" + f, t])), ...Object.fromEntries(Object.entries(TGAM).map(([f, t]) => ["templates/global-art-monitor/" + f, t])) },
+  [CR]: { "sites.json": JSON.stringify(list), ...Object.fromEntries(Object.entries(starter).map(([f, t]) => ["starter/" + f, t])), ...Object.fromEntries(Object.entries(TSAD).map(([f, t]) => ["templates/street-art-dispatch/" + f, t])), ...Object.fromEntries(Object.entries(TGAM).map(([f, t]) => ["templates/global-art-monitor/" + f, t])), ...Object.fromEntries(Object.entries(TWAR).map(([f, t]) => ["templates/world-art-review/" + f, t])) },
   [PB]: { ...Object.fromEntries(Object.entries(starter).filter(([f]) => !f.startsWith(".github/"))), ".github/workflows/pages.yml": starter[".github/workflows/pages.yml"] },
   "Artiscope/World-art-review": { "content/pages.json": rd(W_DIR, "content/pages.json") },
   "Artiscope/global-art-monitor": { "data/pages.json": rd(G_DIR, "data/pages.json") },
@@ -146,7 +147,7 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   const SAD_OWN = /Street Art Dispatch|streetartdispatch|Konn|Banksy|Invader|Fairey|Grove Gallery roster|sad-tile|sad-mark|assets\/brand/;
   let d = await as(ADMIN, { action: "planSite", site: "site-9", choices: { name: "Wall Notes", tagline: "Walls and what is on them", email: "hello@wallnotes.org", template: T } });
   assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
-  const tp = d.spec.templates; assert.deepEqual(tp.filter((x) => x.ready).map((x) => x.id), ["starter", T, "global-art-monitor"]); assert.ok(tp.find((x) => x.id === "the-art-correspondent").later); ok("five templates are offered, three of them ready");
+  const tp = d.spec.templates; assert.deepEqual(tp.filter((x) => x.ready).map((x) => x.id), ["starter", T, "world-art-review", "global-art-monitor"]); assert.ok(tp.find((x) => x.id === "the-art-correspondent").later); ok("five templates are offered, four of them ready");
   let plan = d.plan; assert.equal(plan.choices.template, T); assert.equal(plan.choices.pages, "template"); assert.equal(plan.choices.look, "Street Art Dispatch's own");
   assert.equal(d.spec.looks[0].own, true); assert.ok(!d.spec.looks.some((l) => l.name === "Like Street Art Dispatch"), "no second copy of its own look"); ok("the template's own look comes first");
   assert.deepEqual(Object.keys(plan.pages.pages).sort(), ["about", "artists", "collecting", "contact", "dispatches", "exhibitions", "home", "interventions", "urban-culture"]);
@@ -162,7 +163,7 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   ok("the plan is the template's nine pages, with placeholders, empty lists and none of the original's words");
   d = await as(ADMIN, { action: "planSite", site: "site-9", choices: { name: "Wall Notes", template: T, look: "Ink and clay" } });
   assert.deepEqual(d.plan.theme.colours, { linen: "#F1EEE8", pine: "#22304A", ruby: "#A4572F" }); assert.equal(d.plan.theme.fonts.display, "Castoro"); ok("another look is put into the template's own colours by what each is for");
-  d = await as(ADMIN, { action: "planSite", site: "site-9", choices: { name: "Wall Notes", template: "world-art-review" } });
+  d = await as(ADMIN, { action: "planSite", site: "site-9", choices: { name: "Wall Notes", template: "the-art-correspondent" } });
   assert.equal(d.plan.choices.template, "starter"); ok("a template not ready yet falls back to the starter");
   // Create site
   d = await as(ADMIN, { action: "createSite", site: "site-9", choices: { name: "Wall Notes", tagline: "Walls and what is on them", email: "hello@wallnotes.org", template: T, look: "Ink and clay" } });
@@ -212,7 +213,7 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   const GAM_OWN = /Global Art Monitor|globalartmonitor|Konn|Zara|Tate Ward|Grove Gallery sells|MONITOR|market note|gam-tile|gam-mark/;
   let d = await as(ADMIN, { action: "planSite", site: "site-12", choices: { name: "Sale Notes", tagline: "Prices, kept honest", email: "hello@salenotes.org", template: T } });
   assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
-  assert.deepEqual(d.spec.templates.filter((x) => x.ready).map((x) => x.id), ["starter", "street-art-dispatch", T]);
+  assert.deepEqual(d.spec.templates.filter((x) => x.ready).map((x) => x.id), ["starter", "street-art-dispatch", "world-art-review", T]);
   let plan = d.plan; assert.equal(plan.choices.look, "Global Art Monitor's own");
   assert.deepEqual(Object.keys(plan.pages.pages).sort(), ["about", "artists", "auction-results", "collecting-valuation", "contact", "home", "market-intelligence", "research"]);
   assert.equal(plan.pages.pages.home.intro, true); assert.equal(plan.pages.pages["auction-results"].current, "auction-results");
@@ -242,6 +243,54 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   assert.equal(fs.readFileSync(tmp + "/_site/robots.txt", "utf8"), "User-agent: *\nDisallow: /\n"); assert.ok(!fs.existsSync(tmp + "/_site/CNAME"));
   for (const f of fs.readdirSync(tmp + "/_site", { recursive: true }).filter((x) => String(x).endsWith(".html"))) assert.ok(!GAM_OWN.test(fs.readFileSync(tmp + "/_site/" + f, "utf8")), f + " has the original's words");
   ok("the new site builds, hidden from search engines, with its own name, empty tables and nothing of the original");
+}
+
+// ----- templates: a new site from the World Art Review design -----
+{
+  const T = "world-art-review", TR = "Artiscope/portrait-notes";
+  const WAR_OWN = /World Art Review|worldartreview|Konn|Zara|Zen Xander|Frieze|Malala|Alexandra|Grove Gallery|sym-mark|war-saved/;
+  let d = await as(ADMIN, { action: "planSite", site: "site-13", choices: { name: "Portrait Notes", tagline: "Painters, looked at closely", email: "hello@portraitnotes.org", template: T } });
+  assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
+  assert.deepEqual(d.spec.templates.filter((x) => x.ready).map((x) => x.id), ["starter", "street-art-dispatch", T, "global-art-monitor"]);
+  assert.equal(d.spec.templates.find((x) => x.id === T).page, "src/index.html");
+  let plan = d.plan; assert.equal(plan.choices.look, "World Art Review's own");
+  assert.deepEqual(Object.keys(plan.pages.pages).sort(), ["home", "standards"]);
+  assert.deepEqual([plan.pages.shared.header.settings.name, plan.pages.shared.opening.settings.name, plan.pages.shared.opening.settings.tagline], ["Portrait Notes", "Portrait Notes", "Painters, looked at closely"]);
+  assert.ok(!("tagline" in plan.pages.shared.header.settings), "no words where the design has no place for them");
+  assert.deepEqual([plan.content.artists, plan.content.articles, plan.content.guides, plan.content.sources], [[], [], [], {}]);
+  assert.deepEqual(plan.content.site, { email: "hello@portraitnotes.org", address: "https://artiscope.github.io/portrait-notes/", indexed: false });
+  assert.ok(plan.pages.lists.artists && /^\[/.test(plan.pages.lists.artists.intro));
+  assert.ok(!WAR_OWN.test(JSON.stringify({ ...plan.pages, _how_to_edit: "" }) + JSON.stringify(plan.content)), "nothing of World Art Review's own content");
+  ok("the World Art Review plan is its home and standards pages and its list pages, with placeholders and no content of its own");
+  d = await as(ADMIN, { action: "planSite", site: "site-13", choices: { name: "Portrait Notes", template: T, look: "Mist and forest" } });
+  assert.deepEqual(d.plan.theme.colours, { paper: "#DCE5DF", green: "#1E3329", brick: "#B5652A", ink: "#1E3329" }); ok("a look is put into its paper, green, brick and ink");
+  d = await as(ADMIN, { action: "createSite", site: "site-13", choices: { name: "Portrait Notes", tagline: "Painters, looked at closely", email: "hello@portraitnotes.org", template: T } });
+  assert.equal(d.status, 200, JSON.stringify(d));
+  const files = hub.files(TR);
+  assert.equal(hub.read(TR, "main", "src/index.html"), TWAR["src/index.html"]); assert.ok(files.includes("tools/build.py") && files.includes("tools/build_site.py") && files.includes("content/files.json"));
+  assert.equal(read(TR, "content/site.json").site.email, "hello@portraitnotes.org");
+  assert.ok(!files.some((f) => /^data\/|^brand\/|^design\/|CLAUDE\.md|AGENT-LOG|VOICE|image-slots|place_photos|assemble\.sh|CNAME|^index\.html$/.test(f)), "nothing of the original's own: " + files.join(", "));
+  assert.equal(read(CR, "sites.json").sites.find((x) => x.id === "site-13").template, T);
+  const card = h.SITES.find((x) => x.id === "site-13"); assert.equal(card.model, undefined); assert.equal(card.pages.file, "content/pages.json"); assert.deepEqual(card.artists, []);
+  assert.ok(card.sectionKinds.hero && card.sectionKinds.featured && card.items.artist);
+  d = await as(ADMIN, { action: "pages", site: "site-13" }); assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300)); assert.ok(d.pages.pages.standards && d.pages.lists.artists);
+  ok("Create site copies the World Art Review design into content/, and it opens in the editor as such a site");
+  // the web address is saved where this design keeps its details
+  dns = { "portraitnotes.org A": h.GITHUB_IPS, "www.portraitnotes.org CNAME": ["artiscope.github.io."] };
+  const list13 = read(CR, "sites.json"); list13.sites = list13.sites.map((x) => x.id === "site-13" ? { ...x, want: "portraitnotes.org" } : x); hub.commitOn(CR, "main", "sites.json", JSON.stringify(list13), "want"); h.useSiteList(list13);
+  d = await as(ADMIN, { action: "checkDomain", site: "site-13" }); assert.equal(d.connected, true, JSON.stringify(d));
+  assert.deepEqual(read(TR, "content/site.json").site, { email: "hello@portraitnotes.org", address: "https://portraitnotes.org/", indexed: true }); assert.equal(hub.read(TR, "main", "data/content.json"), null);
+  ok("connecting its web address writes to its own details file");
+  const tmp = "/tmp/build-twar"; fs.rmSync(tmp, { recursive: true, force: true }); fs.cpSync(C_DIR + "/templates/" + T, tmp, { recursive: true });
+  for (const f of ["content/pages.json", "content/theme.json", "content/site.json"]) fs.writeFileSync(tmp + "/" + f, hub.read(TR, "main", f));
+  execFileSync("python3", [tmp + "/tools/build.py", tmp + "/_site"]);
+  const home = fs.readFileSync(tmp + "/_site/index.html", "utf8");
+  assert.ok(home.includes("<title>Portrait Notes</title>") && !home.includes("noindex") && home.includes('"email": "hello@portraitnotes.org"') && !home.includes("@@"));
+  assert.equal(fs.readFileSync(tmp + "/_site/CNAME", "utf8"), "portraitnotes.org\n"); assert.ok(!WAR_OWN.test(home), "the page has the original's words");
+  fs.writeFileSync(tmp + "/content/site.json", JSON.stringify({ ...read(TR, "content/site.json"), site: { email: "x@y.org", address: "https://artiscope.github.io/portrait-notes/", indexed: false } }));
+  execFileSync("python3", [tmp + "/tools/build.py", tmp + "/_site2"]);
+  assert.ok(fs.readFileSync(tmp + "/_site2/index.html", "utf8").includes('content="noindex, nofollow"') && !fs.existsSync(tmp + "/_site2/CNAME") && fs.readFileSync(tmp + "/_site2/robots.txt", "utf8").includes("Disallow"));
+  ok("the new site builds with its own name and email, hidden from search engines until its address is connected");
 }
 
 // ----- step 5: articles and artists on a site built from the starter -----

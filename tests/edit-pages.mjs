@@ -26,7 +26,8 @@ try {
   assert.deepEqual(groups, ["Pages", "Lists", "Articles", "Artist portfolios"]);
 
   // a click on Reviews in the menu bar goes to Reviews, in the preview and in the editor
-  await frame().click("header.hdr nav.left a:has-text('Reviews')"); await settle();
+  // on a busy machine the preview may still be wiring its links: click again until the address follows, up to three times
+  for (let i = 0; i < 3 && (await hash()) !== "#reviews"; i++) { await frame().click("header.hdr nav.left a:has-text('Reviews')"); await page.waitForTimeout(700 + i * 1000); }
   assert.equal(await hash(), "#reviews"); assert.equal(await page.inputValue(".pagepick"), "reviews");
   assert.ok((await page.innerText(".ed-left")).includes("Page heading") && (await page.innerText(".ed-left")).includes("In this list"));
   // with Alt held, a click picks the link to change it

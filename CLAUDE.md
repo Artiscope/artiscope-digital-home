@@ -219,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (19 November 2026, Version 57)
+## Where things stand (19 November 2026, Version 58)
 
 Done:
 
@@ -908,9 +908,9 @@ Done:
     across (articles, artists, figures, photos, logos, email addresses),
     and every word starts in square brackets.
   - Ready: the starter, Street Art Dispatch
-    (`templates/street-art-dispatch`) and, since Version 57, Global Art
-    Monitor. World Art Review shows "Comes in a later step" (step 4); The
-    Art Correspondent "Ready after its conversion" (step 5).
+    (`templates/street-art-dispatch`), Global Art Monitor (Version 57)
+    and World Art Review (Version 58). The Art Correspondent shows
+    "Ready after its conversion" (step 5).
   - The Street Art Dispatch template: SAD's render.js, site.js, site.css
     and build with its name, stamp logo, favicon, Draft note, licensed
     photo credits and own addresses taken out; the site's address and
@@ -971,6 +971,47 @@ Done:
   - Console: look cards on a template other than the starter say "the
     template's own corners" instead of "square corners".
   - Checks: the Global Art Monitor block in `tests/build.mjs`, the `tgam`
+    words in `tests/run.mjs`, the first "Start building" check in
+    `tests/uat.mjs`.
+
+- Version 58 (19 November): the World Art Review template, step 4 of 6.
+  - `templates/world-art-review`: WAR's `src/index.html` and
+    `tools/build_site.py` (with `tools/build.py` calling it, so the
+    starter's workflows work), data in `content/` (`site.json` with
+    `site`, empty `sources`, `artists`, `articles`, `guides`;
+    `pages.json` with the home and standards pages, the list pages'
+    words under `lists`, default templates; `theme.json`; `files.json`),
+    pictures in `images/`.
+  - Taken out of the design: the frame logo (`sym-mark`, `IC.mark` is
+    empty), the favicon, every "World Art Review" (`SITE_NAME()` from the
+    menu bar; the build fills `@@SITE_NAME@@`, `@@SITE_TAGLINE@@` and
+    `@@ROBOTS@@` in the head and opening screen), Grove Gallery's email
+    (`MAIL_TO` comes from `SITE.email`, shown in `.mail-to` and
+    `.mail-link`), the Zara Muse and Konn Artiss comparison table
+    (`compareTable` returns nothing), the default latest articles, the
+    standards and research desk words (placeholders), and the letter
+    panel's words. Storage keys start `site-` instead of `war-`. The "100%"
+    figure in the numbers band is "[100%]".
+  - With no published artist yet, the opening picture and the featured
+    artist use `NOART` (every word in brackets, linking to #artists), so
+    the page draws instead of failing.
+  - The build writes `index.html`, `images/`, robots.txt, and when
+    `site.indexed` is true a sitemap and CNAME; otherwise every page
+    carries noindex.
+  - Server: `TWAR_SECTIONS`, `TWAR_WORDS`, `WORD_LOCKS.twar`; a WAR
+    template site is WAR's config with the site's own id, repository,
+    no artists and `files: WAR_FILES`. Each template says where its
+    files live (`files`, else `DATA_FILES`): `templateFiles`,
+    `createSite` and `checkDomain` (`detailsFile`) use them. `nameInto`
+    now puts the tagline only where the design has a place for it, and
+    the name in the opening screen too.
+  - Console: a template with a whole-page design (`page` in its spec)
+    is previewed by `bdWholePage`: its page with the plan's data put in
+    as the build does, in a frame that may run its own code but has no
+    access to the console (`sandbox="allow-scripts"`), with the opening
+    screen skipped. The Pages step lists the design's own list pages
+    (`bdPageNames`).
+  - Checks: the World Art Review block in `tests/build.mjs`, the `twar`
     words in `tests/run.mjs`, the first "Start building" check in
     `tests/uat.mjs`.
 

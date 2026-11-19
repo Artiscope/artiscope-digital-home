@@ -1,0 +1,427 @@
+{
+  "_how_to_edit": "This file is edited in Artiscope Digital Home. Each page is a list of sections; words in square brackets are placeholders waiting for real words.",
+  "shared": {
+    "opening": {
+      "type": "opening",
+      "visible": true,
+      "settings": {
+        "name": "[Site name]",
+        "tagline": "[A short line about the site]"
+      }
+    },
+    "header": {
+      "type": "header",
+      "visible": true,
+      "settings": {
+        "name": "[Site name]",
+        "links": [
+          [
+            "Artists A to Z",
+            "#artists"
+          ],
+          [
+            "Reviews",
+            "#reviews"
+          ],
+          [
+            "Art Explained",
+            "#explained"
+          ]
+        ],
+        "logos": []
+      }
+    },
+    "footer": {
+      "type": "footer",
+      "visible": true,
+      "settings": {
+        "eyebrow": "[Get the review]",
+        "heading": [
+          "[New portfolios,",
+          "once a month.]"
+        ],
+        "button": "[Subscribe]",
+        "blurb": "[Short description of the site]",
+        "columns": [
+          {
+            "title": "[Read]",
+            "links": [
+              [
+                "Artists A to Z",
+                "#artists"
+              ],
+              [
+                "Reviews",
+                "#reviews"
+              ],
+              [
+                "Art Explained",
+                "#explained"
+              ],
+              [
+                "Exhibition Guides",
+                "#guides"
+              ]
+            ]
+          },
+          {
+            "title": "[Collect]",
+            "links": [
+              [
+                "Collector's Library",
+                "#library"
+              ]
+            ]
+          },
+          {
+            "title": "[About]",
+            "links": [
+              [
+                "How we research",
+                "#home"
+              ],
+              [
+                "Sources",
+                "#standards"
+              ]
+            ]
+          }
+        ],
+        "copyright": "[Small print, such as the year and the site's name]",
+        "elsewhere": [
+          [
+            "[Instagram]",
+            "#"
+          ],
+          [
+            "[X]",
+            "#"
+          ],
+          [
+            "[LinkedIn]",
+            "#"
+          ],
+          [
+            "[Privacy]",
+            "#standards"
+          ],
+          [
+            "[Terms]",
+            "#standards"
+          ]
+        ]
+      }
+    }
+  },
+  "pages": {
+    "home": {
+      "title": "[Site name]",
+      "description": "[One or two sentences about this page, for search results]",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "visible": true,
+          "settings": {
+            "headline": [
+              {
+                "t": "[Discover]",
+                "ital": false
+              },
+              {
+                "t": "[Artists]",
+                "ital": true
+              }
+            ],
+            "tagline": [
+              {
+                "t": "[Understand]",
+                "ital": false
+              },
+              {
+                "t": "[Art]",
+                "ital": true
+              }
+            ],
+            "image": "",
+            "alt": "",
+            "credit": "",
+            "artist": "",
+            "rule_label": "[Our rule]",
+            "rule_text": "[Rule box, text]",
+            "rule_link": "[How we work]",
+            "latest": [],
+            "hide_picture": false,
+            "hide_rule": false
+          }
+        },
+        {
+          "id": "featured",
+          "type": "featured",
+          "visible": true,
+          "settings": {
+            "badge": "[Artist in focus]",
+            "artists": []
+          }
+        },
+        {
+          "id": "sections",
+          "type": "section-list",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[Small line above the heading]",
+            "heading": [
+              "[Read by",
+              "section]"
+            ],
+            "rows": [
+              {
+                "n": "01",
+                "name": "[Artists A to Z]",
+                "desc": "[Description]",
+                "href": "#artists",
+                "count": "artists",
+                "unit": "portfolio"
+              },
+              {
+                "n": "02",
+                "name": "[Reviews]",
+                "desc": "[Description]",
+                "href": "#reviews",
+                "count": "reviews",
+                "unit": "review"
+              },
+              {
+                "n": "03",
+                "name": "[Art Explained]",
+                "desc": "[Description]",
+                "href": "#explained",
+                "count": "explained",
+                "unit": "guide"
+              },
+              {
+                "n": "04",
+                "name": "[Collector's Library]",
+                "desc": "[Description]",
+                "href": "#library",
+                "count": "library",
+                "unit": "guide"
+              }
+            ]
+          }
+        },
+        {
+          "id": "explainedHome",
+          "type": "explained",
+          "visible": true,
+          "settings": {
+            "heading": [
+              "[How to",
+              "look at",
+              "a painting]"
+            ],
+            "text": "[Text]",
+            "count": 2
+          }
+        },
+        {
+          "id": "numbers",
+          "type": "numbers",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[The review so far]",
+            "heading": [
+              "[Research you",
+              "can check]"
+            ],
+            "labels": [
+              "[Artists documented]",
+              "[Articles and reviews]",
+              "[Sources cited]",
+              "[Label]"
+            ]
+          }
+        },
+        {
+          "id": "method",
+          "type": "method",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[How we research]",
+            "heading": [
+              "[The work first,",
+              "then the story]"
+            ],
+            "cards": [
+              {
+                "n": "1",
+                "title": "[Start with the work]",
+                "text": "[Text]",
+                "sub": "[Seen, measured, described]"
+              },
+              {
+                "n": "2",
+                "title": "[Every fact, sourced]",
+                "text": "[Text]",
+                "sub": "[Small line]"
+              },
+              {
+                "n": "3",
+                "title": "[Publicity, flagged]",
+                "text": "[Text]",
+                "sub": "[Small line]"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "standards": {
+      "title": "Editorial standards",
+      "description": "[One or two sentences about this page, for search results]",
+      "sections": [
+        {
+          "id": "heading",
+          "type": "page-heading",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[Editorial standards]",
+            "heading": [
+              "[How we research",
+              "and what we publish]"
+            ],
+            "intro": "[Introduction]"
+          }
+        },
+        {
+          "id": "text",
+          "type": "long-text",
+          "visible": true,
+          "settings": {
+            "body": "<h2>[A rule you follow]</h2>\n<p>[A sentence or two on it]</p>\n<h2>[Another rule]</h2>\n<p>[A sentence or two on it]</p>\n<h2>[Who publishes this site]</h2>\n<p>[Who publishes the site, and any interest it has in the artists it covers]</p>\n<h2>[Corrections]</h2>\n<p>[How to send a correction]</p>\n<h2>[Privacy and terms]</h2>\n<p>[The privacy notice and terms of use]</p>"
+          }
+        }
+      ]
+    }
+  },
+  "groups": {
+    "top": [],
+    "popups": [],
+    "bottom": []
+  },
+  "addons": {
+    "top": {
+      "on": false,
+      "label": "Top",
+      "side": "right",
+      "after": 600
+    },
+    "progress": {
+      "on": false,
+      "style": "bar",
+      "where": "articles"
+    },
+    "share": {
+      "on": false,
+      "heading": "Share this page",
+      "networks": [
+        "email",
+        "x",
+        "linkedin",
+        "facebook"
+      ],
+      "where": "articles"
+    },
+    "privacy": {
+      "on": false,
+      "text": "This site uses no tracking and no adverts.",
+      "link_label": "",
+      "link": "",
+      "button": "Close"
+    }
+  },
+  "templates": {
+    "article": {
+      "default": {
+        "name": "Default article",
+        "sections": [
+          {
+            "id": "main",
+            "type": "main"
+          }
+        ]
+      }
+    },
+    "artist": {
+      "default": {
+        "name": "Default artist portfolio",
+        "sections": [
+          {
+            "id": "main",
+            "type": "main"
+          }
+        ]
+      }
+    }
+  },
+  "assign": {
+    "article": {},
+    "artist": {}
+  },
+  "lists": {
+    "artists": {
+      "eyebrow": "[Artists A to Z]",
+      "heading": [
+        "[Every artist,",
+        "researched and sourced]"
+      ],
+      "intro": "[A line about this page]"
+    },
+    "reviews": {
+      "eyebrow": "[Reviews]",
+      "heading": [
+        "[Recent reviews",
+        "and comparisons]"
+      ],
+      "intro": "[A line about this page]"
+    },
+    "explained": {
+      "eyebrow": "[Art Explained]",
+      "heading": [
+        "[Heading]"
+      ],
+      "intro": "[A line about this page]"
+    },
+    "library": {
+      "eyebrow": "[Collector's Library]",
+      "heading": [
+        "[Buy with your",
+        "eyes open]"
+      ],
+      "intro": "[A line about this page]"
+    },
+    "guides": {
+      "eyebrow": "[Exhibition Guides]",
+      "heading": [
+        "[Heading]"
+      ],
+      "intro": "[A line about this page]"
+    },
+    "search": {
+      "eyebrow": "[Search]",
+      "heading": [
+        "[Search the",
+        "archive]"
+      ],
+      "intro": "[A line about this page]"
+    },
+    "research": {
+      "eyebrow": "[Research desk]",
+      "heading": [
+        "[What still needs",
+        "to be added]"
+      ],
+      "intro": "[A line about this page]"
+    }
+  }
+}

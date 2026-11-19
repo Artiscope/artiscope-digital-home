@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "57";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "58";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -4058,16 +4058,36 @@
     sc.onerror = function () { delete bdModules[t.dir]; };
     document.head.appendChild(sc);
   }
+  // A template whose design is one page drawn in the browser (World Art Review's): its page, with the plan's
+  // data put where the build puts it, shown in a frame that may run its own code but can reach nothing else.
+  var bdPages = {};
+  function bdWholePage(b, t) {
+    var f = app.querySelector("#bd-if"), p = b.plan;
+    var go = function (src) {
+      if (state.build !== b || bdTpl(b).id !== t.id || !app.querySelector("#bd-if")) return;
+      var pages = JSON.parse(JSON.stringify(p.pages)); if (pages.shared && pages.shared.opening) pages.shared.opening.visible = false;
+      var c = p.content || {}, J = function (v) { return JSON.stringify(v).replace(/<\//g, "<\\/"); };
+      var block = "const SOURCES = " + J(c.sources || {}) + ";\nconst ARTISTS = " + J(c.artists || []) + ";\nconst ARTICLES = " + J(c.articles || []) + ";\nconst GUIDES = " + J(c.guides || []) + ";\nconst PAGES = " + J(pages) + ";\nlet SOCIAL = {};\nconst SITE = " + J(c.site || {}) + ";";
+      var name = ((pages.shared.header || {}).settings || {}).name || "[Site name]", tag = (((pages.shared.opening || {}).settings) || {}).tagline || "";
+      var html = src.split("/*@@CONTENT@@*/").join(block).split("@@SITE_NAME@@").join(esc(name)).split("@@SITE_TAGLINE@@").join(esc(tag)).split("@@ROBOTS@@").join("")
+        .replace(/<head>/i, '<head><base href="' + new URL(t.dir + "/", location.href).href + '"><style>a{pointer-events:none}</style>').replace("</head>", bdThemeHead(p.theme) + "</head>");
+      var fr = app.querySelector("#bd-if"); if (fr.getAttribute("data-html") === html) { bdFit(); return; }
+      fr.setAttribute("sandbox", "allow-scripts"); fr.setAttribute("data-html", html); fr.srcdoc = html; bdFit();
+    };
+    if (bdPages[t.dir]) return go(bdPages[t.dir]);
+    fetch(t.dir + "/" + t.page + "?v=" + VERSION).then(function (r) { return r.text(); }).then(function (txt) { bdPages[t.dir] = txt; go(txt); }, function () {});
+  }
   // The home page as the new site will publish it, without its scripts, its links switched off.
   function bdDraw() {
     var b = bdOf(), f = app.querySelector("#bd-if"); if (!b || !b.plan || !f) return;
     var t = bdTpl(b); if (b.plan.choices && b.plan.choices.template && b.plan.choices.template !== t.id) return;
+    if (t.page) return bdWholePage(b, t);
     bdStarter(function (S) {
       var p = b.plan; if (!S || !app.querySelector("#bd-if") || state.build !== b || bdTpl(b).id !== t.id) return;
       var html = S.Site(S.fromFiles(p.content), p.pages, bdThemeHead(p.theme), {}).sectionsPage("home").html;
       var base = new URL(t.dir + "/", location.href).href;
       html = html.replace(/<script\b[\s\S]*?<\/script>/gi, "").replace(/<head>/i, '<head><base href="' + base + '"><style>a{pointer-events:none}</style>');
-      var fr = app.querySelector("#bd-if"); if (fr.getAttribute("data-html") !== html) { fr.setAttribute("data-html", html); fr.srcdoc = html; }
+      var fr = app.querySelector("#bd-if"); if (fr.getAttribute("data-html") !== html) { fr.setAttribute("sandbox", "allow-same-origin"); fr.setAttribute("data-html", html); fr.srcdoc = html; }
       bdFit();
     }, t);
   }
@@ -4136,7 +4156,7 @@
   function bdStep3() {
     var b = bdOf(), t = bdTpl(b);
     if (t.id !== "starter") {
-      var pgs = b.plan ? Object.keys(b.plan.pages.pages).map(function (k) { var x = b.plan.pages.pages[k]; return k === "home" ? "Home" : String(x.title || k).replace(/^\[(.*)\]$/, "$1"); }) : [];
+      var pgs = bdPageNames(b);
       return '<h2 class="bd-h">Starting pages</h2><span class="small bd-sub">The ' + esc(t.name) + ' template brings its own pages, in its own order, each with placeholder words in square brackets, never made-up facts.</span>' +
         '<span class="cap">The template\'s pages</span>' + bdChips(pgs) +
         '<div class="bd-notes"><span class="cap">Arrives empty, ready for your own</span><span>' + esc(t.stays) + '.</span><span class="small">Add articles, artists and entries in the editor. Hide or remove any page you do not need.</span></div>' +
@@ -4156,8 +4176,16 @@
       '<span class="cap">Ready to add from day one</span>' + bdChips(sp.kinds) +
       '<span class="small">Plus theme settings, the four add-ons, templates, Undo, Publish later, Versions and Edit code, the same as your other sites.</span>';
   }
+  // A template's pages by name, with the lists a design draws itself (World Art Review's artists, reviews and the rest)
+  function bdPageNames(b) {
+    if (!b.plan) return [];
+    var unb = function (v) { return String(v || "").replace(/^\[(.*)\]$/, "$1"); }, lists = b.plan.pages.lists || {};
+    var out = Object.keys(b.plan.pages.pages).map(function (k) { var x = b.plan.pages.pages[k]; return k === "home" ? "Home" : unb(x.title || k); });
+    Object.keys(lists).filter(function (k) { return k !== "research" && k !== "search"; }).forEach(function (k) { out.push(unb(lists[k].eyebrow) || k); });
+    return out;
+  }
   function bdPagesWords(b) {
-    if (bdTpl(b).id !== "starter") return "The template's own pages" + (b.plan ? ", " + Object.keys(b.plan.pages.pages).length + " of them" : "");
+    if (bdTpl(b).id !== "starter") return "The template's own pages" + (b.plan ? ", " + bdPageNames(b).length + " of them" : "");
     if (b.c.pages === "set") return "A ready set of six pages";
     if (b.c.pages === "copy") { var f = ((b.spec && b.spec.from) || []).find(function (x) { return x.id === b.c.from; }); return "The page layout of " + (f ? f.name : "another site") + (b.plan ? ", " + Object.keys(b.plan.pages.pages).length + " pages" : ""); }
     return "Just a home page";
@@ -5235,8 +5263,10 @@
   }
   var demoBuild = null; // Start building in sample mode, from assets/demo-build.json (planned by the server's own code)
   function demoNameInto(pages, c) {
-    var p = JSON.parse(JSON.stringify(pages)), hd = p.shared.header.settings, ft = p.shared.footer.settings;
-    hd.name = c.name || "[Site name]"; hd.tagline = c.tagline || "[A short line about the site]"; ft.tagline = c.tagline || "[A short line about the site]";
+    var p = JSON.parse(JSON.stringify(pages)), hd = p.shared.header.settings, ft = p.shared.footer.settings, op = p.shared.opening ? p.shared.opening.settings : null;
+    hd.name = c.name || "[Site name]";
+    [hd, ft, op].forEach(function (st) { if (st && "tagline" in st) st.tagline = c.tagline || "[A short line about the site]"; });
+    if (op) op.name = c.name || "[Site name]";
     if (p.pages.home) { p.pages.home.title = c.name || "[Site name]"; var bn = (p.pages.home.sections || []).find(function (x) { return x.id === "banner"; }); if (bn && c.tagline) bn.settings.text = c.tagline; }
     return p;
   }

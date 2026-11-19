@@ -1,0 +1,24 @@
+name: Update previews
+
+# A working copy made in Artiscope Digital Home is a branch named
+# adh/<name>. When one is made, changes or is deleted, start a publish so
+# its preview is built again. The publish itself always runs from main.
+
+on:
+  create:
+  push:
+    branches: ['adh/**']
+    paths-ignore: ['inbox/**']
+  delete:
+
+permissions:
+  actions: write
+
+jobs:
+  start:
+    if: github.event_name == 'push' || (github.event.ref_type == 'branch' && startsWith(github.event.ref, 'adh/'))
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh workflow run pages.yml --ref main --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}

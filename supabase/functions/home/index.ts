@@ -34,6 +34,7 @@ export const WORD_LOCKS = {
   sad: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK, "missing.date": "Stays until confirmed facts are given, by the site's rules.", "item.draft": "Stays until confirmed facts are given, by the site's rules." },
   starter: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
   tsad: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
+  twar: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
   tgam: { "form.note": NOTE_LOCK, "item.who": "The heading of the publisher disclosure stays as it is: readers are always told who publishes the site." },
 };
 export const WAR_WORDS = {
@@ -1353,13 +1354,21 @@ export const TSAD_WORDS = Object.fromEntries(Object.entries({ ...SAD_WORDS, "for
 const TGAM_SECTIONS = Object.fromEntries(Object.entries(GAM_SECTIONS).map(([k, v]) => [k, v.starter ? { ...v, starter: ST_BRACKET(v.fields, k === "visit" ? { ...v.starter, heading: "Visit us" } : v.starter, k) } : v]));
 const TGAM_ITEMS = Object.fromEntries(Object.entries(GAM_ITEMS).map(([k, v]) => [k, { ...v, parts: v.parts.map((part) => part.fields ? { ...part, fields: part.fields.map((f) => f.name === "site.disclosure" ? { ...f, hint: "Who publishes the site, and any interest it has in the artists it covers. Readers are always told." } : f) } : part) }]));
 export const TGAM_WORDS = { ...GAM_WORDS, "loading.line": "Loading the latest figures.", "form.subject": "Please add me to the mailing list" };
+// The World Art Review template: its sections with bracketed starting words, and the search label naming the site.
+const TWAR_SECTIONS = Object.fromEntries(Object.entries(WAR_SECTIONS).map(([k, v]) => [k, v.starter ? { ...v, starter: ST_BRACKET(v.fields, v.starter, k) } : v]));
+export const TWAR_WORDS = { ...WAR_WORDS, "sr.search": "Search {site}", "form.subject": "Please add me to the mailing list" };
+// Where each kind of site keeps its pages, look and content (a World Art Review site keeps them in content/).
+const DATA_FILES = { pages: "data/pages.json", theme: "data/theme.json", content: "data/content.json" };
+const WAR_FILES = { pages: "content/pages.json", theme: "content/theme.json", content: "content/site.json" };
 export const SITE_TEMPLATES = [
   { id: "starter", name: "The starter", dir: STARTER_DIR, global: "STARTER", ready: true, line: "Simple and flexible. The design every new site has had so far.",
     own: "None of its own", pages: "Articles and artist pages", stays: "Nothing: it has no content of its own" },
   { id: "street-art-dispatch", name: "Street Art Dispatch", dir: "templates/street-art-dispatch", global: "SAD", ready: true, line: "A magazine, with story cards and a dated archive.",
     own: "7 of its own: Opening banner, Article cards, Artist cards, Intervention archive, Exhibition listings, Collecting band and Page text", pages: "Articles, columns, artist profiles and the archive",
     stays: "Its stories, artists, archive entries, licensed photos, the stamp logo and the Draft notes. The archive, exhibitions and collecting figures arrive empty" },
-  { id: "world-art-review", name: "World Art Review", ready: false, line: "Editorial, with artist portfolios, reviews and guides.", later: "Comes in a later step" },
+  { id: "world-art-review", name: "World Art Review", dir: "templates/world-art-review", global: "", ready: true, line: "Editorial, with artist portfolios, reviews and guides.",
+    own: "12 of its own, such as Opening screen, Featured artists, Read by section, Art explained, Numbers band and Artist cards", pages: "Artist portfolios, articles in four sections, exhibition guides and editorial standards",
+    stays: "Its artists, articles, sources, guides, photos and the frame logo. Portfolios and articles arrive empty, and the opening and featured artist show placeholders until the first artist is published", files: WAR_FILES },
   { id: "global-art-monitor", name: "Global Art Monitor", dir: "templates/global-art-monitor", global: "GAM", ready: true, line: "Data-led, with tables, figures and timelines.",
     own: "14 of its own, such as the artist auction timeline, Latest result, All auction results, Words explained and the glossary", pages: "Articles, artist market profiles with their sales, and auction results",
     stays: "Its sales and figures, artists, articles, glossary, photos and the G logo. The tables, profiles and glossary arrive empty" },
@@ -1374,6 +1383,10 @@ export function starterSite(e) {
     pages: { file: "data/pages.json", images: "assets/images", meta: "data/files.json" },
     code: { edit: ["assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs"], read: ["data/pages.json", "data/theme.json", "data/content.json"] },
   };
+  if (t.id === "world-art-review") {
+    const war = SITES.find((x) => x.id === "world-art-review");
+    return { ...war, ...base, pages: war.pages, code: war.code, artists: [], sectionKinds: TWAR_SECTIONS, words: TWAR_WORDS, wordLocks: WORD_LOCKS.twar, files: WAR_FILES };
+  }
   if (t.id === "global-art-monitor") {
     const gam = SITES.find((x) => x.id === "global-art-monitor");
     return { ...base, code: { ...base.code, read: base.code.read.concat(["data/sales.json"]) }, sectionKinds: TGAM_SECTIONS, words: TGAM_WORDS, wordLocks: WORD_LOCKS.tgam, items: TGAM_ITEMS, model: GAM_MODEL, gam: true, builtIn: gam.builtIn, theme: gam.theme, collections: [] };
@@ -3074,8 +3087,11 @@ export function copyLayout(doc, from) {
 }
 // Puts the site's name and tagline where they belong. The console does the same in sample mode.
 export function nameInto(pages, c) {
-  const p = JSON.parse(JSON.stringify(pages)), hd = p.shared.header.settings, ft = p.shared.footer.settings;
-  hd.name = c.name || "[Site name]"; hd.tagline = c.tagline || "[A short line about the site]"; ft.tagline = c.tagline || "[A short line about the site]";
+  const p = JSON.parse(JSON.stringify(pages)), hd = p.shared.header.settings, ft = p.shared.footer.settings, op = p.shared.opening ? p.shared.opening.settings : null;
+  // the name goes in the menu bar (and an opening screen); the tagline wherever the design shows one
+  hd.name = c.name || "[Site name]";
+  for (const st of [hd, ft, op]) if (st && "tagline" in st) st.tagline = c.tagline || "[A short line about the site]";
+  if (op) op.name = c.name || "[Site name]";
   if (p.pages.home) {
     p.pages.home.title = c.name || "[Site name]";
     const b = (p.pages.home.sections || []).find((x) => x.id === "banner");
@@ -3102,7 +3118,7 @@ export function planFiles(c, address, copied, tpl) {
   if (c.template && c.template !== "starter") {
     if (!tpl) throw new Error("The template could not be read from GitHub just now. Try again in a moment.");
     const spec = starterSite({ template: c.template }).theme, look = buildLooks(c.template).find((l) => l.name === c.look) || buildLooks(c.template)[0];
-    const theme = themeFile({ pages: { images: "assets/images" } }, spec, cleanTheme(spec, lookInto(spec, look)));
+    const theme = themeFile({ pages: { images: (starterSite({ template: c.template }).pages || {}).images || "assets/images" } }, spec, cleanTheme(spec, lookInto(spec, look)));
     const t0 = JSON.parse(JSON.stringify(tpl.content || {})), was = t0.site || {};
     // a template whose details carry the site's name and tagline (Global Art Monitor's) gets them there too
     const named = { ...("name" in was ? { name: c.name || "[Site name]" } : {}), ...("tagline" in was ? { tagline: c.tagline || was.tagline } : {}) };
@@ -3138,13 +3154,14 @@ const tplFiles = {};
 async function templateFiles(id) {
   const t = templateOf(id), hit = tplFiles[t.id];
   if (hit && Date.now() - hit.at < 120000) return hit.files;
-  const [p, c] = await Promise.all([getText(CONSOLE_REPO, t.dir + "/data/pages.json"), getText(CONSOLE_REPO, t.dir + "/data/content.json")]);
+  const F = t.files || DATA_FILES;
+  const [p, c] = await Promise.all([getText(CONSOLE_REPO, t.dir + "/" + F.pages), getText(CONSOLE_REPO, t.dir + "/" + F.content)]);
   let files = null; try { files = p && c ? { pages: JSON.parse(p.text), content: JSON.parse(c.text) } : null; } catch (_e) { files = null; }
   if (files) tplFiles[t.id] = { at: Date.now(), files };
   return files;
 }
 export function buildSpec(template = "starter") {
-  return { looks: buildLooks(template), templates: SITE_TEMPLATES.map((t) => ({ id: t.id, name: t.name, ready: !!t.ready, dir: t.dir || "", global: t.global || "", line: t.line, own: t.own || "", pages: t.pages || "", stays: t.stays || "", later: t.later || "",
+  return { looks: buildLooks(template), templates: SITE_TEMPLATES.map((t) => ({ id: t.id, name: t.name, ready: !!t.ready, dir: t.dir || "", global: t.global || "", page: t.id === "world-art-review" ? "src/index.html" : "", line: t.line, own: t.own || "", pages: t.pages || "", stays: t.stays || "", later: t.later || "",
       look: buildLooks(t.ready ? t.id : "starter")[0] })), registrars: BUILD_REGISTRARS, set: BUILD_SET.map((x) => x[1]), from: BUILD_FROM.map((id) => ({ id, name: (SITES.find((x) => x.id === id) || {}).name || id })),
     kinds: STARTER_KINDS.map((k) => STARTER_SECTIONS[k].label), ips: GITHUB_IPS, org: BUILD_ORG };
 }
@@ -3197,7 +3214,7 @@ async function publishAgain(site, message) {
 // the files written, version 1.0, and its place in the list of sites. Each part is reported.
 export async function createSite(card, given, tag) {
   const plan = await planSite(card, given), c = plan.choices, done = [], todo = [];
-  const files = { "data/pages.json": plan.pages, "data/theme.json": plan.theme, "data/content.json": plan.content };
+  const F = templateOf(c.template).files || DATA_FILES, files = { [F.pages]: plan.pages, [F.theme]: plan.theme, [F.content]: plan.content };
   if (!c.name) throw new Error("Give the site a name.");
   if (card.playground) {
     const w = await starterInto({ ...card, dir: templateOf(c.template).dir }, "Start building: " + c.name + (c.template !== "starter" ? ", from the " + templateOf(c.template).name + " template" : "") + " (by " + tag + ")", { files });
@@ -3280,10 +3297,10 @@ export async function checkDomain(site, tag) {
   if (!connected) {
     const set = await gh("/repos/" + site.repo + "/pages", { method: "PUT", body: JSON.stringify({ cname: domain }) });
     if (!set.ok) return { error: PAGES_HELP.replace(" Then press Try again.", " Then press Check again.") };
-    const got = await getText(site.repo, "data/content.json");
+    const detailsFile = (site.files || DATA_FILES).content, got = await getText(site.repo, detailsFile);
     let content = {}; try { content = JSON.parse(got ? got.text : "{}"); } catch (_e) { content = {}; }
     content.site = { ...(content.site || {}), address: "https://" + domain + "/", indexed: true };
-    const put = await gh("/repos/" + site.repo + "/contents/data/content.json", { method: "PUT", body: JSON.stringify({ message: "Connect " + domain + " and let search engines in (by " + tag + ")", content: encodeBase64Utf8(JSON.stringify(content, null, 2) + "\n"), ...(got ? { sha: got.sha } : {}), branch: "main" }) });
+    const put = await gh("/repos/" + site.repo + "/contents/" + detailsFile, { method: "PUT", body: JSON.stringify({ message: "Connect " + domain + " and let search engines in (by " + tag + ")", content: encodeBase64Utf8(JSON.stringify(content, null, 2) + "\n"), ...(got ? { sha: got.sha } : {}), branch: "main" }) });
     if (!put.ok) return { error: writeProblem(put, "The site's address could not be saved.") };
     const err = await changeSiteList((list) => list.map((x) => x && x.id === site.id ? { ...x, domain } : x), "Connect " + domain + " (by " + tag + ")");
     if (err) return { error: err };

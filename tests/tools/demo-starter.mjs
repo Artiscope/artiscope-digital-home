@@ -33,7 +33,8 @@ console.log("Wrote the practice build sample");
   // each template ready to use: its pages, its content and its looks
   const specs = { starter: m.buildSpec() }, contents = {};
   for (const t of m.SITE_TEMPLATES.filter((x) => x.ready && x.id !== "starter")) {
-    const read2 = (p) => JSON.parse(fs.readFileSync(C_DIR + "/" + t.dir + "/" + p, "utf8")), tpl = { pages: read2("data/pages.json"), content: read2("data/content.json") };
+    const F = t.files || { pages: "data/pages.json", content: "data/content.json" };
+    const read2 = (p) => JSON.parse(fs.readFileSync(C_DIR + "/" + t.dir + "/" + p, "utf8")), tpl = { pages: read2(F.pages), content: read2(F.content) };
     const c1 = m.cleanBuild({ name: "", template: t.id }, { name: "Site 4" });
     const p = m.planFiles({ ...c1, name: "", tagline: "" }, "https://artiscope.github.io/site-4/", null, tpl);
     plans["tpl:" + t.id] = { pages: p.pages, notes: p.notes }; contents[t.id] = p.content; specs[t.id] = m.buildSpec(t.id);
