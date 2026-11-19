@@ -1969,13 +1969,15 @@ export function cleanSiteList(given) {
     const name = cleanText(e.name, 60) || e.id, built = repo && e.kind === "starter";
     let want = ""; try { want = cleanDomain(e.want); } catch (_e) { want = ""; }
     const registrar = ["123-reg", "godaddy", "other"].includes(e.registrar) ? e.registrar : "", todo = Array.isArray(e.todo) ? e.todo.filter((t) => t === "pages" || t === "steps") : [];
+    // A site made outside the console (its own hand-written pages): a card with its picture and links, never opened in the editor.
+    if (e.kind === "outside" && repo && domain) { out.push({ id: e.id, name, domain, repo, kind: "outside", playground: false, live: false }); continue; }
     out.push({ id: e.id, name, domain, repo, kind: built ? "starter" : "", playground: !!e.playground && built, live: !!e.live && !!built && !!domain, ...(built ? { want, registrar, todo } : {}) });
   }
   return out;
 }
 export function useSiteList(list) {
   SITES.splice(BUILT_IN, SITES.length - BUILT_IN);
-  for (const e of cleanSiteList(list)) SITES.push(e.kind === "starter" ? starterSite(e) : { id: e.id, name: e.name, domain: e.domain, repo: e.repo, live: false, artists: [], collections: [], playground: e.playground });
+  for (const e of cleanSiteList(list)) SITES.push(e.kind === "starter" ? starterSite(e) : { id: e.id, name: e.name, domain: e.domain, repo: e.repo, live: false, outside: e.kind === "outside", artists: [], collections: [], playground: e.playground });
 }
 useSiteList(DEFAULT_SITE_LIST);
 let siteListAt = 0, siteListSha = "";
@@ -2544,7 +2546,7 @@ async function branchForWriting(site, copy, _who) {
 async function siteOverview(site, wanted = "", me = null, names = {}) {
   const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta), edits: !!site.items, practice: !!site.practice,
     pagesOn: !!site.pages, themeOn: !!site.theme, photosOn: !site.noPhotos, starter: !!site.starter, playground: !!site.playground, youAdmin: !!(me && me.admin),
-    want: site.want || "", registrar: site.registrar || "", todo: site.todo || [], records: dnsRecords(site.want || ""), buildable: !site.live && !site.repo && !site.playground };
+    want: site.want || "", registrar: site.registrar || "", todo: site.todo || [], records: dnsRecords(site.want || ""), buildable: !site.live && !site.repo && !site.playground, outside: !!site.outside, repo: site.outside ? site.repo : undefined };
   if (!site.live) return base;
   try {
     const copies = (await copiesOf(site)).filter((c) => !me || me.admin || c.kind === "live" || ownerOfCopy(c.id) === me.tag);

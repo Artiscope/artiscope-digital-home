@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "54";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "55";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -463,17 +463,20 @@
   function siteAddr(x) { return x.domain ? "https://" + String(x.domain).replace(/^https?:\/\//, "").replace(/\/+$/, "") + "/" : ""; }
   function siteLamp(x) { var list = copiesOf(x), live = list[0]; return x.practice ? "q" : live && live.ahead ? "a" : "g"; }
   function viewHome() {
-    var all = sites(), live = all.filter(function (x) { return x.live && !x.practice; }), rest = all.filter(function (x) { return !x.live || x.practice; }).sort(function (a, b) { var r = function (x) { return x.practice && !x.playground ? 3 : x.playground ? 2 : 0; }; return r(b) - r(a); });
-    var nLive = live.length, nBuild = all.filter(function (x) { return !x.live && !x.playground; }).length, nPrac = all.filter(function (x) { return x.practice || x.playground; }).length;
-    var badge = function (x) { var c = colours(x.live || x.playground ? x.id : ""); return '<span class="hbadge" aria-hidden="true" style="background:' + c[0] + ";color:" + c[1] + '">' + esc(x.playground ? "PB" : x.practice ? "P" : x.live ? initials(x.name) : x.name.replace(/\D/g, "")) + '</span>'; };
+    var all = sites(), live = all.filter(function (x) { return (x.live || x.outside) && !x.practice; }), rest = all.filter(function (x) { return (!x.live && !x.outside) || x.practice; }).sort(function (a, b) { var r = function (x) { return x.practice && !x.playground ? 3 : x.playground ? 2 : 0; }; return r(b) - r(a); });
+    var nLive = live.length, nBuild = all.filter(function (x) { return !x.live && !x.playground && !x.outside; }).length, nPrac = all.filter(function (x) { return x.practice || x.playground; }).length;
+    var badge = function (x) { var c = colours(x.live || x.playground || x.outside ? x.id : ""); return '<span class="hbadge" aria-hidden="true" style="background:' + c[0] + ";color:" + c[1] + '">' + esc(x.playground ? "PB" : x.practice ? "P" : x.live || x.outside ? initials(x.name) : x.name.replace(/\D/g, "")) + '</span>'; };
     var card = function (x) {
       var addr = siteAddr(x), pic = demo && x.id === "world-art-review" && params.get("preview") ? params.get("preview") : demo && x.id === "global-art-monitor" && params.get("gampreview") ? params.get("gampreview") : demo && x.id === "street-art-dispatch" && params.get("sadpreview") ? params.get("sadpreview") : addr;
       return '<div class="card hcard">' +
         '<span class="hpic" aria-hidden="true">' + (pic ? '<iframe src="' + esc(pic) + '" tabindex="-1" loading="lazy" title="" scrolling="no"></iframe>' : "") + '</span>' +
         '<span class="hname">' + badge(x) + '<span><b>' + esc(x.name) + '</b><span class="small">' + esc(x.domain) + '</span></span></span>' +
-        '<span class="hfoot"><span class="hstate"><i class="lamp ' + siteLamp(x) + '" aria-hidden="true"></i>' + esc(statusLine(x)) + '</span>' +
+        (x.outside ? '<span class="hfoot"><span class="hstate"><i class="lamp g" aria-hidden="true"></i>Live. Not in the editor yet</span>' +
           (addr ? '<a href="' + esc(addr) + '" target="_blank" rel="noopener">View site</a>' : "") +
-          '<button type="button" class="btn slim" data-act="open-site" data-site="' + esc(x.id) + '">Open</button></span></div>';
+          (x.repo ? '<a href="https://github.com/' + esc(x.repo) + '" target="_blank" rel="noopener">GitHub</a>' : "") + '</span></div>'
+        : '<span class="hfoot"><span class="hstate"><i class="lamp ' + siteLamp(x) + '" aria-hidden="true"></i>' + esc(statusLine(x)) + '</span>' +
+          (addr ? '<a href="' + esc(addr) + '" target="_blank" rel="noopener">View site</a>' : "") +
+          '<button type="button" class="btn slim" data-act="open-site" data-site="' + esc(x.id) + '">Open</button></span></div>');
     };
     var quiet = function (x) {
       return '<div class="card hquiet">' +

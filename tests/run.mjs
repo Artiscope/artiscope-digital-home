@@ -315,6 +315,13 @@ globalThis.fetch = realFetch;
   const tess = { email: "t@example.org", admin: false, sites: ["pb"] };
   assert.equal(h.asOn(tess, pb).admin, true, "a test user works as the admin on the practice build");
   assert.equal(h.asOn(tess, SITES.find((x) => x.id === "world-art-review")).admin, false, "and as an editor everywhere else");
+  // a site made outside the console: a card only, never live in the editor and never built over
+  const ol = h.cleanSiteList({ sites: [{ id: "tac", name: "The Art Correspondent", domain: "theartcorrespondent.com", repo: "Artiscope/the-art-correspondent", kind: "outside", live: true },
+    { id: "nodomain", name: "No address", repo: "Artiscope/x", kind: "outside" }] });
+  assert.deepEqual(ol.map((x) => [x.id, x.kind, x.live]), [["tac", "outside", false], ["nodomain", "", false]], "an outside site needs its repository and address, and is never live in the editor");
+  h.useSiteList(ol);
+  const tac = SITES.find((x) => x.id === "tac");
+  assert.ok(tac.outside && !tac.live && !tac.pages && !tac.starter && tac.repo === "Artiscope/the-art-correspondent", "an outside site has no pages, theme or model");
   SITES.splice(0, SITES.length, ...keep);
   // site details
   assert.deepEqual(h.starterForEditor({ site: { email: "a@b.org", address: "https://x.org/" } }).site, { email: "a@b.org", address: "https://x.org/", indexed: false });

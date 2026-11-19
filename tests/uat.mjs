@@ -30,7 +30,7 @@ for (const [f, t] of Object.entries(pbFiles)) { fs.mkdirSync(path.dirname("/tmp/
 execFileSync("python3", ["/tmp/uat-pb-src/tools/build.py", "/tmp/uat-pb"]);
 fs.writeFileSync("/tmp/uat-pb/assets/site.js", fs.readFileSync("/tmp/uat-pb/assets/site.js", "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
 const CR = "Artiscope/artiscope-digital-home", PB = "Artiscope/practice-build";
-const siteList = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4" }, { id: "site-5", name: "Site 5" }] };
+const siteList = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4" }, { id: "site-5", name: "Site 5" }, { id: "site-6", name: "The Art Correspondent", domain: "theartcorrespondent.com", repo: "Artiscope/the-art-correspondent", kind: "outside" }] };
 
 // ----- the server, with GitHub in memory -----
 let signedIn = "tester@artiscope.co.uk";
@@ -136,7 +136,7 @@ if (process.env.AUDIT) {
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all seven sites, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 7, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 54"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 55"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -2106,6 +2106,16 @@ await check("The keyboard shortcuts list shows the new shortcuts", async () => {
   const t = await text(".ed-pop");
   must(["Preview at full width", "Pick the item above", "Pick the item below", "Shift+Enter", "Open the blocks of every section", "Close the blocks of every section"].every((w) => t.includes(w)), "list: " + t.slice(0, 300));
   await page.keyboard.press("Escape");
+});
+
+await check("A site made outside the console shows as live, with its picture, View site and GitHub, and no Open", async () => {
+  await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 20000 }); await settle(800);
+  const c = await page.evaluate(() => { const card = Array.from(document.querySelectorAll(".hcard")).find((x) => x.textContent.includes("The Art Correspondent")); if (!card) return null;
+    return { open: !!card.querySelector('[data-act="open-site"]'), view: (card.querySelector('a[href^="https://theartcorrespondent.com"]') || {}).textContent || "", gh: (card.querySelector('a[href="https://github.com/Artiscope/the-art-correspondent"]') || {}).textContent || "", state: card.querySelector(".hstate").textContent, pic: !!card.querySelector(".hpic iframe") }; });
+  must(c && !c.open && c.view === "View site" && c.gh === "GitHub" && c.pic && c.state.includes("Not in the editor yet"), JSON.stringify(c));
+  const counts = await text(".hcounts");
+  must(!(await page.$$eval(".hquiet", (q) => q.some((x) => x.textContent.includes("The Art Correspondent")))), "it also shows as a site to build");
+  await shot("111-outside-site");
 });
 
 // =============== results ===============

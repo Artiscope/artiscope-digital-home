@@ -1,8 +1,8 @@
 {
   "about": "The sites Artiscope Digital Home runs beyond the five built into it. Start building adds to this list.",
   "sites": [
-    { "id": "practice-build", "name": "Practice build", "domain": "artiscope.github.io/practice-build", "repo": "Artiscope/practice-build", "kind": "starter", "playground": true, "live": true },
-    { "id": "site-4", "name": "Site 4", "domain": "", "repo": "", "live": false },
-    { "id": "site-5", "name": "Site 5", "domain": "", "repo": "", "live": false }
+    {"id": "practice-build", "name": "Practice build", "domain": "artiscope.github.io/practice-build", "repo": "Artiscope/practice-build", "kind": "starter", "playground": true, "live": true},
+    {"id": "site-4", "name": "The Art Correspondent", "domain": "theartcorrespondent.com", "repo": "Artiscope/the-art-correspondent", "kind": "outside", "live": false},
+    {"id": "site-5", "name": "Site 5", "domain": "", "repo": "", "live": false}
   ]
 }

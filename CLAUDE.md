@@ -219,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (19 November 2026, Version 54)
+## Where things stand (19 November 2026, Version 55)
 
 Done:
 
@@ -881,6 +881,18 @@ Done:
   - Each site's editor link posts `adh-over` (`overSay`) with what the
     pointer is over; the console marks that row `.over` (`edOver`).
   - Checks: the "Shortcuts and full width" area of `tests/uat.mjs`.
+
+- Version 55 (19 November): The Art Correspondent joins the list of sites
+  as a card only. It was made outside the console (Artiscope/the-art-
+  correspondent, about 50 hand-written pages, theartcorrespondent.com), so
+  `sites.json` lists it as `site-4` with `kind: "outside"`: `cleanSiteList`
+  keeps it never live in the editor, `siteOverview` sends `outside` and
+  `repo`, and `viewHome` shows it with the live sites (picture, "Live. Not
+  in the editor yet", View site and GitHub, no Open). The owner chose to
+  convert it to the console's pattern later, in steps with a sample first;
+  another session builds it, so only one session changes its repository
+  at a time. Checks: the outside lines in `tests/run.mjs` and the last
+  check of the "Shortcuts and full width" area.
 
 Waiting for the owner:
 
