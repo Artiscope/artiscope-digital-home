@@ -290,7 +290,15 @@
     hovBox.innerHTML = '<span class="adh-tag"></span><button type="button" class="adh-plus top" tabindex="-1" title="Add here, above" aria-label="Add here, above">+</button><button type="button" class="adh-plus bottom" tabindex="-1" title="Add here, below" aria-label="Add here, below">+</button>';
     document.documentElement.appendChild(hovBox); return hovBox;
   }
-  function hoverOff() { if (hovBox) { hovBox.className = ""; } hov = null; }
+  /* tell the console what the pointer is over, so the matching row in its list lights up */
+  var overKey = "";
+  function overSay(w) {
+    var k = w ? w.id + "|" + w.bf + "|" + w.block + "|" + w.view : "";
+    if (k === overKey) { return; }
+    overKey = k;
+    try { window.parent.postMessage({ type: "adh-over", id: w ? w.id : "", block: w ? w.block : -1, bf: w ? w.bf : "", view: w ? w.view : "" }, ok); } catch (x) { /* the console has gone */ }
+  }
+  function hoverOff() { if (hovBox) { hovBox.className = ""; } hov = null; overSay(null); }
   function hoverAt(target) {
     if (!active || !target || !target.closest) { return; }
     if (target.closest("#adh-hover")) { return; }
@@ -301,6 +309,7 @@
     box.style.left = (r.left + window.scrollX) + "px"; box.style.top = (r.top + window.scrollY) + "px"; box.style.width = r.width + "px"; box.style.height = r.height + "px";
     box.querySelector(".adh-tag").textContent = w.bf ? (NAMES[w.id + ":" + w.bf] || "Block") : (NAMES[w.id] || "Section");
     box.className = "on" + (w.bf ? " blk" : "") + (w.plus ? "" : " noplus") + (r.top < 34 ? " inside" : "");
+    overSay(w);
   }
   document.addEventListener("mousemove", function (e) { if (!active) { return; } var t = e.target; cancelAnimationFrame(hovRaf); hovRaf = requestAnimationFrame(function () { hoverAt(t); }); }, true);
   document.documentElement.addEventListener("mouseleave", hoverOff);

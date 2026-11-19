@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "53";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "54";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -754,7 +754,8 @@
   if (typeof window.addEventListener === "function") {
     window.addEventListener("message", function (ev) {
       if (!ev.data) return;
-      if (ev.data.type === "adh-click") { var pgd = pgOf(); if (!pgd) return; try { if (ev.origin !== new URL(pgd.preview).origin) return; } catch (e) { return; } var vw = String(ev.data.view || ""), kk = atKind(pgd); if (vw && vw !== "every" && !(vw === "tpl" && tplHere(pgd)) && vw !== (kk === "other" ? "page" : kk)) return; pickSection(String(ev.data.id || ""), ev.data.block, true, undefined, String(ev.data.bf || "")); return; }
+      if (ev.data.type === "adh-over") { var po = pgOf(); if (!po) return; try { if (ev.origin !== new URL(po.preview).origin) return; } catch (e) { return; } edOver(ev.data); return; }
+      if (ev.data.type === "adh-click") { var pgd = pgOf(); if (!pgd) return; try { if (ev.origin !== new URL(pgd.preview).origin) return; } catch (e) { return; } if (state.fullView) state.fullView = false; var vw = String(ev.data.view || ""), kk = atKind(pgd); if (vw && vw !== "every" && !(vw === "tpl" && tplHere(pgd)) && vw !== (kk === "other" ? "page" : kk)) return; pickSection(String(ev.data.id || ""), ev.data.block, true, undefined, String(ev.data.bf || "")); return; }
       if (ev.data.type === "adh-add") { var pa = pgOf(); if (!pa) return; try { if (ev.origin !== new URL(pa.preview).origin) return; } catch (e) { return; } var va = String(ev.data.view || ""), ka = atKind(pa); if (va && va !== "every" && !(va === "tpl" && tplHere(pa)) && va !== (ka === "other" ? "page" : ka)) return; previewAdd(pa, ev.data); return; }
       if (ev.data.type === "adh-found") { var pf = pgOf(); if (!pf) return; try { if (ev.origin !== new URL(pf.preview).origin) return; } catch (e) { return; }
         var fw = wordOf(pf, String(ev.data.key || "")); if (!fw) return;
@@ -1147,7 +1148,7 @@
     return state.leave ? '<div class="sunk stack ask"><b>You have changes that are not saved yet.</b>' +
       '<div class="row"><button type="button" class="btn" data-act="leave-save">Save</button><button type="button" class="soft" data-act="leave-go">Leave without saving</button><button type="button" class="linklike" data-act="leave-stay">Keep editing</button></div></div>' : "";
   }
-  function edClass(pgd, right) { return "ed" + (right ? " with-right" : "") + (pgd && pgd.leftHidden ? " noleft" : "") + (pgd && pgd.inspector === false ? " noinsp" : ""); }
+  function edClass(pgd, right) { return "ed" + (right ? " with-right" : "") + (pgd && pgd.leftHidden ? " noleft" : "") + (pgd && pgd.inspector === false ? " noinsp" : "") + (state.fullView ? " full" : ""); }
   // The editor's left column: the sections of the page, the theme settings or the add-ons.
   function edLeft(pgd) {
     var p = pgd.leftPanel || "sections";
@@ -1289,7 +1290,7 @@
     return '<div class="' + edClass(pgd, right) + '">' +
       '<div class="ed-top">' + edTop(s, pgd) + '</div>' +
       '<div class="ed-left">' + edLeft(pgd) + '</div>' +
-      '<div class="ed-mid">' + viewLeave() + viewAsk() + viewWaiting(pgd) + viewRemoved(pgd) + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
+      '<div class="ed-mid">' + viewFull() + viewLeave() + viewAsk() + viewWaiting(pgd) + viewRemoved(pgd) + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
         '<div class="ed-frame ' + esc(pgd.mode) + '"><iframe id="ed-frame" title="The page being edited" src="' + esc(edFrameSrc(pgd)) + '"></iframe></div><div id="ed-pick">' + edPicker(pgd) + '</div><div id="ed-fbar">' + edFloatBar(pgd) + '</div></div>' +
       (right ? '<div class="ed-right">' + right + '</div>' : "") + '</div>';
   }
@@ -1376,7 +1377,7 @@
   }
   var ED_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
   var ED_CTRL = ED_MAC ? "Cmd" : "Ctrl";
-  var ED_KEYS = [[ED_CTRL + "+Z", "Undo"], [ED_CTRL + "+Y, or " + ED_CTRL + "+Shift+Z", "Redo"], [ED_CTRL + "+S", "Save"], [ED_CTRL + "+/", "Show all shortcuts"], [ED_CTRL + "+Shift+H, or Alt+Shift+H", "Hide or show the picked item"], ["Shift+Delete", "Remove the picked item"], [ED_CTRL + "+Alt+1", "Sections"], [ED_CTRL + "+Alt+2", "Theme settings"], [ED_CTRL + "+Alt+3", "Add-ons"], [ED_CTRL + "+Shift+I, or Alt+Shift+I", "Inspector on or off"], ["Escape", "Close a menu"]];
+  var ED_KEYS = [[ED_CTRL + "+Z", "Undo"], [ED_CTRL + "+Y, or " + ED_CTRL + "+Shift+Z", "Redo"], [ED_CTRL + "+S", "Save"], [ED_CTRL + "+/", "Show all shortcuts"], [ED_CTRL + "+Shift+H, or Alt+Shift+H", "Hide or show the picked item"], ["Shift+Delete", "Remove the picked item"], [ED_CTRL + "+Alt+1", "Sections"], [ED_CTRL + "+Alt+2", "Theme settings"], [ED_CTRL + "+Alt+3", "Add-ons"], [ED_CTRL + "+Shift+I, or Alt+Shift+I", "Inspector on or off"], [ED_CTRL + "+Alt+0", "Preview at full width, or back to the panels"], ["Shift+Up", "Pick the item above in the list"], ["Shift+Down", "Pick the item below in the list"], ["Shift+Enter", "Open or close the picked section's blocks"], [ED_CTRL + "+Shift+O, or Alt+Shift+O", "Open the blocks of every section"], [ED_CTRL + "+Shift+P, or Alt+Shift+P", "Close the blocks of every section"], ["Escape", "Close a menu, or leave full width"]];
   function sitePop(s) {
     var c = curCopy(), list = isAdmin() ? copiesOf(s) : [c];
     return '<div class="ed-pop sp" role="dialog" aria-label="Which copy you are working on"><p class="cap">Working on</p>' +
@@ -1392,6 +1393,7 @@
       : help ? '<p class="cap">Help</p><p class="pop-note">Click a part of the page, or a row on the left, to change it. Save keeps your changes on the copy you are working on. On a trial copy, Make live puts them on the site.</p><p class="pop-note">The hover outlines and clicks on the page come from the inspector. Turn it off to use the page as a visitor would.</p>'
       : (isAdmin() ? '<button type="button" class="pp-item" data-act="code-open">' + ic("code") + '<span class="t">Edit code</span></button>' : '<button type="button" class="pp-item" disabled>' + ic("code") + '<span class="t">Edit code</span><em>Admin only</em></button>') +
         (pgd && pgd.wordSpec ? '<button type="button" class="pp-item" data-act="wd-open">' + ic("text") + '<span class="t">Edit default text</span><em>' + wordList(pgd).length + ' words</em></button>' : '<button type="button" class="pp-item" disabled>' + ic("text") + '<span class="t">Edit default text</span><em>Not on this site</em></button>') +
+        '<button type="button" class="pp-item" data-act="ed-full">' + ic("eye") + '<span class="t">' + (state.fullView ? "Show the panels again" : "Preview at full width") + '</span><span class="kbd">' + ED_CTRL + '+Alt+0</span></button>' +
         '<a class="pp-item" href="' + esc(liveHref(s, pgd)) + '" target="_blank" rel="noopener">' + ic("globe") + '<span class="t">View the live page</span></a>' +
         '<button type="button" class="pp-item" data-act="ed-pop" data-menu="help">' + ic("help") + '<span class="t">Help</span></button>' +
         '<button type="button" class="pp-item" data-act="ed-pop" data-menu="keys">' + ic("keys") + '<span class="t">Keyboard shortcuts</span></button>';
@@ -1436,7 +1438,7 @@
     var c = curCopy(), trial = c.kind === "trial", saving = state.status === "saving", dirty = !!(pgd && pgd.dirty), m = state.edMenu || "";
     var n = function (x) { return x + (x === 1 ? " change" : " changes"); };
     var said = saving ? "Saving" : dirty ? "Edited, not saved" : state.flash || (!isAdmin() && c.behind ? "The live site has moved on" : trial || !isAdmin() ? (c.ahead ? n(c.ahead) + (isAdmin() ? " on this copy" : " not published yet") : "Same as the live site") : "All saved");
-    var copyName = !isAdmin() ? "Your copy" : trial ? "Trial copy: " + c.name : "Live", panel = pgd ? pgd.leftPanel || "sections" : "sections", leftOn = pgd ? !pgd.leftHidden : true;
+    var copyName = !isAdmin() ? "Your copy" : trial ? "Trial copy: " + c.name : "Live", panel = pgd ? pgd.leftPanel || "sections" : "sections", leftOn = pgd ? !pgd.leftHidden && !state.fullView : true;
     var sw = function (id, icon, label, key) { var on = leftOn && panel === id; return '<button type="button" class="tb' + (on ? " on" : "") + '" data-act="ed-panel" data-panel="' + id + '" aria-pressed="' + on + '" aria-label="' + label + '" data-tip="' + label + '" data-key="' + key + '">' + ic(icon, 17) + '</button>'; };
     var insp = !pgd || pgd.inspector !== false;
     return '<div class="lefty"><button type="button" class="tb word ed-exit" data-tab="overview" title="Back to the overview" aria-label="Exit">' + ic("exit", 17) + '<span>Exit</span></button>' +
@@ -2760,9 +2762,44 @@
   // The three switches at the top left: Sections, Theme settings, Add-ons. The one already open hides the column.
   function edPanel(p) {
     var pgd = pgOf(); if (!pgd || !p) return;
-    if ((pgd.leftPanel || "sections") === p && !pgd.leftHidden) pgd.leftHidden = true;
+    if (state.fullView) { state.fullView = false; pgd.leftPanel = p; pgd.leftHidden = false; }
+    else if ((pgd.leftPanel || "sections") === p && !pgd.leftHidden) pgd.leftHidden = true;
     else { pgd.leftPanel = p; pgd.leftHidden = false; }
     pgd.fontPick = null; edPatch(); edAddress(site(), pgd);
+  }
+  // Preview at full width: the lists and the settings step aside so the page can be seen whole.
+  // Picking something on the page brings them back, so a click never seems to do nothing.
+  function viewFull() { return state.fullView ? '<div class="fullbar" role="status"><span>Previewing at full width.</span><button type="button" class="tw" data-act="ed-full">Show the panels</button></div>' : ""; }
+  function edFull(on) {
+    var pgd = pgOf(); if (!pgd) return;
+    state.fullView = on == null ? !state.fullView : !!on; state.edMenu = "";
+    edPatch(); edFit();
+  }
+  // Shift+Up and Shift+Down move along the rows of the list, as shown, sections and blocks alike.
+  function edStep(dir) {
+    var rows = Array.prototype.slice.call(app.querySelectorAll('.ed-left [data-act="ed-pick"]'));
+    if (!rows.length) return;
+    var at = rows.findIndex(function (r) { return r.classList.contains("on"); });
+    var next = rows[at < 0 ? (dir > 0 ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, at + dir))];
+    if (!next || next === rows[at]) return;
+    pickSection(next.dataset.id, next.dataset.block, false, next.dataset.where, next.dataset.bf, next.dataset.sf, next.dataset.sub);
+    var now = app.querySelector('.ed-left .sec.on'); if (now && now.scrollIntoView) now.scrollIntoView({ block: "nearest" });
+  }
+  // Opens or closes the blocks of the picked section, or of every section in the lists.
+  function edOpenBlocks(pgd, all, open) {
+    pgd.open = pgd.open || {};
+    if (all) { Array.prototype.forEach.call(app.querySelectorAll('.ed-left .sec:not(.blk) [data-act="ed-expand"]'), function (b) { pgd.open[b.dataset.key] = open; }); if (!open && pgd.sel) pgd.sel = Object.assign({}, pgd.sel, { block: null, bf: null, sf: null, sub: null }); }
+    else if (pgd.sel) { var k = pgd.sel.where + ":" + pgd.sel.id, b0 = app.querySelector('.ed-left [data-act="ed-expand"][data-key="' + cssq(k) + '"]'); if (!b0) return; pgd.open[k] = b0.getAttribute("aria-expanded") !== "true"; if (!pgd.open[k]) pgd.sel = Object.assign({}, pgd.sel, { block: null, bf: null, sf: null, sub: null }); }
+    edPatch();
+  }
+  // The row matching what the pointer is over on the page lights up.
+  function edOver(d) {
+    var was = app.querySelectorAll(".ed-left .sec.over"); Array.prototype.forEach.call(was, function (x) { x.classList.remove("over"); });
+    var id = String(d.id || ""); if (!id) return;
+    var q = '.ed-left .sec[data-act="ed-pick"][data-id="' + cssq(id) + '"]';
+    var row = d.bf ? app.querySelector(q + '.blk[data-bf="' + cssq(String(d.bf)) + '"][data-block="' + Number(d.block) + '"]:not(.kid)') : null;
+    if (!row) row = app.querySelector(q + ":not(.blk)");
+    if (row) row.classList.add("over");
   }
   // With the inspector off, the page is shown as a visitor sees it: links work and clicks pick nothing.
   // Turning it back on loads the page again with the changes not yet saved.
@@ -2793,8 +2830,8 @@
     if (right) { if (!rp) { rp = document.createElement("div"); rp.className = "ed-right"; ed.appendChild(rp); } rp.innerHTML = right; }
     else if (rp) rp.remove();
     edShowRight(pgd, right ? rp : null);
-    var mid = ed.querySelector(".ed-mid"), notes = mid.querySelectorAll(".ask, .notice"); Array.prototype.forEach.call(notes, function (x) { x.remove(); });
-    mid.insertAdjacentHTML("afterbegin", viewLeave() + viewAsk() + viewWaiting(pgd) + viewRemoved(pgd) + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : ""));
+    var mid = ed.querySelector(".ed-mid"), notes = mid.querySelectorAll(".ask, .notice, .fullbar"); Array.prototype.forEach.call(notes, function (x) { x.remove(); });
+    mid.insertAdjacentHTML("afterbegin", viewFull() + viewLeave() + viewAsk() + viewWaiting(pgd) + viewRemoved(pgd) + (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : ""));
     var pkb = ed.querySelector("#ed-pick"); if (pkb) pkb.innerHTML = edPicker(pgd);
     var fb = ed.querySelector("#ed-fbar"); if (fb) fb.innerHTML = edFloatBar(pgd);
     mountRich(); mountDrag(); edFitWatch();
@@ -4620,6 +4657,7 @@
     else if (a === "ed-tpl-show") { var ts0 = pgOf(); if (ts0) { var tk0 = tplHere(ts0), keep = tplId(ts0); state.tplEx = false; ts0.tplOpen = ts0.tplOpen || {}; ts0.tplOpen[tk0] = keep; navTo((tk0 === "article" ? "a-" : "artist-") + el.dataset.slug, true); patchEdTop(); } }
     else if (a === "ed-tpl-rename") { var tr0 = pgOf(); if (tr0 && tplHere(tr0)) { state.tplRename = { kind: tplHere(tr0), id: tplId(tr0) }; edPatch(); var rb = app.querySelector("#tpl-rename"); if (rb) { rb.focus(); rb.select(); } } }
     else if (a === "ed-tpl-del") { var td0 = pgOf(); if (td0) tplRemove(td0); }
+    else if (a === "ed-full") edFull();
     else if (a === "ed-expand") { var pe = pgOf(); if (pe) { pe.open = pe.open || {}; pe.open[el.dataset.key] = el.getAttribute("aria-expanded") !== "true"; if (!pe.open[el.dataset.key] && pe.sel && pe.sel.where + ":" + pe.sel.id === el.dataset.key) pe.sel = Object.assign({}, pe.sel, { block: null }); edPatch(); } }
     else if (a === "ctx") { var pc = pgOf(); if (pc) ctxDo(pc, el.dataset.op); }
     else if (a === "ed-add-block") {
@@ -4898,6 +4936,11 @@
     var digit = /^Digit([123])$/.exec(ev.code || "");
     var mod = ev.ctrlKey || ev.metaKey;
     if (mod && ev.altKey && !ev.shiftKey && digit) { ev.preventDefault(); edPanel(["sections", "theme", "addons"][Number(digit[1]) - 1]); return; }
+    if (mod && ev.altKey && !ev.shiftKey && ev.code === "Digit0") { ev.preventDefault(); edFull(); return; }
+    if (ev.key === "Escape" && state.fullView) { ev.preventDefault(); edFull(false); return; }
+    if (ev.shiftKey && !mod && !ev.altKey && (ev.key === "ArrowUp" || ev.key === "ArrowDown")) { ev.preventDefault(); edStep(ev.key === "ArrowUp" ? -1 : 1); return; }
+    if (ev.shiftKey && !mod && !ev.altKey && ev.key === "Enter" && pk.sel) { ev.preventDefault(); edOpenBlocks(pk, false); return; }
+    if (ev.shiftKey && (ev.code === "KeyO" || ev.code === "KeyP") && ((mod && !ev.altKey) || (ev.altKey && !mod))) { ev.preventDefault(); edOpenBlocks(pk, true, ev.code === "KeyO"); return; }
     if (ev.shiftKey && ev.code === "KeyI" && ((mod && !ev.altKey) || (ev.altKey && !mod))) { ev.preventDefault(); edInspector(); }
   });
   app.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && !codeOf() && app.querySelector && app.querySelector(".pk")) { var pe2 = pgOf(); if (pe2) { pe2.picker2 = null; edPatch(); } } });

@@ -219,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (18 November 2026, Version 53)
+## Where things stand (19 November 2026, Version 54)
 
 Done:
 
@@ -867,6 +867,21 @@ Done:
     makes `/tmp/film/out/console.mp4` (captions, scene cards, about five
     minutes, no sound).
 
+- Version 54 (19 November): the smallest gaps from the Shopify comparison
+  (doc: https://claude.ai/artifact/4bkH7aBxkRRjCEXK7qrPfi, 84 features).
+  - Shortcuts (`ED_KEYS`): Shift+Up and Shift+Down pick the row above or
+    below (`edStep`, the rows as shown), Shift+Enter opens or closes the
+    picked section's blocks, Ctrl/Cmd+Shift+O or Alt+Shift+O opens every
+    section's blocks and Ctrl/Cmd+Shift+P or Alt+Shift+P closes them
+    (`edOpenBlocks`).
+  - Preview at full width (`state.fullView`, `edFull`, class `full`):
+    Ctrl/Cmd+Alt+0, or More, hides the lists and settings; a quiet bar
+    (`viewFull`, `.fullbar`) has Show the panels; Escape, a panel switch or
+    a pick on the page brings them back.
+  - Each site's editor link posts `adh-over` (`overSay`) with what the
+    pointer is over; the console marks that row `.over` (`edOver`).
+  - Checks: the "Shortcuts and full width" area of `tests/uat.mjs`.
+
 Waiting for the owner:
 
 - Create site needs the GitHub key widened (see step 4 above). The
@@ -900,6 +915,10 @@ Notes for checking:
 - Street Art Dispatch's own rules: Konn Artiss's Draft note and "Date to
   confirm" on the Venice entry stay until the owner gives confirmed
   facts. Only one session changes its repository at a time.
+
+Asked about on 19 November: an AI assistant for the console (like
+Shopify's Sidekick). Plan given in the conversation; nothing built until
+the owner chooses.
 
 Later, in this order unless the owner says otherwise: payments
 (Stripe), extras. A comparison

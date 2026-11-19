@@ -1479,3 +1479,13 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focu
 .wd-fixed { background: var(--field); box-shadow: inset 0 0 0 1.5px var(--field-edge); border-radius: 10px; padding: 10px 12px; color: var(--muted); }
 .wdpanel .pp-search { margin: 2px 0 0; }
 .wdpanel .pp-search input[type="text"] { width: 100%; box-sizing: border-box; }
+
+/* Version 54: preview at full width, and the row that matches what the pointer is over on the page */
+.ed.full, .ed.full.with-right, .ed.full.noleft, .ed.full.noleft.with-right { grid-template-columns: minmax(0, 1fr); grid-template-rows: 64px minmax(0, 1fr); }
+.ed.full .ed-left, .ed.full .ed-right, .ed.full #ed-fbar { display: none !important; }
+.ed.full .ed-mid { grid-column: 1; grid-row: 2; }
+.ed .fullbar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 8px 6px 14px; border-radius: 10px; background: #1C1D21; box-shadow: inset 0 0 0 1.5px #34363C; color: #9A9EA6; font-size: 13px; }
+.ed .sec.over:not(.on) { background: var(--hover); }
+.ed .fullbar .tw { border: 0; min-height: 30px; padding: 0 12px; border-radius: 10px; font: inherit; font-size: 12.5px; color: #D4D7DC; background: #2C2E33; box-shadow: inset 0 0 0 1.5px #44474E; cursor: pointer; }
+.ed .fullbar .tw:hover { box-shadow: inset 0 0 0 1.5px #6E727A; }
+.ed .fullbar .tw:active { background: #1C1D21; }

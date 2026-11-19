@@ -136,7 +136,7 @@ if (process.env.AUDIT) {
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all seven sites, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 7, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 53"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 54"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -2031,6 +2031,81 @@ await check("World Art Review: an article with no picture yet shows its spot in 
   const f = frame("worldartreview.com"); must((await f.$$(".art-hero")).length === 1, "no picture spot on the article");
   await mouseIn("worldartreview.com", ".art-hero"); await settle(900);
   must(/Picture/.test(await text(".ed-right")), "Picture did not open");
+});
+
+// =============== 16. Shortcuts, full width and the row that lights up (Version 54) ===============
+area = "Shortcuts and full width";
+if (ONLY && ONLY.includes(area)) { await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 20000 }); }
+const picked = () => page.evaluate(() => { const r = document.querySelector(".ed-left .sec.on"); return r ? [r.dataset.where, r.dataset.id, r.dataset.bf || "", r.dataset.block || ""].join("|") : ""; });
+const rowsNow = () => page.evaluate(() => Array.from(document.querySelectorAll('.ed-left [data-act="ed-pick"]')).map((r) => [r.dataset.where, r.dataset.id, r.dataset.bf || "", r.dataset.block || ""].join("|")));
+await check("Shift+Down and Shift+Up move the pick along the list, sections and blocks alike", async () => {
+  await openSite("world-art-review"); await page.selectOption(".pagepick", "home"); await settle(1500);
+  await page.click('#ed-sections .sec[data-id="numbers"]'); await settle(700);
+  const rows = await rowsNow(), at = rows.indexOf(await picked());
+  must(at >= 0, "nothing picked");
+  await page.locator("body").press("Shift+ArrowDown"); await settle(700);
+  const rows2 = await rowsNow(), now = await picked();
+  must(now === rows2[rows2.indexOf(rows[at]) + 1], "down went to " + now + " not " + rows2[rows2.indexOf(rows[at]) + 1]);
+  await page.locator("body").press("Shift+ArrowUp"); await settle(700);
+  must(await picked() === rows[at], "up went to " + await picked());
+});
+await check("Shift+Enter opens and closes the picked section's blocks; Ctrl+Shift+O and P open and close them all", async () => {
+  const withBlocks = await page.evaluate(() => { const b = document.querySelector('#ed-sections .sec:not(.blk) [data-act="ed-expand"]'); return b ? b.closest(".sec").dataset.id : ""; });
+  must(withBlocks, "no section on the home page has blocks");
+  await page.click('#ed-sections .sec[data-id="' + withBlocks + '"] .nm'); await settle(500);
+  const openNow = () => page.evaluate((id) => { const b = document.querySelector('#ed-sections .sec[data-id="' + id + '"] [data-act="ed-expand"]'); return b ? b.getAttribute("aria-expanded") : "none"; }, withBlocks);
+  const was = await openNow();
+  must(was !== "none", "the section has no blocks to open");
+  await page.locator("body").press("Shift+Enter"); await settle(600);
+  must(await openNow() !== was, "Shift+Enter did not change the blocks");
+  await page.locator("body").press("Control+Shift+KeyO"); await settle(700);
+  const all = await page.evaluate(() => Array.from(document.querySelectorAll('.ed-left .sec:not(.blk) [data-act="ed-expand"]')).map((b) => b.getAttribute("aria-expanded")));
+  must(all.length > 1 && all.every((x) => x === "true"), "not all open: " + all.join(","));
+  await page.locator("body").press("Alt+Shift+KeyP"); await settle(700);
+  const none = await page.evaluate(() => Array.from(document.querySelectorAll('.ed-left .sec:not(.blk) [data-act="ed-expand"]')).map((b) => b.getAttribute("aria-expanded")));
+  must(none.every((x) => x === "false"), "not all closed: " + none.join(","));
+});
+await check("Ctrl+Alt+0 shows the page at full width; Escape and the bar bring the panels back", async () => {
+  await page.click('#ed-sections .sec[data-id="numbers"]'); await settle(500);
+  const w0 = (await page.locator(".ed-frame").boundingBox()).width;
+  await page.locator("body").press("Control+Alt+Digit0"); await settle(900);
+  must(await page.isVisible(".fullbar") && !(await page.isVisible(".ed-left")) && !(await page.isVisible(".ed-right")), "panels still showing");
+  const w1 = (await page.locator(".ed-frame").boundingBox()).width;
+  must(w1 > w0 + 250, "the preview did not widen: " + w0 + " to " + w1);
+  await shot("110-full-width");
+  await page.locator("body").press("Escape"); await settle(700);
+  must(await page.isVisible(".ed-left") && !(await page.isVisible(".fullbar")), "Escape did not bring the panels back");
+  await page.click('.ed-top [data-act="ed-pop"][data-menu="more"]'); await page.click('[data-act="ed-full"]'); await settle(700);
+  must(await page.isVisible(".fullbar"), "More did not turn on full width");
+  await page.click('.fullbar [data-act="ed-full"]'); await settle(700);
+  must(await page.isVisible(".ed-left"), "Show the panels did not work");
+});
+await check("Picking something on the page at full width brings the panels back with its settings", async () => {
+  await page.locator("body").press("Control+Alt+Digit0"); await settle(800);
+  await mouseIn("worldartreview.com", "#numbers h2"); await settle(1000);
+  must(!(await page.isVisible(".fullbar")) && await page.isVisible(".ed-right") && await picked() === "page|numbers||", "picked: " + await picked());
+});
+await check("Pointing at a section or block on the page lights up its row in the list", async () => {
+  await page.click('#ed-sections .sec[data-id="numbers"]'); await settle(400);
+  await page.click(".ed-left").catch(() => {});
+  await hoverOn("worldartreview.com", "#numbers h2"); await settle(500);
+  const over = await page.evaluate(() => Array.from(document.querySelectorAll(".ed-left .sec.over")).map((r) => r.dataset.id + "|" + (r.dataset.bf || "")));
+  must(over.length === 1 && over[0].startsWith("numbers|"), "lit rows: " + over.join(","));
+  await frame("worldartreview.com").evaluate(() => document.documentElement.dispatchEvent(new MouseEvent("mouseleave"))); await settle(500);
+  must((await page.$$(".ed-left .sec.over")).length === 0, "the row stayed lit after the pointer left");
+  for (const [id, host, sel] of [["global-art-monitor", "globalartmonitor.com", "[data-adh]"], ["street-art-dispatch", "streetartdispatch.com", "[data-adh]"]]) {
+    await openSite(id); await page.selectOption(".pagepick", "home").catch(() => {}); await settle(1500);
+    const sid = await frame(host).evaluate((q) => { const els = Array.from(document.querySelectorAll(q)); const e = els.find((x) => x.getBoundingClientRect().height > 40); return e ? e.getAttribute("data-adh") : ""; }, sel);
+    await hoverOn(host, '[data-adh="' + sid + '"]'); await settle(500);
+    const lit = await page.evaluate(() => Array.from(document.querySelectorAll(".ed-left .sec.over")).map((r) => r.dataset.id));
+    must(lit.length === 1 && lit[0] === sid, id + ": lit " + lit.join(",") + " for " + sid);
+  }
+});
+await check("The keyboard shortcuts list shows the new shortcuts", async () => {
+  await page.click('.ed-top [data-act="ed-pop"][data-menu="more"]'); await page.click('[data-act="ed-pop"][data-menu="keys"]'); await settle(400);
+  const t = await text(".ed-pop");
+  must(["Preview at full width", "Pick the item above", "Pick the item below", "Shift+Enter", "Open the blocks of every section", "Close the blocks of every section"].every((w) => t.includes(w)), "list: " + t.slice(0, 300));
+  await page.keyboard.press("Escape");
 });
 
 // =============== results ===============
