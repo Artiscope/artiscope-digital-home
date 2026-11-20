@@ -9,7 +9,7 @@
         "links": [
           [
             "Stories",
-            "articles/"
+            "stories/"
           ],
           [
             "About",
@@ -36,7 +36,7 @@
           ],
           [
             "Stories",
-            "articles/"
+            "stories/"
           ],
           [
             "About",
@@ -73,7 +73,7 @@
             "heading": "[Your opening heading]",
             "text": "[A sentence or two that says what the site is about and who it is for]",
             "link": "[Read the stories]",
-            "href": "articles/"
+            "href": "stories/"
           }
         },
         {
@@ -95,7 +95,8 @@
             "count": 6,
             "style": "list",
             "only": "",
-            "more": "All stories"
+            "more": "All stories",
+            "every": false
           }
         },
         {
@@ -156,14 +157,30 @@
           "type": "tac-text",
           "visible": true,
           "settings": {
-            "heading": "[A heading]",
+            "heading": "",
+            "standfirst": "[A larger opening line about the site]",
             "paras": [
-              "[A paragraph about the site]",
-              "[Another paragraph]"
+              "[A paragraph about who writes it and why]"
+            ],
+            "parts": [
+              {
+                "heading": "[A heading]",
+                "text": "[A paragraph under it]"
+              }
             ],
             "align": "left",
             "link": "",
             "href": ""
+          }
+        },
+        {
+          "id": "about-subjects",
+          "type": "tac-subjects",
+          "visible": true,
+          "settings": {
+            "heading": "Read by subject",
+            "artists": true,
+            "links": []
           }
         }
       ]
@@ -216,10 +233,44 @@
     "artists": {
       "eyebrow": "Read by subject",
       "heading": [
-        "Artists"
+        "Subjects"
       ],
-      "intro": "[A line about the artists on this site]"
+      "intro": "[A line about the subjects the stories are filed under]"
     }
   },
-  "addons": {}
+  "addons": {},
+  "templates": {
+    "article": {
+      "default": {
+        "name": "Default",
+        "sections": [
+          {
+            "id": "main",
+            "type": "main"
+          }
+        ]
+      }
+    },
+    "artist": {
+      "default": {
+        "name": "Default",
+        "sections": [
+          {
+            "id": "main",
+            "type": "main"
+          },
+          {
+            "id": "t-subjects",
+            "type": "tac-subjects",
+            "visible": true,
+            "settings": {
+              "heading": "Read by subject",
+              "artists": true,
+              "links": []
+            }
+          }
+        ]
+      }
+    }
+  }
 }

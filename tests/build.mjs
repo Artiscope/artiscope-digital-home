@@ -312,7 +312,7 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   assert.deepEqual(plan.theme.colours, { page: "#F6F1E8", band: "#24231F", accent: "#D9BE91", ink: "#24231F" }); assert.deepEqual(plan.theme.fonts, { display: "EB Garamond", text: "Karla", sans: "Karla" });
   assert.ok(!TAC_OWN.test(JSON.stringify({ ...plan.pages, _how_to_edit: "" }) + JSON.stringify(plan.content)), "nothing of The Art Correspondent's own content");
   for (const pg of Object.values(plan.pages.pages)) for (const s of pg.sections) for (const [k, v] of Object.entries(s.settings)) {
-    if (typeof v === "string" && v && /^(heading|text|eyebrow|alt|hand)$/.test(k) && !["latest", "subjects"].includes(s.id) && !(s.id === "contact-opening" && k === "eyebrow")) assert.ok(/^\[.*\]$/.test(v), s.id + "." + k + " = " + v);
+    if (typeof v === "string" && v && /^(heading|text|eyebrow|alt|hand)$/.test(k) && !["tac-latest", "tac-subjects"].includes(s.type) && !(s.id === "contact-opening" && k === "eyebrow")) assert.ok(/^\[.*\]$/.test(v), s.id + "." + k + " = " + v);
     if (k === "image") assert.equal(v, "", "no photos");
   }
   ok("The Art Correspondent plan is its home, About and Write to us pages, with placeholders, its own look and nothing of the original");

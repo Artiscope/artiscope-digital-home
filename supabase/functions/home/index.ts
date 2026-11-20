@@ -1248,7 +1248,9 @@ const STARTER_LISTS = {
 const EMAIL_SHAPE = /^[^\s@<>"(),;:]{1,64}@[a-z0-9.-]{1,190}\.[a-z]{2,24}$/i;
 export function starterForEditor(content) {
   const c = content || {}, s = c.site || {};
-  return { site: { email: String(s.email || ""), address: String(s.address || ""), indexed: s.indexed === true },
+  // the logo's outline, the icons and the sharing picture come along for the preview; only the email can be changed here
+  const look = Object.fromEntries(["mark", "icons", "share"].filter((k) => typeof s[k] === "string" && s[k]).map((k) => [k, s[k]]));
+  return { site: { email: String(s.email || ""), address: String(s.address || ""), indexed: s.indexed === true, ...look },
     articles: JSON.parse(JSON.stringify(Array.isArray(c.articles) ? c.articles : [])), artists: JSON.parse(JSON.stringify(Array.isArray(c.artists) ? c.artists : [])) };
 }
 const ST_NEW_ARTICLE = (slug, g) => ({ slug, title: String((g && g.title) || "New article"), kicker: "", summary: "", date: "", artist: "", image: "", alt: "", credit: "", body: "", sources: [], hidden: true });
@@ -1362,7 +1364,7 @@ export const TWAR_WORDS = { ...WAR_WORDS, "sr.search": "Search {site}", "form.su
 const TAC_LINK = { name: "link", label: "Link words", type: "text", hint: "Leave empty for no link." };
 const TAC_HREF = { ...ADDR, label: "Link address", hint: ST_ADDR_HINT };
 const TAC_EYEBROW = { name: "eyebrow", label: "Small line above the heading", type: "text", hint: "Leave empty to hide." };
-export const TAC_KINDS = ["tac-opening", "tac-lead", "tac-latest", "tac-subjects", "tac-band", "tac-text"];
+export const TAC_KINDS = ["tac-opening", "tac-lead", "tac-latest", "tac-subjects", "tac-band", "tac-text", "tac-entries"];
 const TAC_OWN = {
   "tac-opening": { label: "Page opening", about: "The words at the top of a page: a small line, a large heading, an introduction and a link. Large on the home page, smaller on the others.",
     summary: (st) => st.heading || "Page opening", library: "Words at the top of a page",
@@ -1378,35 +1380,60 @@ const TAC_OWN = {
     starter: { heading: "Latest", count: 6, style: "list", only: "", more: "All stories" }, fields: [
     { name: "heading", label: "Small heading", type: "text", hint: "Leave empty to hide." },
     { name: "style", label: "Show them as", type: "choice", seg: true, dflt: "list", options: [["list", "Numbered list"], ["cards", "Cards"]] },
+    { name: "every", label: "Show every story", type: "yesno", hint: "For a page that lists them all. Otherwise How many below decides." },
     { name: "count", label: "How many", type: "range", min: 1, max: 24, step: 1, dflt: 6 },
     { name: "only", label: "Only stories with this small line", type: "text", hint: "Such as Features, to make a page of one kind of story. Leave empty for every story." },
-    { name: "more", label: "Words of the link to every story", type: "text", hint: "Leave empty to hide." }] },
-  "tac-subjects": { label: "Read by subject", about: "Links to what the stories are filed under: every artist's page, then any links added here.",
-    summary: (st) => { const n = (st.links || []).filter((x) => x && !x.hidden).length; return (st.artists === false ? "" : "Every artist") + (n ? (st.artists === false ? "" : ", ") + n + (n === 1 ? " link" : " links") : st.artists === false ? "No links yet" : ""); },
+    { name: "more", label: "Words of the link to every story", type: "text", hint: "{n} becomes the number of stories, as in All {n} stories. Leave empty to hide." }] },
+  "tac-subjects": { label: "Read by subject", about: "Links to what the stories are filed under: every subject's page, then any links added here.",
+    summary: (st) => { const n = (st.links || []).filter((x) => x && !x.hidden).length; return (st.artists === false ? "" : "Every subject") + (n ? (st.artists === false ? "" : ", ") + n + (n === 1 ? " link" : " links") : st.artists === false ? "No links yet" : ""); },
     library: "Links to artists and subjects", blocks: { field: "links", label: "Subject", add: "Add a subject", about: "A link to a page of stories, or to any page." },
     starter: { heading: "Read by subject", artists: true, links: [] }, fields: [
     { name: "heading", label: "Small heading", type: "text", hint: "Leave empty to hide." },
-    { name: "artists", label: "List every artist's page", type: "yesno", dflt: true },
+    { name: "artists", label: "List every subject's page", type: "yesno", dflt: true },
     { name: "links", label: "Subjects", type: "rows", fields: [{ name: "label", label: "Words", type: "text" }, TAC_HREF] }] },
   "tac-band": { label: "Feature band", about: "A band in the second colour, with a small line, a heading, a few words and a link, about one thing the site does.",
     summary: (st) => st.heading || "Feature band", library: "A coloured band about one feature",
     starter: { eyebrow: "[A small line above the heading]", heading: "[A heading for a feature of the site]", text: "[A few words about it]", link: "", href: "" }, fields: [
     TAC_EYEBROW, { name: "heading", label: "Heading", type: "text" }, { name: "text", label: "Words", type: "long", plain: true, hint: "Leave empty to hide." }, TAC_LINK, TAC_HREF] },
-  "tac-text": { label: "Page text", about: "A heading and paragraphs in the reading column, as on About. Use one for each part of a page.", summary: (st) => st.heading || "Page text", library: "A heading and paragraphs",
-    starter: { heading: "[A heading]", paras: ["[A paragraph]"], align: "left", link: "", href: "" }, fields: [
-    { name: "heading", label: "Heading", type: "text", hint: "Leave empty to hide." }, { name: "paras", label: "Paragraphs", type: "lines", hint: "One paragraph per item." },
+  "tac-text": { label: "Page text", about: "Words in the reading column, as on About: a larger first paragraph, paragraphs, then parts each with its own heading.",
+    summary: (st) => st.heading || ((st.parts || [])[0] || {}).heading || "Page text", library: "Paragraphs and headed parts",
+    blocks: { field: "parts", label: "Part", add: "Add a part", about: "A heading and the paragraphs under it." },
+    starter: { heading: "", standfirst: "", paras: ["[A paragraph]"], parts: [], align: "left", link: "", href: "" }, fields: [
+    { name: "heading", label: "Heading at the top", type: "text", hint: "Leave empty to hide." },
+    { name: "standfirst", label: "Larger first paragraph", type: "long", plain: true, hint: "Leave empty to hide." },
+    { name: "paras", label: "Paragraphs", type: "lines", hint: "One paragraph per item." },
+    { name: "parts", label: "Parts", type: "rows", fields: [{ name: "heading", label: "Heading", type: "text" }, { name: "text", label: "Paragraphs", type: "long", plain: true, hint: "Leave an empty line between paragraphs." }] },
     { name: "align", label: "Words", type: "choice", seg: true, dflt: "left", options: [["left", "Ranged left"], ["centre", "Centred"]] }, TAC_LINK, TAC_HREF] },
+  "tac-entries": { label: "List by hand", about: "A list you write yourself, such as the shows in the site's reporting: each with a title, a link, a line on where and when, and a few words.",
+    summary: (st) => { const n = (st.entries || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " entry" : " entries"); }, library: "A list written by hand",
+    blocks: { field: "entries", label: "Entry", add: "Add an entry", about: "One entry: its title, where it leads, where and when, and a few words." },
+    starter: { heading: "[A heading for the list]", numbered: false, note: "", entries: [{ title: "[A title]", href: "", where: "[Where and when]", blurb: "[A few words about it]" }] }, fields: [
+    { name: "heading", label: "Small heading", type: "text", hint: "Leave empty to hide." },
+    { name: "numbered", label: "Number the entries", type: "yesno" },
+    { name: "entries", label: "Entries", type: "rows", fields: [{ name: "title", label: "Title", type: "text" }, { ...TAC_HREF, label: "Where it leads", hint: ST_ADDR_HINT + " Leave empty for no link." },
+      { name: "where", label: "Where and when", type: "text", hint: "Such as Tate Modern, London, October 2025." }, { name: "blurb", label: "A few words", type: "long", plain: true }] },
+    { name: "note", label: "Note under the list", type: "text", hint: "Such as where the entries come from. Leave empty to hide." }] },
 };
 const TTAC_SECTIONS = { ...STARTER_SECTIONS, header: { ...STARTER_SECTIONS.header, about: "The name and the links along the top of every page. On a phone the links sit under the name.",
   fields: STARTER_SECTIONS.header.fields.filter((f) => !["tagline", "button", "button_href"].includes(f.name)) }, ...TAC_OWN };
-// What a story holds: the starter's article, with a line on how it was reported.
-const TTAC_ITEMS = { ...STARTER_ITEMS, article: { ...STARTER_ITEMS.article, label: "Story", parts: STARTER_ITEMS.article.parts.map((part) => part.id === "words"
-  ? { ...part, about: "The heading of the story and how it is listed.", fields: part.fields.map((f) => f.name === "kicker" ? { ...f, label: "Section", hint: "Such as Features or Culture. Shown above the title, and lists can show one section only." }
-    : f.name === "summary" ? { ...f, label: "Standfirst", hint: "One or two sentences under the title. Also shown on the story cards and in search results." } : f.name === "artist" ? { ...f, label: "Filed under an artist", hint: "The story is then listed on that artist's page." } : f) }
-  : part.id === "sources" ? { ...part, about: "How the story was reported, and every source it rests on.", fields: [{ name: "how", label: "How it was reported", type: "long", plain: true, hint: "Such as: This is a reported essay drawing on published interviews. Shown above the sources." }].concat(part.fields) } : part) } };
+// What a story and a subject hold: the starter's article and artist, with the subjects a story is filed under, a chosen Read next and a line on how it was reported.
+const TTAC_ITEMS = { ...STARTER_ITEMS,
+  article: { ...STARTER_ITEMS.article, label: "Story", parts: STARTER_ITEMS.article.parts.map((part) => part.id === "words"
+    ? { ...part, about: "The heading of the story, how it is listed, and what it is filed under.", fields: part.fields.flatMap((f) => f.name === "kicker" ? [{ ...f, label: "Section", hint: "Such as Features or Culture. Shown above the title, and a page of one section lists the stories with it." }]
+      : f.name === "summary" ? [{ ...f, label: "Standfirst", hint: "One or two sentences under the title. Also shown on the story cards." },
+        { name: "description", label: "Search description", type: "long", plain: true, hint: "What search results show under the title. Leave empty to use the standfirst." }]
+      : f.name === "artist" ? [{ name: "subjects", label: "Filed under", type: "artists", hint: "The subjects this story is listed under, in this order. Each subject's page lists it." },
+        { name: "next", label: "Read next", type: "piece", hint: "The story suggested at the end. Leave empty for the next one in the list." }] : [f]) }
+    : part.id === "sources" ? { ...part, about: "How the story was reported, and every source it rests on.", fields: [{ name: "how", label: "How it was reported", type: "long", plain: true, hint: "Such as: This is a reported essay drawing on published interviews. Shown above the sources." }].concat(part.fields) } : part) },
+  artist: { ...STARTER_ITEMS.artist, label: "Subject", parts: STARTER_ITEMS.artist.parts.map((part) => part.id === "words"
+    ? { ...part, label: "Name and introduction", about: "The subject's name, such as an artist or a theme, and a line about what is filed under it.", fields: part.fields.map((f) => f.name === "name" ? { ...f, hint: "Such as Zara Muse or Art in public. The page keeps its web address when the name changes." } : f.name === "line" ? { ...f, label: "Introduction", type: "long", plain: true, hint: "Shown under the name, and in search results." } : f) }
+    : part.id === "about" ? { ...part, label: "More about the subject", about: "Optional words under the introduction. Nothing about anyone's private life.", fields: part.fields }
+    : part.id === "picture" ? { ...part, about: "An optional picture for the subject page, its description and its credit." }
+    : part.id === "settings" ? { ...part, about: "Whether visitors can see the subject page." } : part) },
+};
 const TTAC_LISTS = {
   articles: { label: "All stories list", start: { eyebrow: "", heading: ["All stories"], intro: "[A line about what the stories cover]" } },
-  artists: { label: "Artists list", start: { eyebrow: "Read by subject", heading: ["Artists"], intro: "[A line about the artists on this site]" } },
+  artists: { label: "Subjects list", start: { eyebrow: "Read by subject", heading: ["Subjects"], intro: "[A line about the subjects the stories are filed under]" } },
 };
 const TTAC_THEME = { ...STARTER_THEME,
   look: { ...STARTER_THEME.look, nav: ".site-nav a", round: STARTER_THEME.look.round + ", .feature-grid li, .details, .photo" },
@@ -1424,19 +1451,21 @@ const TTAC_THEME = { ...STARTER_THEME,
 };
 // The fixed words of The Art Correspondent template, as its code writes them.
 export const TTAC_WORDS = {
-  "sr.social": "Social media", "menu.articles": "All stories", "menu.artists": "Artists", "sr.photo": "Photograph to come: {what}",
+  "sr.social": "Social media", "menu.articles": "All stories", "menu.artists": "Subjects", "sr.photo": "Photograph to come: {what}",
   "missing.photo": "Photograph to come.", "sr.share": "Share this page", "sr.privacy": "Privacy", "sr.nav": "Sections", "sr.links": "Links",
-  "menu.skip": "Skip to the stories", "form.email": "Email address", "form.placeholder": "you@example.com", "btn.join": "Ask to join",
-  "form.note": "This opens your own email app with a message ready to send to {email}.", "btn.close": "Close", "item.reported": "Reported",
-  "btn.count": "{n} of {total}", "btn.previous": "Previous", "btn.next": "Next", "missing.title": "Title to confirm", "item.dates": "Dates:",
-  "missing.tbc": "To confirm", "btn.source": "Source", "btn.read-source": "Read it at the source", "missing.to-add": "To add",
-  "form.name": "Your name", "form.your-email": "Your email", "form.topic": "What it is about", "form.message": "Your message",
-  "btn.write": "Write the email", "form.note-contact": "This opens your own email app with your message ready to send to {email}.",
-  "item.sources": "Sources", "item.byline-date": "By {site}. Published {date}.", "item.byline": "By {site}.", "btn.read-next": "Read next",
-  "item.filed": "Filed under", "item.subject": "Read by subject", "item.stories-about": "Stories about {name}", "sr.filter": "Show stories from",
-  "btn.all": "All", "nf.eyebrow": "Page not found", "nf.title": "This page has wandered off.",
+  "menu.skip": "Skip to the stories", "form.email": "Your email address", "btn.join": "Sign up",
+  "form.note": "This opens your own email app with a message ready to send to {email}.", "btn.close": "Close", "form.placeholder": "you@example.com",
+  "item.reported": "Reported", "btn.count": "{n} of {total}", "btn.previous": "Previous", "btn.next": "Next", "missing.title": "Title to confirm",
+  "item.dates": "Dates:", "missing.tbc": "To confirm", "btn.source": "Source", "btn.read-source": "Read it at the source",
+  "missing.to-add": "To add", "form.name": "Your name", "form.your-email": "Your email address", "form.topic": "What it is about",
+  "form.message": "Your message", "btn.write": "Write the email",
+  "form.note-contact": "This opens your own email app with your message ready to send to {email}.", "item.sources": "Sources",
+  "item.byline-date": "By {site}. Published {date}.", "item.byline": "By {site}.", "btn.read-next": "Read next", "item.filed": "Filed under",
+  "item.subject": "Read by subject", "item.stories-about": "Stories filed under {name}", "sr.filter": "Show stories from", "btn.all": "All",
+  "nf.eyebrow": "Page not found", "nf.title": "This page has wandered off.",
   "nf.lede": "The address may have changed, or the story may not be published yet.", "nf.home": "Back to the front page",
-  "form.need-email-join": "We need a working email address, so we can add you.", "form.subject": "Join the {site} mailing list",
+  "nf.moved": "This page has moved. Continue to the new address.", "form.need-email-join": "We need a working email address, so we can add you.",
+  "form.subject": "Join the {site} mailing list",
   "form.sent-join": "Your email app should now be open with the message ready. Send it and we will add you. If nothing opened, write to {email}.",
   "sr.photo-box": "Photo", "form.need-email": "We need a working email address, so we can reply.",
   "form.need-message": "Please write your message first.",
@@ -1483,7 +1512,8 @@ export function starterSite(e) {
     return { ...base, sectionKinds: TSAD_SECTIONS, words: TSAD_WORDS, wordLocks: WORD_LOCKS.tsad, items: TSAD_ITEMS, model: SAD_MODEL, builtIn: sad.builtIn, theme: sad.theme, collections: [] };
   }
   if (t.id === "the-art-correspondent") {
-    return { ...base, sectionKinds: TTAC_SECTIONS, words: TTAC_WORDS, wordLocks: WORD_LOCKS.ttac, items: TTAC_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: TTAC_THEME, collections: [], lists: TTAC_LISTS };
+    return { ...base, sectionKinds: TTAC_SECTIONS, words: TTAC_WORDS, wordLocks: WORD_LOCKS.ttac, items: TTAC_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: TTAC_THEME, collections: [], lists: TTAC_LISTS,
+      paths: { articles: "stories", artists: "subjects" } };
   }
   return { ...base, sectionKinds: STARTER_SECTIONS, words: STARTER_WORDS, wordLocks: WORD_LOCKS.starter, items: STARTER_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: STARTER_THEME, collections: [], lists: STARTER_LISTS };
 }
@@ -1923,7 +1953,7 @@ export function templateName(site, kind) {
   const l = String(((site.items || {})[kind] || {}).label || kind).toLowerCase();
   return ("Default " + l).length <= 25 ? "Default " + l : ("Default " + l.replace(/^artist /, "")).slice(0, 25);
 }
-const RESERVED = ["home", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search", "assets", "data", "tools", "inbox", "preview", "auction-results", "market-intelligence", "collecting-valuation", "about", "contact", "dispatches", "urban-culture", "interventions", "exhibitions", "collecting", "images"];
+const RESERVED = ["home", "artists", "reviews", "explained", "library", "guides", "standards", "research", "search", "assets", "data", "tools", "inbox", "preview", "auction-results", "market-intelligence", "collecting-valuation", "about", "contact", "dispatches", "urban-culture", "interventions", "exhibitions", "collecting", "images", "stories", "subjects", "articles"];
 // A section's kinds of block, as a list. A kind is a list of rows, a list of names, or one block made of some of the section's own fields.
 export function blockKinds(b) {
   return (Array.isArray(b) ? b : b ? [b] : []).map((x) => {
@@ -3629,7 +3659,7 @@ export async function handle(req) {
       const pictures = c ? pictureSpots(c.data).filter((x) => x.kind !== "work").map(publicSpot) : [];
       const imageMeta = meta && meta.data && meta.data.files && typeof meta.data.files === "object" ? meta.data.files : {};
       let doc = f.data; try { doc = cleanPages(pctx, f.data, f.data); } catch (_e) { /* shown as it is */ }
-      const extra = editorNow ? { site: editorNow, itemKinds: site.items, lists: Object.fromEntries(Object.entries(site.lists || {}).map(([k, l]) => [k, { label: l.label, section: l.section || "" }])), listFields: LIST_FIELDS, gam: !!site.model, model: site.model ? site.model.id : "", builtIn: site.builtIn || null,
+      const extra = editorNow ? { site: editorNow, itemKinds: site.items, lists: Object.fromEntries(Object.entries(site.lists || {}).map(([k, l]) => [k, { label: l.label, section: l.section || "" }])), paths: site.paths || null, listFields: LIST_FIELDS, gam: !!site.model, model: site.model ? site.model.id : "", builtIn: site.builtIn || null,
         pageFields: site.model ? [{ name: "title", label: "Title in the browser tab and search results", type: "text" }, { name: "description", label: "Description for search engines", type: "long", plain: true, hint: "One or two sentences. Not shown on the page." }] : null } : {};
       return json({ pages: doc, wordSpec: wordSpec(site), addonSpec: ADDONS.map((a) => ({ id: a.id, label: a.label, about: a.about, icon: a.icon, fields: a.fields })), kinds: kindsFor(site), summaries: summariesFor(site, doc), images, imageSizes, imageMeta, pictures, imageBase: preview + ps.images + "/", previewWaiting, artists: editorNow ? editorNow.artists.map((a) => ({ slug: a.slug, name: a.name })) : site.artists, preview, sha: f.sha, version, ...extra });
     }

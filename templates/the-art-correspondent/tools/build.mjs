@@ -35,7 +35,7 @@ const KINDS = ["announcement", "columns", "space", "quote", "faq", "button",
   "picture-banner", "slideshow", "gallery", "logo-row", "picture", "text-picture",
   "artworks", "exhibitions", "career", "press", "signup", "visit", "contact-form", "signup-popup",
   // the six sections of The Art Correspondent's design
-  "tac-opening", "tac-lead", "tac-latest", "tac-subjects", "tac-band", "tac-text"];
+  "tac-opening", "tac-lead", "tac-latest", "tac-subjects", "tac-band", "tac-text", "tac-entries"];
 function checkPages() {
   for (const key of ["header", "footer"]) {
     const part = (pages.shared || {})[key];
@@ -101,6 +101,8 @@ const written = [];
 const write = (p, text) => { const out = path.join(OUT, p); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, text); written.push(p); };
 const pagesOut = site.all();
 for (const pg of pagesOut) write(pg.path, pg.html);
+// the site's old addresses, each sending the visitor on to its new page
+for (const pg of site.forwards()) { if (written.includes(pg.path)) fail("An old address is also a page of the site: " + pg.path); write(pg.path, pg.html); }
 const urls = pagesOut.filter((p) => p.path !== "404.html").map((p) => p.url);
 if (D.site.indexed) {
   write("sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + urls.map((u) => "<url><loc>" + address + u + "</loc></url>\n").join("") + "</urlset>\n");

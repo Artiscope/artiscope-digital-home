@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "59";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "60";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -134,7 +134,7 @@
         if (pgd.pages && pgd.wordSpec && (!pgd.pages.words || typeof pgd.pages.words !== "object")) pgd.pages.words = {};
         if (pgd.pages) { pgd.pages.groups = pgd.pages.groups || {}; ["top", "popups", "bottom"].forEach(function (w) { if (!pgd.pages.groups[w]) pgd.pages.groups[w] = []; }); tplNormal(pgd.pages, pgd.itemKinds); }
         state.pg[s.id] = { version: pgd.version || "", pictures: pics, picBase: JSON.stringify(pics), imageMeta: pgd.imageMeta || {}, doc: pgd.pages, base: canon(pgd.pages), kinds: pgd.kinds, summaries: pgd.summaries || {}, images: pgd.images || [], imageSizes: pgd.imageSizes || {}, imageBase: pgd.imageBase || "", uploads: {}, picker: "", artists: pgd.artists || [], preview: pgd.preview, page: pref.page && pgd.pages.pages[pref.page] ? pref.page : "home", sel: pref.sel || null, mode: pref.mode || "computer", panel: "", dirty: false, sent: false,
-          site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, addonSpec: pgd.addonSpec || [], wordSpec: pgd.wordSpec || null, lists: pgd.lists || {}, listFields: pgd.listFields || [], at: pref.at || "", gam: !!pgd.gam, model: pgd.model || (pgd.gam ? "gam" : ""), builtIn: pgd.builtIn || null, pageFields: pgd.pageFields || null, leftPanel: pref.leftPanel || undefined, previewWaiting: !!pgd.previewWaiting };
+          site: pgd.site || null, siteBase: JSON.stringify(pgd.site || null), itemKinds: pgd.itemKinds || null, addonSpec: pgd.addonSpec || [], wordSpec: pgd.wordSpec || null, lists: pgd.lists || {}, paths: pgd.paths || null, listFields: pgd.listFields || [], at: pref.at || "", gam: !!pgd.gam, model: pgd.model || (pgd.gam ? "gam" : ""), builtIn: pgd.builtIn || null, pageFields: pgd.pageFields || null, leftPanel: pref.leftPanel || undefined, previewWaiting: !!pgd.previewWaiting };
         var made = state.pg[s.id]; if (made.at && !atKnown(made)) made.at = ""; histBase(made);
         if (state.openPanel) { made.leftPanel = state.openPanel; made.leftHidden = false; state.openPanel = ""; }
         render();
@@ -262,7 +262,7 @@
   function ic(name, size) { var z = size || 16; return '<svg class="i" width="' + z + '" height="' + z + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + (IC[name] || IC.block) + '"></path></svg>'; }
   // Which icon stands for each kind of section, on both sites.
   var KIND_IC = { "signup-popup": "bell", signup: "mail", visit: "pin", hero: "banner", featured: "person", "section-list": "list", explained: "book", numbers: "hash", method: "cards", opening: "loader", header: "topbar", footer: "footer", "page-heading": "heading", "long-text": "text", status: "clock", timeline: "table", words: "book", features: "cards", profiles: "person", "page-links": "links", "page-head": "heading", "results-table": "table", "latest-result": "hash", glossary: "book", panel: "panel", prose: "text", "contact-form": "form", announcement: "bell", columns: "columns", space: "space", "picture-banner": "banner", slideshow: "slides", gallery: "gallery", "logo-row": "logo", artworks: "frame", exhibitions: "calendar", career: "clock", press: "quote", "artist-cards": "person", quote: "quote", faq: "list", button: "block", text: "text", "text-picture": "picture", picture: "picture", articles: "doc", archive: "table", "exhibition-list": "calendar", collecting: "hash", "text-page": "text",
-    "tac-opening": "heading", "tac-lead": "picture", "tac-latest": "list", "tac-subjects": "links", "tac-band": "panel", "tac-text": "text" };
+    "tac-opening": "heading", "tac-lead": "picture", "tac-latest": "list", "tac-subjects": "links", "tac-band": "panel", "tac-text": "text", "tac-entries": "list" };
   function kindIc(type) { return '<span class="kic">' + ic(KIND_IC[type] || "block") + '</span>'; }
   // Which icon stands for each kind of block.
   var BLOCK_IC = { details: "pin", topics: "list", headline: "heading", tagline: "text", picture: "picture", latest: "doc", rule: "panel", links: "links", logos: "logo", artists: "person", rows: "list", cards: "cards", items: "book", columns: "columns", buttons: "block", about_links: "links", menu_extra: "links", words: "book", sections: "list", timeline: "clock", works: "picture", messages: "bell", slides: "slides", photos: "picture", artworks: "frame", shows: "calendar", events: "clock", quotes: "quote" };
@@ -1120,9 +1120,10 @@
   function gamWhere(pgd, path) {
     path = String(path || "").replace(/^\/+/, "").replace(/index\.html$/, ""); var m;
     if (path === "" ) return "home";
-    if (pgd.model === "starter" && (m = /^(articles|artists)\/?$/.exec(path)) && pgd.lists[m[1]]) return m[1];
-    if (pgd.model === "starter" && (m = /^articles\/([a-z0-9-]+)\/?$/.exec(path)) && pgd.site.articles.some(function (a) { return a.slug === m[1]; })) return "a-" + m[1];
-    if ((m = /^artists\/([a-z0-9-]+)\/?$/.exec(path)) && pgd.site.artists.some(function (a) { return a.slug === m[1]; })) return "artist-" + m[1];
+    var bA = itemBase(pgd, "articles"), bR = itemBase(pgd, "artists"), seg = path.replace(/\/$/, "").split("/");
+    if (pgd.model === "starter" && seg.length === 1 && (seg[0] === bA || seg[0] === bR)) { var lk = seg[0] === bA ? "articles" : "artists"; if (pgd.lists[lk]) return lk; }
+    if (pgd.model === "starter" && seg.length === 2 && seg[0] === bA && pgd.site.articles.some(function (a) { return a.slug === seg[1]; })) return "a-" + seg[1];
+    if (seg.length === 2 && seg[0] === bR && pgd.site.artists.some(function (a) { return a.slug === seg[1]; })) return "artist-" + seg[1];
     if ((m = /^(?:research|dispatches|urban-culture)\/([a-z0-9-]+)\/?$/.exec(path)) && pgd.site.articles.some(function (a) { return a.slug === m[1]; })) return "a-" + m[1];
     var want = path.replace(/\/?$/, "/") + "index.html", key = Object.keys(pgd.doc.pages).find(function (k) { return pgd.doc.pages[k].path === want; });
     return key ? (key === "home" ? "home" : "page-" + key) : path.replace(/[^a-z0-9-]/gi, "") || "home";
@@ -1144,8 +1145,13 @@
     pgd.sel = null; pgd.panel = ""; pgd.picker = ""; state.confirm = null; edRemember(); edPatch(); pushPreview("");
   }
   // What each site calls an artist's page.
-  function artistsWord(pgd) { return pgd.model === "starter" ? "Artists" : pgd.model === "sad" ? "Artist profiles" : pgd.gam ? "Artist market profiles" : "Artist portfolios"; }
-  function artistWord(pgd) { return pgd.model === "starter" ? "Artist" : pgd.model === "sad" ? "Artist profile" : pgd.gam ? "Artist market profile" : "Artist portfolio"; }
+  // Where a site built in the console keeps its articles and artists, and what it calls them (stories and subjects on some).
+  function itemBase(pgd, k) { return (pgd && pgd.paths && pgd.paths[k]) || k; }
+  function plural(w) { return /y$/.test(w) ? w.slice(0, -1) + "ies" : w + "s"; }
+  function itemWord(pgd, k) { var ik = pgd && pgd.itemKinds && pgd.itemKinds[k]; return ik && ik.label ? ik.label : k === "article" ? "Article" : "Artist"; }
+  function articlesWord(pgd) { return pgd.model === "starter" ? plural(itemWord(pgd, "article")) : "Articles"; }
+  function artistsWord(pgd) { return pgd.model === "starter" ? plural(itemWord(pgd, "artist")) : pgd.model === "sad" ? "Artist profiles" : pgd.gam ? "Artist market profiles" : "Artist portfolios"; }
+  function artistWord(pgd) { return pgd.model === "starter" ? itemWord(pgd, "artist") : pgd.model === "sad" ? "Artist profile" : pgd.gam ? "Artist market profile" : "Artist portfolio"; }
 
 
   function viewLeave() {
@@ -1306,8 +1312,8 @@
     var lists = Object.keys(pgd.lists).map(function (k) { return o(k, pgd.lists[k].label); });
     if (lists.length) g.push({ id: "lists", label: "Lists", icon: "list", items: lists });
     if (pgd.site && pgd.model === "starter") {
-      g.push({ id: "articles", label: "Articles", icon: "book", items: (pgd.site.articles || []).map(function (a) { return o("a-" + a.slug, (a.title || "Untitled") + (a.hidden ? " (hidden)" : "")); }) });
-      g.push({ id: "artists", label: "Artists", icon: "person", items: (pgd.site.artists || []).map(function (a) { return o("artist-" + a.slug, (a.name || "Unnamed") + (a.hidden ? " (hidden)" : "")); }) });
+      g.push({ id: "articles", label: articlesWord(pgd), icon: "book", items: (pgd.site.articles || []).map(function (a) { return o("a-" + a.slug, (a.title || "Untitled") + (a.hidden ? " (hidden)" : "")); }) });
+      g.push({ id: "artists", label: artistsWord(pgd), icon: "person", items: (pgd.site.artists || []).map(function (a) { return o("artist-" + a.slug, (a.name || "Unnamed") + (a.hidden ? " (hidden)" : "")); }) });
       g.push({ id: "site", label: "Across the site", icon: "gear", items: [o("site-details", "Site details")] });
     } else if (pgd.site) {
       var arts = pgd.site.articles.slice().sort(function (a, b) { return String(a.title).localeCompare(String(b.title)); });
@@ -1351,7 +1357,7 @@
           '<button type="button" class="soft slim pp-make" data-act="ed-tpl-new" data-kind="' + gk + '"' + (empty ? " disabled" : "") + '>' + ic("plus", 14) + 'Create template</button>' +
           (empty ? '<p class="small pp-note">Nothing to show until there is one to fill the preview.</p>' : "") : "") +
         '<p class="cap">' + esc(g.label) + '</p>' + g.items.filter(function (x) { return x.v !== "home"; }).map(item(g)).join("") +
-        (pgd.model === "starter" && gk ? '<button type="button" class="soft slim pp-make" data-act="ed-new" data-what="' + gk + '">' + ic("plus", 14) + (gk === "article" ? "Create article" : "Create artist") + '</button>' : "");
+        (pgd.model === "starter" && gk ? '<button type="button" class="soft slim pp-make" data-act="ed-new" data-what="' + gk + '">' + ic("plus", 14) + "Create " + itemWord(pgd, gk).toLowerCase() + '</button>' : "");
     } else {
       level = item({ label: "Home page", icon: "home" })({ v: "home", label: "Home page" }) + groups.map(function (x) {
         var k = kindOf(x.id), nt = k && tk.indexOf(k) >= 0 ? Object.keys(tplAll(pgd, k)).length : 0, n = x.id === "pages" ? x.items.length - 1 : x.items.length;
@@ -1375,8 +1381,9 @@
     var k = atKind(pgd), key = atKey(pgd);
     if (!pgd.gam) { var h = atHash(pgd); return h === "home" || h === "site-details" ? base : base + "#" + h; }
     if (k === "page") return base + String((pgd.doc.pages[key] || {}).path || "").replace(/index\.html$/, "");
-    if (k === "artist") return base + "artists/" + key + "/";
-    if (k === "article") { var a = itemOf(pgd) || {}; return base + (pgd.model === "sad" ? (a.section || "dispatches") : "research") + "/" + key + "/"; }
+    if (k === "artist") return base + itemBase(pgd, "artists") + "/" + key + "/";
+    if (k === "article") { var a = itemOf(pgd) || {}; return base + (pgd.model === "starter" ? itemBase(pgd, "articles") : pgd.model === "sad" ? (a.section || "dispatches") : "research") + "/" + key + "/"; }
+    if (k === "list") return base + itemBase(pgd, key) + "/";
     return base;
   }
   var ED_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
@@ -1820,7 +1827,7 @@
   function themeOpen(pgd) { return pgd.leftPanel === "theme" && !pgd.leftHidden; }
   // What a section looks like, drawn small for the picker's preview.
   var SHAPES = { "signup-popup": "popup", signup: "form", visit: "rows", hero: "banner", "picture-banner": "banner", text: "text", prose: "text", "long-text": "text", "text-picture": "textpic", picture: "picture", quote: "quote", articles: "cards", features: "cards", profiles: "cards", featured: "cards", method: "cards", faq: "rows", words: "rows", glossary: "rows", "page-links": "rows", "section-list": "rows", button: "button", status: "bar", timeline: "table", "results-table": "table", panel: "panel", "contact-form": "form", "page-head": "heading", "page-heading": "heading", "latest-result": "card", numbers: "cards", explained: "text", announcement: "ann", columns: "columns", space: "space", slideshow: "slides", gallery: "gallery", "logo-row": "logos", artworks: "gallery", exhibitions: "rows", career: "rows", press: "quote", "artist-cards": "cards", archive: "cards", "exhibition-list": "cards", collecting: "panel", "text-page": "text",
-    "tac-opening": "heading", "tac-lead": "picture", "tac-latest": "rows", "tac-subjects": "rows", "tac-band": "panel", "tac-text": "text" };
+    "tac-opening": "heading", "tac-lead": "picture", "tac-latest": "rows", "tac-subjects": "rows", "tac-band": "panel", "tac-text": "text", "tac-entries": "rows" };
   function shapeHtml(shape) {
     var bar = function (w) { return '<i style="width:' + w + '%"></i>'; };
     switch (shape) {
@@ -1858,7 +1865,7 @@
     articles: "Reading and trust", features: "Reading and trust", explained: "Reading and trust", "section-list": "Reading and trust", "page-links": "Reading and trust", numbers: "Reading and trust", method: "Reading and trust",
     button: "Contact and sign-up", "contact-form": "Contact and sign-up", signup: "Contact and sign-up", visit: "Contact and sign-up", "signup-popup": "Popups",
     archive: "Art and artists", "exhibition-list": "Art and artists", collecting: "Reading and trust", "text-page": "Words",
-    "tac-opening": "Top of the page", "tac-lead": "Pictures", "tac-latest": "Reading and trust", "tac-subjects": "Reading and trust", "tac-band": "Words", "tac-text": "Words"
+    "tac-opening": "Top of the page", "tac-lead": "Pictures", "tac-latest": "Reading and trust", "tac-subjects": "Reading and trust", "tac-band": "Words", "tac-text": "Words", "tac-entries": "Reading and trust"
   };
   // The first section of this kind anywhere on the site: this page first, then the home page, then the rest.
   function firstOnSite(pgd, type) {
@@ -2266,9 +2273,9 @@
     if (pgd.gam) {
       var pages = pgd.model === "starter" ? [{ label: "Home page", href: "./" }] : []; Object.keys(pgd.doc.pages).forEach(function (k) { var pg = pgd.doc.pages[k], at = String(pg.path || "").replace(/index\.html$/, ""); if (k !== "home" && at) pages.push({ label: shortTitle(pgd, pg.title) || k, href: at }); });
       push("pages", "Pages", pages);
-      if (pgd.model === "starter") push("lists", "Lists", Object.keys(pgd.lists || {}).map(function (k) { return { label: pgd.lists[k].label, href: k + "/" }; }));
-      push("artists", artistsWord(pgd), (site2.artists || []).filter(function (a) { return pgd.model !== "starter" || !a.hidden; }).map(function (a) { return { label: a.name, href: "artists/" + a.slug + "/", pic: a.image }; }));
-      push("articles", "Articles", (site2.articles || []).filter(function (a) { return !a.hidden; }).map(function (a) { return { label: a.title, href: (pgd.model === "starter" ? "articles" : pgd.model === "sad" ? (a.section || "dispatches") : "research") + "/" + a.slug + "/" }; }));
+      if (pgd.model === "starter") push("lists", "Lists", Object.keys(pgd.lists || {}).map(function (k) { return { label: pgd.lists[k].label, href: itemBase(pgd, k) + "/" }; }));
+      push("artists", artistsWord(pgd), (site2.artists || []).filter(function (a) { return pgd.model !== "starter" || !a.hidden; }).map(function (a) { return { label: a.name, href: itemBase(pgd, "artists") + "/" + a.slug + "/", pic: a.image }; }));
+      push("articles", articlesWord(pgd), (site2.articles || []).filter(function (a) { return !a.hidden; }).map(function (a) { return { label: a.title, href: (pgd.model === "starter" ? itemBase(pgd, "articles") : pgd.model === "sad" ? (a.section || "dispatches") : "research") + "/" + a.slug + "/" }; }));
       return out;
     }
     pageGroups(pgd).forEach(function (g) {

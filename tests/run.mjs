@@ -1,4 +1,4 @@
-import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir } from "./where.mjs";
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir, tacDir } from "./where.mjs";
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { parseCalendar, setAnswer, parseLog, safePhotoName, parseSlots, slotPhotoName, notePhotoName, cleanText, handle, SITES, cleanPages, cleanCss, cleanSettings } from "./home.mjs";
@@ -444,5 +444,21 @@ globalThis.fetch = realFetch;
   assert.ok(/<img class="ph-img" src="[^"]*konn\.jpg"/.test(html) && html.includes("Photograph: Grove Gallery"), "the photo and its credit are on the site");
   const marked = R.Site(R.fromFiles(content), pages, "", { mark: true }).all().map((p) => p.html).join("\n");
   assert.ok(/data-adh="picture"/.test(marked), "in the editor the photo frame can be clicked");
+}
+// The Art Correspondent, moved into the console: drawn by the template's own code, every page built, every old address forwarding
+{
+  const h = await import("./home.mjs"); const { wordsIn } = await import("./tools/site-words.mjs"); const { execFileSync } = await import("node:child_process");
+  const T = tacDir(), TPL = C_DIR + "/templates/the-art-correspondent";
+  for (const f of ["assets/render.js", "assets/site.js", "assets/site.css", "tools/build.mjs"]) assert.equal(fs.readFileSync(T + "/" + f, "utf8"), fs.readFileSync(TPL + "/" + f, "utf8"), "The Art Correspondent's " + f + " is the template's");
+  assert.deepEqual(wordsIn([T + "/assets/render.js", T + "/assets/site.js"]).words, h.TTAC_WORDS, "its words are the template's");
+  const out = "/tmp/run-tac"; fs.rmSync(out, { recursive: true, force: true }); execFileSync("python3", [T + "/tools/build.py", out], { stdio: "pipe" });
+  const c = JSON.parse(fs.readFileSync(T + "/data/content.json", "utf8"));
+  assert.ok(c.articles.length >= 22 && c.artists.length >= 7, "every story and subject is there");
+  for (const [from, to] of Object.entries(c.forward)) assert.ok(fs.readFileSync(out + "/" + from, "utf8").includes('url=https://theartcorrespondent.com/' + to + '"') && fs.existsSync(out + "/" + to + "index.html"), "the old address " + from + " forwards to a page that is there");
+  assert.equal(fs.readFileSync(out + "/CNAME", "utf8"), "theartcorrespondent.com\n");
+  const home = fs.readFileSync(out + "/index.html", "utf8");
+  assert.ok(home.includes('<svg class="mark"') && home.includes("Behind Every Work, There Is a Story.") && !home.includes("noindex") && !/published by grove/i.test(home), "the home page has its nib, its words, no publisher line, and search engines are let in");
+  const list = h.cleanSiteList({ sites: [{ id: "site-4", name: "The Art Correspondent", domain: "theartcorrespondent.com", repo: "Artiscope/the-art-correspondent", kind: "starter", template: "the-art-correspondent", live: true }] });
+  assert.equal(list[0].template, "the-art-correspondent"); assert.ok(list[0].live, "listed as a live site of its own template");
 }
 console.log("ALL TESTS PASSED");

@@ -22,10 +22,13 @@
   function addressOf(D) { var a = String(((D || {}).site || {}).address || ""); return /^https:\/\/[a-z0-9.-]+(\/[A-Za-z0-9._\/-]*)?$/.test(a) ? a.replace(/\/*$/, "/") : "https://example.org/"; }
 
   // The data file as one object, the same shape Artiscope Digital Home edits.
+  // Where stories and subjects live on the site: stories/<name>/ and subjects/<name>/.
+  var P = { articles: "stories", artists: "subjects" };
   function fromFiles(content) {
     var c = JSON.parse(JSON.stringify(content || {})), s = c.site || {};
-    return { site: { email: String(s.email || ""), address: String(s.address || ""), indexed: s.indexed === true },
-      articles: Array.isArray(c.articles) ? c.articles : [], artists: Array.isArray(c.artists) ? c.artists : [] };
+    return { site: { email: String(s.email || ""), address: String(s.address || ""), indexed: s.indexed === true, mark: String(s.mark || ""), icons: String(s.icons || ""), share: String(s.share || "") },
+      articles: Array.isArray(c.articles) ? c.articles : [], artists: Array.isArray(c.artists) ? c.artists : [],
+      forward: c.forward && typeof c.forward === "object" && !Array.isArray(c.forward) ? c.forward : {} };
   }
 
   function Site(D, PAGES, THEME, opts) {
@@ -52,12 +55,10 @@
     function shared(key) { var part = (PAGES.shared || {})[key] || {}; return [part.settings || {}, get(part, "visible", true) !== false]; }
     function hd() { return shared("header")[0]; }
     function NAME() { return get(hd(), "name", "") || "[Site name]"; }
-    // The menu: the links chosen in the console, then Articles and Artists once there is one to show.
+    // The menu: the links chosen in the console, and nothing added by itself.
     function navLinks() {
       var out = (get(hd(), "links", []) || []).filter(function (l) { return Array.isArray(l) && l[0]; });
       var has = function (a) { return out.some(function (l) { return String(l[1] || "").replace(/^\.?\//, "").replace(/index\.html$/, "") === a; }); };
-      if (listOn("articles") && ARTICLES.length && !has("articles/")) out.push([listWords("articles").name, "articles/"]);
-      if (listOn("artists") && ARTISTS.length && !has("artists/")) out.push([listWords("artists").name, "artists/"]);
       return out;
     }
     // ----- articles and artists: the ones visitors can see, newest article first -----
@@ -68,11 +69,13 @@
     function articleOf(slug) { return (D.articles || []).find(function (a) { return a.slug === slug; }) || null; }
     function artistOf(slug) { return (D.artists || []).find(function (a) { return a.slug === slug; }) || null; }
     // A list page is drawn by the site unless a page of the console already uses its address.
-    function listOn(k) { return !Object.keys(PAGES.pages || {}).some(function (x) { return PAGES.pages[x].path === k + "/index.html"; }); }
+    function listOn(k) { return !Object.keys(PAGES.pages || {}).some(function (x) { return PAGES.pages[x].path === P[k] + "/index.html"; }); }
+    // where every story is listed: the site's own list, or a page of the console at the same address
+    function storiesHref() { return "@@" + P.articles + "/"; }
     function listWords(k) {
       var l = ((PAGES.lists || {})[k]) || {}, h = Array.isArray(l.heading) ? l.heading.filter(Boolean) : l.heading ? [l.heading] : [];
-      var name = k === "articles" ? Wt("menu.articles", "All stories") : Wt("menu.artists", "Artists");
-      return { name: name, eyebrow: l.eyebrow == null ? name : l.eyebrow, heading: h.length ? h : [name], intro: l.intro == null ? (k === "articles" ? "[A line about what the stories cover]" : "[A line about the artists on this site]") : l.intro };
+      var name = k === "articles" ? Wt("menu.articles", "All stories") : Wt("menu.artists", "Subjects");
+      return { name: name, eyebrow: l.eyebrow == null ? name : l.eyebrow, heading: h.length ? h : [name], intro: l.intro == null ? (k === "articles" ? "[A line about what the stories cover]" : "[A line about the subjects the stories are filed under]") : l.intro };
     }
     function photo(desc, ratio) {
       var st = ratio ? ' style="aspect-ratio:' + ratio + '"' : "";
@@ -123,24 +126,28 @@
       main = (o.own ? [main, groupHtml("popups"), ao.fixed] : [groupHtml("top", false), main, ao.share, groupHtml("bottom"), groupHtml("popups"), ao.fixed]).filter(Boolean).join("\n  ");
       var depth = (urlPath.match(/\//g) || []).length, r = o.file ? "" : new Array(depth + 1).join("../");
       var name = txt(NAME()), st = hd(), hon = shared("header")[1];
+      // the site's own mark beside its name, drawn from the outline kept in the site's details
+      var markSvg = /^[MLHVCSQTAZmlhvcsqtaz0-9 .,-]{1,600}$/.test(SITE.mark || "") ? '<svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><path fill-rule="evenodd" fill="currentColor" d="' + SITE.mark + '"></path></svg>' : "";
+      var icons = /^assets\/[a-z0-9-]+\/$/.test(SITE.icons || "") && !iconOk() ? '<link rel="icon" href="' + r + SITE.icons + 'favicon.svg" type="image/svg+xml">\n<link rel="icon" href="' + r + SITE.icons + 'favicon.png" type="image/png" sizes="32x32">\n<link rel="apple-touch-icon" href="' + r + SITE.icons + 'apple-touch-icon.png">\n' : "";
+      var share = /^assets\/[a-z0-9\/._-]+\.(png|jpe?g)$/.test(SITE.share || "") ? '<meta property="og:image" content="' + esc(SITE_URL + SITE.share) + '">\n<meta name="twitter:card" content="summary_large_image">\n' : "";
       main = String(main).split("@@").join(r);
       var links = navLinks().map(function (l) { return '<a href="' + esc(hrefOf(l[1]).split("@@").join(r)) + '"' + (l[1] && urlPath === String(l[1]).replace(/^\.?\/?/, "") ? ' aria-current="page"' : "") + '>' + txt(l[0]) + '</a>'; }).join("\n    ");
       var logosL = headLogos(st, r, "L"), logosR = headLogos(st, r, "C") + headLogos(st, r, "R");
       var nav = !hon || o.own ? "" : '<header class="site-header" id="nav">\n' +
-        '  <a class="wordmark" href="' + (r || "./") + '"><span>' + name + '</span></a>\n' + (logosL ? '  <span class="hlogos">' + logosL + '</span>\n' : "") +
+        '  <a class="wordmark" href="' + (r || "./") + '">' + markSvg + '<span>' + name + '</span></a>\n' + (logosL ? '  <span class="hlogos">' + logosL + '</span>\n' : "") +
         (links ? '  <nav class="site-nav" aria-label="' + W("sr.nav", "Sections") + '">\n    ' + links + '\n  </nav>\n' : "") + (logosR ? '  <span class="hlogos">' + logosR + '</span>\n' : "") + '</header>';
       var ft = shared("footer"), f = ft[0];
       var flinks = (get(f, "links", []) || []).filter(function (l) { return Array.isArray(l) && l[0]; }).map(function (l) { return '<a href="' + esc(hrefOf(l[1]).split("@@").join(r)) + '">' + txt(l[0]) + '</a>'; }).join("\n      ");
       var fh = get(f, "links_heading", ""), legal = get(f, "legal", ""), social = socialHtml();
       var foot = !ft[1] || o.own ? "" : '<footer class="site-footer foot" id="foot">\n  <div class="footer-inner">\n' +
-        '    <div class="footer-brand"><p class="wordmark"><span>' + name + '</span></p>' + (get(f, "tagline", "") ? '<p>' + txt(f.tagline) + '</p>' : "") + '</div>\n' +
+        '    <div class="footer-brand"><p class="wordmark">' + markSvg + '<span>' + name + '</span></p>' + (get(f, "tagline", "") ? '<p>' + txt(f.tagline) + '</p>' : "") + '</div>\n' +
         (flinks ? '    <nav class="footer-nav" aria-label="' + (fh ? esc(fh) : W("sr.links", "Links")) + '">' + (fh ? '<h2 class="label">' + txt(fh) + '</h2>' : "") + '\n      ' + flinks + '\n    </nav>\n' : "") +
-        '  </div>\n' + (social || legal ? '  <div class="footer-foot">' + social + (legal ? '<p>' + txt(legal) + '</p>' : "") + '</div>\n' : "") + '</footer>';
+        '  </div>\n' + (social || legal ? '  <div class="footer-foot">' + social + (legal ? '<p>' + txt(legal).split("{year}").join(String(new Date().getFullYear())) + '</p>' : "") + '</div>\n' : "") + '</footer>';
       var noindex = SITE.indexed !== true ? '<meta name="robots" content="noindex, nofollow">\n' : "";
       var html = '<!doctype html>\n<html lang="en-GB">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n' + noindex +
         '<title>' + esc(title) + '</title>\n<meta name="description" content="' + esc(desc) + '">\n<link rel="canonical" href="' + esc(SITE_URL + urlPath) + '">\n' +
         '<meta property="og:type" content="website">\n<meta property="og:site_name" content="' + name + '">\n' +
-        '<meta property="og:title" content="' + esc(title) + '">\n<meta property="og:description" content="' + esc(desc) + '">\n<meta property="og:url" content="' + esc(SITE_URL + urlPath) + '">\n' +
+        '<meta property="og:title" content="' + esc(title) + '">\n<meta property="og:description" content="' + esc(desc) + '">\n<meta property="og:url" content="' + esc(SITE_URL + urlPath) + '">\n' + share + icons +
         '<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' +
         '<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Karla:wght@400;500;600&family=Reenie+Beanie&display=swap" rel="stylesheet">\n' +
         (o.head || "") + (iconOk() ? '<link rel="icon" href="' + r + opts.favicon + '">\n' : "") +
@@ -154,26 +161,25 @@
     var S = {};
     S.signup = function (st, ctx) {
       var id = (ctx && ctx.id) || "signup";
-      return '<section class="sec sec--lib" id="' + esc(id) + '" aria-labelledby="h-' + esc(id) + '">\n    <div class="wrap news">\n' +
-        '      <div><h2 id="h-' + esc(id) + '">' + txt(get(st, "heading", "")) + '</h2>' + (get(st, "text", "") ? '<p class="dek">' + txt(st.text) + '</p>' : "") + '</div>\n      <div>\n' +
-        '        <form class="nl" data-signup data-email="' + esc(MAIL) + '" novalidate><label class="sr" for="' + esc(id) + '-e">' + W("form.email", "Email address") + '</label><input id="' + esc(id) + '-e" name="email" type="email" required placeholder="' + W("form.placeholder", "you@example.com") + '" autocomplete="email"><button class="btn" type="submit">' + (get(st, "button", "") ? txt(get(st, "button", "")) : W("btn.join", "Ask to join")) + '</button></form>\n' +
-        '        <p class="mf-note" role="status">' + W("form.note", "This opens your own email app with a message ready to send to {email}.", { email: esc(MAIL) }) + '</p>\n' +
-        (get(st, "pitch", "") ? '        <p class="pitch">' + txt(st.pitch) + ' <a class="tlink" style="min-height:0" href="mailto:' + esc(MAIL) + '">' + esc(MAIL) + '</a></p>\n' : "") +
-        '      </div>\n    </div>\n  </section>';
+      return '<section class="letter" id="' + esc(id) + '" aria-labelledby="h-' + esc(id) + '">\n' +
+        '    <h2 id="h-' + esc(id) + '" data-reveal>' + txt(get(st, "heading", "")) + '</h2>' + (get(st, "text", "") ? '<p class="letter-note" data-reveal>' + txt(st.text) + '</p>' : "") + '\n' +
+        '    <form class="nl signup" data-signup data-email="' + esc(MAIL) + '" novalidate data-reveal><div class="field"><label for="' + esc(id) + '-e">' + W("form.email", "Your email address") + '</label><input id="' + esc(id) + '-e" name="email" type="email" required autocomplete="email"></div><button class="btn" type="submit">' + (get(st, "button", "") ? txt(get(st, "button", "")) : W("btn.join", "Sign up")) + '</button></form>\n' +
+        '    <p class="mf-note" role="status">' + W("form.note", "This opens your own email app with a message ready to send to {email}.", { email: esc(MAIL) }) + '</p>\n' +
+        (get(st, "pitch", "") ? '    <p class="pitch">' + txt(st.pitch) + ' <a href="mailto:' + esc(MAIL) + '">' + esc(MAIL) + '</a></p>\n' : "") + '  </section>';
     };
     // A sign-up box that pops up once a visit; drawn hidden, and shown by the site's script.
     S["signup-popup"] = function (st, ctx) {
       var id = (ctx && ctx.id) || "popup", d = Math.max(3, Math.min(60, Number(get(st, "delay", 8)) || 8)), e = get(st, "eyebrow", ""), t = get(st, "text", "");
       return '<div class="supop" id="' + esc(id) + '" data-popup data-delay="' + d + '" role="dialog" aria-labelledby="' + esc(id) + '-h" hidden>\n  <button type="button" class="supop-x" data-pop-close>' + W("btn.close", "Close") + '</button>\n' +
         (e ? '  <p class="kicker">' + txt(e) + '</p>\n' : "") + '  <h2 id="' + esc(id) + '-h">' + txt(get(st, "heading", "")) + '</h2>\n' + (t ? '  <p class="dek">' + txt(String(t).trim()) + '</p>\n' : "") +
-        '  <form class="nl" data-popform data-email="' + esc(MAIL) + '" novalidate><label class="sr" for="' + esc(id) + '-e">' + W("form.email", "Email address") + '</label><input id="' + esc(id) + '-e" name="email" type="email" required placeholder="' + W("form.placeholder", "you@example.com") + '" autocomplete="email"><button class="btn" type="submit">' + (get(st, "button", "") ? txt(get(st, "button", "")) : W("btn.join", "Ask to join")) + '</button></form>\n' +
+        '  <form class="nl" data-popform data-email="' + esc(MAIL) + '" novalidate><label class="sr" for="' + esc(id) + '-e">' + W("form.email", "Your email address") + '</label><input id="' + esc(id) + '-e" name="email" type="email" required placeholder="' + W("form.placeholder", "you@example.com") + '" autocomplete="email"><button class="btn" type="submit">' + (get(st, "button", "") ? txt(get(st, "button", "")) : W("btn.join", "Sign up")) + '</button></form>\n' +
         '  <p class="mf-note" role="status">' + W("form.note", "This opens your own email app with a message ready to send to {email}.", { email: esc(MAIL) }) + '</p>\n</div>';
     };
 
     // ----- the six sections of this design -----
     function textLink(words, h) { return words && addrOk(h) ? '<p data-reveal><a class="text-link" href="' + esc(hrefOf(h)) + '"' + (/^https?:/i.test(String(h)) ? ' rel="noopener"' : "") + '>' + txt(words) + '</a></p>' : ""; }
     function storyCard(a, where) {
-      return '<li><a class="story" href="@@articles/' + esc(a.slug) + '/">' + txt(String(a.title || "").trim() || "[Story title]") + '</a>' + (where && String(a.kicker || "").trim() ? '<p class="where">' + txt(a.kicker) + '</p>' : "") +
+      return '<li><a class="story" href="@@' + P.articles + '/' + esc(a.slug) + '/">' + txt(String(a.title || "").trim() || "[Story title]") + '</a>' + (where && String(a.kicker || "").trim() ? '<p class="where">' + txt(a.kicker) + '</p>' : "") +
         (String(a.summary || "").trim() ? '<p class="blurb">' + txt(a.summary) + '</p>' : "") + '</li>';
     }
     // The words at the top of a page: large on the home page, smaller on the others.
@@ -192,24 +198,24 @@
     // The newest stories, as a numbered list or as cards; all of them, or only those with one small line.
     S["tac-latest"] = function (st, ctx) {
       var id = esc((ctx && ctx.id) || "latest"), only = String(get(st, "only", "") || "").trim().toLowerCase(), n = Math.max(1, Math.min(24, Number(get(st, "count", 6)) || 6));
-      var list = ARTICLES.filter(function (a) { return !only || String(a.kicker || "").trim().toLowerCase() === only; }), shown = list.slice(0, n);
+      var list = ARTICLES.filter(function (a) { return !only || String(a.kicker || "").trim().toLowerCase() === only; }), shown = get(st, "every", false) === true ? list : list.slice(0, n);
       var cards = get(st, "style", "list") === "cards", h = get(st, "heading", ""), m = get(st, "more", "");
       var body = !shown.length ? '<p class="where" data-reveal>[Stories appear here once you add them]</p>'
         : cards ? '<ul class="feature-grid">' + shown.map(function (a) { return storyCard(a, !only); }).join("") + '</ul>'
         : '<ol class="contents">' + shown.map(function (a, k) {
-          return '<li data-reveal><span class="num">' + (k + 1) + '</span><div><a class="story" href="@@articles/' + esc(a.slug) + '/">' + txt(String(a.title || "").trim() || "[Story title]") + '</a>' + (String(a.kicker || "").trim() ? '<p class="where">' + txt(a.kicker) + '</p>' : "") + '</div></li>';
+          return '<li data-reveal><span class="num">' + (k + 1) + '</span><div><a class="story" href="@@' + P.articles + '/' + esc(a.slug) + '/">' + txt(String(a.title || "").trim() || "[Story title]") + '</a>' + (String(a.kicker || "").trim() ? '<p class="where">' + txt(a.kicker) + '</p>' : "") + '</div></li>';
         }).join("") + '</ol>';
-      var more = m && list.length && listOn("articles") ? '<p class="more' + (cards ? " more--cards" : "") + '" data-reveal><a class="text-link" href="@@articles/">' + txt(m) + '</a></p>' : "";
+      var more = m && list.length ? '<p class="more' + (cards ? " more--cards" : "") + '" data-reveal><a class="text-link" href="' + storiesHref() + '">' + txt(m).split("{n}").join(String(ARTICLES.length)) + '</a></p>' : "";
       return '<section class="' + (cards ? "all-features" : "issue") + '"' + (h ? ' aria-labelledby="h-' + id + '"' : "") + '>' + (h ? '<h2 class="label" id="h-' + id + '" data-reveal>' + txt(h) + '</h2>' : "") + body + more + '</section>';
     };
     // Links to the subjects the stories are filed under: every artist's page, then any links added here.
     S["tac-subjects"] = function (st, ctx) {
       var id = esc((ctx && ctx.id) || "subjects"), h = get(st, "heading", "");
-      var people = get(st, "artists", true) !== false ? ARTISTS.map(function (x) { return '<a href="@@artists/' + esc(x.slug) + '/">' + txt(String(x.name || "").trim() || "[Artist name]") + '</a>'; }) : [];
+      var people = get(st, "artists", true) !== false ? ARTISTS.map(function (x) { return '<a href="@@' + P.artists + '/' + esc(x.slug) + '/">' + txt(String(x.name || "").trim() || "[Subject]") + '</a>'; }) : [];
       var rows = liveRows(get(st, "links", [])).filter(function (r) { return r.x.label && addrOk(r.x.href); }).map(function (r) { return '<a href="' + esc(hrefOf(r.x.href)) + '" data-adh-b="links.' + r.i + '">' + txt(r.x.label) + '</a>'; });
       var all = people.concat(rows);
       return '<section class="topics"' + (h ? ' aria-labelledby="h-' + id + '"' : "") + '>' + (h ? '<h2 class="label" id="h-' + id + '" data-reveal>' + txt(h) + '</h2>' : "") +
-        (all.length ? '<p class="topic-links" data-reveal>' + all.join("\n") + '</p>' : '<p class="where" data-reveal>[Subjects appear here once you add artists or links]</p>') + '</section>';
+        (all.length ? '<p class="topic-links" data-reveal>' + all.join("\n") + '</p>' : '<p class="where" data-reveal>[Subjects appear here once you add them]</p>') + '</section>';
     };
     // A band in the second colour, with a small line, a heading, a few words and a link.
     S["tac-band"] = function (st) {
@@ -217,11 +223,27 @@
       return '<section class="sessions"><div class="sessions-inner">' + (e ? '<p class="label" data-reveal>' + txt(e) + '</p>' : "") + (h ? '<h2 data-reveal>' + txt(h) + '</h2>' : "") +
         (t ? '<p data-reveal>' + txt(t) + '</p>' : "") + textLink(get(st, "link", ""), get(st, "href", "")) + '</div></section>';
     };
-    // A heading and paragraphs in the reading column, as on About.
+    // Words in the reading column, as on About: a larger first paragraph, paragraphs, then parts each with a heading.
     S["tac-text"] = function (st) {
-      var h = get(st, "heading", ""), ps = (Array.isArray(get(st, "paras", [])) ? st.paras : []).filter(function (x) { return typeof x === "string" && x.trim(); });
-      return '<section class="prose' + (get(st, "align", "left") === "centre" ? " prose-centre" : "") + '">' + (h ? '<h2 data-reveal>' + txt(h) + '</h2>' : "") +
-        ps.map(function (x) { return '<p data-reveal>' + txt(x.trim()).replace(/\n/g, "<br>") + '</p>'; }).join("") + textLink(get(st, "link", ""), get(st, "href", "")) + '</section>';
+      var ps = function (t) { return String(t || "").split(/\n\s*\n/).map(function (x) { return x.trim(); }).filter(Boolean).map(function (x) { return '<p data-reveal>' + txt(x).replace(/\n/g, "<br>") + '</p>'; }).join(""); };
+      var lines = (Array.isArray(get(st, "paras", [])) ? st.paras : []).filter(function (x) { return typeof x === "string" && x.trim(); });
+      var sf = String(get(st, "standfirst", "") || "").trim(), h = get(st, "heading", "");
+      var parts = liveRows(get(st, "parts", [])).filter(function (r) { return r.x.heading || r.x.text; }).map(function (r) {
+        return '<div class="prose-part" data-adh-b="parts.' + r.i + '">' + (r.x.heading ? '<h2 data-reveal>' + txt(r.x.heading) + '</h2>' : "") + ps(r.x.text) + '</div>';
+      }).join("");
+      return '<section class="prose' + (get(st, "align", "left") === "centre" ? " prose-centre" : "") + '">' + (h ? '<h2 data-reveal>' + txt(h) + '</h2>' : "") + (sf ? '<p class="standfirst" data-reveal>' + txt(sf) + '</p>' : "") +
+        lines.map(function (x) { return '<p data-reveal>' + txt(x.trim()).replace(/\n/g, "<br>") + '</p>'; }).join("") + parts + textLink(get(st, "link", ""), get(st, "href", "")) + '</section>';
+    };
+    // A list made by hand, such as the shows in the site's reporting: each with a title, a line on where and when, and a few words.
+    S["tac-entries"] = function (st, ctx) {
+      var id = esc((ctx && ctx.id) || "entries"), h = get(st, "heading", ""), num = get(st, "numbered", false) === true;
+      var rows = liveRows(get(st, "entries", [])).filter(function (r) { return r.x.title; }).map(function (r, k) {
+        var t = addrOk(r.x.href) ? '<a class="story" href="' + esc(hrefOf(r.x.href)) + '">' + txt(r.x.title) + '</a>' : '<span class="story">' + txt(r.x.title) + '</span>';
+        return '<li data-reveal data-adh-b="entries.' + r.i + '">' + (num ? '<span class="num">' + (k + 1) + '</span>' : "") + '<div>' + t + (r.x.where ? '<p class="where">' + txt(r.x.where) + '</p>' : "") + (r.x.blurb ? '<p class="blurb">' + txt(r.x.blurb) + '</p>' : "") + '</div></li>';
+      }).join("");
+      return '<section class="issue issue-page"' + (h ? ' aria-labelledby="h-' + id + '"' : "") + '>' + (h ? '<h2 class="label" id="h-' + id + '" data-reveal>' + txt(h) + '</h2>' : "") +
+        (rows ? '<ol class="contents' + (num ? "" : " contents-plain") + '">' + rows + '</ol>' : '<p class="where" data-reveal>[Entries appear here once you add them]</p>') +
+        (get(st, "note", "") ? '<p class="how" data-reveal>' + txt(st.note) + '</p>' : "") + '</section>';
     };
 
     // ----- sections any page can use, the same set as the other sites, drawn in this site's look -----
@@ -351,7 +373,7 @@
       var topics = (Array.isArray(get(st, "topics", [])) ? st.topics : []).map(function (t, i) { return { t: t, i: i }; }).filter(function (x) { return typeof x.t === "string" && x.t.trim(); });
       var t = get(st, "text", "");
       return libSec("", '<div class="mform"><div>' + headBlock(st) + (t ? '<p class="dek">' + txt(String(t).trim()) + '</p>' : "") + '</div>' +
-        '<form class="mf" data-mailform="contact" data-email="' + esc(mailTo()) + '" novalidate><div class="mf-row"><div class="field"><label>' + W("form.name", "Your name") + '<input name="name" type="text" autocomplete="name"></label></div><div class="field"><label>' + W("form.your-email", "Your email") + '<input name="email" type="email" autocomplete="email" required></label></div></div>' +
+        '<form class="mf" data-mailform="contact" data-email="' + esc(mailTo()) + '" novalidate><div class="mf-row"><div class="field"><label>' + W("form.name", "Your name") + '<input name="name" type="text" autocomplete="name"></label></div><div class="field"><label>' + W("form.your-email", "Your email address") + '<input name="email" type="email" autocomplete="email" required></label></div></div>' +
         (topics.length ? '<div class="field"><label>' + W("form.topic", "What it is about") + '<select name="topic">' + topics.map(function (x) { return '<option data-adh-b="topics.' + x.i + '">' + txt(x.t.trim()) + '</option>'; }).join("") + '</select></label></div>' : "") +
         '<div class="field"><label>' + W("form.message", "Your message") + '<textarea name="message" rows="5" required></textarea></label></div>' +
         '<div><button class="btn" type="submit">' + (get(st, "button", "") ? txt(get(st, "button", "")) : W("btn.write", "Write the email")) + '</button><p class="mf-note" role="status">' + W("form.note-contact", "This opens your own email app with your message ready to send to {email}.", { email: esc(mailTo()) }) + '</p></div></form></div>');
@@ -448,53 +470,70 @@
         return '<li data-adh-b="sources.' + i + '">' + (/^https?:\/\//i.test(String(x.href || "")) ? '<a href="' + esc(x.href) + '" rel="noopener">' + t + '</a>' : t) + '</li>';
       }).join("") + '</ul>';
     }
+    // The subjects a story is filed under, in the order chosen; an older story may name one artist instead.
+    function subjectsOf(a) {
+      var list = Array.isArray(a.subjects) ? a.subjects : a.artist ? [a.artist] : [];
+      return list.map(function (x) { return artistOf(String(x)); }).filter(function (x, i, all) { return x && (opts.mark || x.hidden !== true) && all.indexOf(x) === i; });
+    }
+    // The page of the console that lists one section's stories, so a story's label leads there.
+    function sectionHref(kick) {
+      var k = String(kick || "").trim().toLowerCase(), hit = "";
+      if (k) Object.keys(PAGES.pages || {}).forEach(function (key) {
+        var pg = PAGES.pages[key];
+        if (!hit && (pg.sections || []).some(function (x) { return x && x.visible !== false && x.type === "tac-latest" && String((x.settings || {}).only || "").trim().toLowerCase() === k; })) hit = "@@" + String(pg.path || "").replace(/index\.html$/, "");
+      });
+      return hit || (k ? storiesHref() : "");
+    }
     function articlePage(a) {
-      var who = a.artist ? artistOf(a.artist) : null, i = ARTICLES.indexOf(a), nxt = ARTICLES.length > 1 ? ARTICLES[(i + 1) % ARTICLES.length] : null;
+      var subs = subjectsOf(a), i = ARTICLES.indexOf(a), chosen = a.next ? articleOf(a.next) : null;
+      var nxt = chosen && chosen !== a && chosen.hidden !== true ? chosen : ARTICLES.length > 1 ? ARTICLES[(i + 1) % ARTICLES.length] : null;
       if (nxt === a) nxt = null;
-      var kick = String(a.kicker || "").trim(), date = String(a.date || "").trim(), how = String(a.how || "").trim();
-      var label = kick ? (listOn("articles") ? '<a href="@@articles/">' + txt(kick) + '</a>' : txt(kick)) : "";
+      var kick = String(a.kicker || "").trim(), date = String(a.date || "").trim(), how = String(a.how || "").trim(), when = Date.parse(date + " 12:00 UTC");
+      var label = kick ? '<a href="' + sectionHref(kick) + '">' + txt(kick) + '</a>' : "";
+      var dateHtml = date ? (isNaN(when) ? txt(date) : '<time datetime="' + new Date(when).toISOString().slice(0, 10) + '">' + txt(date) + '</time>') : "";
       var main = '<article class="article">\n    ' + M('<header class="article-head">' + (label ? '<p class="label" data-reveal>' + label + '</p>' : "") + '<h1 data-reveal>' + txt(or(a.title, "[Story title]")) + '</h1>' +
-        '<p class="byline" data-reveal>' + (date ? W("item.byline-date", "By {site}. Published {date}.", { site: txt(NAME()), date: txt(date) }) : W("item.byline", "By {site}.", { site: txt(NAME()) })) + '</p></header>', "words") + '\n    ' +
+        '<p class="byline" data-reveal>' + (date ? W("item.byline-date", "By {site}. Published {date}.", { site: txt(NAME()), date: dateHtml }) : W("item.byline", "By {site}.", { site: txt(NAME()) })) + '</p></header>', "words") + '\n    ' +
         M(figure(a, or(a.alt, "[What the photograph shows]")), "picture") + '\n    ' +
         M('<div class="prose"><p class="standfirst" data-reveal>' + txt(or(a.summary, "[One or two sentences that sum up the story]")) + '</p>' + (String(a.body || "").replace(/<[^>]*>/g, "").trim() ? a.body : "<p>[Write the story here]</p>") + '</div>', "body") +
-        (nxt ? '\n    <aside class="next" aria-labelledby="next-title"><p class="label" id="next-title" data-reveal>' + W("btn.read-next", "Read next") + '</p><p data-reveal><a class="story" href="@@articles/' + esc(nxt.slug) + '/">' + txt(or(nxt.title, "[Story title]")) + '</a></p>' + (String(nxt.kicker || "").trim() ? '<p class="where" data-reveal>' + txt(nxt.kicker) + '</p>' : "") + '</aside>' : "") + '\n    ' +
+        (nxt ? '\n    <aside class="next" aria-labelledby="next-title"><p class="label" id="next-title" data-reveal>' + W("btn.read-next", "Read next") + '</p><p data-reveal><a class="story" href="@@' + P.articles + '/' + esc(nxt.slug) + '/">' + txt(or(nxt.title, "[Story title]")) + '</a></p>' + (String(nxt.kicker || "").trim() ? '<p class="where" data-reveal>' + txt(nxt.kicker) + '</p>' : "") + '</aside>' : "") + '\n    ' +
         M('<footer class="filed">' + (how ? '<p class="how" data-reveal>' + txt(how) + '</p>' : (opts.mark ? '<p class="how">[A line on how the story was reported]</p>' : "")) + sourceList(a.sources) +
-          (who ? '<p class="label" data-reveal>' + W("item.filed", "Filed under") + '</p><p class="topic-links" data-reveal><a href="@@artists/' + esc(who.slug) + '/">' + txt(or(who.name, "[Artist name]")) + '</a></p>' : "") + '</footer>', "sources") + '\n  </article>';
+          (subs.length ? '<p class="label" data-reveal>' + W("item.filed", "Filed under") + '</p><p class="topic-links" data-reveal>' + subs.map(function (x) { return '<a href="@@' + P.artists + '/' + esc(x.slug) + '/">' + txt(or(x.name, "[Subject]")) + '</a>'; }).join("\n") + '</p>' : "") + '</footer>', "sources") + '\n  </article>';
       main = tplWrap("article", a.slug, main); AO_KIND = "article";
-      return page("articles/" + a.slug + "/index.html", or(a.title, "[Story title]") + " | " + NAME(), String(a.summary || ""), main);
+      return page(P.articles + "/" + a.slug + "/index.html", or(a.title, "[Story title]") + " | " + NAME(), String(a.description || "").trim() || String(a.summary || ""), main);
     }
-    // An artist's page is a subject page: who they are, then every story filed under them.
+    // A subject page: its name and introduction, then every story filed under it.
     function artistPage(x) {
-      var about = ARTICLES.filter(function (a) { return a.artist === x.slug; });
+      var about = ARTICLES.filter(function (a) { return subjectsOf(a).indexOf(x) >= 0; });
       var rows = (x.details || []).filter(function (d) { return Array.isArray(d) && String(d[0] || "").trim(); });
       var dl = rows.length ? '<dl class="details">' + rows.map(function (d, i) { return '<div data-adh-b="details.' + i + '"><dt>' + txt(d[0]) + '</dt><dd>' + txt(d[1] || "") + '</dd></div>'; }).join("") + '</dl>' : (opts.mark ? '<dl class="details"><div><dt>[Detail, such as Based in]</dt><dd>[What it is]</dd></div></dl>' : "");
-      var aboutText = String(x.about || "").replace(/<[^>]*>/g, "").trim() ? x.about : "<p>[About the artist: their work, how they make it and where it has been shown]</p>";
-      var main = '<article class="subject">\n    ' + M('<section class="page-head"><p class="label" data-reveal>' + (listOn("artists") ? '<a href="@@artists/">' + W("item.subject", "Read by subject") + '</a>' : W("item.subject", "Read by subject")) + '</p><h1 data-reveal>' + txt(or(x.name, "[Artist name]")) + '</h1><p class="intro" data-reveal>' + txt(or(x.line, "[A short line on their work]")) + '</p></section>', "words") + '\n    ' +
-        M(figure(x, "Portrait of " + or(x.name, "the artist")), "picture") + '\n    ' +
-        M('<div class="prose">' + aboutText + '</div>', "about") + '\n    ' + M('<div class="prose prose-details">' + dl + '</div>', "details") +
-        (about.length ? '\n    <section class="all-features" aria-label="' + W("item.stories-about", "Stories about {name}", { name: esc(or(x.name, "the artist")) }) + '"><h2 class="label">' + W("item.stories-about", "Stories about {name}", { name: txt(or(x.name, "[Artist name]")) }) + '</h2><ul class="feature-grid">' + about.map(function (a) { return storyCard(a, true); }).join("") + '</ul></section>' : "") +
-        '\n    ' + M('<footer class="filed">' + sourceList(x.sources) + '</footer>', "sources") + '\n  </article>';
+      var hasAbout = String(x.about || "").replace(/<[^>]*>/g, "").trim(), srcs = sourceList(x.sources);
+      var main = '<article class="subject">\n    ' + M('<section class="page-head"><p class="label" data-reveal>' + W("item.subject", "Read by subject") + '</p><h1 data-reveal>' + txt(or(x.name, "[Subject]")) + '</h1><p class="intro" data-reveal>' + txt(or(x.line, "[A line about what is filed here]")) + '</p></section>', "words") + '\n    ' +
+        M(figure(x, "Picture for " + or(x.name, "the subject")), "picture") +
+        (hasAbout || opts.mark ? '\n    ' + M('<div class="prose">' + (hasAbout ? x.about : "<p>[More about the subject, if it needs it]</p>") + '</div>', "about") : "") +
+        (dl ? '\n    ' + M('<div class="prose prose-details">' + dl + '</div>', "details") : "") +
+        '\n    <section class="all-features" aria-label="' + W("item.stories-about", "Stories filed under {name}", { name: esc(or(x.name, "the subject")) }) + '">' + (about.length ? '<ul class="feature-grid">' + about.map(function (a) { return storyCard(a, true); }).join("") + '</ul>' : '<p class="where">[Stories filed under this subject appear here]</p>') + '</section>' +
+        (srcs ? '\n    ' + M('<footer class="filed">' + srcs + '</footer>', "sources") : "") + '\n  </article>';
       main = tplWrap("artist", x.slug, main); AO_KIND = "artist";
-      return page("artists/" + x.slug + "/index.html", or(x.name, "[Artist name]") + " | " + NAME(), String(x.line || ""), main);
+      return page(P.artists + "/" + x.slug + "/index.html", or(x.name, "[Subject]") + " | " + NAME(), String(x.line || ""), main);
     }
     // All the stories as cards, with a word for each small line to show only those; or every artist.
     function listPage(k) {
       var w = listWords(k), items = k === "articles" ? ARTICLES : ARTISTS;
       var head = M('<section class="page-head">' + (String(w.eyebrow || "").trim() ? '<p class="label" data-reveal>' + txt(w.eyebrow) + '</p>' : "") + '<h1 data-reveal>' + w.heading.map(txt).join("<br>") + '</h1>' + (String(w.intro || "").trim() ? '<p class="intro" data-reveal>' + txt(w.intro) + '</p>' : "") + '</section>', "listhead");
       var grid;
-      if (!items.length) grid = '<p class="where">' + (k === "articles" ? "[No stories yet]" : "[No artists yet]") + '</p>';
+      if (!items.length) grid = '<p class="where">' + (k === "articles" ? "[No stories yet]" : "[No subjects yet]") + '</p>';
       else if (k === "articles") {
         var kinds = []; items.forEach(function (a) { var t = String(a.kicker || "").trim(); if (t && kinds.indexOf(t) < 0) kinds.push(t); });
         var filter = kinds.length > 1 ? '<div class="filter" role="group" aria-label="' + W("sr.filter", "Show stories from") + '"><button type="button" data-filter="" aria-pressed="true">' + W("btn.all", "All") + '</button>' + kinds.map(function (t) { return '<button type="button" data-filter="' + esc(t.toLowerCase()) + '" aria-pressed="false">' + txt(t) + '</button>'; }).join("") + '</div>' : "";
         grid = filter + '<ul class="feature-grid" data-stories>' + items.map(function (a) { return storyCard(a, true).replace("<li>", '<li data-kind="' + esc(String(a.kicker || "").trim().toLowerCase()) + '">'); }).join("") + '</ul>';
-      } else grid = '<ul class="feature-grid">' + items.map(function (x) { return '<li><a class="story" href="@@artists/' + esc(x.slug) + '/">' + txt(or(x.name, "[Artist name]")) + '</a>' + (String(x.line || "").trim() ? '<p class="blurb">' + txt(x.line) + '</p>' : "") + '</li>'; }).join("") + '</ul>';
-      return page(k + "/index.html", w.name + " | " + NAME(), String(w.intro || ""), head + '\n  <section class="all-features">' + grid + '</section>');
+      } else grid = '<ul class="feature-grid">' + items.map(function (x) { return '<li><a class="story" href="@@' + P.artists + '/' + esc(x.slug) + '/">' + txt(or(x.name, "[Subject]")) + '</a>' + (String(x.line || "").trim() ? '<p class="blurb">' + txt(x.line) + '</p>' : "") + '</li>'; }).join("") + '</ul>';
+      return page(P[k] + "/index.html", w.name + " | " + NAME(), String(w.intro || ""), head + '\n  <section class="all-features">' + grid + '</section>');
     }
     function notFound() {
       var base = SITE_URL.replace(/^https:\/\/[^\/]+/, "") || "/";
       var head = "<script>document.write('<base href=\"'+(location.hostname.slice(-9)==='github.io'?'" + esc(base) + "':'/')+'\">')</script>\n";
       var main = '<section class="page-head page-head-tall"><p class="label">' + W("nf.eyebrow", "Page not found") + '</p><h1>' + W("nf.title", "This page has wandered off.") + '</h1><p class="intro">' + W("nf.lede", "The address may have changed, or the story may not be published yet.") + '</p><p><a class="text-link" href="./">' + W("nf.home", "Back to the front page") + '</a></p></section>';
-      return page("", "Page not found | " + NAME(), "This page has wandered off.", main, { file: "404.html", head: head });
+      return page("", "Page not found | " + NAME(), "This page could not be found.", main, { file: "404.html", head: head });
     }
     // Every published page: the pages from the page list, then the page for a wrong address.
     function all() {
@@ -503,7 +542,7 @@
       p("home"); Object.keys(PAGES.pages || {}).forEach(p);
       // a list page is published once it has something in it, or the menu already leads to it
       ["articles", "artists"].forEach(function (k) {
-        var linked = (get(hd(), "links", []) || []).some(function (l) { return Array.isArray(l) && String(l[1] || "").replace(/^\.?\//, "") === k + "/"; });
+        var linked = (get(hd(), "links", []) || []).some(function (l) { return Array.isArray(l) && String(l[1] || "").replace(/^\.?\//, "") === P[k] + "/"; });
         if (listOn(k) && ((k === "articles" ? ARTICLES : ARTISTS).length || linked)) out.push(listPage(k));
       });
       ARTICLES.forEach(function (a) { out.push(articlePage(a)); });
@@ -511,8 +550,17 @@
       out.push(notFound());
       return out;
     }
+    // A page at each of the site's old addresses that sends the visitor on to the new one.
+    function forwards() {
+      var all = D.forward || {}, made = {};
+      return Object.keys(all).filter(function (from) { return /^[a-z0-9-]+\.html$/.test(from) && from !== "index.html" && from !== "404.html" && /^([a-z0-9-]+\/)*$/.test(String(all[from])); }).map(function (from) {
+        var to = SITE_URL + all[from];
+        made[from] = 1;
+        return { path: from, html: '<!doctype html>\n<html lang="en-GB">\n<head>\n<meta charset="utf-8">\n<title>' + txt(NAME()) + '</title>\n<meta name="robots" content="noindex">\n<link rel="canonical" href="' + esc(to) + '">\n<meta http-equiv="refresh" content="0; url=' + esc(to) + '">\n</head>\n<body>\n<p><a href="' + esc(to) + '">' + W("nf.moved", "This page has moved. Continue to the new address.") + '</a></p>\n</body>\n</html>\n' };
+      });
+    }
     return {
-      all: all, sectionsPage: sectionsPage, notFound: notFound, address: SITE_URL,
+      all: all, forwards: forwards, sectionsPage: sectionsPage, notFound: notFound, address: SITE_URL, paths: P,
       // in the editor a hidden article or artist can still be opened; on the site it has no page
       articlePage: function (s) { var a = articleOf(s); return a && (opts.mark || a.hidden !== true) ? articlePage(a) : null; },
       featurePage: function (s) { var a = articleOf(s); return a && (opts.mark || a.hidden !== true) ? articlePage(a) : null; },
@@ -523,9 +571,9 @@
         path = String(path || "").replace(/^\/+/, "").replace(/index\.html$/, "").split("#")[0].split("?")[0];
         var k = Object.keys(PAGES.pages || {}).find(function (x) { return PAGES.pages[x].path === path + (path && !/\/$/.test(path) ? "/" : "") + "index.html"; });
         if (k) return { kind: "page", key: k };
-        var m = /^(articles|artists)\/?$/.exec(path); if (m && listOn(m[1])) return { kind: "list", key: m[1] };
-        if ((m = /^articles\/([a-z0-9-]+)\/?$/.exec(path)) && articleOf(m[1])) return { kind: "article", key: m[1] };
-        if ((m = /^artists\/([a-z0-9-]+)\/?$/.exec(path)) && artistOf(m[1])) return { kind: "artist", key: m[1] };
+        var m = /^(stories|subjects)\/?$/.exec(path), lk = m && (m[1] === P.articles ? "articles" : "artists"); if (m && listOn(lk)) return { kind: "list", key: lk };
+        if ((m = /^stories\/([a-z0-9-]+)\/?$/.exec(path)) && articleOf(m[1])) return { kind: "article", key: m[1] };
+        if ((m = /^subjects\/([a-z0-9-]+)\/?$/.exec(path)) && artistOf(m[1])) return { kind: "artist", key: m[1] };
         return null;
       },
     };

@@ -1,4 +1,4 @@
-import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir, goTab } from "./where.mjs";
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir, tacDir, goTab } from "./where.mjs";
 // User acceptance run: the real console, signed in, talking to the real server code
 // over an in-memory GitHub seeded from both sites, with the real sites as previews.
 // Each case is recorded as passed or failed with a note; nothing stops the run.
@@ -32,7 +32,7 @@ for (const [f, t] of Object.entries(pbFiles)) { fs.mkdirSync(path.dirname("/tmp/
 execFileSync("python3", ["/tmp/uat-pb-src/tools/build.py", "/tmp/uat-pb"]);
 fs.writeFileSync("/tmp/uat-pb/assets/site.js", fs.readFileSync("/tmp/uat-pb/assets/site.js", "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
 const CR = "Artiscope/artiscope-digital-home", PB = "Artiscope/practice-build";
-const siteList = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4" }, { id: "site-5", name: "Site 5" }, { id: "site-6", name: "The Art Correspondent", domain: "theartcorrespondent.com", repo: "Artiscope/the-art-correspondent", kind: "outside" }] };
+const siteList = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4" }, { id: "site-5", name: "Site 5" }, { id: "site-6", name: "Old Notes", domain: "oldnotes.org", repo: "Artiscope/old-notes", kind: "outside" }, { id: "site-7", name: "The Art Correspondent", domain: "theartcorrespondent.com", repo: "Artiscope/the-art-correspondent", kind: "starter", template: "the-art-correspondent", live: true }] };
 
 // ----- the server, with GitHub in memory -----
 let signedIn = "tester@artiscope.co.uk";
@@ -42,13 +42,18 @@ const { handle, STARTER_KINDS } = await import("./home.mjs");
 const { makeGitHub } = await import("./fakegit.mjs");
 const files = (dir, list) => Object.fromEntries(list.filter((f) => fs.existsSync(dir + f)).map((f) => [f, fs.readFileSync(dir + f, "utf8")]));
 const pics = (dir, sub) => Object.fromEntries(fs.readdirSync(dir + sub).map((f) => [sub + "/" + f, "picture"]));
-const WR = "Artiscope/World-art-review", GR = "Artiscope/global-art-monitor", SR = "Artiscope/street-art-dispatch";
+const WR = "Artiscope/World-art-review", GR = "Artiscope/global-art-monitor", SR = "Artiscope/street-art-dispatch", TR = "Artiscope/the-art-correspondent";
+// The Art Correspondent, as its repository holds it and built as publishing builds it
+const TACDIR = tacDir() + "/";
+fs.rmSync("/tmp/uat-tac", { recursive: true, force: true }); execFileSync("python3", [TACDIR + "tools/build.py", "/tmp/uat-tac"]);
+fs.writeFileSync("/tmp/uat-tac/assets/site.js", fs.readFileSync("/tmp/uat-tac/assets/site.js", "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
 const SADDIR = sadDir() + "/", sad0 = JSON.parse(fs.readFileSync(SADDIR + "data/content.json", "utf8"));
 const hub = makeGitHub({
   [WR]: { ...files(WARDIR, ["src/index.html", "tools/build_site.py", "content/site.json", "content/pages.json", "content/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(WARDIR, "images") },
   [SR]: files(SADDIR, ["data/content.json", "data/pages.json", "data/theme.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]),
   [CR]: { "sites.json": JSON.stringify(siteList), ...Object.fromEntries(Object.entries(starterFiles).map(([f, t]) => ["starter/" + f, t])), ...tsadFiles },
   [PB]: pbFiles,
+  [TR]: files(TACDIR, ["data/content.json", "data/pages.json", "data/theme.json", "data/files.json", "assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs", "tools/build.py"]),
   [GR]: { ...files(GAMDIR, ["data/content.json", "data/sales.json", "data/images.json", "data/pages.json", "data/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(GAMDIR, "assets/images") },
 });
 let breakGitHub = false;
@@ -104,6 +109,7 @@ await page.route("**/*", async (route) => {
   if (url.startsWith("https://worldartreview.com/")) return serveSite("/tmp/uat-war", route, url);
   if (url.startsWith("https://globalartmonitor.com/")) return serveSite("/tmp/uat-gam", route, url);
   if (url.startsWith("https://streetartdispatch.com/")) return serveSite("/tmp/uat-sad", route, url);
+  if (url.startsWith("https://theartcorrespondent.com/")) return serveSite("/tmp/uat-tac", route, url);
   if (url.startsWith("https://artiscope.github.io/practice-build/")) return serveSite("/tmp/uat-pb", route, url.replace("https://artiscope.github.io/practice-build/", "https://pb.local/"));
   if (url.startsWith("https://artiscope.github.io/grove-prints/") && fs.existsSync("/tmp/uat-new")) return serveSite("/tmp/uat-new", route, url.replace("https://artiscope.github.io/grove-prints/", "https://new.local/"));
   return route.abort();
@@ -138,8 +144,8 @@ if (process.env.AUDIT) {
 // =============== 1. Getting in ===============
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
-await check("Signed-in console opens on All sites, with all seven sites, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 7, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 59"), "no version"));
+await check("Signed-in console opens on All sites, with all eight sites, The Art Correspondent, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 8, n + " sites shown"); await shot("01-home"); });
+await check("Version number is shown", async () => must((await text("body")).includes("Version 60"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -2143,11 +2149,11 @@ await check("The keyboard shortcuts list shows the new shortcuts", async () => {
 
 await check("A site made outside the console shows as live, with its picture, View site and GitHub, and no Open", async () => {
   await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 20000 }); await settle(800);
-  const c = await page.evaluate(() => { const card = Array.from(document.querySelectorAll(".hcard")).find((x) => x.textContent.includes("The Art Correspondent")); if (!card) return null;
-    return { open: !!card.querySelector('[data-act="open-site"]'), view: (card.querySelector('a[href^="https://theartcorrespondent.com"]') || {}).textContent || "", gh: (card.querySelector('a[href="https://github.com/Artiscope/the-art-correspondent"]') || {}).textContent || "", state: card.querySelector(".hstate").textContent, pic: !!card.querySelector(".hpic iframe") }; });
+  const c = await page.evaluate(() => { const card = Array.from(document.querySelectorAll(".hcard")).find((x) => x.textContent.includes("Old Notes")); if (!card) return null;
+    return { open: !!card.querySelector('[data-act="open-site"]'), view: (card.querySelector('a[href^="https://oldnotes.org"]') || {}).textContent || "", gh: (card.querySelector('a[href="https://github.com/Artiscope/old-notes"]') || {}).textContent || "", state: card.querySelector(".hstate").textContent, pic: !!card.querySelector(".hpic iframe") }; });
   must(c && !c.open && c.view === "View site" && c.gh === "GitHub" && c.pic && c.state.includes("Not in the editor yet"), JSON.stringify(c));
   const counts = await text(".hcounts");
-  must(!(await page.$$eval(".hquiet", (q) => q.some((x) => x.textContent.includes("The Art Correspondent")))), "it also shows as a site to build");
+  must(!(await page.$$eval(".hquiet", (q) => q.some((x) => x.textContent.includes("Old Notes")))), "it also shows as a site to build");
   await shot("111-outside-site");
 });
 
@@ -2208,6 +2214,39 @@ await check("Start again puts the practice build back on the starter after a tem
   must(hub.read(PB, "main", "assets/render.js") === starterFiles["assets/render.js"] && hub.read(PB, "main", "content/pages.json") == null, "not the starter again");
   must(!("template" in JSON.parse(hub.read(CR, "main", "sites.json")).sites.find((x) => x.id === "practice-build")), "the list of sites still names a template");
   pbPublish();
+});
+
+// =============== 19. The Art Correspondent, moved into the console ===============
+area = "The Art Correspondent";
+const tacFrame = () => page.frames().filter((f) => f.url().startsWith("https://theartcorrespondent.com")).pop();
+const tacText = async () => { const f = tacFrame(); return f ? await f.innerText("body").catch(() => "") : ""; };
+await check("The Art Correspondent opens in the editor in its own design, with Stories and Subjects in the page picker", async () => {
+  await openSite("site-7"); await settle(1200);
+  const t = await tacText(); must(t.includes("Behind Every Work, There Is a Story.") && t.includes("All 22 stories") && t.includes("Filed from the studio floor."), "home: " + t.slice(0, 200));
+  must(!/published by Grove/i.test(t), "a publisher line");
+  await page.click(".ed-pagebtn"); await settle(400); const pp = await text(".pp");
+  must(pp.includes("Stories") && pp.includes("Subjects"), "picker: " + pp.slice(0, 300)); await page.keyboard.press("Escape");
+  await shot("130-tac-home");
+});
+await check("A story shows its section, Filed under and its chosen Read next, and a changed standfirst saves to the site", async () => {
+  await page.selectOption(".pagepick", "a-who-owns-the-street"); await settle(1800);
+  const t = await tacText();
+  must(t.includes("Who Owns the Street?") && t.toLowerCase().includes("filed under") && t.includes("Art in public") && t.includes("From Gallery Wall to Hotel Wall") && t.includes("By The Art Correspondent. Published 19 November 2026."), "story: " + t.slice(0, 300));
+  await page.click('.sec[data-where="item"][data-id="words"]'); await page.fill('[data-pf="summary"]', "Changed by Tess."); await settle(800);
+  must((await tacText()).includes("Changed by Tess."), "the change is not in the preview");
+  await shot("131-tac-story");
+  await liveSave();
+  const c = read(TR, "data/content.json"), a = c.articles.find((x) => x.slug === "who-owns-the-street");
+  must(a.summary === "Changed by Tess." && a.next === "the-gallery-in-residence" && a.subjects.join() === "art-in-public" && c.forward["who-owns-the-street.html"] === "stories/who-owns-the-street/", "saved: " + JSON.stringify(a).slice(0, 300));
+});
+await check("A subject page lists its stories, and Exhibitions opens as a list made by hand", async () => {
+  await page.selectOption(".pagepick", "artist-art-in-public"); await settle(1800);
+  let t = await tacText(); must(t.includes("Art in public") && t.includes("Who Owns the Street?") && t.includes("Vhils and the Art of Taking Away"), "subject: " + t.slice(0, 300));
+  await page.selectOption(".pagepick", "page-exhibitions"); await settle(1800);
+  t = await tacText(); must(t.includes("Konn Artiss, ANTI-FRIEZE") && t.includes("These notes come from published reports."), "exhibitions: " + t.replace(/\s+/g, " ").slice(0, 300));
+  await page.click('.sec[data-where="page"][data-id="exhibitions-list"]'); await settle(600);
+  must((await page.inputValue('input[data-pf="heading"]')) === "Shows and installations in our reporting", "the list's settings did not open");
+  await shot("132-tac-exhibitions");
 });
 
 // =============== results ===============

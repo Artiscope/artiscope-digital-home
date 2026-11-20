@@ -268,6 +268,7 @@ section[id],footer[id]{scroll-margin-top:88px}
    Spacing on a base of 8: 8, 16, 24, 32, 48, 64, 96, 128. */
 
 /* the shared sections, in this design's voice */
+h1,h2,h3,h4{text-wrap:wrap}
 .kicker,.label{display:block;font:600 calc(var(--t-label) * var(--b-scale, 1))/1.65 var(--sans);letter-spacing:.16em;text-transform:uppercase;color:inherit}
 .kicker::before{content:none}
 .dek{color:var(--soft)}
@@ -281,14 +282,24 @@ section[id],footer[id]{scroll-margin-top:88px}
 .field input,.field select,.mf textarea,.nl input{border:1.5px solid var(--ink);border-radius:2px;background:var(--page);font:400 calc(var(--t-body) * var(--b-scale, 1)) var(--sans)}
 .field label{font:400 calc(var(--t-small) * var(--b-scale, 1))/1.3 var(--sans)}
 /* the email sign-up, set as a letter: centred under its heading */
-.news{grid-template-columns:1fr!important;max-width:620px;margin:0 auto;text-align:center;justify-items:center;gap:var(--s4)}
-.news .dek{margin:var(--s2) auto 0}
-.news .nl{justify-content:center}
-.news .mf-note{margin-top:var(--s2)}
+.letter{max-width:620px;margin:0 auto;padding:var(--s7) var(--side);text-align:center}
+.letter h2{font-family:var(--display);font-weight:400;font-size:calc(var(--t-heading) * var(--h-scale, 1));line-height:1.15}
+.letter-note{margin:var(--s2) 0 var(--s4);color:var(--soft)}
+.signup{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:center;gap:var(--s2)}
+.signup .field{flex:1 1 220px;display:flex;flex-direction:column;gap:var(--s1);text-align:left}
+.signup .field input{flex:none;width:100%;height:48px;min-height:0;padding:0 var(--s2)}
+.letter .mf-note{margin-top:var(--s2)}
+.letter .pitch{margin-top:var(--s2);font-size:calc(var(--t-small) * var(--b-scale, 1))}
 /* a contact form with no words of its own sits alone in the reading column, as on Write to us */
-.mform:has(>div:first-child:empty){grid-template-columns:1fr;max-width:calc(660px + 2*var(--side));margin:0 auto}
+.mform:has(>div:first-child:empty){grid-template-columns:1fr;max-width:calc(660px - 2*var(--side));margin:0 auto}
 .mform>div:first-child:empty{display:none}
-.sec--lib:has(.mform>div:first-child:empty){padding-top:0}
+.sec--lib:has(.mform>div:first-child:empty){padding:var(--s5) 0 var(--s7)}
+/* the contact form's boxes, one under another as on Write to us */
+.mf{gap:var(--s3)}
+.mf .mf-row{grid-template-columns:1fr;gap:var(--s3)}
+.mf .field label{gap:var(--s1)}
+.mf .field input,.mf .field select{min-height:48px;height:48px}
+.mf textarea{min-height:222px}
 
 /* the menu bar */
 .site-header{max-width:var(--wide);margin:0 auto;padding:var(--s3) var(--side);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0 var(--s5)}
@@ -304,6 +315,7 @@ a.wordmark{display:inline-flex;align-items:center;min-height:48px}
 .footer-inner{max-width:var(--wide);margin:0 auto;padding:var(--s6) var(--side) var(--s5);display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--s4) var(--s6)}
 .footer-brand{max-width:340px}
 p.wordmark{display:flex;align-items:center;margin-bottom:var(--s1)}
+.wordmark .mark{flex:none;width:28px;height:28px;margin-right:12px}
 .footer-nav{max-width:440px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:0 var(--s4)}
 .footer-nav .label{flex:1 1 100%}
 .footer-nav a{padding:var(--s2) 0;line-height:1.1}
@@ -341,6 +353,8 @@ p.wordmark{display:flex;align-items:center;margin-bottom:var(--s1)}
 .blurb{margin-top:var(--s1);max-width:560px;color:var(--soft)}
 .more{margin-top:var(--s3);padding-left:calc(var(--s4) + var(--s3))}
 .more--cards{padding-left:0;text-align:center}
+.issue-page{padding-top:var(--s3)}
+.contents-plain{margin-bottom:var(--s5)}
 
 /* Read by subject */
 .topics{max-width:900px;margin:0 auto;padding:0 var(--side) var(--s7)}
@@ -361,13 +375,13 @@ p.wordmark{display:flex;align-items:center;margin-bottom:var(--s1)}
 .prose{max-width:660px;margin:0 auto;padding:var(--s5) var(--side) var(--s7)}
 .prose-centre{padding-top:0;text-align:center}
 .prose p{margin-top:var(--s3);color:var(--soft)}
-.prose>:first-child{margin-top:0}
+.prose p:first-child{margin-top:0}
 .prose h2,.prose h3{margin-top:var(--s5);font-family:var(--display);font-weight:400;font-size:calc(var(--t-title) * var(--h-scale, 1));line-height:1.2}
-.prose>h2:first-child{margin-top:0}
 .prose a{text-underline-offset:4px}
 .prose ul,.prose ol{margin-top:var(--s3);padding-left:1.3em;list-style:disc;color:var(--soft)}
 .prose ol{list-style:decimal}
 .prose strong{font-weight:600}
+.prose-part>:first-child{margin-top:var(--s5)}
 .prose .standfirst{font-family:var(--display);font-size:calc(var(--t-lead) * var(--h-scale, 1));line-height:1.35;color:var(--ink)}
 .prose-details{padding-top:0}
 .subject .page-head+.prose,.subject .story-pic+.prose{padding-top:0}
@@ -433,7 +447,8 @@ p.wordmark{display:flex;align-items:center;margin-bottom:var(--s1)}
   .site-header{padding-top:var(--s2);padding-bottom:0}
   .hero,.page-head,.article-head{padding-top:var(--s6);padding-bottom:var(--s5)}
   .issue{padding-top:var(--s6);padding-bottom:var(--s6)}
-  .sessions-inner{padding-top:var(--s6);padding-bottom:var(--s6)}
+  .issue-page{padding-top:var(--s2)}
+  .sessions-inner,.letter{padding-top:var(--s6);padding-bottom:var(--s6)}
   .topics,.filed,.prose{padding-bottom:var(--s6)}
   .article .prose{padding-bottom:var(--s5)}
   .next{padding-bottom:var(--s5)}
@@ -457,5 +472,6 @@ p.wordmark{display:flex;align-items:center;margin-bottom:var(--s1)}
   .feature-grid .where{margin-bottom:var(--s1)}
   .feature-grid .blurb{display:none}
   .details{padding:var(--s2) var(--s3)}
-  .news .nl .btn{flex:1 1 100%}
+  .signup .btn{flex:1 1 100%}
+  .letter h2{font-size:calc(var(--t-title) * var(--h-scale, 1))}
 }

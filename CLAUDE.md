@@ -81,6 +81,7 @@ to this one, under either spelling of their names (or set `WAR_DIR`,
 | `Artiscope/global-art-monitor` | globalartmonitor.com | GitHub Pages, on every push to main |
 | `Artiscope/street-art-dispatch` | streetartdispatch.com. Its words are all in `data/content.json`; `tools/build.py <folder>` builds every page on publish, and no built pages are kept in the repository | GitHub Pages, on every push to main |
 | `Artiscope/practice-site` | The Practice site, a copy of World Art Review for trying things out | GitHub Pages at artiscope.github.io/practice-site, unlisted, every page marked noindex |
+| `Artiscope/the-art-correspondent` | theartcorrespondent.com, a site of The Art Correspondent template, listed in `sites.json` (`site-4`). Built by `tools/build.py <folder>` on publish; no built pages in the repository | GitHub Pages through GitHub Actions, on every push to main |
 
 Each site has its own `CLAUDE.md`. Those are written for the unattended
 weekday agent. When the owner is here and asks for a change, their
@@ -219,7 +220,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (20 November 2026, Version 59)
+## Where things stand (20 November 2026, Version 60)
 
 Done:
 
@@ -1076,6 +1077,49 @@ Done:
     words in `tests/run.mjs`, `tests/templates.mjs` (now five
     templates), the first "Start building" check and a fourth run in
     "Templates end to end" in `tests/uat.mjs`.
+
+- Version 60 (20 November): The Art Correspondent moved into the console,
+  start to finish in one conversation (owner's choice, 20 November).
+  Decisions taken: forms open the visitor's email app (info@grovegallery.com);
+  folder addresses with every old `<name>.html` forwarding; no publisher
+  line; every word, source and the nib logo unchanged.
+  - The site is now a site of its own template: `sites.json` lists it as
+    `site-4`, `kind: "starter"`, `template: "the-art-correspondent"`,
+    `live: true`, so `starterSite` gives it `TTAC_SECTIONS`, `TTAC_ITEMS`,
+    `TTAC_WORDS`, `STARTER_MODEL` and `TTAC_THEME`. Its `assets/render.js`,
+    `site.js`, `site.css` and `tools/build.mjs` are the template's, file for
+    file (`tests/run.mjs` checks it); change the template and copy them over.
+  - Its data: `data/content.json` holds 22 stories (`articles`: section as
+    `kicker`, `summary` the standfirst, `description` for search results,
+    `subjects` in order, a chosen `next`, `how`, `sources`), 7 subjects
+    (`artists`: two artists and five themes), the site's `mark` (the nib's
+    outline), `icons` and `share` (in `assets/brand/`), and `forward` (old
+    address to new). `data/pages.json` has the home page, the six section
+    pages (Opening plus Latest stories set to one section, or the list by
+    hand on Exhibitions, or Page text on Conversations), All stories at
+    `stories/`, Studio Sessions, About and Write to us. Converted by
+    `/tmp/tac/convert.py` (kept in this session only); the live pages were
+    compared word for word and at both sizes before the switch.
+  - The template gained what the site needed, so new sites get it too:
+    stories at `stories/<slug>/` and subjects at `subjects/<slug>/` (`P` in
+    render.js, `paths` on the server, sent to the console, which uses
+    `itemBase`, `itemWord`, `articlesWord` for links, the live address and
+    the picker's Stories and Subjects); several subjects per story and a
+    chosen Read next; a search description; the story's label leading to
+    the section page that lists it (`sectionHref`); List by hand
+    (`tac-entries`, with a note under it); Page text in parts with a larger
+    first paragraph; Latest stories with Show every story and `{n}` in its
+    link; the email sign-up as the site's letter with its label showing;
+    `{year}` in the footer's small print; the menu holding only the links
+    chosen; the site's `mark`, `icons` and `share` drawn when its details
+    name them; forwarding pages (`forwards`, written by the build).
+  - `starterForEditor` passes `mark`, `icons` and `share` to the preview.
+    `RESERVED` page keys now include stories, subjects and articles.
+  - The site's repository has its own `CLAUDE.md` and `README.md`.
+  - Checks: the Art Correspondent block in `tests/run.mjs` (`tacDir` in
+    `tests/where.mjs`, or `TAC_DIR`), the "The Art Correspondent" area of
+    `tests/uat.mjs` (site-7 in the test list; the outside-site check now
+    uses a made-up "Old Notes"), and the template checks as before.
 
 Waiting for the owner:
 
