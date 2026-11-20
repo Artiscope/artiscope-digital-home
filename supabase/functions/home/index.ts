@@ -36,6 +36,7 @@ export const WORD_LOCKS = {
   tsad: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
   twar: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
   ttac: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
+  ted: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK, "form.note-work": NOTE_LOCK },
   tgam: { "form.note": NOTE_LOCK, "item.who": "The heading of the publisher disclosure stays as it is: readers are always told who publishes the site." },
 };
 export const WAR_WORDS = {
@@ -193,6 +194,9 @@ export const FONTS = {
   "Public Sans": "Public+Sans:wght@400;500;600",
   "IBM Plex Sans": "IBM+Plex+Sans:wght@400;500;600",
   "Karla": "Karla:wght@400;500;600",
+  "Syne": "Syne:wght@600;700;800",
+  "Anton": "Anton",
+  "DM Sans": "DM+Sans:wght@400;500;700",
 };
 const HEADLINE_FONTS = ["Castoro", "Libre Caslon Display", "Cormorant Garamond", "EB Garamond", "Libre Baskerville", "Newsreader"];
 const READING_FONTS = ["Literata", "Source Serif 4", "EB Garamond", "Libre Baskerville", "Newsreader", "Libre Franklin"];
@@ -1471,6 +1475,93 @@ export const TTAC_WORDS = {
   "form.need-message": "Please write your message first.",
   "form.sent": "Your email app should now be open with the message ready. Send it and it reaches us. If nothing opened, write to {email}.",
 };
+// The Editions template: prints and editions in their frames, on a bold page. Works and series are the
+// site's articles and artists, at works/<name>/ and series/<name>/.
+export const ED_KINDS = ["ed-slides", "ed-series", "ed-works", "ed-social", "ed-series-list"];
+const ED_SLIDE = [TAC_EYEBROW, { name: "heading", label: "Heading", type: "text" }, { name: "text", label: "Words", type: "long", plain: true, hint: "Leave empty to hide." }, TAC_LINK, TAC_HREF,
+  { name: "image", label: "Photograph of the work", type: "image", alt: "alt", hint: "Shown whole in its frame, never cropped." }, { name: "alt", label: "What the work shows", type: "text", hint: "For people who cannot see it." }];
+const ED_OWN = {
+  "ed-slides": { label: "Opening slides", about: "Up to three large slides, one at a time, each with a heading, a few words, a button and a work in its frame. Visitors move on with Previous and Next.",
+    summary: (st) => { const n = (st.slides || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " slide" : " slides"); }, library: "Large slides with a framed work",
+    blocks: { field: "slides", label: "Slide", add: "Add a slide", max: 3, about: "One slide: its words, its button and the work in its frame." },
+    starter: { slides: [{ eyebrow: "", heading: "[A heading for the slide]", text: "[A sentence or two]", link: "", href: "", image: "", alt: "[What the work shows]" }] }, fields: [
+    { name: "slides", label: "Slides", type: "rows", max: 3, fields: ED_SLIDE }] },
+  "ed-series": { label: "Series banner", about: "One series: a small line, a large heading, a few words and a button, beside two of its works in their frames.",
+    summary: (st) => st.heading || st.series || "Series banner", library: "One series beside two of its works",
+    starter: { eyebrow: "", series: "", heading: "[A heading, or leave empty for the series' name]", text: "", link: "", href: "" }, fields: [
+    { name: "series", label: "Which series", type: "artists", one: true, hint: "Its first two works are shown. Leave empty to show frames waiting for photographs." },
+    TAC_EYEBROW, { name: "heading", label: "Heading", type: "text", hint: "Leave empty for the series' name." },
+    { name: "text", label: "Words", type: "long", plain: true, hint: "Leave empty for the series' short line." }, TAC_LINK, { ...TAC_HREF, hint: ST_ADDR_HINT + " Leave empty for the series' page." }] },
+  "ed-works": { label: "Works", about: "A grid of works in their frames, with title, edition and price: every work, or one series. A work appears here as soon as it is shown on the site.",
+    summary: (st) => (st.series ? st.series + ", " : "") + (st.every ? "every work" : (st.count || 8) + " works"), library: "A grid of framed works",
+    starter: { heading: "[A heading, such as New works]", series: "", every: false, count: 8, per_row: "4", more: "" }, fields: [
+    { name: "heading", label: "Heading", type: "text", hint: "Leave empty to hide, or for the series' name when one is chosen." },
+    { name: "series", label: "Only this series", type: "artists", one: true, hint: "Leave empty for every work." },
+    { name: "every", label: "Show every work", type: "yesno", hint: "For a page that lists them all. Otherwise How many below decides." },
+    { name: "count", label: "How many", type: "range", min: 1, max: 24, step: 1, dflt: 8 },
+    { name: "per_row", label: "Works in a row", type: "choice", seg: true, dflt: "4", options: [["4", "Four"], ["3", "Three"]], hint: "Two on a phone." },
+    { name: "more", label: "Words of the link to every work", type: "text", hint: "{n} becomes the number of works, as in See all {n} works. Leave empty to hide." }] },
+  "ed-social": { label: "Social tiles", about: "A row of your own photographs, each a link to your Instagram, TikTok or any page. Nothing is fetched from other sites.",
+    summary: (st) => { const n = (st.tiles || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " tile" : " tiles"); }, library: "Square photographs that link out",
+    blocks: { field: "tiles", label: "Tile", add: "Add a tile", max: 10, about: "One square photograph and where it leads." },
+    starter: { heading: "[A heading, such as Follow the studio]", link: "", href: "", tiles: [] }, fields: [
+    { name: "heading", label: "Heading", type: "text", hint: "Leave empty to hide." }, { ...TAC_LINK, label: "Button words", hint: "Such as Instagram. Leave empty for no button." }, { ...TAC_HREF, label: "Button address" },
+    { name: "tiles", label: "Tiles", type: "rows", max: 10, fields: [{ name: "image", label: "Photograph", type: "image", alt: "alt" }, { name: "alt", label: "What the photograph shows", type: "text", hint: "For people who cannot see it." },
+      { ...TAC_HREF, label: "Where it leads", hint: "Such as your Instagram address. Leave empty for no link." }] }] },
+  "ed-series-list": { label: "Every series", about: "Every series as a card with two of its works. On a series page it can leave out the series being shown.",
+    summary: (st) => st.heading || "Every series", library: "A card for each series",
+    starter: { heading: "[A heading, such as The series]", skip: "" }, fields: [
+    { name: "heading", label: "Heading", type: "text", hint: "Leave empty to hide." },
+    { name: "skip", label: "Leave out this series", type: "artists", one: true, hint: "In a series page template, connect it to the page's own series to leave that one out." }] },
+};
+const TED_SECTIONS = { ...STARTER_SECTIONS, header: { ...STARTER_SECTIONS.header, about: "The name in capitals and the links along the top of every page, with a bar of quick links at the foot of a phone screen.",
+  fields: STARTER_SECTIONS.header.fields.filter((f) => !["tagline", "button", "button_href"].includes(f.name)).concat([{ name: "bar", label: "Quick links at the foot of a phone screen", type: "yesno", dflt: true, hint: "Home and the first two menu links, always in reach on a phone." }]) }, ...ED_OWN };
+// What a work and a series hold: the starter's article and artist, with the work's series, edition, price and details.
+const ED_DETAILS = (about) => ({ id: "details", label: "Details", about, fields: [{ name: "details", label: "Details", type: "rows", fields: [{ name: 0, label: "Label", type: "text", hint: "Such as Size, Paper or Frame." }, { name: 1, label: "Detail", type: "text" }] }],
+  blocks: { field: "details", label: "Detail", add: "Add a detail", about: "One fact, with its label.", title: (b) => b[0] } });
+const TED_ITEMS = { ...STARTER_ITEMS,
+  article: { ...STARTER_ITEMS.article, label: "Work", parts: STARTER_ITEMS.article.parts.flatMap((part) => part.id === "words"
+    ? [{ ...part, label: "Title, price and series", about: "The work's title, how it is listed, its price and the series it belongs to.", fields: part.fields.flatMap((f) => f.name === "kicker" ? [{ ...f, hint: "Shown above the title when the work is in no series. Leave empty to hide." }]
+      : f.name === "summary" ? [{ ...f, label: "Search description", hint: "One or two sentences for search results." }]
+      : f.name === "date" ? [{ name: "edition", label: "Edition", type: "text", hint: "Such as Edition of 50, or Original. Shown under the title on the cards." },
+        { name: "price", label: "Price", type: "text", hint: "As it should read, such as From £250 or Sold. Leave empty to show no price." }]
+      : f.name === "artist" ? [{ ...f, label: "Series", hint: "The series this work belongs to. Its page lists the work." }] : [f]) }, ED_DETAILS("Short facts beside the work, such as its size, paper and frame.")]
+    : part.id === "picture" ? [{ ...part, about: "The photograph of the work, shown whole in its frame, its description and its credit." }]
+    : part.id === "body" ? [{ ...part, about: "A few lines about the work." }] : [part]) },
+  artist: { ...STARTER_ITEMS.artist, label: "Series", parts: STARTER_ITEMS.artist.parts.map((part) => part.id === "words"
+    ? { ...part, label: "Name and line", about: "The series' name and a short line about it.", fields: part.fields.map((f) => f.name === "line" ? { ...f, label: "A short line about the series", hint: "Such as Screen prints of the estuary. Shown under the name and on the cards." } : f) }
+    : part.id === "about" ? { ...part, label: "About the series", about: "Where the idea came from and how the works are made, printed and framed." }
+    : part.id === "details" ? { ...part, about: "Short facts in the box under the name, such as the number of works and the edition size." }
+    : part.id === "picture" ? { ...part, about: "An optional picture for the series page, its description and its credit." }
+    : part.id === "settings" ? { ...part, about: "Whether visitors can see the series page." } : part) },
+};
+const TED_LISTS = {
+  articles: { label: "All works list", start: { eyebrow: "", heading: ["All works"], intro: "[A line about the works]" } },
+  artists: { label: "Series list", start: { eyebrow: "", heading: ["Series"], intro: "[A line about the series]" } },
+};
+const TED_THEME = { ...STARTER_THEME,
+  look: { ...STARTER_THEME.look, nav: ".site-nav a", round: STARTER_THEME.look.round + ", .tile, .spics, .sq, .work-art, .slide" },
+  colours: [
+    { id: "page", role: "bg", label: "Page background", use: "Pages", var: "--page", default: "#0B0B0B", derived: [] },
+    { id: "ink", role: "text", label: "Text and buttons", use: "All text, and the solid buttons", var: "--ink", default: "#F2F0EB", on: "page", min: 4.5, derived: [] },
+    { id: "accent", role: "accent", label: "Panels", use: "The panels behind the works, the slides and the cards", var: "--accent", default: "#171716", derived: [] },
+    { id: "band", role: "band", label: "Frames", use: "The frame round every work", var: "--band", default: "#050505", derived: [] },
+  ],
+  fonts: [
+    { id: "display", role: "display", label: "Headlines", use: "Site name, headings and titles, in capitals", var: "--display", default: "Syne", fallback: "Arial, sans-serif", options: ["Syne", "Anton", "Gloock", ...HEADLINE_FONTS] },
+    { id: "text", role: "body", label: "Reading text", use: "Paragraphs and introductions", var: "--text", default: "DM Sans", fallback: "Arial, sans-serif", options: ["DM Sans", ...READING_FONTS] },
+    { id: "sans", role: "small", label: "Small text", use: "Labels, buttons, prices and menus", var: "--sans", default: "DM Sans", fallback: "Arial, sans-serif", options: ["DM Sans", ...SMALL_FONTS] },
+  ],
+  looks: [{ name: "White gallery", colours: { page: "#FFFFFF", ink: "#111111", accent: "#F1F0EC", band: "#050505" } }, { name: "Warm grey", colours: { page: "#E6E1D8", ink: "#1C1B19", accent: "#D8D2C7", band: "#050505" } }],
+};
+// The Editions template's own looks besides its black one: a white gallery and a warm grey.
+const ED_LOOKS = [
+  { name: "White gallery", colours: { page: "#FFFFFF", ink: "#111111", accent: "#F1F0EC", band: "#050505" }, fonts: { display: "Syne", text: "DM Sans", sans: "DM Sans" }, corners: "", mine: false, own: true },
+  { name: "Warm grey", colours: { page: "#E6E1D8", ink: "#1C1B19", accent: "#D8D2C7", band: "#050505" }, fonts: { display: "Anton", text: "Libre Franklin", sans: "Libre Franklin" }, corners: "", mine: false, own: true },
+];
+// The fixed words of the Editions template, as its code writes them.
+export const TED_WORDS = { "sr.social": "Social media", "menu.articles": "All works", "menu.artists": "Series", "sr.photo": "Photograph to come: {what}", "missing.photo": "Photograph to come.", "sr.share": "Share this page", "sr.privacy": "Privacy", "sr.nav": "Sections", "sr.links": "Links", "sr.bar": "Quick links", "menu.home": "Home", "menu.skip": "Skip to the works", "form.email": "Your email address", "btn.join": "Sign up", "form.note": "This opens your own email app with a message ready to send to {email}.", "btn.close": "Close", "form.placeholder": "you@example.com", "item.one-work": "1 work", "item.works": "{n} works", "btn.count": "{n} of {total}", "btn.previous": "Previous", "btn.next": "Next", "sr.slides": "Opening slides", "item.reported": "Reported", "missing.title": "Title to confirm", "item.dates": "Dates:", "missing.tbc": "To confirm", "btn.source": "Source", "btn.read-source": "Read it at the source", "missing.to-add": "To add", "form.name": "Your name", "form.your-email": "Your email address", "form.topic": "What it is about", "form.message": "Your message", "btn.write": "Write the email", "form.note-contact": "This opens your own email app with your message ready to send to {email}.", "item.sources": "Sources", "form.about-work": "About {work}", "btn.ask": "Ask about this work", "form.note-work": "This opens your own email app with a message about this work, ready to send to {email}.", "item.more-from": "More from {series}", "btn.see-series": "See the series", "item.series": "Series", "item.works-in": "Works in {series}", "nf.eyebrow": "Page not found", "nf.title": "Nothing hangs here.", "nf.lede": "The address may have changed, or the work may not be shown yet.", "nf.home": "Back to the home page", "nf.moved": "This page has moved. Continue to the new address.", "form.need-email-join": "We need a working email address, so we can add you.", "form.subject": "Join the {site} mailing list", "form.sent-join": "Your email app should now be open with the message ready. Send it and we will add you. If nothing opened, write to {email}.", "sr.photo-box": "Photo", "form.need-email": "We need a working email address, so we can reply.", "form.need-message": "Please write your message first.", "form.sent": "Your email app should now be open with the message ready. Send it and it reaches us. If nothing opened, write to {email}." };
+
 // Where each kind of site keeps its pages, look and content (a World Art Review site keeps them in content/).
 const DATA_FILES = { pages: "data/pages.json", theme: "data/theme.json", content: "data/content.json" };
 const WAR_FILES = { pages: "content/pages.json", theme: "content/theme.json", content: "content/site.json" };
@@ -1489,6 +1580,9 @@ export const SITE_TEMPLATES = [
   { id: "the-art-correspondent", name: "The Art Correspondent", dir: "templates/the-art-correspondent", global: "TAC", ready: true, line: "Quiet and text-led, with story lists by section and subject.",
     own: "6 of its own: Page opening, Lead photograph, Latest stories, Read by subject, Feature band and Page text", pages: "Stories in sections, subject pages for artists, About and Write to us",
     stays: "Its stories, artist pages, sources, the nib logo and its Studio Sessions words. Stories and subjects arrive empty" },
+  { id: "editions", name: "Editions", dir: "templates/editions", global: "EDITIONS", ready: true, line: "Bold and gallery-like, with every work in a black frame and a paper mount.",
+    own: "5 of its own: Opening slides, Series banner, Works, Social tiles and Every series", pages: "Works with price, edition and details, series pages, About and Contact",
+    stays: "Nothing: it is an original design with no content of its own. Works and series arrive empty", ownLook: "Black gallery", looks: ED_LOOKS },
 ];
 export const templateOf = (id) => SITE_TEMPLATES.find((t) => t.id === id && t.ready) || SITE_TEMPLATES[0];
 // A site from the list of sites, built from the starter or from a template.
@@ -1514,6 +1608,10 @@ export function starterSite(e) {
   if (t.id === "the-art-correspondent") {
     return { ...base, sectionKinds: TTAC_SECTIONS, words: TTAC_WORDS, wordLocks: WORD_LOCKS.ttac, items: TTAC_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: TTAC_THEME, collections: [], lists: TTAC_LISTS,
       paths: { articles: "stories", artists: "subjects" } };
+  }
+  if (t.id === "editions") {
+    return { ...base, sectionKinds: TED_SECTIONS, words: TED_WORDS, wordLocks: WORD_LOCKS.ted, items: TED_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: TED_THEME, collections: [], lists: TED_LISTS,
+      paths: { articles: "works", artists: "series" } };
   }
   return { ...base, sectionKinds: STARTER_SECTIONS, words: STARTER_WORDS, wordLocks: WORD_LOCKS.starter, items: STARTER_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: STARTER_THEME, collections: [], lists: STARTER_LISTS };
 }
@@ -3090,8 +3188,8 @@ export function buildLooks(template = "starter") {
   const t = templateOf(template);
   if (t.id === "starter") return all;
   const spec = starterSite({ template: t.id }).theme, col = (role) => ((spec.colours.find((c) => c.role === role) || {}).default || ""), font = (role) => ((spec.fonts.find((f) => f.role === role) || {}).default || "");
-  const own = { name: t.name + "'s own", colours: { page: col("bg"), band: col("band"), accent: col("accent"), ink: col("text") || col("band") }, fonts: { display: font("display"), text: font("body"), sans: font("small") || "Libre Franklin" }, corners: "", mine: false, own: true };
-  return [own].concat(all.filter((l) => l.name !== "Like " + t.name));
+  const own = { name: t.ownLook || t.name + "'s own", colours: { page: col("bg"), band: col("band"), accent: col("accent"), ink: col("text") || col("band") }, fonts: { display: font("display"), text: font("body"), sans: font("small") || "Libre Franklin" }, corners: "", mine: false, own: true };
+  return [own].concat((t.looks || []).map((l) => ({ ...l, colours: { ...l.colours }, fonts: { ...l.fonts } })), all.filter((l) => l.name !== "Like " + t.name));
 }
 // A look put into a theme's own colours and typefaces, by what each is for.
 function lookInto(spec, look) {

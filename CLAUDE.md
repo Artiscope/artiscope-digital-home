@@ -220,7 +220,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (20 November 2026, Version 60)
+## Where things stand (20 November 2026, Version 61)
 
 Done:
 
@@ -1120,6 +1120,42 @@ Done:
     `tests/where.mjs`, or `TAC_DIR`), the "The Art Correspondent" area of
     `tests/uat.mjs` (site-7 in the test list; the outside-site check now
     uses a made-up "Old Notes"), and the template checks as before.
+
+- Version 61 (20 November): Editions, the sixth site template and the
+  first original one, from the approved sample
+  (https://claude.ai/artifact/Cx4NmMUudawei4gPmpgEJj). Its look and page
+  order follow the group's own Zen Xander store; the code is written fresh
+  (nothing from the store's theme, whose code belongs to its maker). The
+  owner declined copying designs of sites the group does not own.
+  - `templates/editions`: the TAC template's code reworked (`EDITIONS`
+    global). Works are the articles at `works/<slug>/`, series the artists
+    at `series/<slug>/` (`paths`). Every work sits in a frame (`--band`)
+    with a paper mount (`--mount`), never cropped; with no photograph it
+    shows a plain coloured stand-in, "Photograph to come.".
+  - Five sections of its own (`ED_OWN`, `ED_KINDS`): Opening slides
+    (`ed-slides`, up to 3, Previous and Next in words, `setupEdSlides`),
+    Series banner (`ed-series`), Works (`ed-works`: every work or one
+    series, 3 or 4 a row), Social tiles (`ed-social`, the owner's own
+    photographs as links; nothing fetched) and Every series
+    (`ed-series-list`, with `skip`, connected to `{page.artist}` in the
+    default series template so a series leaves itself out).
+  - A work (`TED_ITEMS`) has Series, Edition, Price (words as written,
+    such as From £250 or Sold), Details (label and detail) and "Ask about
+    this work", which opens the visitor's email app. No basket, no
+    payments, no delivery or returns words (they would be invented).
+  - The menu bar has `bar` (a yes or no): quick links at the foot of a
+    phone screen (Home and the first two menu links).
+  - Theme (`TED_THEME`): Page background, Text and buttons, Panels,
+    Frames; Syne and DM Sans, with Anton offered (headings never fake a
+    bold weight). Looks: Black gallery (its own, `ownLook`), White
+    gallery and Warm grey (`ED_LOOKS`, `looks` on the template entry,
+    listed under From the template); `FONTS` gained Syne, Anton, DM Sans.
+  - Console: icons, drawings and groups for the five kinds; `plural`
+    leaves "Series" alone.
+  - Checks: the Editions block in `tests/build.mjs` (site-15), the `ted`
+    words in `tests/run.mjs`, `tests/templates.mjs` (six templates), the
+    first "Start building" check and a fifth run in "Templates end to end"
+    in `tests/uat.mjs`.
 
 Waiting for the owner:
 

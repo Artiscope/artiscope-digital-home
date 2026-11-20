@@ -353,7 +353,8 @@ globalThis.fetch = realFetch;
     tsad: [[C_DIR + "/templates/street-art-dispatch/assets/render.js", C_DIR + "/templates/street-art-dispatch/assets/site.js"], h.TSAD_WORDS],
     tgam: [[C_DIR + "/templates/global-art-monitor/assets/render.js", C_DIR + "/templates/global-art-monitor/assets/site.js"], h.TGAM_WORDS],
     twar: [[C_DIR + "/templates/world-art-review/src/index.html"], h.TWAR_WORDS],
-    ttac: [[C_DIR + "/templates/the-art-correspondent/assets/render.js", C_DIR + "/templates/the-art-correspondent/assets/site.js"], h.TTAC_WORDS] };
+    ttac: [[C_DIR + "/templates/the-art-correspondent/assets/render.js", C_DIR + "/templates/the-art-correspondent/assets/site.js"], h.TTAC_WORDS],
+    ted: [[C_DIR + "/templates/editions/assets/render.js", C_DIR + "/templates/editions/assets/site.js"], h.TED_WORDS] };
   for (const [id, [files, list]] of Object.entries(sets)) {
     const found = wordsIn(files);
     assert.deepEqual(found.clash, [], id + ": one key, one set of words");

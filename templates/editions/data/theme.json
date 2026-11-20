@@ -1,0 +1,15 @@
+{
+  "colours": {
+    "page": "#0B0B0B",
+    "ink": "#F2F0EB",
+    "accent": "#171716",
+    "band": "#050505"
+  },
+  "fonts": {
+    "display": "Syne",
+    "text": "DM Sans",
+    "sans": "DM Sans"
+  },
+  "css": "",
+  "font_links": []
+}

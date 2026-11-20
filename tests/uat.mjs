@@ -24,7 +24,7 @@ fs.writeFileSync("/tmp/uat-sad/assets/site.js", fs.readFileSync("/tmp/uat-sad/as
 const STARTER = C_DIR + "/starter/", walk = (dir, at = "") => fs.readdirSync(dir + at, { withFileTypes: true }).flatMap((d) => d.isDirectory() ? walk(dir, at + d.name + "/") : [at + d.name]);
 const starterFiles = Object.fromEntries(walk(STARTER).map((f) => [f, fs.readFileSync(STARTER + f, "utf8")]));
 // every site template, as it sits in the console's repository
-const tsadFiles = Object.fromEntries(["street-art-dispatch", "global-art-monitor", "world-art-review", "the-art-correspondent"].flatMap((t) => { const d = C_DIR + "/templates/" + t + "/"; return walk(d).filter((f) => !f.endsWith(".gitkeep")).map((f) => ["templates/" + t + "/" + f, fs.readFileSync(d + f, "utf8")]); }));
+const tsadFiles = Object.fromEntries(["street-art-dispatch", "global-art-monitor", "world-art-review", "the-art-correspondent", "editions"].flatMap((t) => { const d = C_DIR + "/templates/" + t + "/"; return walk(d).filter((f) => !f.endsWith(".gitkeep")).map((f) => ["templates/" + t + "/" + f, fs.readFileSync(d + f, "utf8")]); }));
 const pbContent = JSON.parse(starterFiles["data/content.json"]); pbContent.site.address = "https://artiscope.github.io/practice-build/";
 const pbFiles = { ...starterFiles, "data/content.json": JSON.stringify(pbContent, null, 2) + "\n" };
 fs.rmSync("/tmp/uat-pb-src", { recursive: true, force: true }); fs.rmSync("/tmp/uat-pb", { recursive: true, force: true });
@@ -145,7 +145,7 @@ if (process.env.AUDIT) {
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all eight sites, The Art Correspondent, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 8, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 60"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 61"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -1615,7 +1615,10 @@ const bdText = async () => { const f = await bdFrame(); return f ? await f.inner
 await check("Start building opens on Template: each template draws its own home page beside it", async () => {
   await page.setViewportSize({ width: 1440, height: 900 }); await goHome();
   await page.click('[data-act="open-site"][data-site="site-4"]'); await page.waitForSelector(".bd-tpl"); await settle(2500);
-  must((await page.locator(".bd-tpl").count()) === 5 && (await page.locator(".bd-tpl[disabled]").count()) === 0, "not five templates, all ready");
+  must((await page.locator(".bd-tpl").count()) === 6 && (await page.locator(".bd-tpl[disabled]").count()) === 0, "not six templates, all ready");
+  await page.click('.bd-tpl[data-v="editions"]'); await settle(2500);
+  let te = await bdText(); for (let i = 0; i < 10 && !te.includes("[Works appear here"); i++) { await settle(500); te = await bdText(); }
+  must(te.includes("[Works appear here once you add them]") && te.includes("Photograph to come") && /join the list/i.test(te) && !/Zen Xander|Zara|Konn|Grove/.test(te), "not the Editions template's home page: " + te.slice(0, 160));
   await page.click('.bd-tpl[data-v="the-art-correspondent"]'); await settle(2500);
   let ta = await bdText(); for (let i = 0; i < 10 && !ta.includes("[Stories appear here"); i++) { await settle(500); ta = await bdText(); }
   must(ta.includes("[Your opening heading]") && ta.includes("[Stories appear here once you add them]") && ta.toLowerCase().includes("read by subject") && !/Art Correspondent|Konn|Zara|Studio Sessions/.test(ta), "not The Art Correspondent template's home page: " + ta.slice(0, 160));
@@ -2172,6 +2175,7 @@ const TPL_RUNS = [
   { id: "global-art-monitor", name: "Tess on sales", files: "data", kind: "timeline", sees: "[Sales appear here once you add them]" },
   { id: "world-art-review", name: "Tess on portraits", files: "content", kind: "hero", sees: "[Discover]" },
   { id: "the-art-correspondent", name: "Tess on studios", files: "data", kind: "tac-opening", sees: "[Stories appear here once you add them]" },
+  { id: "editions", name: "Tess prints", files: "data", kind: "ed-series", sees: "[Works appear here once you add them]" },
 ];
 for (const run of TPL_RUNS) {
   await check("The practice build rebuilt from the " + run.id.replace(/-/g, " ") + " template opens in the editor as that design, and a change saves", async () => {
@@ -2188,7 +2192,7 @@ for (const run of TPL_RUNS) {
     pbPublish();
     await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]');
     await openSite("practice-build"); await settle(2500);
-    const body = await pbText(); must(body.includes(run.name) && body.includes(run.sees), "the preview is not the template's design: " + body.slice(0, 200));
+    const body = await pbText(); must(body.toLowerCase().includes(run.name.toLowerCase()) && body.includes(run.sees), "the preview is not the template's design: " + body.slice(0, 200));
     must(!/World Art Review|Global Art Monitor|Street Art Dispatch|Art Correspondent|Konn|Zara/.test(body), "a word of the original site in the preview");
     await shot("120-tpl-" + run.id);
     // pick the template's own section, change its first words, and save

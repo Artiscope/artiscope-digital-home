@@ -1,0 +1,251 @@
+{
+  "_how_to_edit": "This file is edited in Artiscope Digital Home. Each page is a list of sections; words in square brackets are placeholders waiting for real words.",
+  "shared": {
+    "header": {
+      "type": "header",
+      "visible": true,
+      "settings": {
+        "name": "[Site name]",
+        "links": [
+          [
+            "Works",
+            "works/"
+          ],
+          [
+            "Series",
+            "series/"
+          ],
+          [
+            "About",
+            "about/"
+          ],
+          [
+            "Contact",
+            "contact/"
+          ]
+        ],
+        "logos": [],
+        "bar": true
+      }
+    },
+    "footer": {
+      "type": "footer",
+      "visible": true,
+      "settings": {
+        "tagline": "[A short line about the works]",
+        "links_heading": "",
+        "links": [
+          [
+            "Home",
+            "./"
+          ],
+          [
+            "Works",
+            "works/"
+          ],
+          [
+            "Series",
+            "series/"
+          ],
+          [
+            "About",
+            "about/"
+          ],
+          [
+            "Contact",
+            "contact/"
+          ]
+        ],
+        "legal": "[Small print, such as © {year} and the site's name]"
+      }
+    }
+  },
+  "groups": {
+    "top": [],
+    "popups": [],
+    "bottom": []
+  },
+  "pages": {
+    "home": {
+      "path": "index.html",
+      "title": "[Site name]",
+      "description": "[One or two sentences about the works, for search results]",
+      "home": true,
+      "sections": [
+        {
+          "id": "slides",
+          "type": "ed-slides",
+          "visible": true,
+          "settings": {
+            "slides": [
+              {
+                "eyebrow": "[A small line, such as New series]",
+                "heading": "[Your opening heading]",
+                "text": "[A sentence or two about the works]",
+                "link": "[See the works]",
+                "href": "works/",
+                "image": "",
+                "alt": "[What the work shows]"
+              },
+              {
+                "eyebrow": "[A small line]",
+                "heading": "[A second heading]",
+                "text": "[A sentence or two]",
+                "link": "[See the series]",
+                "href": "series/",
+                "image": "",
+                "alt": "[What the work shows]"
+              }
+            ]
+          }
+        },
+        {
+          "id": "featured-series",
+          "type": "ed-series",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[A small line, such as The new series]",
+            "series": "",
+            "heading": "[The series' name]",
+            "text": "[A few words about the series]",
+            "link": "[See the series]",
+            "href": "series/"
+          }
+        },
+        {
+          "id": "new-works",
+          "type": "ed-works",
+          "visible": true,
+          "settings": {
+            "heading": "[New works]",
+            "series": "",
+            "every": false,
+            "count": 8,
+            "per_row": "4",
+            "more": "[See all {n} works]"
+          }
+        },
+        {
+          "id": "social",
+          "type": "ed-social",
+          "visible": true,
+          "settings": {
+            "heading": "[Follow the studio]",
+            "link": "",
+            "href": "",
+            "tiles": []
+          }
+        },
+        {
+          "id": "join",
+          "type": "signup",
+          "visible": true,
+          "settings": {
+            "heading": "[Join the list]",
+            "text": "[A line on what people on the list hear about first]",
+            "button": "Sign up",
+            "pitch": ""
+          }
+        }
+      ]
+    },
+    "about": {
+      "path": "about/index.html",
+      "title": "About | [Site name]",
+      "description": "[A line about the artist or studio, for search results]",
+      "sections": [
+        {
+          "id": "about-words",
+          "type": "text-picture",
+          "visible": true,
+          "settings": {
+            "eyebrow": "About",
+            "heading": [
+              "[About the studio]"
+            ],
+            "body": "<p>[Who makes the works, how they are made and printed, and where they have been shown.]</p>",
+            "image": "",
+            "alt": "",
+            "caption": "",
+            "side": "right",
+            "bg": "paper",
+            "fg": ""
+          }
+        }
+      ]
+    },
+    "contact": {
+      "path": "contact/index.html",
+      "title": "Contact | [Site name]",
+      "description": "[A line on what people can write about, for search results]",
+      "sections": [
+        {
+          "id": "contact-form",
+          "type": "contact-form",
+          "visible": true,
+          "settings": {
+            "eyebrow": "Contact",
+            "heading": "[Write to the studio]",
+            "text": "[What people can write about, such as a work, a commission or delivery]",
+            "topics": [
+              "A work",
+              "Delivery",
+              "Something else"
+            ],
+            "button": "Write the email"
+          }
+        }
+      ]
+    }
+  },
+  "lists": {
+    "articles": {
+      "eyebrow": "",
+      "heading": [
+        "All works"
+      ],
+      "intro": "[A line about the works]"
+    },
+    "artists": {
+      "eyebrow": "",
+      "heading": [
+        "Series"
+      ],
+      "intro": "[A line about the series]"
+    }
+  },
+  "addons": {},
+  "templates": {
+    "article": {
+      "default": {
+        "name": "Default",
+        "sections": [
+          {
+            "id": "main",
+            "type": "main"
+          }
+        ]
+      }
+    },
+    "artist": {
+      "default": {
+        "name": "Default",
+        "sections": [
+          {
+            "id": "main",
+            "type": "main"
+          },
+          {
+            "id": "t-more-series",
+            "type": "ed-series-list",
+            "visible": true,
+            "settings": {
+              "heading": "More series",
+              "skip": "{page.artist}"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
