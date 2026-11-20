@@ -1,0 +1,15 @@
+{
+  "colours": {
+    "page": "#F6F1E8",
+    "band": "#24231F",
+    "accent": "#D9BE91",
+    "ink": "#24231F"
+  },
+  "fonts": {
+    "display": "EB Garamond",
+    "text": "Karla",
+    "sans": "Karla"
+  },
+  "css": "",
+  "font_links": []
+}

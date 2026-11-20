@@ -219,7 +219,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (19 November 2026, Version 58)
+## Where things stand (20 November 2026, Version 59)
 
 Done:
 
@@ -909,8 +909,7 @@ Done:
     and every word starts in square brackets.
   - Ready: the starter, Street Art Dispatch
     (`templates/street-art-dispatch`), Global Art Monitor (Version 57)
-    and World Art Review (Version 58). The Art Correspondent shows
-    "Ready after its conversion" (step 5).
+    and World Art Review (Version 58), The Art Correspondent (Version 59).
   - The Street Art Dispatch template: SAD's render.js, site.js, site.css
     and build with its name, stamp logo, favicon, Draft note, licensed
     photo credits and own addresses taken out; the site's address and
@@ -1036,8 +1035,47 @@ Done:
     template's design and the new name), a heading or small line is
     changed and saved to the right pages file, and Start again puts the
     starter back. The test GitHub holds every template folder.
-  - Step 5, The Art Correspondent template, waits for its conversion
-    (another session, and the owner's four decisions first).
+
+- Version 59 (20 November): The Art Correspondent template, step 5 of 6.
+  The live site was still hand-written pages when this was built (its
+  conversion into the console had not been pushed), so the owner asked
+  for the template to be made from its current design. It lives in this
+  repository only; Artiscope/the-art-correspondent was not touched, and
+  the live site stays an outside card on All sites until its conversion.
+  - `templates/the-art-correspondent`: the starter's code (`render.js` as
+    the global `TAC`, `site.js`, build, workflows, `data/`) drawn in the
+    site's design: its `styles.css` turned into `assets/site.css` on the
+    theme's variables (`--page` Warm Plaster, `--band` Soft Black for
+    buttons and footer, `--accent` Pale Oak for the band, photograph
+    frames and cards, `--ink`; EB Garamond, Karla, and Reenie Beanie for
+    the handwritten line), its menu bar and footer (name in words, no
+    nib logo), the soft fade-up (`setupReveal`, never in a frame) and the
+    story filter (`setupFilter`).
+  - Six sections of its own (`TAC_KINDS`, `TAC_OWN` on the server):
+    Page opening (`tac-opening`, Large or Page heading), Lead photograph
+    (`tac-lead`, with the handwritten line), Latest stories
+    (`tac-latest`: numbered list or cards, how many, only one section by
+    its small line, a link to every story), Read by subject
+    (`tac-subjects`: every artist's page, then added links), Feature band
+    (`tac-band`) and Page text (`tac-text`, paragraphs as lines). The
+    shared 20 come from the starter, restyled in the site's voice.
+  - Stories are the starter's articles with the site's layout: section
+    label, byline ("By {site}. Published {date}."), standfirst, body,
+    Read next, how it was reported (`how`, new in `TTAC_ITEMS`), Sources
+    and Filed under (the artist). Artist pages are subject pages, with
+    "Stories about {name}" as cards. Lists are cards with the section
+    words to filter by; addresses are folders (articles/<slug>/).
+  - Server: `TTAC_SECTIONS` (the starter's, a menu bar of name and links
+    only, and `TAC_OWN`), `TTAC_ITEMS`, `TTAC_WORDS`, `WORD_LOCKS.ttac`,
+    `TTAC_LISTS`, `TTAC_THEME` (Page background, Buttons and footer,
+    Second colour, Text; Karla added to the reading faces), and
+    `SITE_TEMPLATES` marks it ready with `global: "TAC"`. Forms open the
+    visitor's email app like the other console sites; no publisher line.
+  - Console: icons, drawings and groups for the six kinds.
+  - Checks: The Art Correspondent block in `tests/build.mjs`, the `ttac`
+    words in `tests/run.mjs`, `tests/templates.mjs` (now five
+    templates), the first "Start building" check and a fourth run in
+    "Templates end to end" in `tests/uat.mjs`.
 
 Waiting for the owner:
 

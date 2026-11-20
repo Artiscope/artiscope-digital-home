@@ -1,0 +1,225 @@
+{
+  "_how_to_edit": "This file is edited in Artiscope Digital Home. Each page is a list of sections; words in square brackets are placeholders waiting for real words.",
+  "shared": {
+    "header": {
+      "type": "header",
+      "visible": true,
+      "settings": {
+        "name": "[Site name]",
+        "links": [
+          [
+            "Stories",
+            "articles/"
+          ],
+          [
+            "About",
+            "about/"
+          ],
+          [
+            "Write to us",
+            "contact/"
+          ]
+        ],
+        "logos": []
+      }
+    },
+    "footer": {
+      "type": "footer",
+      "visible": true,
+      "settings": {
+        "tagline": "[A short line about the site]",
+        "links_heading": "",
+        "links": [
+          [
+            "Home",
+            "./"
+          ],
+          [
+            "Stories",
+            "articles/"
+          ],
+          [
+            "About",
+            "about/"
+          ],
+          [
+            "Write to us",
+            "contact/"
+          ]
+        ],
+        "legal": "[Small print, such as the year and the site's name]"
+      }
+    }
+  },
+  "groups": {
+    "top": [],
+    "popups": [],
+    "bottom": []
+  },
+  "pages": {
+    "home": {
+      "path": "index.html",
+      "title": "[Site name]",
+      "description": "[One or two sentences about the site, for search results]",
+      "home": true,
+      "sections": [
+        {
+          "id": "opening",
+          "type": "tac-opening",
+          "visible": true,
+          "settings": {
+            "size": "large",
+            "eyebrow": "[A short line about the site]",
+            "heading": "[Your opening heading]",
+            "text": "[A sentence or two that says what the site is about and who it is for]",
+            "link": "[Read the stories]",
+            "href": "articles/"
+          }
+        },
+        {
+          "id": "lead",
+          "type": "tac-lead",
+          "visible": true,
+          "settings": {
+            "image": "",
+            "alt": "[What the opening photograph shows]",
+            "hand": "[A short line in handwriting]"
+          }
+        },
+        {
+          "id": "latest",
+          "type": "tac-latest",
+          "visible": true,
+          "settings": {
+            "heading": "Latest",
+            "count": 6,
+            "style": "list",
+            "only": "",
+            "more": "All stories"
+          }
+        },
+        {
+          "id": "subjects",
+          "type": "tac-subjects",
+          "visible": true,
+          "settings": {
+            "heading": "Read by subject",
+            "artists": true,
+            "links": []
+          }
+        },
+        {
+          "id": "band",
+          "type": "tac-band",
+          "visible": true,
+          "settings": {
+            "eyebrow": "[A small line above the heading]",
+            "heading": "[A heading for a feature of the site]",
+            "text": "[A few words about it]",
+            "link": "",
+            "href": ""
+          }
+        },
+        {
+          "id": "letter",
+          "type": "signup",
+          "visible": true,
+          "settings": {
+            "heading": "[A heading for the sign-up]",
+            "text": "[A line on what readers will get]",
+            "button": "Sign up",
+            "pitch": ""
+          }
+        }
+      ]
+    },
+    "about": {
+      "path": "about/index.html",
+      "title": "About | [Site name]",
+      "description": "[A line about the site, for search results]",
+      "sections": [
+        {
+          "id": "about-opening",
+          "type": "tac-opening",
+          "visible": true,
+          "settings": {
+            "size": "page",
+            "eyebrow": "",
+            "heading": "[About the site]",
+            "text": "[A line about who writes it and why]",
+            "link": "",
+            "href": ""
+          }
+        },
+        {
+          "id": "about-text",
+          "type": "tac-text",
+          "visible": true,
+          "settings": {
+            "heading": "[A heading]",
+            "paras": [
+              "[A paragraph about the site]",
+              "[Another paragraph]"
+            ],
+            "align": "left",
+            "link": "",
+            "href": ""
+          }
+        }
+      ]
+    },
+    "contact": {
+      "path": "contact/index.html",
+      "title": "Write to us | [Site name]",
+      "description": "[A line on what readers can write about, for search results]",
+      "sections": [
+        {
+          "id": "contact-opening",
+          "type": "tac-opening",
+          "visible": true,
+          "settings": {
+            "size": "page",
+            "eyebrow": "Write to us",
+            "heading": "[A heading for the contact page]",
+            "text": "[What readers can write about]",
+            "link": "",
+            "href": ""
+          }
+        },
+        {
+          "id": "contact-form",
+          "type": "contact-form",
+          "visible": true,
+          "settings": {
+            "eyebrow": "",
+            "heading": "",
+            "text": "",
+            "topics": [
+              "A story idea",
+              "A correction",
+              "Something else"
+            ],
+            "button": "Write the email"
+          }
+        }
+      ]
+    }
+  },
+  "lists": {
+    "articles": {
+      "eyebrow": "",
+      "heading": [
+        "All stories"
+      ],
+      "intro": "[A line about what the stories cover]"
+    },
+    "artists": {
+      "eyebrow": "Read by subject",
+      "heading": [
+        "Artists"
+      ],
+      "intro": "[A line about the artists on this site]"
+    }
+  },
+  "addons": {}
+}

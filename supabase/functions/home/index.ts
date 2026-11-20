@@ -35,6 +35,7 @@ export const WORD_LOCKS = {
   starter: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
   tsad: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
   twar: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
+  ttac: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
   tgam: { "form.note": NOTE_LOCK, "item.who": "The heading of the publisher disclosure stays as it is: readers are always told who publishes the site." },
 };
 export const WAR_WORDS = {
@@ -153,7 +154,7 @@ export const STARTER_WORDS = {
 // The longest a changed word may be: short for buttons, menus and table headings, so they never break the layout.
 export function wordMax(key) { return ["menu", "btn", "table"].includes(String(key).split(".")[0]) ? 40 : 200; }
 const SLOT_WORDS = { name: "the artist's name", email: "the email address", n: "the number", total: "the total", low: "the low estimate", price: "the price",
-  lot: "the lot number", tags: "the subjects", what: "what the photograph shows", shown: "the number shown", site: "the site's name", title: "the title" };
+  lot: "the lot number", tags: "the subjects", what: "what the photograph shows", shown: "the number shown", site: "the site's name", title: "the title", date: "the date" };
 export const slotsOf = (t) => [...String(t).matchAll(/\{([a-z]+)\}/g)].map((m) => m[1]);
 // What the console needs for Edit default text: the groups, and each word with the site's own words, its longest and why it is locked.
 export function wordSpec(site) {
@@ -1357,6 +1358,90 @@ export const TGAM_WORDS = { ...GAM_WORDS, "loading.line": "Loading the latest fi
 // The World Art Review template: its sections with bracketed starting words, and the search label naming the site.
 const TWAR_SECTIONS = Object.fromEntries(Object.entries(WAR_SECTIONS).map(([k, v]) => [k, v.starter ? { ...v, starter: ST_BRACKET(v.fields, v.starter, k) } : v]));
 export const TWAR_WORDS = { ...WAR_WORDS, "sr.search": "Search {site}", "form.subject": "Please add me to the mailing list" };
+// The Art Correspondent template: the sections every site offers, six of its own, and a menu bar of the name and links only.
+const TAC_LINK = { name: "link", label: "Link words", type: "text", hint: "Leave empty for no link." };
+const TAC_HREF = { ...ADDR, label: "Link address", hint: ST_ADDR_HINT };
+const TAC_EYEBROW = { name: "eyebrow", label: "Small line above the heading", type: "text", hint: "Leave empty to hide." };
+export const TAC_KINDS = ["tac-opening", "tac-lead", "tac-latest", "tac-subjects", "tac-band", "tac-text"];
+const TAC_OWN = {
+  "tac-opening": { label: "Page opening", about: "The words at the top of a page: a small line, a large heading, an introduction and a link. Large on the home page, smaller on the others.",
+    summary: (st) => st.heading || "Page opening", library: "Words at the top of a page",
+    starter: { size: "page", eyebrow: "", heading: "[A heading for the page]", text: "[A line that says what the page is about]", link: "", href: "" }, fields: [
+    { name: "size", label: "Size", type: "choice", seg: true, dflt: "large", options: [["large", "Large"], ["page", "Page heading"]], hint: "Large suits the home page." },
+    TAC_EYEBROW, { name: "heading", label: "Heading", type: "text" }, { name: "text", label: "Introduction", type: "long", plain: true, hint: "Leave empty to hide." }, TAC_LINK, TAC_HREF] },
+  "tac-lead": { label: "Lead photograph", about: "One wide photograph, with a short line in handwriting under it.", summary: (st) => st.hand || "Lead photograph", library: "A wide photograph with a handwritten line",
+    starter: { image: "", alt: "[What the photograph shows]", hand: "" }, fields: [
+    { name: "image", label: "Photograph", type: "image", alt: "alt" }, { name: "alt", label: "What the photograph shows", type: "text", hint: "For people who cannot see it. Shown in the frame until a photograph is chosen." },
+    { name: "hand", label: "Line in handwriting", type: "text", hint: "A few words under the photograph. Leave empty to hide." }] },
+  "tac-latest": { label: "Latest stories", about: "The newest stories, as a numbered list or as cards. A story appears here as soon as it is shown on the site.",
+    summary: (st) => (st.only ? st.only + ", " : "") + (st.style === "cards" ? "as cards" : "numbered list"), library: "The newest stories, listed or as cards",
+    starter: { heading: "Latest", count: 6, style: "list", only: "", more: "All stories" }, fields: [
+    { name: "heading", label: "Small heading", type: "text", hint: "Leave empty to hide." },
+    { name: "style", label: "Show them as", type: "choice", seg: true, dflt: "list", options: [["list", "Numbered list"], ["cards", "Cards"]] },
+    { name: "count", label: "How many", type: "range", min: 1, max: 24, step: 1, dflt: 6 },
+    { name: "only", label: "Only stories with this small line", type: "text", hint: "Such as Features, to make a page of one kind of story. Leave empty for every story." },
+    { name: "more", label: "Words of the link to every story", type: "text", hint: "Leave empty to hide." }] },
+  "tac-subjects": { label: "Read by subject", about: "Links to what the stories are filed under: every artist's page, then any links added here.",
+    summary: (st) => { const n = (st.links || []).filter((x) => x && !x.hidden).length; return (st.artists === false ? "" : "Every artist") + (n ? (st.artists === false ? "" : ", ") + n + (n === 1 ? " link" : " links") : st.artists === false ? "No links yet" : ""); },
+    library: "Links to artists and subjects", blocks: { field: "links", label: "Subject", add: "Add a subject", about: "A link to a page of stories, or to any page." },
+    starter: { heading: "Read by subject", artists: true, links: [] }, fields: [
+    { name: "heading", label: "Small heading", type: "text", hint: "Leave empty to hide." },
+    { name: "artists", label: "List every artist's page", type: "yesno", dflt: true },
+    { name: "links", label: "Subjects", type: "rows", fields: [{ name: "label", label: "Words", type: "text" }, TAC_HREF] }] },
+  "tac-band": { label: "Feature band", about: "A band in the second colour, with a small line, a heading, a few words and a link, about one thing the site does.",
+    summary: (st) => st.heading || "Feature band", library: "A coloured band about one feature",
+    starter: { eyebrow: "[A small line above the heading]", heading: "[A heading for a feature of the site]", text: "[A few words about it]", link: "", href: "" }, fields: [
+    TAC_EYEBROW, { name: "heading", label: "Heading", type: "text" }, { name: "text", label: "Words", type: "long", plain: true, hint: "Leave empty to hide." }, TAC_LINK, TAC_HREF] },
+  "tac-text": { label: "Page text", about: "A heading and paragraphs in the reading column, as on About. Use one for each part of a page.", summary: (st) => st.heading || "Page text", library: "A heading and paragraphs",
+    starter: { heading: "[A heading]", paras: ["[A paragraph]"], align: "left", link: "", href: "" }, fields: [
+    { name: "heading", label: "Heading", type: "text", hint: "Leave empty to hide." }, { name: "paras", label: "Paragraphs", type: "lines", hint: "One paragraph per item." },
+    { name: "align", label: "Words", type: "choice", seg: true, dflt: "left", options: [["left", "Ranged left"], ["centre", "Centred"]] }, TAC_LINK, TAC_HREF] },
+};
+const TTAC_SECTIONS = { ...STARTER_SECTIONS, header: { ...STARTER_SECTIONS.header, about: "The name and the links along the top of every page. On a phone the links sit under the name.",
+  fields: STARTER_SECTIONS.header.fields.filter((f) => !["tagline", "button", "button_href"].includes(f.name)) }, ...TAC_OWN };
+// What a story holds: the starter's article, with a line on how it was reported.
+const TTAC_ITEMS = { ...STARTER_ITEMS, article: { ...STARTER_ITEMS.article, label: "Story", parts: STARTER_ITEMS.article.parts.map((part) => part.id === "words"
+  ? { ...part, about: "The heading of the story and how it is listed.", fields: part.fields.map((f) => f.name === "kicker" ? { ...f, label: "Section", hint: "Such as Features or Culture. Shown above the title, and lists can show one section only." }
+    : f.name === "summary" ? { ...f, label: "Standfirst", hint: "One or two sentences under the title. Also shown on the story cards and in search results." } : f.name === "artist" ? { ...f, label: "Filed under an artist", hint: "The story is then listed on that artist's page." } : f) }
+  : part.id === "sources" ? { ...part, about: "How the story was reported, and every source it rests on.", fields: [{ name: "how", label: "How it was reported", type: "long", plain: true, hint: "Such as: This is a reported essay drawing on published interviews. Shown above the sources." }].concat(part.fields) } : part) } };
+const TTAC_LISTS = {
+  articles: { label: "All stories list", start: { eyebrow: "", heading: ["All stories"], intro: "[A line about what the stories cover]" } },
+  artists: { label: "Artists list", start: { eyebrow: "Read by subject", heading: ["Artists"], intro: "[A line about the artists on this site]" } },
+};
+const TTAC_THEME = { ...STARTER_THEME,
+  look: { ...STARTER_THEME.look, nav: ".site-nav a", round: STARTER_THEME.look.round + ", .feature-grid li, .details, .photo" },
+  colours: [
+    { id: "page", role: "bg", label: "Page background", use: "Pages", var: "--page", default: "#F6F1E8", derived: [] },
+    { id: "band", role: "band", label: "Buttons and footer", use: "Buttons, the footer and dark bands", var: "--band", default: "#24231F", on: "page", min: 4.5, derived: [] },
+    { id: "accent", role: "accent", label: "Second colour", use: "The feature band, photograph frames and story cards", var: "--accent", default: "#D9BE91", derived: [] },
+    { id: "ink", role: "text", label: "Text", use: "All reading text", var: "--ink", default: "#24231F", on: "page", min: 4.5, derived: [] },
+  ],
+  fonts: [
+    { id: "display", role: "display", label: "Headlines", use: "Site name, titles and story names", var: "--display", default: "EB Garamond", fallback: "Georgia, serif", options: ["Gloock", ...HEADLINE_FONTS] },
+    { id: "text", role: "body", label: "Reading text", use: "Paragraphs and introductions", var: "--text", default: "Karla", fallback: "Arial, sans-serif", options: [...READING_FONTS, "Karla"] },
+    { id: "sans", role: "small", label: "Small text", use: "Labels, buttons and menus", var: "--sans", default: "Karla", fallback: "Arial, sans-serif", options: SMALL_FONTS },
+  ],
+};
+// The fixed words of The Art Correspondent template, as its code writes them.
+export const TTAC_WORDS = {
+  "sr.social": "Social media", "menu.articles": "All stories", "menu.artists": "Artists", "sr.photo": "Photograph to come: {what}",
+  "missing.photo": "Photograph to come.", "sr.share": "Share this page", "sr.privacy": "Privacy", "sr.nav": "Sections", "sr.links": "Links",
+  "menu.skip": "Skip to the stories", "form.email": "Email address", "form.placeholder": "you@example.com", "btn.join": "Ask to join",
+  "form.note": "This opens your own email app with a message ready to send to {email}.", "btn.close": "Close", "item.reported": "Reported",
+  "btn.count": "{n} of {total}", "btn.previous": "Previous", "btn.next": "Next", "missing.title": "Title to confirm", "item.dates": "Dates:",
+  "missing.tbc": "To confirm", "btn.source": "Source", "btn.read-source": "Read it at the source", "missing.to-add": "To add",
+  "form.name": "Your name", "form.your-email": "Your email", "form.topic": "What it is about", "form.message": "Your message",
+  "btn.write": "Write the email", "form.note-contact": "This opens your own email app with your message ready to send to {email}.",
+  "item.sources": "Sources", "item.byline-date": "By {site}. Published {date}.", "item.byline": "By {site}.", "btn.read-next": "Read next",
+  "item.filed": "Filed under", "item.subject": "Read by subject", "item.stories-about": "Stories about {name}", "sr.filter": "Show stories from",
+  "btn.all": "All", "nf.eyebrow": "Page not found", "nf.title": "This page has wandered off.",
+  "nf.lede": "The address may have changed, or the story may not be published yet.", "nf.home": "Back to the front page",
+  "form.need-email-join": "We need a working email address, so we can add you.", "form.subject": "Join the {site} mailing list",
+  "form.sent-join": "Your email app should now be open with the message ready. Send it and we will add you. If nothing opened, write to {email}.",
+  "sr.photo-box": "Photo", "form.need-email": "We need a working email address, so we can reply.",
+  "form.need-message": "Please write your message first.",
+  "form.sent": "Your email app should now be open with the message ready. Send it and it reaches us. If nothing opened, write to {email}.",
+};
 // Where each kind of site keeps its pages, look and content (a World Art Review site keeps them in content/).
 const DATA_FILES = { pages: "data/pages.json", theme: "data/theme.json", content: "data/content.json" };
 const WAR_FILES = { pages: "content/pages.json", theme: "content/theme.json", content: "content/site.json" };
@@ -1372,7 +1457,9 @@ export const SITE_TEMPLATES = [
   { id: "global-art-monitor", name: "Global Art Monitor", dir: "templates/global-art-monitor", global: "GAM", ready: true, line: "Data-led, with tables, figures and timelines.",
     own: "14 of its own, such as the artist auction timeline, Latest result, All auction results, Words explained and the glossary", pages: "Articles, artist market profiles with their sales, and auction results",
     stays: "Its sales and figures, artists, articles, glossary, photos and the G logo. The tables, profiles and glossary arrive empty" },
-  { id: "the-art-correspondent", name: "The Art Correspondent", ready: false, line: "Quiet and text-led, with story lists by section and subject.", later: "Ready after its conversion" },
+  { id: "the-art-correspondent", name: "The Art Correspondent", dir: "templates/the-art-correspondent", global: "TAC", ready: true, line: "Quiet and text-led, with story lists by section and subject.",
+    own: "6 of its own: Page opening, Lead photograph, Latest stories, Read by subject, Feature band and Page text", pages: "Stories in sections, subject pages for artists, About and Write to us",
+    stays: "Its stories, artist pages, sources, the nib logo and its Studio Sessions words. Stories and subjects arrive empty" },
 ];
 export const templateOf = (id) => SITE_TEMPLATES.find((t) => t.id === id && t.ready) || SITE_TEMPLATES[0];
 // A site from the list of sites, built from the starter or from a template.
@@ -1394,6 +1481,9 @@ export function starterSite(e) {
   if (t.id === "street-art-dispatch") {
     const sad = SITES.find((x) => x.id === "street-art-dispatch");
     return { ...base, sectionKinds: TSAD_SECTIONS, words: TSAD_WORDS, wordLocks: WORD_LOCKS.tsad, items: TSAD_ITEMS, model: SAD_MODEL, builtIn: sad.builtIn, theme: sad.theme, collections: [] };
+  }
+  if (t.id === "the-art-correspondent") {
+    return { ...base, sectionKinds: TTAC_SECTIONS, words: TTAC_WORDS, wordLocks: WORD_LOCKS.ttac, items: TTAC_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: TTAC_THEME, collections: [], lists: TTAC_LISTS };
   }
   return { ...base, sectionKinds: STARTER_SECTIONS, words: STARTER_WORDS, wordLocks: WORD_LOCKS.starter, items: STARTER_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: STARTER_THEME, collections: [], lists: STARTER_LISTS };
 }

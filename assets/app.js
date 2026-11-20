@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "58";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "59";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -261,7 +261,8 @@
   };
   function ic(name, size) { var z = size || 16; return '<svg class="i" width="' + z + '" height="' + z + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + (IC[name] || IC.block) + '"></path></svg>'; }
   // Which icon stands for each kind of section, on both sites.
-  var KIND_IC = { "signup-popup": "bell", signup: "mail", visit: "pin", hero: "banner", featured: "person", "section-list": "list", explained: "book", numbers: "hash", method: "cards", opening: "loader", header: "topbar", footer: "footer", "page-heading": "heading", "long-text": "text", status: "clock", timeline: "table", words: "book", features: "cards", profiles: "person", "page-links": "links", "page-head": "heading", "results-table": "table", "latest-result": "hash", glossary: "book", panel: "panel", prose: "text", "contact-form": "form", announcement: "bell", columns: "columns", space: "space", "picture-banner": "banner", slideshow: "slides", gallery: "gallery", "logo-row": "logo", artworks: "frame", exhibitions: "calendar", career: "clock", press: "quote", "artist-cards": "person", quote: "quote", faq: "list", button: "block", text: "text", "text-picture": "picture", picture: "picture", articles: "doc", archive: "table", "exhibition-list": "calendar", collecting: "hash", "text-page": "text" };
+  var KIND_IC = { "signup-popup": "bell", signup: "mail", visit: "pin", hero: "banner", featured: "person", "section-list": "list", explained: "book", numbers: "hash", method: "cards", opening: "loader", header: "topbar", footer: "footer", "page-heading": "heading", "long-text": "text", status: "clock", timeline: "table", words: "book", features: "cards", profiles: "person", "page-links": "links", "page-head": "heading", "results-table": "table", "latest-result": "hash", glossary: "book", panel: "panel", prose: "text", "contact-form": "form", announcement: "bell", columns: "columns", space: "space", "picture-banner": "banner", slideshow: "slides", gallery: "gallery", "logo-row": "logo", artworks: "frame", exhibitions: "calendar", career: "clock", press: "quote", "artist-cards": "person", quote: "quote", faq: "list", button: "block", text: "text", "text-picture": "picture", picture: "picture", articles: "doc", archive: "table", "exhibition-list": "calendar", collecting: "hash", "text-page": "text",
+    "tac-opening": "heading", "tac-lead": "picture", "tac-latest": "list", "tac-subjects": "links", "tac-band": "panel", "tac-text": "text" };
   function kindIc(type) { return '<span class="kic">' + ic(KIND_IC[type] || "block") + '</span>'; }
   // Which icon stands for each kind of block.
   var BLOCK_IC = { details: "pin", topics: "list", headline: "heading", tagline: "text", picture: "picture", latest: "doc", rule: "panel", links: "links", logos: "logo", artists: "person", rows: "list", cards: "cards", items: "book", columns: "columns", buttons: "block", about_links: "links", menu_extra: "links", words: "book", sections: "list", timeline: "clock", works: "picture", messages: "bell", slides: "slides", photos: "picture", artworks: "frame", shows: "calendar", events: "clock", quotes: "quote" };
@@ -1818,7 +1819,8 @@
   }
   function themeOpen(pgd) { return pgd.leftPanel === "theme" && !pgd.leftHidden; }
   // What a section looks like, drawn small for the picker's preview.
-  var SHAPES = { "signup-popup": "popup", signup: "form", visit: "rows", hero: "banner", "picture-banner": "banner", text: "text", prose: "text", "long-text": "text", "text-picture": "textpic", picture: "picture", quote: "quote", articles: "cards", features: "cards", profiles: "cards", featured: "cards", method: "cards", faq: "rows", words: "rows", glossary: "rows", "page-links": "rows", "section-list": "rows", button: "button", status: "bar", timeline: "table", "results-table": "table", panel: "panel", "contact-form": "form", "page-head": "heading", "page-heading": "heading", "latest-result": "card", numbers: "cards", explained: "text", announcement: "ann", columns: "columns", space: "space", slideshow: "slides", gallery: "gallery", "logo-row": "logos", artworks: "gallery", exhibitions: "rows", career: "rows", press: "quote", "artist-cards": "cards", archive: "cards", "exhibition-list": "cards", collecting: "panel", "text-page": "text" };
+  var SHAPES = { "signup-popup": "popup", signup: "form", visit: "rows", hero: "banner", "picture-banner": "banner", text: "text", prose: "text", "long-text": "text", "text-picture": "textpic", picture: "picture", quote: "quote", articles: "cards", features: "cards", profiles: "cards", featured: "cards", method: "cards", faq: "rows", words: "rows", glossary: "rows", "page-links": "rows", "section-list": "rows", button: "button", status: "bar", timeline: "table", "results-table": "table", panel: "panel", "contact-form": "form", "page-head": "heading", "page-heading": "heading", "latest-result": "card", numbers: "cards", explained: "text", announcement: "ann", columns: "columns", space: "space", slideshow: "slides", gallery: "gallery", "logo-row": "logos", artworks: "gallery", exhibitions: "rows", career: "rows", press: "quote", "artist-cards": "cards", archive: "cards", "exhibition-list": "cards", collecting: "panel", "text-page": "text",
+    "tac-opening": "heading", "tac-lead": "picture", "tac-latest": "rows", "tac-subjects": "rows", "tac-band": "panel", "tac-text": "text" };
   function shapeHtml(shape) {
     var bar = function (w) { return '<i style="width:' + w + '%"></i>'; };
     switch (shape) {
@@ -1855,7 +1857,8 @@
     featured: "Art and artists", profiles: "Art and artists", timeline: "Art and artists", "results-table": "Art and artists", "latest-result": "Art and artists",
     articles: "Reading and trust", features: "Reading and trust", explained: "Reading and trust", "section-list": "Reading and trust", "page-links": "Reading and trust", numbers: "Reading and trust", method: "Reading and trust",
     button: "Contact and sign-up", "contact-form": "Contact and sign-up", signup: "Contact and sign-up", visit: "Contact and sign-up", "signup-popup": "Popups",
-    archive: "Art and artists", "exhibition-list": "Art and artists", collecting: "Reading and trust", "text-page": "Words"
+    archive: "Art and artists", "exhibition-list": "Art and artists", collecting: "Reading and trust", "text-page": "Words",
+    "tac-opening": "Top of the page", "tac-lead": "Pictures", "tac-latest": "Reading and trust", "tac-subjects": "Reading and trust", "tac-band": "Words", "tac-text": "Words"
   };
   // The first section of this kind anywhere on the site: this page first, then the home page, then the rest.
   function firstOnSite(pgd, type) {
