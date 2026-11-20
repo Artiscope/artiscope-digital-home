@@ -7,9 +7,11 @@ const list = ["run", "content", "people", "versions", "practice", "build", "disp
 if (process.argv.includes("uat")) list.push("uat");
 let failed = [];
 for (const t of list) {
-  const r = spawnSync(process.execPath, [path.join(here, t + ".mjs")], { encoding: "utf8", env: process.env, timeout: 900000 });
+  // the acceptance test takes longest (about twenty minutes); a check that is stopped, or says nothing, has not passed
+  const r = spawnSync(process.execPath, [path.join(here, t + ".mjs")], { encoding: "utf8", env: process.env, timeout: t === "uat" ? 2700000 : 900000, maxBuffer: 64 * 1024 * 1024 });
   const out = ((r.stdout || "") + (r.stderr || "")).trim().split("\n"), last = out[out.length - 1] || "";
-  const m = /(\d+) of (\d+) passed/.exec(out.join("\n")), ok = r.status === 0 && !/FAIL/.test(last) && (!m || m[1] === m[2]);
+  const m = /(\d+) of (\d+) passed/.exec(out.join("\n"));
+  const ok = r.status === 0 && !r.error && !r.signal && !/FAIL/.test(last) && (!m || m[1] === m[2]) && (t !== "uat" || !!m) && !/^FAIL /m.test(out.join("\n"));
   console.log((ok ? "passed  " : "FAILED  ") + t.padEnd(14) + last.slice(0, 100));
   if (!ok) { failed.push(t); console.log(out.slice(-15).map((l) => "          " + l).join("\n")); }
 }

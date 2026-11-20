@@ -110,7 +110,8 @@ await page.route("**/*", async (route) => {
 });
 const shot = (n) => page.screenshot({ path: OUT + "shots/" + n + ".png" });
 const settle = (ms = 800) => page.waitForTimeout(ms);
-const frame = (host) => page.frames().find((f) => f.url().startsWith("https://" + host));
+// the newest frame showing that site: the editor's preview, not a small picture of the site left from another screen
+const frame = (host) => page.frames().filter((f) => f.url().startsWith("https://" + host)).pop();
 const text = (sel) => page.innerText(sel);
 const notice = async () => (await page.locator(".notice").allInnerTexts()).join(" | ");
 // Undo or Redo of a save sits in Save's dropdown; the top bar's Undo is for changes not saved yet.
@@ -2118,6 +2119,8 @@ await check("Pointing at a section or block on the page lights up its row in the
   must((await page.$$(".ed-left .sec.over")).length === 0, "the row stayed lit after the pointer left");
   for (const [id, host, sel] of [["global-art-monitor", "globalartmonitor.com", "[data-adh]"], ["street-art-dispatch", "streetartdispatch.com", "[data-adh]"]]) {
     await openSite(id); await page.selectOption(".pagepick", "home").catch(() => {}); await settle(1500);
+    // an earlier area may have left another panel open on the left (Default text, say): show the sections list
+    if (!(await page.isVisible("#ed-sections"))) { await page.click('[data-act="ed-panel"][data-panel="sections"]').catch(() => {}); await settle(700); }
     const sid = await frame(host).evaluate((q) => { const els = Array.from(document.querySelectorAll(q)); const e = els.find((x) => x.getBoundingClientRect().height > 40); return e ? e.getAttribute("data-adh") : ""; }, sel);
     // the preview may still be settling after the page change: point again a few times before giving up
     let lit = [];
@@ -2125,7 +2128,7 @@ await check("Pointing at a section or block on the page lights up its row in the
       await hoverOn(host, '[data-adh="' + sid + '"]').catch(() => {}); await settle(500 + i * 700);
       lit = await page.evaluate(() => Array.from(document.querySelectorAll(".ed-left .sec.over")).map((r) => r.dataset.id));
     }
-    must(lit.length === 1 && lit[0] === sid, id + ": lit " + lit.join(",") + " for " + sid);
+    must(lit.length === 1 && lit[0] === sid, id + ": lit " + lit.join(",") + " for " + sid + (await page.isVisible("#ed-sections") ? "" : " (the sections list is not showing)"));
   }
 });
 await check("The keyboard shortcuts list shows the new shortcuts", async () => {
