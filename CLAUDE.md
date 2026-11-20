@@ -1015,6 +1015,30 @@ Done:
     words in `tests/run.mjs`, the first "Start building" check in
     `tests/uat.mjs`.
 
+- Site templates, step 6 (20 November): the full check of the four
+  ready templates together. No change to the console or the sites; two
+  new checks.
+  - `tests/templates.mjs` (in `run-all`): for each ready template, in its
+    own look and in a ready-made one, a site is planned as Start building
+    plans it (`cleanBuild`, `planFiles`), built with its own
+    `tools/build.py`, served at its GitHub address
+    (artiscope.github.io/wall-and-page/, from the built folder) and every
+    page opened at 1440 and 390 wide (World Art Review: every route). It
+    fails on an error on a page, a missing file, a link to a page that was
+    not built or outside the site, anything too wide on a phone, a long
+    dash, a US spelling, a word of any original site, a page without
+    noindex, or a home page without the site's name or a placeholder.
+    Screenshots in `/tmp/look/templates`.
+  - The "Templates end to end" area of `tests/uat.mjs`: the practice
+    build is rebuilt through Start building from each of Street Art
+    Dispatch, Global Art Monitor and World Art Review, published as the
+    workflow would (`pbPublish`), opened in the editor (preview shows the
+    template's design and the new name), a heading or small line is
+    changed and saved to the right pages file, and Start again puts the
+    starter back. The test GitHub holds every template folder.
+  - Step 5, The Art Correspondent template, waits for its conversion
+    (another session, and the owner's four decisions first).
+
 Waiting for the owner:
 
 - Create site needs the GitHub key widened (see step 4 above). The

@@ -23,7 +23,8 @@ fs.writeFileSync("/tmp/uat-sad/assets/site.js", fs.readFileSync("/tmp/uat-sad/as
 // the practice build: the starter, filled in as the console fills it, and built as publishing builds it
 const STARTER = C_DIR + "/starter/", walk = (dir, at = "") => fs.readdirSync(dir + at, { withFileTypes: true }).flatMap((d) => d.isDirectory() ? walk(dir, at + d.name + "/") : [at + d.name]);
 const starterFiles = Object.fromEntries(walk(STARTER).map((f) => [f, fs.readFileSync(STARTER + f, "utf8")]));
-const TSAD = C_DIR + "/templates/street-art-dispatch/", tsadFiles = Object.fromEntries(walk(TSAD).map((f) => ["templates/street-art-dispatch/" + f, fs.readFileSync(TSAD + f, "utf8")]));
+// every site template, as it sits in the console's repository
+const tsadFiles = Object.fromEntries(["street-art-dispatch", "global-art-monitor", "world-art-review"].flatMap((t) => { const d = C_DIR + "/templates/" + t + "/"; return walk(d).filter((f) => !f.endsWith(".gitkeep")).map((f) => ["templates/" + t + "/" + f, fs.readFileSync(d + f, "utf8")]); }));
 const pbContent = JSON.parse(starterFiles["data/content.json"]); pbContent.site.address = "https://artiscope.github.io/practice-build/";
 const pbFiles = { ...starterFiles, "data/content.json": JSON.stringify(pbContent, null, 2) + "\n" };
 fs.rmSync("/tmp/uat-pb-src", { recursive: true, force: true }); fs.rmSync("/tmp/uat-pb", { recursive: true, force: true });
@@ -2142,6 +2143,64 @@ await check("A site made outside the console shows as live, with its picture, Vi
   const counts = await text(".hcounts");
   must(!(await page.$$eval(".hquiet", (q) => q.some((x) => x.textContent.includes("The Art Correspondent")))), "it also shows as a site to build");
   await shot("111-outside-site");
+});
+
+// =============== 18. Templates end to end (site templates, step 6) ===============
+area = "Templates end to end";
+if (ONLY && ONLY.includes(area)) { await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"]', { timeout: 20000 }); }
+// the practice build as publishing would build it from its files in the (test) GitHub, with the editor link pointed at this console
+function pbPublish() {
+  fs.rmSync("/tmp/uat-pb-src", { recursive: true, force: true }); fs.rmSync("/tmp/uat-pb", { recursive: true, force: true });
+  for (const f of hub.files(PB)) { fs.mkdirSync(path.dirname("/tmp/uat-pb-src/" + f), { recursive: true }); fs.writeFileSync("/tmp/uat-pb-src/" + f, hub.read(PB, "main", f)); }
+  execFileSync("python3", ["/tmp/uat-pb-src/tools/build.py", "/tmp/uat-pb"]);
+  for (const f of ["/tmp/uat-pb/assets/site.js", "/tmp/uat-pb/index.html"]) if (fs.existsSync(f)) fs.writeFileSync(f, fs.readFileSync(f, "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
+}
+const TPL_RUNS = [
+  { id: "street-art-dispatch", name: "Tess on walls", files: "data", kind: "archive", sees: "[The Intervention Archive]" },
+  { id: "global-art-monitor", name: "Tess on sales", files: "data", kind: "timeline", sees: "[Sales appear here once you add them]" },
+  { id: "world-art-review", name: "Tess on portraits", files: "content", kind: "hero", sees: "[Discover]" },
+];
+for (const run of TPL_RUNS) {
+  await check("The practice build rebuilt from the " + run.id.replace(/-/g, " ") + " template opens in the editor as that design, and a change saves", async () => {
+    await openSite("practice-build"); await page.click(".ed-exit").catch(() => {}); await goTab(page, "overview"); await settle(500);
+    await page.click('[data-act="bd-start"]'); await page.waitForSelector(".bd-tpl"); await settle(800);
+    await page.click('.bd-tpl[data-v="' + run.id + '"]'); await settle(2500);
+    await page.click('[data-act="bd-next"]'); await page.waitForSelector('[data-bd="name"]'); await page.fill('[data-bd="name"]', run.name); await settle(700);
+    for (let i = 0; i < 3; i++) { await page.click('[data-act="bd-next"]'); await settle(600); }
+    must((await text(".bd-rows")).includes("Template"), "no template in the summary");
+    await page.click('[data-act="bd-create"]'); await page.waitForSelector("text=is on the practice build", { timeout: 20000 });
+    const pagesFile = run.files + "/pages.json", doc = read(PB, pagesFile);
+    must(doc && doc.shared.header.settings.name === run.name, "not rebuilt from the template: " + JSON.stringify(doc && doc.shared.header.settings).slice(0, 160));
+    must(JSON.parse(hub.read(CR, "main", "sites.json")).sites.find((x) => x.id === "practice-build").template === run.id, "the list of sites does not say which template");
+    pbPublish();
+    await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]');
+    await openSite("practice-build"); await settle(2500);
+    const body = await pbText(); must(body.includes(run.name) && body.includes(run.sees), "the preview is not the template's design: " + body.slice(0, 200));
+    must(!/World Art Review|Global Art Monitor|Street Art Dispatch|Konn|Zara/.test(body), "a word of the original site in the preview");
+    await shot("120-tpl-" + run.id);
+    // pick the template's own section, change its first words, and save
+    // the template's own kind of section first, then the others, until one has a heading or small line to change
+    const secs = doc.pages.home.sections.slice().sort((x, y) => (y.type === run.kind) - (x.type === run.kind));
+    let box = null, pf = "";
+    for (const x of secs) {
+      await page.click('.sec[data-where="page"][data-id="' + x.id + '"]').catch(() => {}); await settle(600);
+      box = await page.$('input[data-pf="heading"]:visible, input[data-pf="eyebrow"]:visible');
+      if (box) { pf = x.type + "." + (await box.getAttribute("data-pf")); break; }
+    }
+    must(box, "no words to change on the home page");
+    await box.fill("Changed by Tess"); await settle(900);
+    must((await pbText()).toLowerCase().includes("changed by tess"), "the change is not in the preview (" + pf + ")");   // some designs set small lines in capitals
+    await liveSave();
+    must(hub.read(PB, "main", pagesFile).includes("Changed by Tess"), "the change was not saved to " + pagesFile);
+  });
+}
+await check("Start again puts the practice build back on the starter after a template", async () => {
+  await openSite("practice-build"); await page.click(".ed-exit").catch(() => {}); await goTab(page, "overview"); await settle(500);
+  await page.click('[data-act="ask-startagain"]'); await settle(300);
+  await page.click('[data-act="startagain"]'); await page.waitForSelector("text=starts again from the starter", { timeout: 9000 }); await settle(800);
+  must(hub.read(PB, "main", "assets/render.js") === starterFiles["assets/render.js"] && hub.read(PB, "main", "content/pages.json") == null, "not the starter again");
+  must(!("template" in JSON.parse(hub.read(CR, "main", "sites.json")).sites.find((x) => x.id === "practice-build")), "the list of sites still names a template");
+  pbPublish();
 });
 
 // =============== results ===============
