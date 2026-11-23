@@ -36,9 +36,10 @@ const siteList = { sites: [{ id: "practice-build", name: "Practice build", domai
 
 // ----- the server, with GitHub in memory -----
 let signedIn = "tester@artiscope.co.uk";
-globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "tester@artiscope.co.uk", SUPABASE_URL: "https://s", SUPABASE_SERVICE_ROLE_KEY: "k", SCHEDULE_KEY: "a-long-random-key-for-the-clock-0123456789" }[k] || "") }, serve() {} };
+globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "tester@artiscope.co.uk", SUPABASE_URL: "https://s", SUPABASE_SERVICE_ROLE_KEY: "k", SCHEDULE_KEY: "a-long-random-key-for-the-clock-0123456789", SHOPIFY_TOKEN: "shpat_uat" }[k] || "") }, serve() {} };
+const { makeShop } = await import("./fakeshop.mjs"); const shop = makeShop("zx-test"); shop.setKey("shpat_uat");
 const { makePeople } = await import("./fakepeople.mjs"); const ppl = makePeople();
-const { handle, STARTER_KINDS } = await import("./home.mjs");
+const { handle, STARTER_KINDS, useSiteList } = await import("./home.mjs");
 const { makeGitHub } = await import("./fakegit.mjs");
 const files = (dir, list) => Object.fromEntries(list.filter((f) => fs.existsSync(dir + f)).map((f) => [f, fs.readFileSync(dir + f, "utf8")]));
 const pics = (dir, sub) => Object.fromEntries(fs.readdirSync(dir + sub).map((f) => [sub + "/" + f, "picture"]));
@@ -63,6 +64,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (String(url).startsWith("https://dns.google/")) { const q = new URL(String(url)).searchParams; return new Response(JSON.stringify({ Answer: (dnsAnswers[q.get("name") + " " + q.get("type")] || []).map((data) => ({ data })) })); }
   if (init.method === "HEAD") return new Response(null, { status: previewGone && String(url).includes("/preview/") ? 404 : 200 });
   if (ppl.handles(url)) return ppl.fetch(url, init);
+  if (shop.handles(url)) return shop.fetch(url, init);
   if (breakGitHub && (init.method || "GET") !== "GET") return new Response(JSON.stringify({ message: "Server Error" }), { status: 500 });
   return hub.fetch(url, init);
 };
@@ -145,7 +147,7 @@ if (process.env.AUDIT) {
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all eight sites, The Art Correspondent, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 8, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 61"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 62"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -2251,6 +2253,72 @@ await check("A subject page lists its stories, and Exhibitions opens as a list m
   await page.click('.sec[data-where="page"][data-id="exhibitions-list"]'); await settle(600);
   must((await page.inputValue('input[data-pf="heading"]')) === "Shows and installations in our reporting", "the list's settings did not open");
   await shot("132-tac-exhibitions");
+});
+
+// =============== 20. A shop on Shopify: products and prices from the console ===============
+area = "Shop";
+const shopList = { sites: [...siteList.sites, { id: "zen-xander", name: "Zen Xander", domain: "zenxander.com", kind: "shop", store: "zx-test" }] };
+if (!ONLY || ONLY.includes(area)) {
+  // the shop joins sites.json as well, so the server's own reading of the list keeps it
+  const cur = await (await hub.fetch("https://api.github.com/repos/" + CR + "/contents/sites.json?ref=main")).json();
+  const listNow = JSON.parse(Buffer.from(cur.content, "base64").toString("utf8")); listNow.sites.push(shopList.sites.at(-1));
+  await hub.fetch("https://api.github.com/repos/" + CR + "/contents/sites.json", { method: "PUT", body: JSON.stringify({ message: "Add the shop", content: Buffer.from(JSON.stringify(listNow)).toString("base64"), sha: cur.sha, branch: "main" }) });
+  useSiteList(listNow); await page.click('[data-tab="home"]', { timeout: 1500 }).catch(() => {}); signedIn = "tester@artiscope.co.uk"; await page.evaluate(() => { window.__adh.state.leave = null; }).catch(() => {}); await page.goto(consoleAt + "/index.html"); await page.waitForSelector('[data-act="open-site"][data-site="zen-xander"]', { timeout: 20000 }); }
+const ratsId = shop.products[0].id, rats = () => shop.findProduct(ratsId);
+await check("The shop opens on Products, read from Shopify, with only Products and Changes in the menu", async () => {
+  await page.click('[data-act="open-site"][data-site="zen-xander"]'); await page.waitForSelector(".sp-table", { timeout: 9000 }); await settle(600);
+  const t = await text(".sp"); must(t.includes("4 products in the Zen Xander shop, 2 of them on sale") && t.includes("SPACE RATS") && t.includes("£250 to £350") && t.includes("1,800"), t.slice(0, 300));
+  const nav = (await page.locator(".navb").allInnerTexts()).map((x) => x.trim()); must(nav.join() === "All sites,Products,Changes", nav.join());
+  await page.click('[data-act="sp-filter"][data-v="DRAFT"]'); must((await page.locator(".sp-table tbody tr").count()) === 1, "Draft filter");
+  await page.click('[data-act="sp-filter"][data-v="all"]'); await shot("140-shop-list");
+});
+await check("One product: the White group's price set once for all six, a stock and a collection changed, saved to Shopify and listed beside it", async () => {
+  await page.click('[data-act="sp-open"][data-id="' + ratsId + '"]'); await page.waitForSelector('[data-sp-group="1"]', { timeout: 9000 });
+  await page.fill('[data-sp-group="1"]', "375");
+  await page.click('[data-act="sp-group"][data-v="Unframed"]'); const st = page.locator('[data-sp="stock"]').first(); await st.fill("98");
+  await page.uncheck('[data-sp="col"][value="' + shop.collections[0].id + '"]');
+  must((await text("#sp-count")) === "8 changes not saved", await text("#sp-count"));
+  must(await page.isDisabled('[data-sp="col"][value="' + shop.collections[2].id + '"]'), "a rule-filled collection can be ticked");
+  await shot("141-shop-product");
+  await page.click('[data-act="sp-save"]'); await page.waitForSelector("#sp-count:has-text('All saved')", { timeout: 9000 }); await settle(800);
+  const white = rats().variants.filter((v) => v.selectedOptions[1].value === "White");
+  must(white.every((v) => v.price === "375.00") && Object.values(rats().variants[0].item.levels)[0] === 98 && !shop.collections[0].products.includes(ratsId), "Shopify was not changed as asked");
+  must((await text(".sp-side")).includes("8 changes to SPACE RATS"), "not listed beside it");
+});
+await check("A price changed in Shopify meanwhile stops the save and says so, and nothing is changed", async () => {
+  rats().variants[13].price = "360.00";
+  await page.fill('[data-sp-group="2"]', "390"); await page.click('[data-act="sp-save"]'); await settle(1500);
+  must((await notice()).includes("changed in Shopify since you opened it"), await notice());
+  must(rats().variants[12].price === "350.00", "a price was changed");
+  rats().variants[13].price = "350.00"; await page.click('[data-act="sp-reload"]').catch(() => {}); await settle(800);
+});
+await check("Change prices: on sale, White and Black, set to £380, checked before saving, then saved", async () => {
+  await page.click('[data-tab="products"]'); await settle(600); await page.click('[data-act="sp-view"][data-v="prices"]'); await settle(400);
+  await page.click('[data-act="sp-pf"][data-k="opt:Frame"][data-v="White"]'); await page.click('[data-act="sp-pf"][data-k="opt:Frame"][data-v="Black"]');
+  await page.fill('[data-sp-pf="value"]', "380"); await page.click('[data-act="sp-plan"]'); await page.waitForSelector(".sp-sum", { timeout: 9000 });
+  const sum = await text(".sp-sum"); must(sum.startsWith("14 versions in 2 products change"), sum);
+  await shot("142-shop-prices");
+  await page.click('[data-act="sp-apply"]'); await settle(1500);
+  must((await notice()).includes("14 prices changed in the shop"), await notice());
+  must(shop.products.filter((p) => p.status === "ACTIVE").every((p) => p.variants.filter((v) => v.selectedOptions[1].value !== "Unframed").every((v) => v.price === "380.00")), "not all at £380");
+  must(shop.products.find((p) => p.status === "DRAFT").variants.every((v) => v.price !== "380.00"), "a draft changed");
+});
+await check("Changes lists it, and Put back asks once, then sets every price as it was", async () => {
+  await page.click('.navb[data-tab="changes"]'); await page.waitForSelector(".sp-change", { timeout: 9000 });
+  must((await text(".sp")).includes("14 prices changed"), await text(".sp"));
+  await page.click('.sp-change [data-act="sp-confirm"]'); must((await text(".sp-change")).includes("Put back 14 parts in the shop straight away?"), await text(".sp-change"));
+  await page.click('[data-act="sp-putback"]'); await settle(1500);
+  must((await notice()).includes("Put back in the shop"), await notice());
+  const white = rats().variants.filter((v) => v.selectedOptions[1].value === "White"), black = rats().variants.filter((v) => v.selectedOptions[1].value === "Black");
+  must(white.every((v) => v.price === "375.00") && black.every((v) => v.price === "350.00"), "not put back as it was");
+  await shot("143-shop-changes");
+});
+await check("Add a product as a copy: a draft with the same versions, opened straight away", async () => {
+  await page.click('.navb[data-tab="products"]'); await settle(600); await page.click('[data-act="sp-view"][data-v="add"]');
+  await page.selectOption('[data-sp-add="from"]', ratsId); await page.fill('[data-sp-add="title"]', "MOON RATS"); await page.click('[data-act="sp-add"]');
+  await page.waitForSelector('[data-sp="title"]', { timeout: 9000 }); await settle(600);
+  const made = shop.products.find((p) => p.title === "MOON RATS"); must(made && made.status === "DRAFT" && made.variants.length === 18, "no draft copy");
+  must((await page.inputValue('[data-sp="title"]')) === "MOON RATS" && (await notice()).includes("Added as a draft"), "the copy did not open");
 });
 
 // =============== results ===============

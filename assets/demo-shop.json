@@ -1,0 +1,343 @@
+{
+ "about": "Sample mode for the Products screen: the Zen Xander shop's product names and prices as they were on 23 November 2026. Colours are examples, and there are no photos.",
+ "collections": [
+  [
+   "WILD REALITIES",
+   false
+  ],
+  [
+   "Limited Edition Prints",
+   false
+  ],
+  [
+   "Ultra Edition Prints",
+   false
+  ],
+  [
+   "Home page",
+   false
+  ]
+ ],
+ "products": [
+  {
+   "title": "FULL THROTTLE CRISIS",
+   "status": "ACTIVE",
+   "colours": [
+    "Green",
+    "Orange",
+    "Pink",
+    "Purple"
+   ]
+  },
+  {
+   "title": "SPACE RATS",
+   "status": "ACTIVE",
+   "colours": [
+    "Green",
+    "Orange",
+    "Pink",
+    "Purple",
+    "Mint",
+    "Red"
+   ]
+  },
+  {
+   "title": "NEW CHALLENGES",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "GATHERING ECONOMY",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "DAMN PLASTIC",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "FREEDOM OF MOVEMENT",
+   "status": "ACTIVE",
+   "colours": [
+    "Green",
+    "Orange",
+    "Pink",
+    "Purple",
+    "Mint",
+    "Red"
+   ]
+  },
+  {
+   "title": "ENDLESS STREAM",
+   "status": "ACTIVE",
+   "colours": [
+    "Green",
+    "Orange",
+    "Pink",
+    "Purple",
+    "Mint",
+    "Red"
+   ]
+  },
+  {
+   "title": "GET AWAY",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "FEASTAGRAM",
+   "status": "ACTIVE",
+   "colours": [
+    "Green",
+    "Orange",
+    "Pink",
+    "Purple",
+    "Mint"
+   ]
+  },
+  {
+   "title": "KNEAD FOR SPEED",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "SLOW CONNECTION",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "TIM BEAR",
+   "status": "ACTIVE",
+   "colours": [
+    "Green",
+    "Orange",
+    "Pink",
+    "Purple",
+    "Mint"
+   ]
+  },
+  {
+   "title": "PANDA PIZZA PARTY",
+   "status": "ACTIVE",
+   "colours": [
+    "Green",
+    "Orange",
+    "Pink"
+   ]
+  },
+  {
+   "title": "FLAT PACK PANDA",
+   "status": "ACTIVE",
+   "colours": [
+    "Green",
+    "Orange",
+    "Pink",
+    "Purple",
+    "Mint"
+   ]
+  },
+  {
+   "title": "SCAVENGER HUNT",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "CLIMATE COIN-TROL",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "COLD COMFORT",
+   "status": "ACTIVE",
+   "colours": [
+    "Green",
+    "Orange",
+    "Pink",
+    "Purple",
+    "Mint",
+    "Red"
+   ]
+  },
+  {
+   "title": "ONLY FANS",
+   "status": "ACTIVE",
+   "colours": [
+    "Green",
+    "Orange",
+    "Pink",
+    "Purple",
+    "Mint"
+   ]
+  },
+  {
+   "title": "OTTERLY DELICIOUS",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "The Great Ape Off",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "Couchella",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "Always a Cheetah",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "Yoga Cat",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "Bento Bear",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "PerSHELLnal Best",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "Chakra Russell",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "HD Giraphics",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "Macro Monkey",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "3D Spinner",
+   "status": "ACTIVE",
+   "colours": []
+  },
+  {
+   "title": "NO PLAN BEE",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "FAT CAT",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "INNOCENCE AT SEA",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "QUEEN BEE",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "CLASSES APART",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "ANGER MANAGEMENT",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "FAST TRACK LIFE",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "PAWSITIVELY IN LOVE",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "HOWLS ACROSS THE SEA",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "DESPERATE WATERS",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "LION EATS TONIGHT",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "TUSK TO TUSK - ORANGE",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "STRICTLY PURRSONAL",
+   "status": "DRAFT",
+   "colours": [
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "title": "Job Lot - 'Society Falling' Posters",
+   "status": "ARCHIVED",
+   "colours": []
+  },
+  {
+   "title": "HD Giraphics - 'Society Falling' Poster",
+   "status": "ARCHIVED",
+   "colours": []
+  }
+ ]
+}

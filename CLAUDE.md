@@ -220,7 +220,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (20 November 2026, Version 61)
+## Where things stand (23 November 2026, Version 62)
 
 Done:
 
@@ -1157,7 +1157,59 @@ Done:
     first "Start building" check and a fifth run in "Templates end to end"
     in `tests/uat.mjs`.
 
+- Version 62 (23 November): shops on Shopify, Phase 1 of moving the Zen
+  Xander shop into the console (plan:
+  https://claude.ai/artifact/NvpPCBVWGr7W2ErFcgwGn7, sample of the screens:
+  https://claude.ai/artifact/Uq461xRJW5uvHGpQz3KBYJ, both approved). Shopify
+  stays the one record and still takes the payments, sends order emails and
+  handles delivery; the console reads and changes its products.
+  - `sites.json` entries with `kind: "shop"` and `store` (the part of the
+    Shopify address before .myshopify.com; Zen Xander is `7bb690-c7`). A shop
+    has no repository and is never built; on All sites it sits with the live
+    sites ("Shop on Shopify", or "Waiting for the Shopify key"). Only the
+    admin opens it (`shopAction` refuses editors). Its menu is Products and
+    Changes only. The other sites are not touched.
+  - The key lives only in Supabase's secrets: `SHOPIFY_TOKEN` (an app made in
+    the shop's admin before 2026), or `SHOPIFY_CLIENT_ID` and
+    `SHOPIFY_CLIENT_SECRET` (an app made in Shopify's Dev Dashboard in the
+    same organisation; `shopToken` asks Shopify for a key with the client
+    credentials grant and keeps it until it lapses). A second store adds
+    `_<STORE>` to each name. Since 1 January 2026 new apps can only be made in
+    the Dev Dashboard. The app needs to read and write products, inventory and
+    files, and read locations. Never take a key in the conversation.
+  - Server (`shopify`, `SHOPIFY_VERSION` "2026-10", Admin GraphQL; it asks
+    again when Shopify is busy): `shopProducts`, `shopProduct`, `shopSave`
+    (`shopCleanChange`: every change carries what it was, and the save is
+    refused with `stale` if Shopify has moved on; descriptions pass through
+    `safeMarks`; rule-filled collections cannot be changed by hand; stock
+    uses `inventorySetQuantities` with `changeFromQuantity` and the
+    `@idempotent` key), `shopPricePlan` and `shopPriceApply` (many prices at
+    once: on sale, every product, a collection or chosen by hand, by option
+    value; set, or raise or lower by an amount or a percentage, rounded to
+    whole pounds; a was price when lowering; the plan is applied only if
+    every price is still as checked), `shopChanges` and `shopPutBack` (the
+    list of changes on the `shop-log` branch of this repository, never main;
+    Put back only when nothing in the change has moved since), `shopAdd` (a
+    draft copy with `productDuplicate`, or a blank draft), `shopPhoto`
+    (staged upload, then the photo joins the product; a description is
+    required).
+  - Console (`viewProducts`, `viewShopProduct`, `viewShopPrices`,
+    `viewShopAdd`, `viewShopChanges`, `shopClick`, `shopInput`, `spChange`;
+    styles under `.sp` at the end of `app.css`): as in the sample. Prices,
+    was prices, stock codes and stock per place, grouped by an option with
+    one box for the whole group; title, description (the rich editor),
+    status, collections, search words, page layout, photo words and order,
+    Add a photo. Sample mode: `assets/demo-shop.json` and `demoShop`.
+  - Checks: `tests/shop.mjs` (in `run-all`, with `tests/fakeshop.mjs`, a
+    Shopify in memory) and the "Shop" area of `tests/uat.mjs`.
+  - Still to come (the plan's Phase 2 onwards): the Zen Xander site itself
+    in the console, then payments. Options (sizes, frames, colours) are
+    still changed in Shopify.
+
 Waiting for the owner:
+
+- The Shopify key for Zen Xander (see Version 62), and what the shop's
+  "Artiscope Sync" app is for.
 
 - Create site needs the GitHub key widened (see step 4 above). The
   practice build works without it.

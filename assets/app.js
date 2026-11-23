@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "61";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "62";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -23,6 +23,7 @@
     status: "live",        // "live" | "saving" | "saved"
     flash: "",             // what just happened, said once in the top bar
     copy: {},              // site id -> the trial copy being worked on ("" is the live site)
+    shop: {},              // shop site id -> its products, the one open, drafts not yet saved, price plans, changes
     ask: null,             // a question shown before something big: { kind, ... }
     sure: false,           // set while a confirmed live save runs
     busy: {},
@@ -64,7 +65,7 @@
   }
   function sites() { return state.data ? state.data.sites : []; }
   function liveSites() { return sites().filter(function (s) { return s.live; }); }
-  function site() { return liveSites().find(function (s) { return s.id === state.site; }) || null; }
+  function site() { return sites().find(function (s) { return s.id === state.site && (s.live || s.shop); }) || null; }
   function initials(name) { return String(name).split(/\s+/).map(function (w) { return w.charAt(0); }).join("").slice(0, 3).toUpperCase(); }
   var COLOURS = { "world-art-review": ["#1D4A35", "#EEE5D4"], "global-art-monitor": ["#F3C3C8", "#2A2A2F"], "practice-site": ["#F1E6FC", "#52057B"], "street-art-dispatch": ["#163A30", "#EFE6D3"], "practice-build": ["#22304A", "#F1EEE8"] };
   function colours(id) { return COLOURS[id] || ["#EDE8F3", "#5D5866"]; }
@@ -114,6 +115,7 @@
   async function ensure(force) {
     if (!state.inSite && state.tab === "people" && isAdmin() && (force || !state.people || !state.people.list)) { await loadPeople(); return; }
     var s = site(); if (!s) return;
+    if (s.shop) { await shopLoad(force); return; }
     try {
       if (state.tab === "versions" && (force || !state.versions[s.id])) {
         var vd = await api("versions", { site: s.id }); var old = state.versions[s.id] || {};
@@ -283,6 +285,7 @@
   ];
   // Outside a site only "All sites" shows. Inside, the site's own screens.
   // Sites that keep their photos in Files show Files instead of Photos.
+  var NAV_PRODUCTS = ["products", "Products", "M4 4h7.5l8.5 8.5-7.5 7.5L4 11.5z", "M8.5 8.5h.01"], NAV_CHANGES = ["changes", "Changes", "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M12 8v4.5l3 2"];
   var NAV_FILES = ["files", "Files", "M4 6a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z", "M8 15l2.5-2.5 2 2 1.5-1.5 2 2"];
   var NAV_PEOPLE = ["people", "People", "M9 5.3a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4zM3.5 19.5c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5", "M16.8 7a2.5 2.5 0 1 1 0 5M16.5 14.6c2.2.1 3.7 1.6 4.1 4.4"];
   // The admin sees everything; an editor sees only their own sites and their own copy.
@@ -292,6 +295,7 @@
   function myCopy(s) { return copiesOf(s).find(function (c) { return c.mine; }) || null; }
   function navItems() {
     var s = site(); if (!(state.inSite && s)) return NAV.slice(0, 1).concat(isAdmin() ? [NAV_PEOPLE] : []);
+    if (s.shop) return [NAV[0], NAV_PRODUCTS, NAV_CHANGES];
     return (s.files ? NAV.map(function (n) { return n[0] === "photos" ? NAV_FILES : n; }) : NAV).filter(function (n) { return !(s.edits && n[0] === "content") && !(n[0] === "history" && !isAdmin()) && hasScreen(s, n[0]); });
   }
   // A site that is not yet set up for Pages, Theme or Photos leaves those screens out.
@@ -316,6 +320,7 @@
       var ppl = state.tab === "people";
       return '<span class="dot" aria-hidden="true" style="background:#9A9EA6"></span><b class="island-name">' + (ppl ? "People" : "All sites") + '</b><span class="small">' + (state.status === "saving" ? "Saving" : state.flash || (ppl ? "Who can sign in, and which sites they work on" : "Pick a site to work on")) + '</span>';
     }
+    if (s.shop) return '<span class="dot" aria-hidden="true" style="background:' + colours(s.id)[0] + '"></span><b class="island-name">' + esc(s.name) + '</b><span class="small">' + esc(busy || (shopOf(s) && shopOf(s).busy) ? "Saving to Shopify" : state.flash || "Shop on Shopify. Saves go straight to " + (s.domain || "the shop")) + '</span>';
     var copyPick = list.length > 1 && isAdmin()
       ? '<label class="small" for="copy-pick" style="position:absolute;left:-9999px">Working on</label><select id="copy-pick" class="copypick" data-change="copy">' +
         list.map(function (x) { return '<option value="' + esc(x.kind === "live" ? "" : x.id) + '"' + (x.id === c.id ? " selected" : "") + '>' + esc(x.kind === "live" ? "Live site" : "Trial: " + x.name) + '</option>'; }).join("") + '</select>'
@@ -465,15 +470,18 @@
   function siteAddr(x) { return x.domain ? "https://" + String(x.domain).replace(/^https?:\/\//, "").replace(/\/+$/, "") + "/" : ""; }
   function siteLamp(x) { var list = copiesOf(x), live = list[0]; return x.practice ? "q" : live && live.ahead ? "a" : "g"; }
   function viewHome() {
-    var all = sites(), live = all.filter(function (x) { return (x.live || x.outside) && !x.practice; }), rest = all.filter(function (x) { return (!x.live && !x.outside) || x.practice; }).sort(function (a, b) { var r = function (x) { return x.practice && !x.playground ? 3 : x.playground ? 2 : 0; }; return r(b) - r(a); });
-    var nLive = live.length, nBuild = all.filter(function (x) { return !x.live && !x.playground && !x.outside; }).length, nPrac = all.filter(function (x) { return x.practice || x.playground; }).length;
-    var badge = function (x) { var c = colours(x.live || x.playground || x.outside ? x.id : ""); return '<span class="hbadge" aria-hidden="true" style="background:' + c[0] + ";color:" + c[1] + '">' + esc(x.playground ? "PB" : x.practice ? "P" : x.live || x.outside ? initials(x.name) : x.name.replace(/\D/g, "")) + '</span>'; };
+    var all = sites(), live = all.filter(function (x) { return (x.live || x.outside || x.shop) && !x.practice; }), rest = all.filter(function (x) { return (!x.live && !x.outside && !x.shop) || x.practice; }).sort(function (a, b) { var r = function (x) { return x.practice && !x.playground ? 3 : x.playground ? 2 : 0; }; return r(b) - r(a); });
+    var nLive = live.length, nBuild = all.filter(function (x) { return !x.live && !x.playground && !x.outside && !x.shop; }).length, nPrac = all.filter(function (x) { return x.practice || x.playground; }).length;
+    var badge = function (x) { var c = colours(x.live || x.playground || x.outside || x.shop ? x.id : ""); return '<span class="hbadge" aria-hidden="true" style="background:' + c[0] + ";color:" + c[1] + '">' + esc(x.playground ? "PB" : x.practice ? "P" : x.live || x.outside || x.shop ? initials(x.name) : x.name.replace(/\D/g, "")) + '</span>'; };
     var card = function (x) {
       var addr = siteAddr(x), pic = demo && x.id === "world-art-review" && params.get("preview") ? params.get("preview") : demo && x.id === "global-art-monitor" && params.get("gampreview") ? params.get("gampreview") : demo && x.id === "street-art-dispatch" && params.get("sadpreview") ? params.get("sadpreview") : addr;
       return '<div class="card hcard">' +
         '<span class="hpic" aria-hidden="true">' + (pic ? '<iframe src="' + esc(pic) + '" tabindex="-1" loading="lazy" title="" scrolling="no"></iframe>' : "") + '</span>' +
         '<span class="hname">' + badge(x) + '<span><b>' + esc(x.name) + '</b><span class="small">' + esc(x.domain) + '</span></span></span>' +
-        (x.outside ? '<span class="hfoot"><span class="hstate"><i class="lamp g" aria-hidden="true"></i>Live. Not in the editor yet</span>' +
+        (x.shop ? '<span class="hfoot"><span class="hstate"><i class="lamp ' + (x.shop.ready ? "g" : "a") + '" aria-hidden="true"></i>' + (x.shop.ready ? "Shop on Shopify" : "Shop. Waiting for the Shopify key") + '</span>' +
+          (addr ? '<a href="' + esc(addr) + '" target="_blank" rel="noopener">View shop</a>' : "") +
+          '<button type="button" class="btn slim" data-act="open-site" data-site="' + esc(x.id) + '">Open</button></span></div>'
+        : x.outside ? '<span class="hfoot"><span class="hstate"><i class="lamp g" aria-hidden="true"></i>Live. Not in the editor yet</span>' +
           (addr ? '<a href="' + esc(addr) + '" target="_blank" rel="noopener">View site</a>' : "") +
           (x.repo ? '<a href="https://github.com/' + esc(x.repo) + '" target="_blank" rel="noopener">GitHub</a>' : "") + '</span></div>'
         : '<span class="hfoot"><span class="hstate"><i class="lamp ' + siteLamp(x) + '" aria-hidden="true"></i>' + esc(statusLine(x)) + '</span>' +
@@ -4322,6 +4330,336 @@
     }, function (e) { state.domain[k] = { error: e.message }; render(); });
   }
 
+  // ---------- shops on Shopify: products, prices, stock and photos ----------
+  // A shop site has only these screens. Everything is read from Shopify when it opens, and every Save goes
+  // straight to the shop. Shopify still takes the payments. Each change is listed in Changes, where it can be put back.
+  var SHOP_STATUS = { ACTIVE: ["On sale", "g"], DRAFT: ["Draft", "a"], ARCHIVED: ["Archived", "q"], UNLISTED: ["Unlisted", "q"] };
+  function shopOf(s) { s = s || site(); if (!s || !s.shop) return null; if (!state.shop[s.id]) state.shop[s.id] = { list: null, err: "", q: "", filter: "all", col: "", more: false, view: "list", open: "", prods: {}, drafts: {}, changes: {}, plan: null, planAll: false, pf: { products: "active", collection: "", ids: [], opts: {}, how: "set", value: "", round: "pound", was: false }, add: { from: "", title: "", blank: false }, confirm: "", busy: "", pickQ: "" }; return state.shop[s.id]; }
+  function gbp(v) { if (v == null || v === "") return "None"; var n = Number(v); return "£" + (n % 1 ? n.toFixed(2) : String(n)); }
+  function gbpRange(lo, hi) { return lo == null ? "None" : lo === hi ? gbp(lo) : gbp(lo) + " to " + gbp(hi); }
+  function spStatus(st) { var x = SHOP_STATUS[st] || [String(st || "").toLowerCase(), "q"]; return '<span class="sp-st"><i class="lamp ' + x[1] + '" aria-hidden="true"></i>' + esc(x[0]) + '</span>'; }
+  function spPic(url, alt) { return url ? '<img class="sp-pic" src="' + esc(url) + '" alt="' + esc(alt || "") + '" loading="lazy">' : '<span class="sp-pic" aria-hidden="true"></span>'; }
+  function spWho(by) { return by === "admin" ? "Admin" : (state.data && state.data.names && state.data.names[by]) || "An editor"; }
+  function viewShopWait(sh, s) {
+    return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><h1>' + esc(s.name) + '</h1><p>A shop on Shopify. Its products and prices are changed here, and Shopify still takes the payments.</p></div>' +
+      '<div class="card stack" style="max-width:820px"><h2 class="cardh">' + (s.shop.ready ? "Shopify did not answer" : "Waiting for the Shopify key") + '</h2>' +
+      (sh.err ? '<p class="notice problem" role="status">' + esc(sh.err) + '</p>' : "") +
+      (s.shop.ready ? '<div class="row"><button type="button" class="soft" data-act="sp-reload">Try again</button></div>' :
+        '<span class="small">The console needs the key of an app in your Shopify shop, with access to ' + "read and write products, inventory and files, and read locations" + '. It goes only into Supabase, never here.</span>' +
+        '<ol class="sp-steps"><li>If the shop already has an app made in its own admin before 2026 (Apps, Develop apps), open it, give it those permissions, and copy its Admin API access token. Add it in Supabase, Edge Functions, Secrets, as <b>SHOPIFY_TOKEN</b>.</li>' +
+        '<li>Otherwise make the app in Shopify\'s Dev Dashboard, in the same organisation as the shop, give it those permissions and install it on the shop. Add its Client ID and Client secret in Supabase as <b>SHOPIFY_CLIENT_ID</b> and <b>SHOPIFY_CLIENT_SECRET</b>.</li>' +
+        '<li>Come back here and press Try again.</li></ol><div class="row"><button type="button" class="soft" data-act="sp-reload">Try again</button></div>') + '</div>';
+  }
+  function viewProducts() {
+    var s = site(), sh = shopOf(s); if (!sh) return viewHome();
+    if (sh.view === "product") return viewShopProduct(s, sh);
+    if (sh.view === "prices") return viewShopPrices(s, sh);
+    if (sh.view === "add") return viewShopAdd(s, sh);
+    if (!sh.list) return sh.err || !s.shop.ready ? viewShopWait(sh, s) : head("Products", "Reading the products from Shopify.");
+    var L = sh.list, q = sh.q.trim().toLowerCase();
+    var counts = { all: L.products.length, ACTIVE: 0, DRAFT: 0, ARCHIVED: 0 }; L.products.forEach(function (p) { if (counts[p.status] != null) counts[p.status]++; });
+    var shown = L.products.filter(function (p) { return (sh.filter === "all" || p.status === sh.filter) && (!sh.col || p.collections.indexOf(sh.col) >= 0) && (!q || p.title.toLowerCase().indexOf(q) >= 0); });
+    var cut = sh.more || q ? shown : shown.slice(0, 25);
+    var seg = [["all", "All " + counts.all], ["ACTIVE", "On sale " + counts.ACTIVE], ["DRAFT", "Draft " + counts.DRAFT], ["ARCHIVED", "Archived " + counts.ARCHIVED]];
+    return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><div class="row between sp-head"><div><h1>Products</h1>' +
+      '<p>' + counts.all + ' products in the ' + esc(s.name) + ' shop, ' + counts.ACTIVE + ' of them on sale. Read from Shopify ' + esc(when(L.at)) + '.</p></div>' +
+      '<div class="row"><button type="button" class="soft" data-act="sp-view" data-v="prices">Change prices</button><button type="button" class="soft" data-act="sp-view" data-v="add">Add a product</button><button type="button" class="linklike small" data-act="sp-reload">Read again</button></div></div></div>' +
+      '<div class="card stack sp-list">' +
+      '<p class="sunk sp-note"><i class="lamp g" aria-hidden="true"></i>Changes you save here go straight to ' + esc(s.domain || "the shop") + '. Shopify still takes the payments.</p>' +
+      '<div class="row between"><div class="seg" role="group" aria-label="Show">' + seg.map(function (x) { return '<button type="button" class="' + (sh.filter === x[0] ? "on" : "") + '" data-act="sp-filter" data-v="' + x[0] + '"' + (sh.filter === x[0] ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' + esc(x[1]) + '</button>'; }).join("") + '</div>' +
+      '<div class="row sp-filt"><label class="field sp-f"><span class="cap">Collection</span><select data-sp-list="col"><option value="">Every collection</option>' + L.collections.map(function (c) { return '<option value="' + esc(c.id) + '"' + (sh.col === c.id ? " selected" : "") + '>' + esc(c.title) + '</option>'; }).join("") + '</select></label>' +
+      '<label class="field sp-f"><span class="cap">Search</span><input type="search" data-sp-list="q" value="' + esc(sh.q) + '" placeholder="Search by name"></label></div></div>' +
+      '<div class="sp-scroll"><table class="sp-table"><thead><tr><th>Product</th><th>Status</th><th>Versions</th><th>In stock</th><th>Price</th></tr></thead><tbody>' +
+      (cut.length ? cut.map(function (p) {
+        return '<tr><td><button type="button" class="sp-name" data-act="sp-open" data-id="' + esc(p.id) + '">' + spPic(p.pic, "") + '<b>' + esc(p.title) + '</b></button></td><td>' + spStatus(p.status) + '</td><td>' + p.versions + '</td><td>' + (p.stock == null ? "" : Number(p.stock).toLocaleString("en-GB")) + '</td><td>' + esc(gbpRange(p.low, p.high)) + '</td></tr>';
+      }).join("") : '<tr><td colspan="5" class="small">No products match.</td></tr>') + '</tbody></table></div>' +
+      (!q && !sh.more && shown.length > cut.length ? '<div class="row between"><span class="small">Showing ' + cut.length + ' of ' + shown.length + '</span><button type="button" class="soft" data-act="sp-more">Show all</button></div>' : "") + '</div>';
+  }
+
+  // ----- one product -----
+  function spDraft(sh, p) {
+    if (sh.drafts[p.id]) return sh.drafts[p.id];
+    var d = { title: p.title, status: p.status, seoTitle: p.seo.title, seoDescription: p.seo.description, template: p.template, desc: null, price: {}, was: {}, sku: {}, stock: {}, cols: p.collections.slice(), alt: {}, order: p.photos.map(function (x) { return x.id; }), groupBy: "", open: {} };
+    p.variants.forEach(function (v) { d.price[v.id] = gbp(v.price).replace("£", ""); d.was[v.id] = v.was == null ? "" : gbp(v.was).replace("£", ""); d.sku[v.id] = v.sku; v.stock.forEach(function (l) { d.stock[v.item + "|" + l.location] = String(l.qty); }); });
+    p.photos.forEach(function (x) { d.alt[x.id] = x.alt; });
+    var multi = p.options.filter(function (o) { return o.values.length > 1; });
+    d.groupBy = (multi.find(function (o) { return /frame/i.test(o.name); }) || multi[0] || { name: "" }).name;
+    return (sh.drafts[p.id] = d);
+  }
+  function spNum(v) { var t = String(v == null ? "" : v).replace(/[£,\s]/g, ""); return t === "" ? null : /^\d{1,7}(\.\d{1,2})?$/.test(t) ? Number(t).toFixed(2) : "bad"; }
+  // What would be sent to Shopify: only what differs from what was read, each with what it was.
+  function spChange(p, d) {
+    var c = {}, n = 0, bad = "";
+    [["title", p.title], ["status", p.status], ["seoTitle", p.seo.title], ["seoDescription", p.seo.description], ["template", p.template]].forEach(function (f) { if (String(d[f[0]] || "") !== String(f[1] || "")) { c[f[0]] = { from: f[1] || "", to: d[f[0]] || "" }; n++; } });
+    if (d.desc != null && d.desc !== p.description) { c.description = { from: p.description, to: d.desc }; n++; }
+    var vs = [];
+    p.variants.forEach(function (v) {
+      var x = { id: v.id }, pr = spNum(d.price[v.id]), wa = spNum(d.was[v.id]);
+      if (pr === "bad" || pr == null) bad = bad || "The price of " + v.title + " is not a price.";
+      else if (pr !== v.price) { x.price = { from: v.price, to: pr }; n++; }
+      if (wa === "bad") bad = bad || "The was price of " + v.title + " is not a price.";
+      else if (wa !== v.was) { x.was = { from: v.was, to: wa }; n++; }
+      if (String(d.sku[v.id] || "") !== v.sku) { x.sku = { from: v.sku, to: d.sku[v.id] || "" }; n++; }
+      if (x.price || x.was || x.sku) vs.push(x);
+    });
+    if (vs.length) c.variants = vs;
+    var st = [];
+    p.variants.forEach(function (v) { v.stock.forEach(function (l) { var t = String(d.stock[v.item + "|" + l.location]).trim(); if (!/^\d{1,7}$/.test(t)) { bad = bad || "The stock of " + v.title + " must be a whole number."; return; } if (Number(t) !== l.qty) { st.push({ item: v.item, location: l.location, from: l.qty, to: Number(t) }); n++; } }); });
+    if (st.length) c.stock = st;
+    var add = d.cols.filter(function (id) { return p.collections.indexOf(id) < 0; }), rem = p.collections.filter(function (id) { return d.cols.indexOf(id) < 0; });
+    if (add.length || rem.length) { c.collections = { add: add, remove: rem }; n += add.length + rem.length; }
+    var ph = p.photos.filter(function (x) { return (d.alt[x.id] || "") !== x.alt; }).map(function (x) { return { id: x.id, from: x.alt, to: d.alt[x.id] || "" }; });
+    if (ph.length) { c.photos = ph; n += ph.length; }
+    if (d.order.join() !== p.photos.map(function (x) { return x.id; }).join()) { c.order = d.order.slice(); n++; }
+    return { change: c, count: n, bad: bad };
+  }
+  function spGroups(p, d) {
+    var by = d.groupBy, out = {}, keys = [];
+    p.variants.forEach(function (v) { var k = by ? v.options[by] || "" : "All"; if (!out[k]) { out[k] = []; keys.push(k); } out[k].push(v); });
+    return keys.map(function (k) { return { key: k, list: out[k] }; });
+  }
+  function viewShopProduct(s, sh) {
+    var p = sh.prods[sh.open];
+    if (!p) return '<div class="page-head"><button type="button" class="linklike" data-act="sp-view" data-v="list" style="align-self:flex-start">Products</button><h1>Reading the product</h1><p>From Shopify.</p></div>';
+    var d = spDraft(sh, p), ch = spChange(p, d), groups = spGroups(p, d), others = p.options.filter(function (o) { return o.name !== d.groupBy && o.values.length > 1; }).map(function (o) { return o.name; });
+    var multiStock = p.locations.length > 1;
+    var order = d.order.map(function (id) { return p.photos.find(function (x) { return x.id === id; }); }).filter(Boolean);
+    var changes = sh.changes[p.id];
+    richSource = { "sp-desc": { html: d.desc != null ? d.desc : p.description, dirty: d.desc != null } };
+    function stockCells(v) { return v.stock.length ? v.stock.map(function (l) { var k = v.item + "|" + l.location; return '<label class="sp-stock">' + (multiStock ? '<span class="small">' + esc(l.name) + '</span>' : '<span class="sr">Stock of ' + esc(v.title) + '</span>') + '<input inputmode="numeric" data-sp="stock" data-k="' + esc(k) + '" value="' + esc(d.stock[k]) + '"></label>'; }).join("") : '<span class="small">' + (v.tracked ? "None held" : "Not counted") + '</span>'; }
+    return '<div class="page-head"><div class="row between sp-head"><div><p class="small sp-crumbs"><button type="button" class="linklike" data-act="sp-view" data-v="list">Products</button> / ' + esc(p.title) + '</p><h1>' + esc(d.title || p.title) + '</h1></div>' +
+      '<div class="row"><div class="seg" role="group" aria-label="Status">' + ["ACTIVE", "DRAFT", "ARCHIVED"].map(function (st) { return '<button type="button" class="' + (d.status === st ? "on" : "") + '" data-act="sp-status" data-v="' + st + '" aria-pressed="' + (d.status === st) + '">' + SHOP_STATUS[st][0] + '</button>'; }).join("") + '</div>' +
+      (p.url && p.status === "ACTIVE" ? '<a class="soft" href="' + esc(p.url) + '" target="_blank" rel="noopener">View on ' + esc(s.domain) + '</a>' : "") +
+      '<button type="button" class="soft" data-act="sp-copyof" data-id="' + esc(p.id) + '">Copy as a new product</button>' +
+      '<span class="small" id="sp-count">' + (ch.count ? ch.count + (ch.count === 1 ? " change" : " changes") + " not saved" : "All saved") + '</span>' +
+      '<button type="button" class="btn key" data-act="sp-save"' + (ch.count && !sh.busy ? "" : " disabled") + '>' + (sh.busy === "save" ? "Saving" : "Save") + '</button></div></div></div>' +
+      '<div class="sp-cols"><div class="sp-main">' +
+      '<div class="card stack"><h2 class="cardh">Words</h2>' +
+        '<label class="field"><span class="cap">Title</span><input data-sp="title" value="' + esc(d.title) + '"></label>' +
+        '<div class="field"><span class="cap" id="sp-desc-l">Description</span><div class="rt">' + richTools("sp-desc-ed", false, null) + '<div class="rt-page" id="sp-desc-ed" data-rich="sp-desc" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="sp-desc-l" spellcheck="true" lang="en-GB"></div></div></div></div>' +
+      '<div class="card stack"><div class="row between"><h2 class="cardh">Photos</h2><span class="small">' + order.length + (order.length === 1 ? " photo" : " photos") + '. The first is the one shown in lists.</span></div>' +
+        '<div class="sp-photos">' + order.map(function (x, i) {
+          return '<div class="sp-photo">' + spPic(x.url, d.alt[x.id]) + '<label class="field"><span class="sr">What photo ' + (i + 1) + ' shows</span><input data-sp="alt" data-id="' + esc(x.id) + '" value="' + esc(d.alt[x.id]) + '" placeholder="What it shows"></label>' +
+            '<div class="row"><button type="button" class="linklike small" data-act="sp-move" data-id="' + esc(x.id) + '" data-d="-1"' + (i ? "" : " disabled") + '>Earlier</button><button type="button" class="linklike small" data-act="sp-move" data-id="' + esc(x.id) + '" data-d="1"' + (i < order.length - 1 ? "" : " disabled") + '>Later</button></div></div>';
+        }).join("") + '</div>' +
+        '<div class="sunk stack sp-up"><span class="cap">Add a photo</span><div class="row"><input type="file" accept="image/jpeg,image/png,image/webp" data-sp-file="1" aria-label="Choose a photo"><label class="field" style="flex:1 1 240px"><span class="sr">What the new photo shows</span><input data-sp-new="alt" placeholder="What it shows, read out to people who cannot see it" value="' + esc(sh.newAlt || "") + '"></label>' +
+        '<button type="button" class="soft" data-act="sp-upload"' + (sh.busy ? " disabled" : "") + '>' + (sh.busy === "upload" ? "Sending" : "Add photo") + '</button></div><span class="small">It goes to Shopify straight away, at the end of the photos. JPG, PNG or WebP, up to 10 MB.</span></div></div>' +
+      '<div class="card stack"><div class="row between"><h2 class="cardh">Versions and prices</h2></div>' +
+        p.options.map(function (o) { return '<div class="row"><span class="cap sp-oname">' + esc(o.name === "Color" ? "Colour" : o.name) + '</span>' + o.values.map(function (v) { return '<span class="sp-chip">' + esc(v) + '</span>'; }).join("") + '</div>'; }).join("") +
+        '<div class="row between"><span class="small">' + p.variants.length + (p.variants.length === 1 ? " version" : " versions") + (p.stock != null ? ", " + Number(p.stock).toLocaleString("en-GB") + " in stock in all" : "") + '. Options are changed in Shopify for now.</span>' +
+        (p.options.filter(function (o) { return o.values.length > 1; }).length > 1 ? '<div class="row"><span class="cap">Group by</span><div class="seg" role="group" aria-label="Group by">' + p.options.filter(function (o) { return o.values.length > 1; }).map(function (o) { return '<button type="button" class="' + (d.groupBy === o.name ? "on" : "") + '" data-act="sp-groupby" data-v="' + esc(o.name) + '">' + esc(o.name === "Color" ? "Colour" : o.name) + '</button>'; }).join("") + '</div></div>' : "") + '</div>' +
+        groups.map(function (g, gi) {
+          var prices = g.list.map(function (v) { return d.price[v.id]; }), same = prices.every(function (x) { return x === prices[0]; }), open = d.open[g.key] || groups.length === 1;
+          return '<div class="sunk sp-grp"><b>' + esc(g.key || "All") + '</b><span class="small">' + g.list.length + (g.list.length === 1 ? " version" : " versions") + '</span>' +
+            (g.list.length > 1 ? '<label class="sp-gprice"><span class="small">Price for all ' + g.list.length + '</span><input data-sp-group="' + gi + '" value="' + esc(same ? prices[0] : "") + '" placeholder="' + (same ? "" : "Mixed") + '" aria-label="Price for all ' + esc(g.key) + '"></label>' : "") +
+            (groups.length > 1 ? '<button type="button" class="soft slim" data-act="sp-group" data-v="' + esc(g.key) + '">' + (open ? "Close" : "Open") + '</button>' : "") + '</div>' +
+            '<div class="sp-scroll"' + (open ? "" : " hidden") + '><table class="sp-table sp-vt"><thead><tr><th>' + esc(others.length ? others.map(function (o) { return o === "Color" ? "Colour" : o; }).join(", ") : "Version") + '</th><th>Price</th><th>Was price</th><th>Stock code</th><th>Stock</th></tr></thead><tbody>' +
+            g.list.map(function (v) {
+              var nm = others.length ? others.map(function (o) { return v.options[o]; }).join(" / ") : v.title;
+              return '<tr><td><b>' + esc(nm) + '</b></td><td><input class="sp-money" data-sp="price" data-g="' + gi + '" data-id="' + esc(v.id) + '" value="' + esc(d.price[v.id]) + '" aria-label="Price of ' + esc(v.title) + ', pounds"></td>' +
+                '<td><input class="sp-money" data-sp="was" data-id="' + esc(v.id) + '" value="' + esc(d.was[v.id]) + '" placeholder="None" aria-label="Was price of ' + esc(v.title) + '"></td>' +
+                '<td><input data-sp="sku" data-id="' + esc(v.id) + '" value="' + esc(d.sku[v.id]) + '" placeholder="None" aria-label="Stock code of ' + esc(v.title) + '"></td><td>' + stockCells(v) + '</td></tr>';
+            }).join("") + '</tbody></table></div>';
+        }).join("") + '<span class="small">Prices are in pounds. A was price shows crossed out beside the price; leave it empty for none.</span></div>' +
+      '</div><div class="sp-side">' +
+      '<div class="card stack"><h2 class="cardh">Collections</h2>' + p.allCollections.map(function (c) {
+        return '<label class="sp-check"><input type="checkbox" data-sp="col" value="' + esc(c.id) + '"' + (d.cols.indexOf(c.id) >= 0 ? " checked" : "") + (c.auto ? " disabled" : "") + '><span>' + esc(c.title) + (c.auto ? ' <span class="small">fills itself by rules in Shopify</span>' : "") + '</span></label>';
+      }).join("") + '</div>' +
+      '<div class="card stack"><h2 class="cardh">In search results</h2>' +
+        '<div class="sunk sp-serp"><span class="sp-serp-t">' + esc(d.seoTitle || d.title) + '</span><span class="small">' + esc(p.url.replace(/^https:\/\//, "")) + '</span></div>' +
+        '<label class="field"><span class="cap">Title in search results</span><input data-sp="seoTitle" value="' + esc(d.seoTitle) + '" placeholder="' + esc(d.title) + '"></label>' +
+        '<label class="field"><span class="cap">Description in search results</span><textarea rows="3" data-sp="seoDescription" placeholder="Shopify uses the start of the description">' + esc(d.seoDescription) + '</textarea></label>' +
+        '<label class="field"><span class="cap">Page layout in the theme</span><input data-sp="template" value="' + esc(d.template) + '" placeholder="The theme\'s own"></label></div>' +
+      '<div class="card stack"><h2 class="cardh">Changes made here</h2>' + (changes == null ? '<span class="small">Reading the list.</span>' : changes.length ? changes.slice(0, 6).map(spChangeRow).join("") + '<button type="button" class="linklike small" data-tab="changes" style="align-self:flex-start">Every change to the shop</button>' : '<span class="small">None yet. Every change saved from the console shows here, with who made it and when, and can be put back.</span>') + '</div>' +
+      '</div></div>';
+  }
+  function spChangeRow(e) {
+    var sh = shopOf(), parts = (e.items || []).filter(function (x) { return x.kind !== "note"; }).length, ask = sh && sh.confirm === e.id;
+    return '<div class="sunk sp-change"><div class="stack-tight"><b>' + esc(e.what) + '</b><span class="small">' + esc(when(e.when)) + ', ' + esc(spWho(e.by)) + (e.putBack ? ". Put back " + esc(when(e.putBack)) : "") + '</span></div>' +
+      (ask ? '<div class="row"><span class="small">Put back ' + parts + (parts === 1 ? " part" : " parts") + ' in the shop straight away?</span><button type="button" class="btn slim" data-act="sp-putback" data-id="' + esc(e.id) + '">Put back</button><button type="button" class="linklike small" data-act="sp-confirm" data-id="">Cancel</button></div>'
+        : parts && !e.putBack && !e.undoes ? '<button type="button" class="soft slim" data-act="sp-confirm" data-id="' + esc(e.id) + '">Put back</button>' : "") + '</div>';
+  }
+
+  // ----- many prices at once -----
+  function spOptionsOf(L) {
+    var out = {}, order = [];
+    L.products.forEach(function (p) { (p.options || []).forEach(function (o) { if (!out[o.name]) { out[o.name] = []; order.push(o.name); } o.values.forEach(function (v) { if (out[o.name].indexOf(v) < 0) out[o.name].push(v); }); }); });
+    return order.filter(function (n) { return out[n].length > 1; }).map(function (n) { return { name: n, values: out[n] }; });
+  }
+  function viewShopPrices(s, sh) {
+    var L = sh.list; if (!L) return head("Change prices", "Reading the products from Shopify.");
+    var f = sh.pf, opts = spOptionsOf(L), plan = sh.plan, pq = sh.pickQ.trim().toLowerCase();
+    var counts = { active: L.products.filter(function (p) { return p.status === "ACTIVE"; }).length, all: L.products.length };
+    function pick(k, v, label, on) { return '<button type="button" class="pick' + (on ? " on" : "") + '" data-act="sp-pf" data-k="' + k + '" data-v="' + esc(v) + '" aria-pressed="' + !!on + '">' + esc(label) + '</button>'; }
+    var rows = plan ? plan.groups : [], cut = sh.planAll ? rows : rows.slice(0, 10);
+    return '<div class="page-head"><p class="small sp-crumbs"><button type="button" class="linklike" data-act="sp-view" data-v="list">Products</button> / Change prices</p><h1>Change prices</h1><p>Choose the versions, then the new price. You see every change before anything is saved.</p></div>' +
+      '<div class="card stack sp-step"><h2 class="cardh"><span class="sp-n">1</span>Which versions</h2>' +
+        '<div class="row"><span class="cap sp-oname">Products</span>' + pick("products", "active", "On sale (" + counts.active + ")", f.products === "active") + pick("products", "all", "Every product (" + counts.all + ")", f.products === "all") + pick("products", "collection", "One collection", f.products === "collection") + pick("products", "chosen", "Choose by hand", f.products === "chosen") + '</div>' +
+        (f.products === "collection" ? '<label class="field sp-f"><span class="cap">Collection</span><select data-sp-pf="collection"><option value="">Choose</option>' + L.collections.map(function (c) { return '<option value="' + esc(c.id) + '"' + (f.collection === c.id ? " selected" : "") + '>' + esc(c.title) + '</option>'; }).join("") + '</select></label>' : "") +
+        (f.products === "chosen" ? '<div class="sunk stack"><label class="field sp-f"><span class="cap">Find a product</span><input type="search" data-sp-pick="q" value="' + esc(sh.pickQ) + '"></label><div class="sp-picks">' + L.products.filter(function (p) { return !pq || p.title.toLowerCase().indexOf(pq) >= 0; }).map(function (p) { return '<label class="sp-check"><input type="checkbox" data-sp-pick="id" value="' + esc(p.id) + '"' + (f.ids.indexOf(p.id) >= 0 ? " checked" : "") + '><span>' + esc(p.title) + ' <span class="small">' + esc((SHOP_STATUS[p.status] || [p.status])[0]) + '</span></span></label>'; }).join("") + '</div><span class="small">' + f.ids.length + ' chosen</span></div>' : "") +
+        opts.map(function (o) { var chosen = f.opts[o.name] || []; return '<div class="row"><span class="cap sp-oname">' + esc(o.name === "Color" ? "Colour" : o.name) + '</span>' + pick("opt:" + o.name, "", "Every " + (o.name === "Color" ? "colour" : o.name.toLowerCase()), !chosen.length) + o.values.map(function (v) { return pick("opt:" + o.name, v, v, chosen.indexOf(v) >= 0); }).join("") + '</div>'; }).join("") + '</div>' +
+      '<div class="card stack sp-step"><h2 class="cardh"><span class="sp-n">2</span>New price</h2>' +
+        '<div class="row"><div class="seg" role="group" aria-label="How">' + [["set", "Set to"], ["amount", "Raise or lower by an amount"], ["percent", "Raise or lower by a percentage"]].map(function (x) { return '<button type="button" class="' + (f.how === x[0] ? "on" : "") + '" data-act="sp-pf" data-k="how" data-v="' + x[0] + '" aria-pressed="' + (f.how === x[0]) + '">' + x[1] + '</button>'; }).join("") + '</div>' +
+        '<label class="field sp-f"><span class="sr">' + (f.how === "set" ? "New price in pounds" : f.how === "amount" ? "Pounds to add, or take off with a minus" : "Percentage to add, or take off with a minus") + '</span><input data-sp-pf="value" value="' + esc(f.value) + '" placeholder="' + (f.how === "set" ? "£375" : f.how === "amount" ? "25 or -25" : "10 or -10") + '"></label></div>' +
+        (f.how !== "set" ? '<label class="sp-check"><input type="checkbox" data-sp-pf="round"' + (f.round === "pound" ? " checked" : "") + '><span>Round to whole pounds</span></label>' : "") +
+        '<label class="sp-check"><input type="checkbox" data-sp-pf="was"' + (f.was ? " checked" : "") + '><span>Where a price goes down, show the old price crossed out as a "was" price</span></label>' +
+        '<div class="row"><button type="button" class="soft" data-act="sp-plan"' + (sh.busy ? " disabled" : "") + '>' + (sh.busy === "plan" ? "Checking" : "Check the changes") + '</button></div></div>' +
+      (plan ? '<div class="card stack sp-step"><h2 class="cardh"><span class="sp-n">3</span>Check before saving</h2>' +
+        (plan.count ? '<p class="sunk sp-sum">' + plan.count + (plan.count === 1 ? " version" : " versions") + ' in ' + plan.products + (plan.products === 1 ? " product" : " products") + ' change' + (plan.from && plan.to ? ' from ' + gbp(plan.from) + ' to ' + gbp(plan.to) : "") + '.' + (f.products === "active" ? " Drafts and archived products stay as they are." : "") + '</p>' +
+          '<div class="sp-scroll"><table class="sp-table"><thead><tr><th>Product</th><th>Versions</th><th>Now</th><th>After</th></tr></thead><tbody>' + cut.map(function (g) {
+            var fr = g.versions.map(function (v) { return v.from; }), to = g.versions.map(function (v) { return v.to; });
+            var r = function (a) { var lo = Math.min.apply(null, a.map(Number)), hi = Math.max.apply(null, a.map(Number)); return gbpRange(lo.toFixed(2), hi.toFixed(2)); };
+            return '<tr><td><b>' + esc(g.title) + '</b>' + (g.status !== "ACTIVE" ? ' <span class="small">' + esc((SHOP_STATUS[g.status] || [g.status])[0]) + '</span>' : "") + '</td><td>' + g.versions.length + '</td><td>' + esc(r(fr)) + '</td><td><b>' + esc(r(to)) + '</b></td></tr>';
+          }).join("") + '</tbody></table></div>' +
+          (rows.length > cut.length ? '<div class="row between"><span class="small">And ' + (rows.length - cut.length) + ' more products, ' + rows.slice(cut.length).reduce(function (n, g) { return n + g.versions.length; }, 0) + ' versions.</span><button type="button" class="soft" data-act="sp-planall">Show all</button></div>' : "") +
+          '<div class="row between"><span class="small">Goes live on ' + esc(s.domain || "the shop") + ' as soon as it is saved. Listed in Changes, where all of it can be put back in one go.</span><div class="row"><button type="button" class="soft" data-act="sp-view" data-v="list">Cancel</button><button type="button" class="btn key" data-act="sp-apply"' + (sh.busy ? " disabled" : "") + '>' + (sh.busy === "apply" ? "Saving" : "Save " + plan.count + (plan.count === 1 ? " price" : " prices")) + '</button></div></div>'
+          : '<p class="small">No price would change with these choices.</p>') + '</div>' : "");
+  }
+  function viewShopAdd(s, sh) {
+    var L = sh.list; if (!L) return head("Add a product", "Reading the products from Shopify.");
+    var a = sh.add; if (!a.from && !a.blank) a.from = (L.products.find(function (p) { return p.status === "ACTIVE"; }) || L.products[0] || {}).id || "";
+    return '<div class="page-head"><p class="small sp-crumbs"><button type="button" class="linklike" data-act="sp-view" data-v="list">Products</button> / Add a product</p><h1>Add a product</h1><p>It starts as a draft, so nobody sees it until you put it on sale.</p></div>' +
+      '<div class="card stack" style="max-width:820px">' +
+      '<label class="sp-check"><input type="radio" name="sp-how" data-sp-add="copy"' + (!a.blank ? " checked" : "") + '><span><b>A copy of another product</b><br><span class="small">Its versions, prices, photos and collections come too. Best for a new print in the same sizes and frames.</span></span></label>' +
+      (!a.blank ? '<label class="field sp-f"><span class="cap">Copy</span><select data-sp-add="from">' + L.products.map(function (p) { return '<option value="' + esc(p.id) + '"' + (a.from === p.id ? " selected" : "") + '>' + esc(p.title) + '</option>'; }).join("") + '</select></label>' : "") +
+      '<label class="sp-check"><input type="radio" name="sp-how" data-sp-add="blank"' + (a.blank ? " checked" : "") + '><span><b>A blank product</b><br><span class="small">Just a title. Its sizes and frames are set up in Shopify for now.</span></span></label>' +
+      '<label class="field"><span class="cap">Title</span><input data-sp-add="title" value="' + esc(a.title) + '" placeholder="Such as MOON RATS"></label>' +
+      '<div class="row"><button type="button" class="soft" data-act="sp-view" data-v="list">Cancel</button><button type="button" class="btn key" data-act="sp-add"' + (sh.busy ? " disabled" : "") + '>' + (sh.busy === "add" ? "Adding" : "Add as a draft") + '</button></div></div>';
+  }
+  function viewShopChanges() {
+    var s = site(), sh = shopOf(s); if (!sh) return viewHome();
+    var list = sh.changes[""];
+    return '<div class="page-head"><button type="button" class="linklike" data-tab="products" style="align-self:flex-start">Products</button><h1>Changes</h1><p>Every change made to the ' + esc(s.name) + ' shop from the console, newest first. Put back sets each part as it was, if nobody has changed it since.</p></div>' +
+      '<div class="card stack" style="max-width:920px">' + (list == null ? '<span class="small">Reading the list.</span>' : list.length ? list.map(spChangeRow).join("") : '<span class="small">Nothing yet.</span>') + '</div>';
+  }
+
+  // ----- doing things -----
+  async function shopLoad(force) {
+    var s = site(), sh = shopOf(s); if (!sh) return;
+    try {
+      if (state.tab === "products" && (force || !sh.list)) { var d = await api("shopProducts", { site: s.id }); sh.list = { products: d.products, collections: d.collections, at: new Date().toISOString() }; sh.err = ""; render(); }
+      if (state.tab === "products" && sh.view === "product" && sh.open && (force || !sh.prods[sh.open])) { var pd = await api("shopProduct", { site: s.id, id: sh.open }); sh.prods[sh.open] = pd.product; render(); }
+      if (state.tab === "products" && sh.view === "product" && sh.open && (force || sh.changes[sh.open] == null)) { var c1 = await api("shopChanges", { site: s.id, id: sh.open }); sh.changes[sh.open] = c1.changes || []; render(); }
+      if (state.tab === "changes" && (force || sh.changes[""] == null)) { var c2 = await api("shopChanges", { site: s.id }); sh.changes[""] = c2.changes || []; render(); }
+    } catch (e) { sh.err = e.message; if (state.tab === "products" && sh.list) state.notice = { text: e.message, problem: true }; render(); }
+  }
+  function spPatchCount() {
+    var sh = shopOf(), p = sh && sh.prods[sh.open], d = p && sh.drafts[p.id]; if (!d) return;
+    var ch = spChange(p, d), el = app.querySelector("#sp-count"), b = app.querySelector('[data-act="sp-save"]');
+    if (el) el.textContent = ch.count ? ch.count + (ch.count === 1 ? " change" : " changes") + " not saved" : "All saved";
+    if (b) b.disabled = !ch.count || !!sh.busy;
+  }
+  function shopInput(t) {
+    var sh = shopOf(); if (!sh || !t.dataset) return false;
+    if (t.dataset.spList) { sh[t.dataset.spList] = t.value; sh.more = false; if (t.dataset.spList === "q") { var pos = t.selectionStart; render(); var q = app.querySelector('[data-sp-list="q"]'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (_e) { /* not a text box */ } } } else render(); return true; }
+    if (t.dataset.spPf) {
+      var k = t.dataset.spPf; sh.pf[k] = k === "round" ? (t.checked ? "pound" : "none") : k === "was" ? t.checked : t.value;
+      if (k !== "value") { sh.plan = null; render(); }
+      else if (sh.plan) { sh.plan = null; var vp = t.selectionStart; render(); var vb = app.querySelector('[data-sp-pf="value"]'); if (vb) { vb.focus(); try { vb.setSelectionRange(vp, vp); } catch (_e) { /* fine */ } } }
+      return true;
+    }
+    if (t.dataset.spPick) { if (t.dataset.spPick === "q") { sh.pickQ = t.value; var ps = t.selectionStart; render(); var pq = app.querySelector('[data-sp-pick="q"]'); if (pq) { pq.focus(); try { pq.setSelectionRange(ps, ps); } catch (_e) { /* fine */ } } return true; } var i = sh.pf.ids.indexOf(t.value); if (t.checked && i < 0) sh.pf.ids.push(t.value); if (!t.checked && i >= 0) sh.pf.ids.splice(i, 1); sh.plan = null; render(); return true; }
+    if (t.dataset.spAdd) { var a = sh.add; if (t.dataset.spAdd === "title") a.title = t.value; else if (t.dataset.spAdd === "from") a.from = t.value; else { a.blank = t.dataset.spAdd === "blank"; render(); } return true; }
+    if (t.dataset.spNew) { sh.newAlt = t.value; return true; }
+    var p = sh.prods[sh.open], d = p && sh.drafts[p.id]; if (!d) return false;
+    if (t.dataset.spGroup != null) {
+      var gi = t.dataset.spGroup;
+      Array.prototype.forEach.call(app.querySelectorAll('[data-sp="price"][data-g="' + gi + '"]'), function (el) { el.value = t.value; d.price[el.dataset.id] = t.value; });
+      spPatchCount(); return true;
+    }
+    var f = t.dataset.sp; if (!f) return false;
+    if (f === "price" || f === "was" || f === "sku") d[f][t.dataset.id] = t.value;
+    else if (f === "stock") d.stock[t.dataset.k] = t.value;
+    else if (f === "alt") d.alt[t.dataset.id] = t.value;
+    else if (f === "col") { var j = d.cols.indexOf(t.value); if (t.checked && j < 0) d.cols.push(t.value); if (!t.checked && j >= 0) d.cols.splice(j, 1); }
+    else d[f] = t.value;
+    if (f === "price") { var g = app.querySelector('[data-sp-group="' + t.dataset.g + '"]'); if (g) { var all = Array.prototype.map.call(app.querySelectorAll('[data-sp="price"][data-g="' + t.dataset.g + '"]'), function (el) { return el.value; }); g.value = all.every(function (x) { return x === all[0]; }) ? all[0] : ""; g.placeholder = g.value ? "" : "Mixed"; } }
+    spPatchCount(); return true;
+  }
+  function spDesc() {
+    var sh = shopOf(), p = sh && sh.prods[sh.open], d = p && sh.drafts[p.id], el = app.querySelector && app.querySelector('[data-rich="sp-desc"]'), r = rich["sp-desc"];
+    if (d && el && r && r.dirty) d.desc = richOut(el, r.keep, r.single);
+  }
+  async function shopClick(el) {
+    var a = el.dataset.act, s = site(), sh = shopOf(s); if (!sh) return;
+    function fail(e) { sh.busy = ""; state.notice = { text: e.message, problem: true }; if (e.stale && sh.open) { delete sh.prods[sh.open]; delete sh.drafts[sh.open]; } render(); shopLoad(); }
+    spDesc();
+    if (a === "sp-reload") { sh.err = ""; sh.list = null; if (sh.open) { delete sh.prods[sh.open]; delete sh.changes[sh.open]; } delete sh.changes[""]; render(); shopLoad(true); return; }
+    if (a === "sp-filter") { sh.filter = el.dataset.v; sh.more = false; render(); return; }
+    if (a === "sp-more") { sh.more = true; render(); return; }
+    if (a === "sp-view") { sh.view = el.dataset.v; state.notice = null; if (el.dataset.v === "prices") sh.plan = null; render(); shopLoad(); window.scrollTo(0, 0); return; }
+    if (a === "sp-open") { sh.view = "product"; sh.open = el.dataset.id; state.notice = null; render(); shopLoad(); window.scrollTo(0, 0); return; }
+    if (a === "sp-copyof") { sh.view = "add"; sh.add = { from: el.dataset.id, title: "", blank: false }; render(); return; }
+    var p = sh.prods[sh.open], d = p && sh.drafts[p.id];
+    if (a === "sp-status" && d) { d.status = el.dataset.v; render(); return; }
+    if (a === "sp-groupby" && d) { d.groupBy = el.dataset.v; d.open = {}; render(); return; }
+    if (a === "sp-group" && d) { d.open[el.dataset.v] = !d.open[el.dataset.v]; render(); return; }
+    if (a === "sp-move" && d) { var i = d.order.indexOf(el.dataset.id), j = i + Number(el.dataset.d); if (i >= 0 && j >= 0 && j < d.order.length) { d.order.splice(j, 0, d.order.splice(i, 1)[0]); render(); } return; }
+    if (a === "sp-save" && d) {
+      var ch = spChange(p, d); if (ch.bad) { state.notice = { text: ch.bad, problem: true }; render(); return; } if (!ch.count) return;
+      sh.busy = "save"; spPatchCount(); patchIsland();
+      try { var r = await api("shopSave", { site: s.id, id: p.id, change: ch.change }); sh.busy = ""; delete sh.drafts[p.id]; sh.prods[p.id] = r.product; delete sh.changes[p.id]; delete sh.changes[""]; sh.list = null; state.flash = "Saved to the shop"; state.notice = r.logged === false ? { text: "Saved to the shop. The list of changes could not be updated, so this one cannot be put back from here.", problem: true } : null; render(); shopLoad(); }
+      catch (e) { fail(e); }
+      return;
+    }
+    if (a === "sp-upload" && p) {
+      var file = app.querySelector("[data-sp-file]"), f = file && file.files && file.files[0], alt = (sh.newAlt || "").trim();
+      if (!f) { state.notice = { text: "Choose a photo first.", problem: true }; render(); return; }
+      if (!alt) { state.notice = { text: "Say what the photo shows. It is read out to people who cannot see it.", problem: true }; render(); return; }
+      if (f.size > 10 * 1024 * 1024) { state.notice = { text: "That photo is over 10 MB. Make it smaller first.", problem: true }; render(); return; }
+      sh.busy = "upload"; render();
+      try {
+        var b64 = await new Promise(function (ok, no) { var fr = new FileReader(); fr.onload = function () { ok(String(fr.result).split(",")[1] || ""); }; fr.onerror = no; fr.readAsDataURL(f); });
+        await api("shopPhoto", { site: s.id, id: p.id, title: p.title, name: f.name, ext: (f.name.split(".").pop() || "").toLowerCase(), content: b64, alt: alt });
+        sh.busy = ""; sh.newAlt = ""; var keep = sh.drafts[p.id]; delete sh.prods[p.id]; delete sh.changes[p.id]; state.flash = "Photo added";
+        var pd = await api("shopProduct", { site: s.id, id: p.id }); sh.prods[p.id] = pd.product;
+        if (keep) { keep.order = pd.product.photos.map(function (x) { return x.id; }); pd.product.photos.forEach(function (x) { if (keep.alt[x.id] == null) keep.alt[x.id] = x.alt; }); }
+        render(); shopLoad();
+      } catch (e) { fail(e); }
+      return;
+    }
+    if (a === "sp-pf") {
+      var k = el.dataset.k, v = el.dataset.v;
+      if (k.indexOf("opt:") === 0) { var on = k.slice(4), cur = sh.pf.opts[on] || []; if (!v) cur = []; else { var x = cur.indexOf(v); if (x >= 0) cur.splice(x, 1); else cur.push(v); } sh.pf.opts[on] = cur; }
+      else sh.pf[k] = v;
+      sh.plan = null; render(); return;
+    }
+    if (a === "sp-planall") { sh.planAll = true; render(); return; }
+    if (a === "sp-plan") {
+      var pf = sh.pf;
+      if (!String(pf.value).trim()) { state.notice = { text: pf.how === "set" ? "Write the new price." : "Write how much to change the prices by.", problem: true }; render(); return; }
+      sh.busy = "plan"; state.notice = null; render();
+      try { var pr = await api("shopPricePlan", { site: s.id, filter: { products: pf.products, collection: pf.collection, ids: pf.ids, options: pf.opts }, how: pf.how, value: pf.value, round: pf.round, was: pf.was }); sh.busy = ""; sh.plan = pr.plan; sh.planAll = false; render(); }
+      catch (e) { fail(e); }
+      return;
+    }
+    if (a === "sp-apply" && sh.plan) {
+      var pl = sh.plan, label = (pl.count === 1 ? "1 price" : pl.count + " prices") + (pl.from && pl.to ? " from " + gbp(pl.from) + " to " + gbp(pl.to) : " changed");
+      sh.busy = "apply"; render();
+      try {
+        var ap = await api("shopPriceApply", { site: s.id, groups: pl.groups, label: label });
+        sh.busy = ""; sh.plan = null; sh.list = null; sh.prods = {}; sh.drafts = {}; sh.changes = {}; sh.view = "list";
+        state.notice = ap.ok ? { text: ap.changed + (ap.changed === 1 ? " price" : " prices") + " changed in the shop. Listed in Changes, where they can be put back." } : { text: ap.problem, problem: true };
+        render(); shopLoad();
+      } catch (e) { fail(e); }
+      return;
+    }
+    if (a === "sp-add") {
+      var ad = sh.add; if (!ad.title.trim()) { state.notice = { text: "Give the new product a title.", problem: true }; render(); return; }
+      sh.busy = "add"; render();
+      try { var made = await api("shopAdd", { site: s.id, title: ad.title, from: ad.blank ? "" : ad.from }); sh.busy = ""; sh.add = { from: "", title: "", blank: false }; sh.list = null; sh.view = "product"; sh.open = made.id; state.notice = { text: "Added as a draft. Put it on sale when it is ready." }; render(); shopLoad(); }
+      catch (e) { fail(e); }
+      return;
+    }
+    if (a === "sp-confirm") { sh.confirm = el.dataset.id || ""; render(); return; }
+    if (a === "sp-putback") {
+      sh.busy = "back"; render();
+      try { await api("shopPutBack", { site: s.id, entry: el.dataset.id }); sh.busy = ""; sh.confirm = ""; sh.changes = {}; sh.prods = {}; sh.drafts = {}; sh.list = null; state.notice = { text: "Put back in the shop." }; render(); shopLoad(); }
+      catch (e) { sh.confirm = ""; fail(e); }
+      return;
+    }
+  }
+
   function render() {
     snapshot();
     if (!demo && !state.session) { app.innerHTML = viewSignin(); return; }
@@ -4331,7 +4669,7 @@
         : '<p class="loading">Reading your sites</p>';
       return;
     }
-    var views = { home: viewHome, overview: viewOverview, content: viewContent, theme: viewTheme, photos: viewPhotos, files: viewFiles, history: viewHistory, people: viewPeople, versions: viewVersions };
+    var views = { products: function () { return '<div class="sp">' + viewProducts() + '</div>'; }, changes: function () { return '<div class="sp">' + viewShopChanges() + '</div>'; }, home: viewHome, overview: viewOverview, content: viewContent, theme: viewTheme, photos: viewPhotos, files: viewFiles, history: viewHistory, people: viewPeople, versions: viewVersions };
     if (state.build) { app.innerHTML = viewBuild(); mountBuild(); return; }
     var s = site(), unbuilt = state.inSite && !s && state.site;
     if (state.inSite && s && state.tab === "pages" && codeOf()) { app.innerHTML = viewCode(s); mountCode(); return; }
@@ -4411,6 +4749,10 @@
   function openSite(id) {
     var x = sites().find(function (y) { return y.id === id; }); if (!x) return;
     state.pgFail = null;
+    if (x.shop) {
+      if (!isAdmin()) { state.notice = { text: "Only the admin can change the shop for now.", problem: true }; render(); return; }
+      state.flash = ""; state.ask = null; state.site = id; state.inSite = true; var back0 = state.place[id]; go(back0 === "changes" ? "changes" : "products"); return;
+    }
     if (!x.live && !x.playground && isAdmin()) { startBuild(id); return; }
     if (!isAdmin() && !(x.playground && x.youAdmin) && x.live && !myCopy(x)) {
       state.status = "saving"; state.flash = ""; render();
@@ -4423,6 +4765,7 @@
     go(x.live ? (back || firstTab(x)) : "overview");
   }
   function go(tab) {
+    if (tab === "products" && site() && site().shop) { var gsh = shopOf(); gsh.view = "list"; gsh.confirm = ""; }
     if (tab === "home" || tab === "people") { state.inSite = false; }
     else if (site()) state.place[site().id] = tab;
     state.prevTab = state.tab; state.tab = tab; state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.notice = null;
@@ -4572,6 +4915,7 @@
       if (!keep && (!inPop || el)) { state.edMenu = ""; if (!el) { patchEdTop(); return; } if (!el.dataset.tab && ["ed-goto-item", "ed-copy", "ed-new", "ed-discard", "ed-save", "ed-save-publish", "ask-makelive", "refresh-copy"].indexOf(el.dataset.act) < 0) patchEdTop(); }
     }
     if (!el) return;
+    if (el.dataset.act && el.dataset.act.indexOf("sp-") === 0) { shopClick(el); return; }
     if (el.dataset.tab) { var to = el.dataset.tab; guard(function () { go(to); }); return; }
     var a = el.dataset.act, s = site();
     if (a === "code-open") { codeClick(el); return; }
@@ -5033,6 +5377,7 @@
   });
   app.addEventListener("focusout", function (ev) { if (ev.target && ev.target.id === "ed-rename" && state.renaming) setTimeout(function () { if (state.renaming) renameDone(true); }, 0); if (ev.target && ev.target.id === "tpl-rename" && state.tplRename) setTimeout(function () { if (state.tplRename) tplRenameDone(true); }, 0); });
   app.addEventListener("input", function (ev) {
+    if (ev.target && ev.target.dataset && (ev.target.dataset.sp || ev.target.dataset.spGroup != null || ev.target.dataset.spList || ev.target.dataset.spPf || ev.target.dataset.spPick || ev.target.dataset.spAdd || ev.target.dataset.spNew) && shopInput(ev.target)) return;
     if (ev.target.id === "wd-only") { var po = pgOf(); state.wordOnly = ev.target.checked; if (po) { var bo = app.querySelector("#wd-body"); if (bo) bo.innerHTML = wordsBody(po); } return; }
     if (ev.target.id === "wd-q") { var pq = pgOf(); state.wordQ = ev.target.value; if (pq) { var bq = app.querySelector("#wd-body"); if (bq) bq.innerHTML = wordsBody(pq); } return; }
     if (ev.target.dataset && ev.target.dataset.wd) { var pw = pgOf(); if (pw) wordSet(pw, ev.target.dataset.wd, ev.target.value, ev.target.closest(".wd-row")); return; }
@@ -5070,6 +5415,7 @@
     }
     var ed = ev.target.closest && ev.target.closest("[data-rich]");
     if (ed && ed.dataset.pfRich) { var pe = pgOf(), es = pe && pgSel(pe); if (es && rich[ed.dataset.rich]) { rich[ed.dataset.rich].dirty = true; pgSet(es.sec.settings, ed.dataset.rich, richOut(ed, rich[ed.dataset.rich].keep, false)); pe.what = "Edit " + (es.kind ? es.kind.label : es.id); pgMark(pe); patchEdTop(); pushSoon(); } return; }
+    if (ed && ed.dataset.rich === "sp-desc") { if (rich["sp-desc"]) rich["sp-desc"].dirty = true; spDesc(); spPatchCount(); return; }
     if (ed) { state.dirty = true; if (rich[ed.dataset.rich]) rich[ed.dataset.rich].dirty = true; return; }
     if (ev.target.dataset && ev.target.dataset.css) {
       var pc3 = pgOf(), sc3 = pc3 && pgSel(pc3); if (!sc3) return;
@@ -5204,6 +5550,7 @@
     { id: "site-4", name: "Site 4", domain: "", live: false }, { id: "site-5", name: "Site 5", domain: "", live: false },
     { id: "practice-site", name: "Practice site", domain: "artiscope.github.io/practice-site", live: true, files: true, edits: true, practice: true, artists: [], inbox: [], slots: [] },
     { id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", live: true, files: true, edits: true, practice: true, playground: true, starter: true, youAdmin: true, artists: [], inbox: [], slots: [] },
+    { id: "zen-xander", name: "Zen Xander", domain: "zenxander.com", live: false, shop: { store: "7bb690-c7", ready: true }, artists: [], inbox: [], slots: [] },
   ] };
   var demoHistory = [
     { sha: "a".repeat(40), what: "Edit article: [Sample] How to look at a painting", when: new Date().toISOString(), by: "you", canUndo: true },
@@ -5303,7 +5650,83 @@
     Object.assign(card, { name: c.name, domain: "artiscope.github.io/" + slug, live: true, starter: true, edits: true, files: true, want: c.domain, registrar: c.registrar, todo: [], inbox: [], slots: [], artists: [] });
     return Promise.resolve({ ok: true, site: card.id, address: address, want: c.domain, registrar: c.registrar, todo: [], done: ["Repository made: Artiscope/" + slug, "Publishing switched on", "Pages, look and words written", "Version 1.0", "Hidden from search engines until its own address is connected"] });
   }
+
+  // Sample mode for a shop: the Zen Xander products in memory, changed the way the server changes them.
+  var demoShopData = null;
+  function demoShop(body) {
+    if (!demoShopData) return fetch("assets/demo-shop.json").then(function (r) { return r.json(); }).then(function (d) {
+      var n = 100, id = function (k) { return "gid://shopify/" + k + "/" + (++n); }, loc = id("Location");
+      var cols = d.collections.map(function (c) { return { id: id("Collection"), title: c[0], handle: c[0].toLowerCase().replace(/[^a-z0-9]+/g, "-"), auto: c[1], products: [] }; });
+      var at = Date.UTC(2026, 10, 20);
+      var products = d.products.map(function (x, i) {
+        var p = { id: id("Product"), title: x.title, handle: x.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"), status: x.status, description: "<p>[Sample] " + x.title + " by Zen Xander</p><p>Limited Edition Print</p>", template: x.status === "ARCHIVED" ? "" : "new-series-template", updatedAt: new Date(at - i * 3600000).toISOString(),
+          seo: { title: "", description: "" }, options: [{ name: "Size", values: ["A2 (42x60cm)"] }, { name: "Frame", values: ["Unframed", "White", "Black"] }], variants: [], photos: [], collections: [] };
+        if (x.colours.length) p.options.push({ name: "Color", values: x.colours });
+        ["Unframed", "White", "Black"].forEach(function (f) { (x.colours.length ? x.colours : [null]).forEach(function (c) {
+          var o = { Size: "A2 (42x60cm)", Frame: f }; if (c) o.Color = c;
+          p.variants.push({ id: id("ProductVariant"), title: "A2 (42x60cm) / " + f + (c ? " / " + c : ""), price: f === "Unframed" ? "250.00" : "350.00", was: null, sku: "", options: o, item: id("InventoryItem"), tracked: true, stock: [{ location: loc, name: "Shop location", qty: 100 }] });
+        }); });
+        if (x.status !== "ARCHIVED") { cols[1].products.push(p.id); p.collections.push(cols[1].id); }
+        if (x.colours.length > 3) { cols[0].products.push(p.id); p.collections.push(cols[0].id); }
+        return p;
+      });
+      demoShopData = { products: products, cols: cols, loc: loc, log: [], n: n };
+      return demoShop(body);
+    });
+    var D = demoShopData, find = function (pid) { return D.products.find(function (p) { return p.id === pid; }); };
+    var total = function (p) { return p.variants.reduce(function (t, v) { return t + v.stock.reduce(function (a, l) { return a + l.qty; }, 0); }, 0); };
+    var full = function (p) { var c = JSON.parse(JSON.stringify(p)); c.url = "https://zenxander.com/products/" + p.handle; c.stock = total(p); c.allCollections = D.cols.map(function (x) { return { id: x.id, title: x.title, handle: x.handle, auto: x.auto }; }); c.locations = [{ id: D.loc, name: "Shop location" }]; return c; };
+    var no = function (m) { return Promise.reject(new Error(m)); }, wait = function (v) { return new Promise(function (ok) { setTimeout(function () { ok(v); }, 250); }); };
+    var log = function (what, items) { D.log.unshift({ id: "s" + (++D.n), when: new Date().toISOString(), by: "admin", what: what, items: items }); };
+    var a = body.action;
+    if (a === "shopProducts") return wait({ currency: "GBP", collections: D.cols.map(function (x) { return { id: x.id, title: x.title, handle: x.handle, auto: x.auto }; }),
+      products: D.products.slice().sort(function (x, y) { return y.updatedAt.localeCompare(x.updatedAt); }).map(function (p) { var ps = p.variants.map(function (v) { return Number(v.price); }); return { id: p.id, title: p.title, handle: p.handle, status: p.status, stock: total(p), versions: p.variants.length, low: Math.min.apply(null, ps).toFixed(2), high: Math.max.apply(null, ps).toFixed(2), pic: "", collections: p.collections.slice(), options: p.options }; }) });
+    if (a === "shopProduct") { var p0 = find(body.id); return p0 ? wait({ product: full(p0) }) : no("That product is no longer in the shop."); }
+    if (a === "shopChanges") return wait({ changes: D.log.filter(function (e) { return !body.id || e.items.some(function (x) { return x.productId === body.id; }); }) });
+    if (a === "shopSave") {
+      var p = find(body.id), c = body.change || {}, items = [];
+      ["title", "status", "seoTitle", "seoDescription", "template", "description"].forEach(function (f) { if (!c[f]) return; items.push({ kind: "product", productId: p.id, title: p.title, field: f, from: c[f].from, to: c[f].to }); if (f === "seoTitle") p.seo.title = c[f].to; else if (f === "seoDescription") p.seo.description = c[f].to; else p[f] = c[f].to; });
+      (c.variants || []).forEach(function (g) { var v = p.variants.find(function (x) { return x.id === g.id; }); ["price", "was", "sku"].forEach(function (f) { if (!g[f]) return; v[f] = f === "sku" ? g[f].to : g[f].to == null ? null : Number(String(g[f].to).replace(/[£,]/g, "")).toFixed(2); items.push({ kind: "variant", productId: p.id, title: p.title, variantId: v.id, version: v.title, field: f, from: g[f].from, to: v[f] }); }); });
+      (c.stock || []).forEach(function (x) { p.variants.forEach(function (v) { if (v.item === x.item) v.stock.forEach(function (l) { if (l.location === x.location) l.qty = x.to; }); }); items.push({ kind: "stock", productId: p.id, title: p.title }); });
+      if (c.collections) { (c.collections.add || []).forEach(function (cid) { p.collections.push(cid); }); p.collections = p.collections.filter(function (cid) { return (c.collections.remove || []).indexOf(cid) < 0; }); items.push({ kind: "collection", productId: p.id, title: p.title }); }
+      p.updatedAt = new Date().toISOString(); log(items.length === 1 && items[0].field === "price" ? "1 price on " + p.title + ", £" + Number(items[0].from) + " to £" + Number(items[0].to) : items.length + " changes to " + p.title, items);
+      return wait({ ok: true, product: full(p) });
+    }
+    if (a === "shopPricePlan") {
+      var f = body.filter || {}, groups = [], opts = f.options || {};
+      var newOf = function (old) { var o = Number(old), t = String(body.value).replace(/[£%,\s]/g, ""), v = body.how === "set" ? Number(t) : body.how === "percent" ? o * (1 + Number(t) / 100) : o + Number(t); if (body.how !== "set" && body.round === "pound") v = Math.round(v); return v; };
+      if (!(newOf(250) > 0)) return no("That would make a price that cannot be right.");
+      D.products.forEach(function (p) {
+        if ((f.products === "active" || !f.products) && p.status !== "ACTIVE") return;
+        if (f.products === "collection" && p.collections.indexOf(f.collection) < 0) return;
+        if (f.products === "chosen" && (f.ids || []).indexOf(p.id) < 0) return;
+        var vs = p.variants.filter(function (v) { return Object.keys(opts).every(function (k) { return !opts[k].length || opts[k].indexOf(v.options[k]) >= 0; }); }).map(function (v) { var to = newOf(v.price).toFixed(2); return { id: v.id, title: v.title, from: v.price, to: to, wasFrom: v.was, wasTo: body.was && Number(to) < Number(v.price) ? v.price : v.was }; }).filter(function (x) { return x.to !== x.from; });
+        if (vs.length) groups.push({ productId: p.id, title: p.title, status: p.status, versions: vs });
+      });
+      var flat = [].concat.apply([], groups.map(function (g) { return g.versions; })), fr = flat.map(function (x) { return x.from; }), to2 = flat.map(function (x) { return x.to; });
+      var one = function (l) { return l.length && l.every(function (x) { return x === l[0]; }) ? l[0] : null; };
+      return wait({ plan: { groups: groups, count: flat.length, products: groups.length, from: one(fr), to: one(to2) } });
+    }
+    if (a === "shopPriceApply") {
+      var its = [];
+      (body.groups || []).forEach(function (g) { var p = find(g.productId); g.versions.forEach(function (x) { var v = p.variants.find(function (y) { return y.id === x.id; }); v.price = x.to; v.was = x.wasTo; its.push({ kind: "variant", productId: p.id, title: p.title, variantId: v.id, version: v.title, field: "price", from: x.from, to: x.to }); }); });
+      log(body.label, its); return wait({ ok: true, changed: its.length, of: its.length });
+    }
+    if (a === "shopPutBack") {
+      var e = D.log.find(function (x) { return x.id === body.entry; }); if (!e) return no("That change is no longer in the list.");
+      e.items.forEach(function (x) { var p = find(x.productId); if (x.kind === "variant") { var v = p.variants.find(function (y) { return y.id === x.variantId; }); v[x.field] = x.from; } if (x.kind === "product") { if (x.field === "seoTitle") p.seo.title = x.from; else if (x.field === "seoDescription") p.seo.description = x.from; else p[x.field] = x.from; } });
+      e.putBack = new Date().toISOString(); log("Put back: " + e.what, []); D.log[0].undoes = e.id; return wait({ ok: true });
+    }
+    if (a === "shopAdd") {
+      var src = body.from ? find(body.from) : null, np = src ? JSON.parse(JSON.stringify(src)) : { options: [{ name: "Title", values: ["Default Title"] }], variants: [{ title: "Default Title", price: "0.00", was: null, sku: "", options: { Title: "Default Title" }, item: "", tracked: false, stock: [] }], photos: [], collections: [], seo: { title: "", description: "" }, description: "", template: "" };
+      np.id = "gid://shopify/Product/" + (++D.n); np.title = body.title; np.status = "DRAFT"; np.handle = body.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"); np.updatedAt = new Date().toISOString(); np.variants.forEach(function (v) { v.id = "gid://shopify/ProductVariant/" + (++D.n); });
+      D.products.push(np); log("Added " + body.title + ", as a draft", [{ kind: "note", productId: np.id, title: np.title, what: "Added" }]); return wait({ ok: true, id: np.id });
+    }
+    if (a === "shopPhoto") return no("Photos are not sent in sample mode.");
+    return no("Not in sample mode.");
+  }
   function demoApi(body) {
+    if (String(body.action || "").indexOf("shop") === 0) return demoShop(body);
     if (body.action === "planSite" || body.action === "createSite") return demoBuildApi(body);
     // a site built in sample mode opens like the practice build
     if (/^site-\d$/.test(body.site || "") && demoData.sites.some(function (x) { return x.id === body.site && x.starter; })) body = Object.assign({}, body, { site: "practice-build" });

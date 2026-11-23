@@ -25,6 +25,13 @@
       "domain": "",
       "repo": "",
       "live": false
+    },
+    {
+      "id": "zen-xander",
+      "name": "Zen Xander",
+      "domain": "zenxander.com",
+      "kind": "shop",
+      "store": "7bb690-c7"
     }
   ]
 }

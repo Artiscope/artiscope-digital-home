@@ -1500,3 +1500,72 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focu
 .bd-tinfo span { font-size: 13px; line-height: 1.45; }
 .bd-tinfo b { font-weight: 600; color: var(--bright); }
 @media (max-width: 560px) { .bd-tlook .bd-aa { display: none; } }
+
+/* Shops on Shopify: products and prices (Version 62). Same surfaces and states as the rest of the console. */
+.sp input:not([type]), .sp input[type="search"], .sp select { width: 100%; min-height: 38px; border: 0; border-radius: 12px; background-color: var(--bg); box-shadow: var(--pressed-small); color: var(--bright); padding: 8px 12px; box-sizing: border-box; }
+.sp input:not([type]):focus, .sp input[type="search"]:focus, .sp select:focus, .sp textarea:focus { outline: none; box-shadow: var(--pressed-small), 0 0 0 2px var(--ice); }
+.sp select { appearance: none; padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239A9EA6' stroke-width='1.5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+.sp .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sp .cap { margin: 0; }
+.sp .field { position: relative; }
+.sp-head { align-items: flex-end; gap: 14px; width: 100%; }
+.sp-head > .row { gap: 10px; }
+.sp-crumbs { margin: 0 0 4px; color: var(--muted); }
+.sp-f { min-width: 200px; flex: 0 1 260px; }
+.sp-note { display: flex; align-items: center; gap: 10px; padding: 12px 14px; margin: 0; border-radius: 12px; }
+.sp-scroll { overflow-x: auto; position: relative; }
+.sp-table { width: 100%; border-collapse: separate; border-spacing: 0 4px; min-width: 620px; }
+.sp-table th { text-align: left; padding: 0 14px 4px; font-size: 13.5px; font-variant-caps: all-small-caps; letter-spacing: .08em; font-weight: 600; color: var(--muted); }
+.sp-table td { padding: 8px 14px; background: var(--field); vertical-align: middle; }
+.sp-table td:first-child { border-radius: 10px 0 0 10px; }
+.sp-table td:last-child { border-radius: 0 10px 10px 0; }
+.sp-table tr:hover td { background: var(--btn); }
+.sp-name { display: flex; align-items: center; gap: 12px; border: 0; background: none; padding: 0; color: var(--bright); cursor: pointer; text-align: left; }
+.sp-name:hover b { color: var(--ice); }
+.sp-pic { width: 44px; height: 44px; flex: none; border-radius: 8px; object-fit: cover; background: var(--field); box-shadow: inset 0 0 0 1.5px var(--field-edge); display: inline-block; }
+.sp-st { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.sp-cols { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.sp-main { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+.sp-side { flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+.sp-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 14px; }
+.sp-photo { display: flex; flex-direction: column; gap: 6px; }
+.sp-photo .sp-pic { width: 100%; height: auto; aspect-ratio: 1 / 1; }
+.sp-photo .row { gap: 12px; }
+.sp-up { padding: 14px; border-radius: 12px; gap: 10px; }
+.sp-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 999px; background: var(--btn); box-shadow: inset 0 0 0 1.5px var(--btn-edge); font-size: 13px; }
+.sp-oname { min-width: 74px; }
+.sp-grp { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; }
+.sp-grp b { color: var(--bright); min-width: 90px; }
+.sp-gprice { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.sp .sp-gprice input, .sp .sp-money { width: 110px; }
+.sp .sp-vt input { min-height: 34px; padding: 6px 10px; }
+.sp .sp-vt td { background: transparent; padding: 4px 10px; }
+.sp .sp-vt tr:hover td { background: transparent; }
+.sp-stock { display: flex; flex-direction: column; gap: 2px; }
+.sp .sp-stock input { width: 84px; }
+.sp-check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; line-height: 1.45; }
+.sp-check input { margin-top: 3px; accent-color: var(--ice); }
+.sp-check input:disabled + span { color: var(--dim); }
+.sp-serp { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 12px; }
+.sp-serp-t { color: var(--ice); }
+.sp-change { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 12px; }
+.sp-change .stack-tight { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sp-change b { color: var(--bright); font-weight: 600; }
+.sp-step .cardh { display: flex; align-items: center; gap: 12px; }
+.sp-n { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--field); box-shadow: inset 0 0 0 1.5px var(--field-edge); color: var(--bright); font: 600 13px "Libre Franklin", sans-serif; }
+.sp .pick { display: inline-flex; align-items: center; min-height: 34px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--btn); box-shadow: var(--shadow-small); color: var(--text); font: inherit; cursor: pointer; }
+.sp .pick:hover { box-shadow: inset 0 0 0 1.5px var(--btn-edge-hover); }
+.sp .pick.on { background: var(--chosen); box-shadow: var(--chosen-edge); color: var(--bright); font-weight: 600; }
+.sp-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 14px; max-height: 280px; overflow: auto; }
+.sp-sum { margin: 0; padding: 12px 14px; border-radius: 12px; color: var(--bright); }
+.sp-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.sp .seg button { border: 0; background: none; min-height: 30px; padding: 0 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.sp .rt-page { min-height: 140px; }
+@media (max-width: 700px) { .sp-gprice { margin-left: 0; } .sp-head { align-items: flex-start; } }
+.sp-filt { flex: 1 1 420px; justify-content: flex-end; align-items: flex-end; }
+.sp-filt .sp-f { flex: 0 1 260px; }
+.sp-list > .row.between { align-items: flex-end; }
+@media (max-width: 700px) { .sp-filt { flex-basis: 100%; justify-content: flex-start; } .sp-filt .sp-f { flex: 1 1 100%; } }
+.sp input[type="file"] { color: var(--muted); font-size: 13px; }
+.sp input[type="file"]::file-selector-button { min-height: 34px; margin-right: 10px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--btn); box-shadow: var(--shadow-small); color: var(--bright); font: 600 14px "Libre Franklin", sans-serif; cursor: pointer; }
+.sp .page-head { margin-bottom: 18px; }

@@ -2230,6 +2230,7 @@ const BUILT_IN = SITES.length;
 // The rest of the sites come from the list file sites.json in the console's own repository, so a new site
 // can be added from the console without a change to this code. Each is built from the starter, or not built yet.
 export const CONSOLE_REPO = "Artiscope/artiscope-digital-home";
+const SHOP_STORE = /^[a-z0-9][a-z0-9-]{1,60}$/;
 const SITE_ID = /^[a-z][a-z0-9-]{1,40}$/, REPO_NAME = /^Artiscope\/[A-Za-z0-9._-]{1,100}$/, DOMAIN_OK = /^[a-z0-9.-]{3,190}(\/[a-z0-9._-]{1,100})?$/;
 export const DEFAULT_SITE_LIST = [
   { id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: "Artiscope/practice-build", kind: "starter", playground: true, live: true },
@@ -2245,6 +2246,9 @@ export function cleanSiteList(given) {
     const name = cleanText(e.name, 60) || e.id, built = repo && e.kind === "starter";
     let want = ""; try { want = cleanDomain(e.want); } catch (_e) { want = ""; }
     const registrar = ["123-reg", "godaddy", "other"].includes(e.registrar) ? e.registrar : "", todo = Array.isArray(e.todo) ? e.todo.filter((t) => t === "pages" || t === "steps") : [];
+    // A shop on Shopify: its products and prices are changed from the console, and Shopify keeps taking the payments.
+    // `store` is the part of its Shopify address before .myshopify.com.
+    if (e.kind === "shop") { if (SHOP_STORE.test(String(e.store || ""))) out.push({ id: e.id, name, domain, repo: "", kind: "shop", store: String(e.store), playground: false, live: false }); continue; }
     // A site made outside the console (its own hand-written pages): a card with its picture and links, never opened in the editor.
     if (e.kind === "outside" && repo && domain) { out.push({ id: e.id, name, domain, repo, kind: "outside", playground: false, live: false }); continue; }
     const template = templateOf(e.template).id;
@@ -2254,7 +2258,7 @@ export function cleanSiteList(given) {
 }
 export function useSiteList(list) {
   SITES.splice(BUILT_IN, SITES.length - BUILT_IN);
-  for (const e of cleanSiteList(list)) SITES.push(e.kind === "starter" ? starterSite(e) : { id: e.id, name: e.name, domain: e.domain, repo: e.repo, live: false, outside: e.kind === "outside", artists: [], collections: [], playground: e.playground });
+  for (const e of cleanSiteList(list)) SITES.push(e.kind === "starter" ? starterSite(e) : e.kind === "shop" ? { id: e.id, name: e.name, domain: e.domain, repo: "", live: false, shop: { store: e.store }, artists: [], collections: [] } : { id: e.id, name: e.name, domain: e.domain, repo: e.repo, live: false, outside: e.kind === "outside", artists: [], collections: [], playground: e.playground });
 }
 useSiteList(DEFAULT_SITE_LIST);
 let siteListAt = 0, siteListSha = "";
@@ -2823,7 +2827,8 @@ async function branchForWriting(site, copy, _who) {
 async function siteOverview(site, wanted = "", me = null, names = {}) {
   const base = { id: site.id, name: site.name, domain: site.domain, live: site.live, artists: site.artists, files: !!(site.pages && site.pages.meta), edits: !!site.items, practice: !!site.practice,
     pagesOn: !!site.pages, themeOn: !!site.theme, photosOn: !site.noPhotos, starter: !!site.starter, template: site.starter ? site.template || "starter" : undefined, playground: !!site.playground, youAdmin: !!(me && me.admin),
-    want: site.want || "", registrar: site.registrar || "", todo: site.todo || [], records: dnsRecords(site.want || ""), buildable: !site.live && !site.repo && !site.playground, outside: !!site.outside, repo: site.outside ? site.repo : undefined };
+    want: site.want || "", registrar: site.registrar || "", todo: site.todo || [], records: dnsRecords(site.want || ""), buildable: !site.live && !site.repo && !site.playground && !site.shop, outside: !!site.outside, repo: site.outside ? site.repo : undefined,
+    shop: site.shop ? { store: site.shop.store, ready: !!shopKey(site) } : undefined };
   if (!site.live) return base;
   try {
     const copies = (await copiesOf(site)).filter((c) => !me || me.admin || c.kind === "live" || ownerOfCopy(c.id) === me.tag);
@@ -3527,6 +3532,515 @@ export async function checkDomain(site, tag) {
   return { ok: true, connected: true, secure, wwwOk, found: a };
 }
 
+// ---------- shops on Shopify: products, prices, stock and photos from the console ----------
+// A shop is a card in sites.json with kind "shop" and its Shopify store's name (the part of its Shopify
+// address before .myshopify.com). The console reads and changes the store through Shopify's Admin API, with
+// the owner's own app in Shopify. Its key lives only in Supabase's secrets, in one of two forms:
+// - SHOPIFY_TOKEN: the Admin API key of an app made in the shop's admin before 2026 (Apps, Develop apps).
+// - SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET: an app made in Shopify's Dev Dashboard, in the same organisation as
+//   the shop. The server asks Shopify for a key with them when it needs one (each lasts a day).
+// A second store adds _<STORE> to each name (SHOPIFY_TOKEN_MY_OTHER_SHOP). Shopify stays the one record: nothing about the products is kept here, except the list
+// of changes made from the console (on the shop-log branch of the console's repository), so each can be put back.
+// Shopify still takes the payments, sends the order emails and handles delivery.
+export const SHOPIFY_VERSION = "2026-10";
+export const SHOP_NEEDS = "read and write products, inventory and files, and read locations";
+const shopEnv = (site, name) => env(name + "_" + site.shop.store.toUpperCase().replace(/-/g, "_")) || env(name);
+export function shopKey(site) {
+  return !!(shopEnv(site, "SHOPIFY_TOKEN") || (shopEnv(site, "SHOPIFY_CLIENT_ID") && shopEnv(site, "SHOPIFY_CLIENT_SECRET")));
+}
+const shopKeys = {};
+async function shopToken(site, fresh = false) {
+  const fixed = shopEnv(site, "SHOPIFY_TOKEN"); if (fixed) return fixed;
+  const id = shopEnv(site, "SHOPIFY_CLIENT_ID"), secret = shopEnv(site, "SHOPIFY_CLIENT_SECRET");
+  if (!id || !secret) return "";
+  const had = shopKeys[site.shop.store];
+  if (had && !fresh && had.until > Date.now()) return had.key;
+  let r;
+  try {
+    r = await fetch("https://" + site.shop.store + ".myshopify.com/admin/oauth/access_token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "client_credentials", client_id: id, client_secret: secret }).toString() });
+  } catch (_e) { throw shopError("Shopify could not be reached just now. Please try again in a minute."); }
+  let d = null; try { d = await r.json(); } catch (_e) { d = null; }
+  if (!r.ok || !d || !d.access_token) throw shopError("Shopify did not give the console a key with the app's Client ID and secret" + (d && d.error ? " (" + cleanText(d.error_description || d.error, 120) + ")" : "") + ". Check that the app is installed on the shop, and that the app and the shop are in the same organisation in Shopify's Dev Dashboard.");
+  shopKeys[site.shop.store] = { key: d.access_token, until: Date.now() + Math.max(60, Number(d.expires_in || 3600) - 300) * 1000 };
+  return d.access_token;
+}
+function shopError(message, status = 502, stale = false) { const e = new Error(message); e.status = status; e.stale = stale; return e; }
+const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+
+async function shopify(site, query, variables = {}) {
+  let key = await shopToken(site);
+  if (!key) throw shopError("The Shopify key has not been added yet. Add it in Supabase under Edge Functions, Secrets: SHOPIFY_TOKEN for an app made in the shop's admin, or SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET for an app made in Shopify's Dev Dashboard.", 503);
+  for (let i = 0; i < 4; i++) {
+    let res;
+    try {
+      res = await fetch("https://" + site.shop.store + ".myshopify.com/admin/api/" + SHOPIFY_VERSION + "/graphql.json", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": key }, body: JSON.stringify({ query, variables }) });
+    } catch (_e) { throw shopError("Shopify could not be reached just now. Please try again in a minute."); }
+    if (res.status === 401 && !shopEnv(site, "SHOPIFY_TOKEN") && i === 0) { key = await shopToken(site, true); continue; }
+    if (res.status === 401) throw shopError("Shopify did not accept the key. Make a new key for the app in Shopify and replace it in Supabase.");
+    if (res.status === 402 || res.status === 423) throw shopError("Shopify says the shop is not open at the moment. Check the shop's plan in Shopify.");
+    if (res.status === 429 || res.status >= 500) { await pause(700 * (i + 1)); continue; }
+    let d = null;
+    try { d = await res.json(); } catch (_e) { d = null; }
+    if (!d) throw shopError("Shopify sent an answer the console could not read. Please try again.");
+    const errs = Array.isArray(d.errors) ? d.errors : d.errors ? [d.errors] : [];
+    const code = (e) => e && e.extensions && e.extensions.code;
+    if (errs.some((e) => code(e) === "THROTTLED")) { await pause(1000 * (i + 1)); continue; }
+    if (res.status === 403 || errs.some((e) => code(e) === "ACCESS_DENIED")) throw shopError("The Shopify key is missing a permission. In Shopify, give the app access to " + SHOP_NEEDS + ".");
+    if (errs.length) throw shopError("Shopify could not do that: " + cleanText(errs[0].message || errs[0], 200));
+    return d.data || {};
+  }
+  throw shopError("Shopify is busy just now. Please try again in a minute.");
+}
+// A mutation's own refusals, in Shopify's words.
+function shopRefused(payload, what) {
+  const list = payload ? [...(payload.userErrors || []), ...(payload.mediaUserErrors || [])] : [];
+  if (!payload) throw shopError(what + " could not be done in Shopify.");
+  if (list.length) throw shopError(what + " was refused by Shopify: " + cleanText(list[0].message, 200), 400);
+  return payload;
+}
+
+// Money as Shopify keeps it ("250.00"), from what was typed ("£250", "250", "1,250.5").
+export function shopMoney(v, blankOk = false) {
+  const t = String(v == null ? "" : v).replace(/[£,\s]/g, "");
+  if (!t) { if (blankOk) return null; throw shopError("A price is empty.", 400); }
+  if (!/^\d{1,7}(\.\d{1,2})?$/.test(t)) throw shopError("\"" + cleanText(String(v), 30) + "\" is not a price. Write it like 250 or 249.50.", 400);
+  return Number(t).toFixed(2);
+}
+const sameMoney = (a, b) => (a == null || a === "" ? null : Number(a).toFixed(2)) === (b == null || b === "" ? null : Number(b).toFixed(2));
+const GID = (kind) => new RegExp("^gid://shopify/" + kind + "/\\d{1,20}$");
+const isGid = (v, kind) => GID(kind).test(String(v || ""));
+const STATUS_OK = ["ACTIVE", "DRAFT", "ARCHIVED", "UNLISTED"];
+
+const LIST_Q = `query List($after: String) {
+  products(first: 100, after: $after, sortKey: UPDATED_AT, reverse: true) {
+    pageInfo { hasNextPage endCursor }
+    nodes { id title handle status totalInventory variantsCount { count } updatedAt options { name optionValues { name } }
+      priceRangeV2 { minVariantPrice { amount } maxVariantPrice { amount } }
+      featuredMedia { preview { image { url(transform: { maxWidth: 160 }) } } }
+      collections(first: 10) { nodes { id } } }
+  }
+  collections(first: 60, sortKey: TITLE) { nodes { id title handle ruleSet { appliedDisjunctively } } }
+  shop { currencyCode }
+}`;
+const ONE_Q = `query One($id: ID!) {
+  product(id: $id) { id title handle status descriptionHtml templateSuffix updatedAt totalInventory
+    seo { title description }
+    options { name optionValues { name } }
+    variants(first: 100) { nodes { id title price compareAtPrice sku selectedOptions { name value }
+      inventoryItem { id tracked inventoryLevels(first: 10) { nodes { location { id name } quantities(names: ["available"]) { name quantity } } } } } }
+    media(first: 60) { nodes { id alt mediaContentType status preview { image { url(transform: { maxWidth: 400 }) } } } }
+    collections(first: 30) { nodes { id title } } }
+  collections(first: 60, sortKey: TITLE) { nodes { id title handle ruleSet { appliedDisjunctively } } }
+  locations(first: 20) { nodes { id name isActive } }
+}`;
+const shopCollections = (d) => ((d.collections && d.collections.nodes) || []).map((c) => ({ id: c.id, title: c.title, handle: c.handle, auto: !!c.ruleSet }));
+function shopListed(p) {
+  const lo = p.priceRangeV2 && p.priceRangeV2.minVariantPrice ? p.priceRangeV2.minVariantPrice.amount : null, hi = p.priceRangeV2 && p.priceRangeV2.maxVariantPrice ? p.priceRangeV2.maxVariantPrice.amount : null;
+  const pic = p.featuredMedia && p.featuredMedia.preview && p.featuredMedia.preview.image ? p.featuredMedia.preview.image.url : "";
+  return { id: p.id, title: p.title, handle: p.handle, status: p.status, stock: p.totalInventory, versions: p.variantsCount ? p.variantsCount.count : 0,
+    low: lo == null ? null : Number(lo).toFixed(2), high: hi == null ? null : Number(hi).toFixed(2), pic, collections: ((p.collections && p.collections.nodes) || []).map((c) => c.id), updatedAt: p.updatedAt,
+    options: (p.options || []).map((o) => ({ name: o.name, values: (o.optionValues || []).map((v) => v.name) })) };
+}
+function shopProduct(site, p, d) {
+  const stockOf = (v) => (((v.inventoryItem && v.inventoryItem.inventoryLevels && v.inventoryItem.inventoryLevels.nodes) || []).map((l) => {
+    const q = (l.quantities || []).find((x) => x.name === "available");
+    return { location: l.location.id, name: l.location.name, qty: q ? q.quantity : 0 };
+  }));
+  return { id: p.id, title: p.title, handle: p.handle, status: p.status, description: p.descriptionHtml || "", template: p.templateSuffix || "", updatedAt: p.updatedAt, stock: p.totalInventory,
+    url: site.domain && p.handle ? "https://" + site.domain + "/products/" + p.handle : "",
+    seo: { title: (p.seo && p.seo.title) || "", description: (p.seo && p.seo.description) || "" },
+    options: (p.options || []).map((o) => ({ name: o.name, values: (o.optionValues || []).map((v) => v.name) })),
+    variants: ((p.variants && p.variants.nodes) || []).map((v) => ({ id: v.id, title: v.title, price: Number(v.price).toFixed(2), was: v.compareAtPrice == null ? null : Number(v.compareAtPrice).toFixed(2), sku: v.sku || "",
+      options: Object.fromEntries((v.selectedOptions || []).map((o) => [o.name, o.value])), item: v.inventoryItem ? v.inventoryItem.id : "", tracked: !!(v.inventoryItem && v.inventoryItem.tracked), stock: stockOf(v) })),
+    photos: ((p.media && p.media.nodes) || []).filter((m) => m.mediaContentType === "IMAGE").map((m) => ({ id: m.id, alt: m.alt || "", url: m.preview && m.preview.image ? m.preview.image.url : "", ready: m.status === "READY" })),
+    collections: ((p.collections && p.collections.nodes) || []).map((c) => c.id),
+    allCollections: shopCollections(d), locations: ((d.locations && d.locations.nodes) || []).filter((l) => l.isActive !== false).map((l) => ({ id: l.id, name: l.name })) };
+}
+async function shopReadOne(site, id) {
+  if (!isGid(id, "Product")) throw shopError("That product is not known.", 400);
+  const d = await shopify(site, ONE_Q, { id });
+  if (!d.product) throw shopError("That product is no longer in the shop. It may have been deleted in Shopify.", 404);
+  return shopProduct(site, d.product, d);
+}
+
+// ----- the list of changes made from the console, so each can be put back -----
+const SHOP_LOG_BRANCH = "shop-log";
+const shopLogPath = (site) => "shop-log/" + site.id + ".json";
+async function shopLogRead(site) {
+  const r = await gh("/repos/" + CONSOLE_REPO + "/contents/" + shopLogPath(site) + "?ref=" + SHOP_LOG_BRANCH);
+  if (!r.ok || !r.data || !r.data.content) return { entries: [], sha: "", missing: r.status === 404 };
+  try { const d = JSON.parse(decodeBase64Utf8(String(r.data.content).replace(/\n/g, ""))); return { entries: Array.isArray(d.entries) ? d.entries : [], sha: r.data.sha }; }
+  catch (_e) { return { entries: [], sha: r.data.sha }; }
+}
+async function shopLogAdd(site, entry) {
+  for (let i = 0; i < 3; i++) {
+    const now = await shopLogRead(site);
+    if (!now.sha) {
+      const br = await gh("/repos/" + CONSOLE_REPO + "/git/ref/heads/" + SHOP_LOG_BRANCH);
+      if (!br.ok) {
+        const main = await gh("/repos/" + CONSOLE_REPO + "/git/ref/heads/main");
+        if (!main.ok || !main.data || !main.data.object) return false;
+        await gh("/repos/" + CONSOLE_REPO + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/" + SHOP_LOG_BRANCH, sha: main.data.object.sha }) });
+      }
+    }
+    const entries = [entry, ...now.entries].slice(0, 300);
+    const doc = { about: "Changes made to " + site.name + "'s Shopify products from Artiscope Digital Home, newest first. Each can be put back from the console.", entries };
+    const w = await gh("/repos/" + CONSOLE_REPO + "/contents/" + shopLogPath(site), { method: "PUT", body: JSON.stringify({ message: "Shop: " + cleanText(entry.what, 120) + " (by " + entry.by + ")", content: encodeBase64Utf8(JSON.stringify(doc, null, 1) + "\n"), branch: SHOP_LOG_BRANCH, ...(now.sha ? { sha: now.sha } : {}) }) });
+    if (w.ok) return true;
+    if (w.status !== 409 && w.status !== 422) return false;
+  }
+  return false;
+}
+function shopEntry(by, what, items) {
+  return { id: crypto.randomUUID().slice(0, 12), when: new Date().toISOString(), by, what: cleanText(what, 200), items };
+}
+
+// ----- saving one product: every change carries what it was, and is refused if Shopify has moved on -----
+const PRODUCT_FIELDS = { title: 255, description: 60000, status: 20, seoTitle: 70, seoDescription: 320, template: 60 };
+export function shopCleanChange(given, now) {
+  const c = given && typeof given === "object" ? given : {}, out = { product: {}, variants: [], stock: [], add: [], remove: [], photos: [], order: null };
+  const moved = [];
+  const cur = { title: now.title, description: now.description, status: now.status, seoTitle: now.seo.title, seoDescription: now.seo.description, template: now.template };
+  for (const f of Object.keys(PRODUCT_FIELDS)) {
+    if (!c[f] || typeof c[f] !== "object") continue;
+    let to = String(c[f].to == null ? "" : c[f].to);
+    if (f === "description") to = safeMarks(to).slice(0, PRODUCT_FIELDS[f]);
+    else if (f === "status") { if (!STATUS_OK.includes(to)) throw shopError("That status is not known.", 400); }
+    else if (f === "template") { if (to && !/^[a-z0-9_-]{1,60}$/i.test(to)) throw shopError("That page layout is not known.", 400); }
+    else to = cleanText(to, PRODUCT_FIELDS[f]);
+    if (f === "title" && !to.trim()) throw shopError("A product needs a title.", 400);
+    if (String(c[f].from == null ? "" : c[f].from) !== String(cur[f] == null ? "" : cur[f])) moved.push(f);
+    if (to !== String(cur[f] || "")) out.product[f] = { from: cur[f] || "", to };
+  }
+  const vs = Object.fromEntries(now.variants.map((v) => [v.id, v]));
+  for (const g of (Array.isArray(c.variants) ? c.variants : []).slice(0, 100)) {
+    const v = g && vs[g.id]; if (!v) throw shopError("A version of this product is no longer in the shop. Refresh and try again.", 409, true);
+    const ch = { id: v.id, version: v.title };
+    if (g.price) { if (!sameMoney(g.price.from, v.price)) moved.push("price"); const to = shopMoney(g.price.to); if (!sameMoney(to, v.price)) ch.price = { from: v.price, to }; }
+    if (g.was) { if (!sameMoney(g.was.from, v.was)) moved.push("was price"); const to = shopMoney(g.was.to, true); if (!sameMoney(to, v.was)) ch.was = { from: v.was, to }; }
+    if (g.sku) { if (String(g.sku.from || "") !== v.sku) moved.push("stock code"); const to = cleanText(g.sku.to, 100); if (to !== v.sku) ch.sku = { from: v.sku, to }; }
+    if (ch.price || ch.was || ch.sku) out.variants.push(ch);
+  }
+  for (const s of (Array.isArray(c.stock) ? c.stock : []).slice(0, 300)) {
+    const v = now.variants.find((x) => x.item === s.item); const at = v && v.stock.find((l) => l.location === s.location);
+    if (!v || !at) throw shopError("A stock place is no longer in the shop. Refresh and try again.", 409, true);
+    const to = Number(s.to); if (!Number.isInteger(to) || to < 0 || to > 1000000) throw shopError("Stock must be a whole number.", 400);
+    if (Number(s.from) !== at.qty) moved.push("stock");
+    if (to !== at.qty) out.stock.push({ item: v.item, version: v.title, location: at.location, place: at.name, from: at.qty, to });
+  }
+  const known = Object.fromEntries(now.allCollections.map((x) => [x.id, x]));
+  for (const id of (c.collections && Array.isArray(c.collections.add) ? c.collections.add : []).slice(0, 60)) {
+    if (!known[id]) throw shopError("That collection is not in the shop.", 400);
+    if (known[id].auto) throw shopError("\"" + known[id].title + "\" fills itself by rules in Shopify, so products cannot be added to it by hand.", 400);
+    if (!now.collections.includes(id)) out.add.push({ id, title: known[id].title });
+  }
+  for (const id of (c.collections && Array.isArray(c.collections.remove) ? c.collections.remove : []).slice(0, 60)) {
+    if (!known[id]) continue;
+    if (known[id].auto) throw shopError("\"" + known[id].title + "\" fills itself by rules in Shopify, so products cannot be taken out of it by hand.", 400);
+    if (now.collections.includes(id)) out.remove.push({ id, title: known[id].title });
+  }
+  const pics = Object.fromEntries(now.photos.map((x) => [x.id, x]));
+  for (const ph of (Array.isArray(c.photos) ? c.photos : []).slice(0, 60)) {
+    const was = ph && pics[ph.id]; if (!was) throw shopError("A photo is no longer on this product. Refresh and try again.", 409, true);
+    if (String(ph.from || "") !== was.alt) moved.push("photo description");
+    const to = cleanText(ph.to, 500); if (to !== was.alt) out.photos.push({ id: was.id, from: was.alt, to });
+  }
+  if (Array.isArray(c.order) && c.order.length) {
+    const ids = c.order.map(String);
+    if (ids.length !== now.photos.length || ids.some((id) => !pics[id])) throw shopError("The photos changed in Shopify. Refresh and try again.", 409, true);
+    if (ids.join() !== now.photos.map((x) => x.id).join()) out.order = ids;
+  }
+  if (moved.length) throw shopError("This product was changed in Shopify since you opened it (" + [...new Set(moved)].join(", ") + "). Refresh to see the latest, then make your change again.", 409, true);
+  return out;
+}
+const PRODUCT_UPDATE_M = `mutation Up($product: ProductUpdateInput!) { productUpdate(product: $product) { product { id updatedAt } userErrors { field message } } }`;
+const VARIANTS_M = `mutation Vs($productId: ID!, $variants: [ProductVariantsBulkInput!]!) { productVariantsBulkUpdate(productId: $productId, variants: $variants) { productVariants { id price } userErrors { field message } } }`;
+const STOCK_M = `mutation Stock($input: InventorySetQuantitiesInput!, $key: String!) { inventorySetQuantities(input: $input) @idempotent(key: $key) { inventoryAdjustmentGroup { reason } userErrors { code field message } } }`;
+const ADD_M = `mutation Add($id: ID!, $productIds: [ID!]!) { collectionAddProducts(id: $id, productIds: $productIds) { userErrors { field message } } }`;
+const REMOVE_M = `mutation Remove($id: ID!, $productIds: [ID!]!) { collectionRemoveProducts(id: $id, productIds: $productIds) { userErrors { field message } } }`;
+const ALT_M = `mutation Alt($files: [FileUpdateInput!]!) { fileUpdate(files: $files) { files { id } userErrors { field message } } }`;
+const ORDER_M = `mutation Order($id: ID!, $moves: [MoveInput!]!) { productReorderMedia(id: $id, moves: $moves) { job { id } mediaUserErrors { field message } } }`;
+
+// Makes the changes in Shopify, in a fixed order, and says what was done.
+async function shopApply(site, now, ch) {
+  const items = [], P = { productId: now.id, title: now.title };
+  const pu = { id: now.id };
+  if (ch.product.title) pu.title = ch.product.title.to;
+  if (ch.product.description) pu.descriptionHtml = ch.product.description.to;
+  if (ch.product.status) pu.status = ch.product.status.to;
+  if (ch.product.template) pu.templateSuffix = ch.product.template.to || null;
+  if (ch.product.seoTitle || ch.product.seoDescription) pu.seo = { title: (ch.product.seoTitle || { to: now.seo.title }).to, description: (ch.product.seoDescription || { to: now.seo.description }).to };
+  if (Object.keys(pu).length > 1) {
+    const d = await shopify(site, PRODUCT_UPDATE_M, { product: pu }); shopRefused(d.productUpdate, "Saving the product");
+    for (const [f, x] of Object.entries(ch.product)) items.push({ kind: "product", ...P, field: f, from: x.from, to: x.to });
+  }
+  if (ch.variants.length) {
+    const d = await shopify(site, VARIANTS_M, { productId: now.id, variants: ch.variants.map((v) => ({ id: v.id, ...(v.price ? { price: v.price.to } : {}), ...(v.was ? { compareAtPrice: v.was.to } : {}), ...(v.sku ? { inventoryItem: { sku: v.sku.to } } : {}) })) });
+    shopRefused(d.productVariantsBulkUpdate, "Saving the prices");
+    for (const v of ch.variants) for (const f of ["price", "was", "sku"]) if (v[f]) items.push({ kind: "variant", ...P, variantId: v.id, version: v.version, field: f, from: v[f].from, to: v[f].to });
+  }
+  if (ch.stock.length) {
+    const d = await shopify(site, STOCK_M, { key: crypto.randomUUID(), input: { name: "available", reason: "correction", quantities: ch.stock.map((s) => ({ inventoryItemId: s.item, locationId: s.location, quantity: s.to, changeFromQuantity: s.from })) } });
+    const pay = d.inventorySetQuantities;
+    if (pay && (pay.userErrors || []).some((e) => /CHANGE_FROM_QUANTITY_STALE|COMPARE_QUANTITY_STALE/.test(String(e.code || "")))) throw shopError("The stock was changed in Shopify since you opened this product. Refresh to see the latest, then make your change again.", 409, true);
+    shopRefused(pay, "Saving the stock");
+    for (const s of ch.stock) items.push({ kind: "stock", ...P, item: s.item, version: s.version, location: s.location, place: s.place, from: s.from, to: s.to });
+  }
+  for (const c of ch.add) { const d = await shopify(site, ADD_M, { id: c.id, productIds: [now.id] }); shopRefused(d.collectionAddProducts, "Adding it to " + c.title); items.push({ kind: "collection", ...P, collectionId: c.id, collection: c.title, from: false, to: true }); }
+  for (const c of ch.remove) { const d = await shopify(site, REMOVE_M, { id: c.id, productIds: [now.id] }); shopRefused(d.collectionRemoveProducts, "Taking it out of " + c.title); items.push({ kind: "collection", ...P, collectionId: c.id, collection: c.title, from: true, to: false }); }
+  if (ch.photos.length) {
+    const d = await shopify(site, ALT_M, { files: ch.photos.map((x) => ({ id: x.id, alt: x.to })) }); shopRefused(d.fileUpdate, "Saving the photo descriptions");
+    for (const x of ch.photos) items.push({ kind: "photo", ...P, mediaId: x.id, from: x.from, to: x.to });
+  }
+  if (ch.order) {
+    const d = await shopify(site, ORDER_M, { id: now.id, moves: ch.order.map((id, i) => ({ id, newPosition: String(i) })) }); shopRefused(d.productReorderMedia, "Changing the order of the photos");
+    items.push({ kind: "note", ...P, what: "Photos put in a new order" });
+  }
+  return items;
+}
+export function shopSay(items, title) {
+  const n = items.filter((x) => x.kind !== "note").length, prices = items.filter((x) => x.kind === "variant" && x.field === "price");
+  if (!n) return items.length ? items[0].what + ", " + title : "";
+  if (prices.length === n) {
+    const from = [...new Set(prices.map((x) => x.from))], to = [...new Set(prices.map((x) => x.to))];
+    return (prices.length === 1 ? "1 price" : prices.length + " prices") + " on " + title + (from.length === 1 && to.length === 1 ? ", " + gbp(from[0]) + " to " + gbp(to[0]) : "");
+  }
+  return (n === 1 ? "1 change" : n + " changes") + " to " + title;
+}
+export const gbp = (v) => v == null || v === "" ? "none" : "£" + (Number(v) % 1 ? Number(v).toFixed(2) : String(Number(v)));
+
+// ----- changing many prices at once: a plan to check, then the same plan applied -----
+const VARIANTS_Q = `query All($after: String) { productVariants(first: 250, after: $after) { pageInfo { hasNextPage endCursor }
+  nodes { id title price compareAtPrice selectedOptions { name value } product { id title status } } } }`;
+const IN_COLLECTION_Q = `query In($id: ID!, $after: String) { collection(id: $id) { title products(first: 250, after: $after) { pageInfo { hasNextPage endCursor } nodes { id } } } }`;
+async function shopPages(site, query, vars, pick, most = 20) {
+  const out = []; let after = null;
+  for (let i = 0; i < most; i++) {
+    const d = await shopify(site, query, { ...vars, after }); const conn = pick(d);
+    if (!conn) break;
+    out.push(...(conn.nodes || []));
+    if (!conn.pageInfo || !conn.pageInfo.hasNextPage) break;
+    after = conn.pageInfo.endCursor;
+  }
+  return out;
+}
+export function shopNewPrice(old, how, value, round) {
+  const o = Number(old); let n;
+  if (how === "set") n = Number(shopMoney(value));
+  else {
+    const t = String(value == null ? "" : value).replace(/[£%,\s]/g, "");
+    if (!/^[-+]?\d{1,7}(\.\d{1,2})?$/.test(t)) throw shopError("Write the change as a number, such as 25 or -10.", 400);
+    n = how === "percent" ? o * (1 + Number(t) / 100) : o + Number(t);
+    if (round === "pound") n = Math.round(n);
+  }
+  if (!(n > 0) || n >= 10000000) throw shopError("That would make a price of " + gbp(n.toFixed(2)) + ", which cannot be right.", 400);
+  return n.toFixed(2);
+}
+async function shopPricePlan(site, body) {
+  const f = body && body.filter && typeof body.filter === "object" ? body.filter : {}, how = ["set", "amount", "percent"].includes(body.how) ? body.how : "";
+  if (!how) throw shopError("Choose how the prices change.", 400);
+  const options = f.options && typeof f.options === "object" ? f.options : {};
+  let inSet = null;
+  if (f.products === "collection") {
+    if (!isGid(f.collection, "Collection")) throw shopError("Choose a collection.", 400);
+    inSet = new Set((await shopPages(site, IN_COLLECTION_Q, { id: f.collection }, (d) => d.collection && d.collection.products)).map((p) => p.id));
+  } else if (f.products === "chosen") {
+    const ids = (Array.isArray(f.ids) ? f.ids : []).filter((x) => isGid(x, "Product"));
+    if (!ids.length) throw shopError("Choose at least one product.", 400);
+    inSet = new Set(ids);
+  }
+  const all = await shopPages(site, VARIANTS_Q, {}, (d) => d.productVariants);
+  const groups = {}, order = [];
+  for (const v of all) {
+    const p = v.product; if (!p) continue;
+    if (f.products === "active" || !f.products) { if (p.status !== "ACTIVE") continue; }
+    else if (inSet && !inSet.has(p.id)) continue;
+    const opts = Object.fromEntries((v.selectedOptions || []).map((o) => [o.name, o.value]));
+    if (Object.entries(options).some(([name, vals]) => Array.isArray(vals) && vals.length && !vals.includes(opts[name]))) continue;
+    const from = Number(v.price).toFixed(2), to = shopNewPrice(from, how, body.value, body.round);
+    const wasFrom = v.compareAtPrice == null ? null : Number(v.compareAtPrice).toFixed(2);
+    let wasTo = wasFrom;
+    if (body.was === true && Number(to) < Number(from)) wasTo = from;
+    if (to === from && wasTo === wasFrom) continue;
+    if (!groups[p.id]) { groups[p.id] = { productId: p.id, title: p.title, status: p.status, versions: [] }; order.push(p.id); }
+    groups[p.id].versions.push({ id: v.id, title: v.title, from, to, wasFrom, wasTo });
+  }
+  const list = order.map((id) => groups[id]), flat = list.flatMap((g) => g.versions);
+  const froms = [...new Set(flat.map((x) => x.from))], tos = [...new Set(flat.map((x) => x.to))];
+  return { groups: list, count: flat.length, products: list.length, from: froms.length === 1 ? froms[0] : null, to: tos.length === 1 ? tos[0] : null };
+}
+const NODES_Q = `query Now($ids: [ID!]!) { nodes(ids: $ids) { ... on ProductVariant { id price compareAtPrice product { id } } } }`;
+async function shopPriceApply(site, body, by) {
+  const groups = (Array.isArray(body.groups) ? body.groups : []).slice(0, 2000);
+  const want = [];
+  for (const g of groups) for (const v of (Array.isArray(g.versions) ? g.versions : [])) {
+    if (!isGid(g.productId, "Product") || !isGid(v.id, "ProductVariant")) throw shopError("The list of changes could not be read. Check the prices again.", 400);
+    want.push({ productId: g.productId, title: cleanText(g.title, 255), id: v.id, version: cleanText(v.title, 255), from: shopMoney(v.from), to: shopMoney(v.to), wasFrom: shopMoney(v.wasFrom, true), wasTo: shopMoney(v.wasTo, true) });
+  }
+  if (!want.length) throw shopError("There are no prices to change.", 400);
+  if (want.length > 5000) throw shopError("That is too many prices for one go. Choose fewer products.", 400);
+  // Each price must still be what the check showed, or nothing is changed.
+  const live = {};
+  for (let i = 0; i < want.length; i += 250) {
+    const d = await shopify(site, NODES_Q, { ids: want.slice(i, i + 250).map((x) => x.id) });
+    for (const n of d.nodes || []) if (n && n.id) live[n.id] = n;
+  }
+  const moved = want.filter((x) => !live[x.id] || !sameMoney(live[x.id].price, x.from) || !sameMoney(live[x.id].compareAtPrice, x.wasFrom) || live[x.id].product.id !== x.productId);
+  if (moved.length) throw shopError((moved.length === 1 ? "1 price has" : moved.length + " prices have") + " changed in Shopify since the check. Nothing was changed. Check the prices again.", 409, true);
+  const byProduct = {};
+  for (const x of want) (byProduct[x.productId] = byProduct[x.productId] || []).push(x);
+  const items = []; let problem = "";
+  for (const [productId, list] of Object.entries(byProduct)) {
+    try {
+      const d = await shopify(site, VARIANTS_M, { productId, variants: list.map((x) => ({ id: x.id, price: x.to, ...(x.wasTo !== x.wasFrom ? { compareAtPrice: x.wasTo } : {}) })) });
+      shopRefused(d.productVariantsBulkUpdate, "Changing the prices of " + list[0].title);
+    } catch (e) { problem = String(e.message || e); break; }
+    for (const x of list) {
+      items.push({ kind: "variant", productId, title: x.title, variantId: x.id, version: x.version, field: "price", from: x.from, to: x.to });
+      if (x.wasTo !== x.wasFrom) items.push({ kind: "variant", productId, title: x.title, variantId: x.id, version: x.version, field: "was", from: x.wasFrom, to: x.wasTo });
+    }
+  }
+  const done = items.filter((x) => x.field === "price").length;
+  const label = cleanText(body.label, 160) || ((done === 1 ? "1 price" : done + " prices") + " changed");
+  const logged = items.length ? await shopLogAdd(site, shopEntry(by, label, items)) : true;
+  return { ok: !problem, changed: done, of: want.length, problem: problem ? problem + " " + done + " of " + want.length + " prices were changed before that, and are listed in Changes, where they can be put back." : "", logged };
+}
+
+// ----- putting a change back: each part only if it is still as the change left it -----
+const VARIANT_NOW_Q = `query V($ids: [ID!]!) { nodes(ids: $ids) { ... on ProductVariant { id price compareAtPrice sku product { id } } } }`;
+async function shopPutBack(site, body, by) {
+  const log = await shopLogRead(site), entry = log.entries.find((e) => e.id === String(body.entry || ""));
+  if (!entry) throw shopError("That change is no longer in the list.", 404);
+  if (entry.putBack) throw shopError("That change has already been put back.", 409);
+  const parts = entry.items.filter((x) => x.kind !== "note");
+  if (!parts.length) throw shopError("This change cannot be put back from the console.", 400);
+  // Check everything first, so nothing is half put back.
+  const products = {}, variantIds = parts.filter((x) => x.kind === "variant").map((x) => x.variantId), vnow = {};
+  for (const id of [...new Set(parts.filter((x) => x.kind !== "variant").map((x) => x.productId))]) products[id] = await shopReadOne(site, id);
+  for (let i = 0; i < variantIds.length; i += 250) { const d = await shopify(site, VARIANT_NOW_Q, { ids: variantIds.slice(i, i + 250) }); for (const n of d.nodes || []) if (n && n.id) vnow[n.id] = n; }
+  const moved = [];
+  for (const x of parts) {
+    const p = products[x.productId];
+    if (x.kind === "variant") { const n = vnow[x.variantId]; const cur = !n ? undefined : x.field === "price" ? n.price : x.field === "was" ? n.compareAtPrice : n.sku || ""; if (n === undefined || (x.field === "sku" ? String(cur) !== String(x.to || "") : !sameMoney(cur, x.to))) moved.push(x); }
+    else if (x.kind === "product") { const cur = { title: p.title, description: p.description, status: p.status, seoTitle: p.seo.title, seoDescription: p.seo.description, template: p.template }[x.field]; if (String(cur || "") !== String(x.to || "")) moved.push(x); }
+    else if (x.kind === "stock") { const v = p.variants.find((y) => y.item === x.item), at = v && v.stock.find((l) => l.location === x.location); if (!at || at.qty !== x.to) moved.push(x); }
+    else if (x.kind === "collection") { if (p.collections.includes(x.collectionId) !== x.to) moved.push(x); }
+    else if (x.kind === "photo") { const ph = p.photos.find((y) => y.id === x.mediaId); if (!ph || ph.alt !== x.to) moved.push(x); }
+  }
+  if (moved.length) throw shopError("Some of this has been changed again since (" + moved.length + (moved.length === 1 ? " part" : " parts") + "), so nothing was put back. Change those back by hand.", 409, true);
+  const items = [];
+  const byVariantProduct = {};
+  for (const x of parts.filter((y) => y.kind === "variant")) (byVariantProduct[x.productId] = byVariantProduct[x.productId] || []).push(x);
+  for (const [productId, list] of Object.entries(byVariantProduct)) {
+    const per = {};
+    for (const x of list) { per[x.variantId] = per[x.variantId] || { id: x.variantId }; if (x.field === "price") per[x.variantId].price = x.from; if (x.field === "was") per[x.variantId].compareAtPrice = x.from; if (x.field === "sku") per[x.variantId].inventoryItem = { sku: x.from || "" }; }
+    const d = await shopify(site, VARIANTS_M, { productId, variants: Object.values(per) }); shopRefused(d.productVariantsBulkUpdate, "Putting the prices back");
+    for (const x of list) items.push({ ...x, from: x.to, to: x.from });
+  }
+  for (const [productId, p] of Object.entries(products)) {
+    const mine = parts.filter((x) => x.productId === productId && x.kind !== "variant");
+    if (!mine.length) continue;
+    const ch = { product: {}, variants: [], stock: [], add: [], remove: [], photos: [], order: null };
+    for (const x of mine) {
+      if (x.kind === "product") ch.product[x.field] = { from: x.to, to: x.from };
+      if (x.kind === "stock") ch.stock.push({ item: x.item, version: x.version, location: x.location, place: x.place, from: x.to, to: x.from });
+      if (x.kind === "collection") (x.from ? ch.add : ch.remove).push({ id: x.collectionId, title: x.collection });
+      if (x.kind === "photo") ch.photos.push({ id: x.mediaId, from: x.to, to: x.from });
+    }
+    items.push(...await shopApply(site, p, ch));
+  }
+  entry.putBack = new Date().toISOString();
+  const back = shopEntry(by, "Put back: " + entry.what, items); back.undoes = entry.id;
+  await shopLogMark(site, entry.id, back);
+  return { ok: true };
+}
+async function shopLogMark(site, id, back) {
+  for (let i = 0; i < 3; i++) {
+    const now = await shopLogRead(site);
+    const entries = [back, ...now.entries.map((e) => e.id === id ? { ...e, putBack: back.when } : e)].slice(0, 300);
+    const doc = { about: "Changes made to " + site.name + "'s Shopify products from Artiscope Digital Home, newest first. Each can be put back from the console.", entries };
+    const w = await gh("/repos/" + CONSOLE_REPO + "/contents/" + shopLogPath(site), { method: "PUT", body: JSON.stringify({ message: "Shop: " + cleanText(back.what, 120) + " (by " + back.by + ")", content: encodeBase64Utf8(JSON.stringify(doc, null, 1) + "\n"), branch: SHOP_LOG_BRANCH, ...(now.sha ? { sha: now.sha } : {}) }) });
+    if (w.ok) return true;
+    if (w.status !== 409 && w.status !== 422) return false;
+  }
+  return false;
+}
+
+// ----- adding a product: a copy of one already there (its versions, prices and photos), or a blank one -----
+const DUP_M = `mutation Dup($productId: ID!, $newTitle: String!) { productDuplicate(productId: $productId, newTitle: $newTitle, includeImages: true, newStatus: DRAFT) { newProduct { id title } userErrors { field message } } }`;
+const CREATE_M = `mutation New($product: ProductCreateInput!) { productCreate(product: $product) { product { id title } userErrors { field message } } }`;
+async function shopAdd(site, body, by) {
+  const title = cleanText(body.title, 255).trim();
+  if (!title) throw shopError("Give the new product a title.", 400);
+  let made;
+  if (body.from) {
+    if (!isGid(body.from, "Product")) throw shopError("Choose the product to copy.", 400);
+    const d = await shopify(site, DUP_M, { productId: body.from, newTitle: title }); made = shopRefused(d.productDuplicate, "Copying the product").newProduct;
+  } else {
+    const d = await shopify(site, CREATE_M, { product: { title, status: "DRAFT" } }); made = shopRefused(d.productCreate, "Adding the product").product;
+  }
+  if (!made || !made.id) throw shopError("Shopify did not say which product it made. Look in the list before trying again.");
+  await shopLogAdd(site, shopEntry(by, "Added " + title + (body.from ? " as a copy" : "") + ", as a draft", [{ kind: "note", productId: made.id, title, what: "Added as a draft" }]));
+  return { ok: true, id: made.id };
+}
+
+// ----- a new photo: Shopify gives a place to send it, then the photo joins the product -----
+const STAGE_M = `mutation Stage($input: [StagedUploadInput!]!) { stagedUploadsCreate(input: $input) { stagedTargets { url resourceUrl parameters { name value } } userErrors { field message } } }`;
+const MEDIA_M = `mutation Media($product: ProductUpdateInput!, $media: [CreateMediaInput!]) { productUpdate(product: $product, media: $media) { product { id } userErrors { field message } } }`;
+async function shopPhoto(site, body, by) {
+  if (!isGid(body.id, "Product")) throw shopError("That product is not known.", 400);
+  const content = String(body.content || ""), ext = String(body.ext || "").toLowerCase();
+  if (!["jpg", "jpeg", "png", "webp"].includes(ext)) throw shopError("Use a JPG, PNG or WebP photo.", 400);
+  if (!content || content.length > 13_500_000 || /[^A-Za-z0-9+/=]/.test(content)) throw shopError("That photo is too large or could not be read. Keep photos under 10 MB.", 400);
+  const alt = cleanText(body.alt, 500).trim();
+  if (!alt) throw shopError("Say what the photo shows. It is read out to people who cannot see it.", 400);
+  const bytes = Uint8Array.from(atob(content), (c) => c.charCodeAt(0)), mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+  const name = (slugFrom(cleanText(body.name, 80).replace(/\.[a-z0-9]+$/i, "")) || "photo") + "." + (ext === "jpeg" ? "jpg" : ext);
+  const d = await shopify(site, STAGE_M, { input: [{ filename: name, mimeType: mime, httpMethod: "POST", resource: "PRODUCT_IMAGE", fileSize: String(bytes.length) }] });
+  const target = shopRefused(d.stagedUploadsCreate, "Sending the photo").stagedTargets[0];
+  if (!target || !/^https:\/\//.test(String(target.url || ""))) throw shopError("Shopify did not give a place to send the photo. Please try again.");
+  const form = new FormData();
+  for (const p of target.parameters || []) form.append(p.name, p.value);
+  form.append("file", new Blob([bytes], { type: mime }), name);
+  let up;
+  try { up = await fetch(target.url, { method: "POST", body: form }); } catch (_e) { up = null; }
+  if (!up || !up.ok) throw shopError("The photo could not be sent to Shopify. Please try again.");
+  const m = await shopify(site, MEDIA_M, { product: { id: body.id }, media: [{ originalSource: target.resourceUrl, alt, mediaContentType: "IMAGE" }] });
+  shopRefused(m.productUpdate, "Adding the photo");
+  await shopLogAdd(site, shopEntry(by, "Added a photo to " + cleanText(body.title, 120), [{ kind: "note", productId: body.id, title: cleanText(body.title, 255), what: "Photo added: " + alt }]));
+  return { ok: true };
+}
+
+export async function shopAction(site, action, body, by) {
+  if (action === "shopProducts") {
+    const first = await shopify(site, LIST_Q, { after: null });
+    const nodes = [...((first.products && first.products.nodes) || [])]; let page = first.products && first.products.pageInfo;
+    for (let i = 0; i < 20 && page && page.hasNextPage; i++) { const d = await shopify(site, LIST_Q, { after: page.endCursor }); nodes.push(...((d.products && d.products.nodes) || [])); page = d.products && d.products.pageInfo; }
+    return { products: nodes.map(shopListed), collections: shopCollections(first), currency: first.shop ? first.shop.currencyCode : "GBP", store: site.shop.store };
+  }
+  if (action === "shopProduct") return { product: await shopReadOne(site, String(body.id || "")) };
+  if (action === "shopSave") {
+    const now = await shopReadOne(site, String(body.id || ""));
+    const ch = shopCleanChange(body.change, now);
+    const items = await shopApply(site, now, ch);
+    if (!items.length) return { ok: true, nothing: true, product: now };
+    const logged = await shopLogAdd(site, shopEntry(by, shopSay(items, now.title), items));
+    return { ok: true, logged, product: await shopReadOne(site, now.id) };
+  }
+  if (action === "shopPricePlan") return { plan: await shopPricePlan(site, body) };
+  if (action === "shopPriceApply") return await shopPriceApply(site, body, by);
+  if (action === "shopChanges") {
+    const log = await shopLogRead(site), id = String(body.id || "");
+    return { changes: log.entries.filter((e) => !id || e.items.some((x) => x.productId === id)).slice(0, 100) };
+  }
+  if (action === "shopPutBack") return await shopPutBack(site, body, by);
+  if (action === "shopAdd") return await shopAdd(site, body, by);
+  if (action === "shopPhoto") return await shopPhoto(site, body, by);
+  throw shopError("Unknown request.", 400);
+}
+
 export async function handle(req) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return json({ error: "Use POST." }, 405);
@@ -3613,6 +4127,15 @@ export async function handle(req) {
       const r = await createSite(card, body.choices, me.tag || "admin");
       return json(r, r.error ? 502 : 200);
     } catch (e) { return json({ error: String(e && e.message || e) }, 400); }
+  }
+
+  // ----- a shop on Shopify: products, prices, stock and photos -----
+  if (action.startsWith("shop")) {
+    const shopSite = SITES.find((x) => x.id === String(body.site || "") && x.shop);
+    if (!shopSite || !me.sites.includes(shopSite.id)) return json({ error: "That shop is not available." }, 400);
+    if (!me.admin) return json({ error: "Only the admin can change the shop for now." }, 403);
+    try { return json(await shopAction(shopSite, action, body, me.tag || "admin")); }
+    catch (e) { return json({ error: String(e && e.message || e), stale: !!(e && e.stale) }, e && e.status || 502); }
   }
 
   const site = liveSite(String(body.site || ""));
