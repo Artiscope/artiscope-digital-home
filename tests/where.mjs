@@ -24,6 +24,10 @@ export function chromeOptions() {
 }
 // Moves to another screen. The page editor has no menu down the side, so it leaves by Exit first.
 export async function goTab(page, tab) {
-  if (await page.isVisible(".ed-exit")) { await page.click(".ed-exit"); await page.waitForSelector('.navb[data-tab="overview"]'); }
-  await page.click('.navb[data-tab="' + tab + '"]');
+  if (await page.isVisible(".ed-exit")) { await page.click(".ed-exit"); await page.waitForSelector('.navb[data-tab="overview"]', { state: "attached" }); }
+  // On a phone the side menu is a bar at the foot of the screen; what is not on it is under More.
+  if (await page.isVisible('.navb[data-tab="' + tab + '"]')) return page.click('.navb[data-tab="' + tab + '"]');
+  if (await page.isVisible('.pb[data-tab="' + tab + '"]')) return page.click('.pb[data-tab="' + tab + '"]');
+  if (!(await page.isVisible(".phsheet"))) await page.click('[data-act="ph-more"]');
+  await page.click('.phrow[data-tab="' + tab + '"]');
 }

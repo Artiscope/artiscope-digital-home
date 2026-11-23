@@ -71,7 +71,7 @@ How they like to work. Follow this every time:
     amber for a trial copy or an editor's own copy). "Undo the last save"
     and "Redo" sit in the marker only when there is one to take back. A
     site opens on its Overview (`openSite`), whose main button is Edit
-    pages. Under 901px the menu is still the strip at the top until step 5.
+    pages.
   - One main action per screen (Version 65): solid teal only for it
     (`.btn.key`): Start a new site on All sites, Edit pages on a site's
     Overview, Choose photos on Files, Invite an editor on People, Add a
@@ -97,8 +97,16 @@ How they like to work. Follow this every time:
     are words, two to a row, at the top of its settings (`edTools`,
     `.ptools`). The picked outline, name tag and plus in every site's
     editor link are teal #0D6767 with white words.
-  - Step 5 of the agreed UI plan is still to come (phone): it waits for
-    the owner's go ahead.
+  - Phones (Version 67): under 901px the side menu is hidden and a bar
+    sits at the foot of the screen (`phoneBar`, `.phbar`, `.pb`): up to
+    four places (inside a site Overview, Edit, Theme, Files or Photos; a
+    shop's Products and Changes; outside a site All sites and People)
+    and More, which opens a sheet (`.phsheet`, `state.phMore`) with the
+    rest, All sites, the account, Refresh, Sign out and the version.
+    Every button and box is at least 44 pixels tall there; the editor's
+    rows and counts grow to fit a finger, and the thin plus lines between
+    rows are hidden under 701px. `goTab` in `tests/where.mjs` uses the
+    bar and More on a phone. The five steps of the UI plan are done.
   - All sites (`viewHome`): live sites three to a row, each with a small
     picture of its home page (an iframe laid out 1280 wide and scaled,
     `homeFit`), then the Practice site and the sites still to build on
@@ -258,7 +266,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (23 November 2026, Version 66)
+## Where things stand (23 November 2026, Version 67)
 
 Done:
 
@@ -1292,6 +1300,12 @@ Done:
   - Global Art Monitor's new fixed word `table.mixed-note` is in
     `GAM_WORDS` (added after `TGAM_WORDS`, so the older template copy of
     its code does not need it).
+
+- Version 67 (23 November): step 5 of 5 of the UI plan, phones (see
+  Design rules). `tests/rich.mjs` now reads the sites' bodies from
+  `W_DIR` and `G_DIR` like the other checks (World Art Review's newer
+  content has a bare "&" in a body, which the editor writes back as
+  "&amp;": the same page, but not the same text).
 
 Waiting for the owner:
 

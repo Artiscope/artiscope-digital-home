@@ -1829,3 +1829,38 @@ select.box option, select option { background: #FFFFFF; color: var(--bright); }
 .ptools:not(.ask) .tw[disabled] { background: var(--field); box-shadow: inset 0 0 0 1px var(--field-edge); color: var(--dim); cursor: default; }
 .ptools:not(.ask) { width: 100%; }
 .ed-right .rhead { box-shadow: inset 1px 1px 0 var(--edge), inset -1px 0 0 var(--edge); background: var(--bg); }
+
+/* ---------- Phones (Version 67, step 5 of the UI plan) ---------- */
+.phbar, .phsheet { display: none; }
+@media (max-width: 900px) {
+  /* the side menu becomes a bar at the foot of the screen */
+  .shell > .rail { display: none; }
+  .phbar { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; padding: 6px 6px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--bg); box-shadow: 0 -1px 0 var(--edge); }
+  .pb { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 54px; padding: 0 2px; border: 0; border-radius: 12px; background: none; color: var(--muted); font: 600 11px "Libre Franklin", Arial, sans-serif; cursor: pointer; }
+  .pb svg, .pb .ico { width: 22px; height: 22px; }
+  .pb.on { background: var(--chosen); color: var(--bright); }
+  .pb.on svg { color: var(--ice); }
+  .pb:focus-visible { outline: 2px solid var(--ice); outline-offset: -2px; }
+  .main { padding-bottom: 100px; }
+  .phsheet { display: flex; flex-direction: column; gap: 4px; position: fixed; left: 8px; right: 8px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 41; max-height: 70vh; overflow: auto; padding: 14px; border-radius: 16px; background: var(--bg); box-shadow: var(--shadow-pop); }
+  .phs-h { font-family: var(--serif); font-weight: 400; font-size: 20px; color: var(--bright); }
+  .phrow { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 12px; border: 0; border-radius: 10px; background: none; color: var(--text); font: 500 15px "Libre Franklin", Arial, sans-serif; text-align: left; cursor: pointer; }
+  .phrow:hover { background: var(--hover); }
+  .phrow svg { width: 20px; height: 20px; color: var(--muted); }
+  .phacct { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; padding: 12px; border-radius: 12px; background: var(--field); }
+  /* every button and box at least 44 pixels tall, so it is easy to tap */
+  .btn, .soft, .tb, .btn.slim, .soft.slim, .phacct .soft, select, select.box,
+  input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="search"], input[type="date"], input[type="time"], input:not([type]),
+  .island .linklike, .crumbs .linklike, .need .soft, .hquiet .btn, .tile, .seg button, .seg .tb { min-height: 44px; }
+  button.linklike, a.linklike, .hfoot > a { min-height: 44px; display: inline-flex; align-items: center; }
+  .seg.tbs .tb { height: 44px; }
+  .hhead .btn.key, .ov-head .btn, .btn.key, .split .btn, .ed-top .tb { min-height: 44px; }
+  .ed-top .tb { height: 44px; }
+  input[type="color"], .cswatch { min-width: 44px; min-height: 44px; }
+  /* the editor's list: taller rows and counts, and Add buttons, for a finger */
+  .ed .sec { min-height: 52px; }
+  .ed .sec .cnt { min-height: 44px; min-width: 48px; }
+  .ed .addl { min-height: 44px; }
+}
+/* a phone has no pointer to hover with, so the thin plus lines between rows give way to the Add buttons */
+@media (max-width: 700px) { .ed .ins { display: none; } }

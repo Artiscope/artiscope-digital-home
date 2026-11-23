@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "66";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "67";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -427,13 +427,34 @@
   function viewShell(inner) {
     var s = site();
     var nav = navHtml();
-    return '<div class="shell">' + viewRail(nav) +
+    return '<div class="shell">' + viewRail(nav) + phoneBar() +
       '<main class="main">' +
         '<div class="island-row">' + crumbs() + '<div class="' + islandClass() + '" role="status">' + islandInner() + '</div></div>' +
         '<div class="column fade">' +
           (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
           viewAsk() + inner +
         '</div></main></div>';
+  }
+  // On a phone the side menu becomes a bar at the foot of the screen: up to four places and More.
+  // More opens a sheet with the rest, All sites, and the account.
+  function phoneBar() {
+    var items = navItems(), s = site(), inSite = !!(state.inSite && s), main, rest;
+    if (inSite) {
+      var pref = s.shop ? ["products", "changes"] : ["overview", "pages", "content", "theme", "files", "photos"];
+      main = pref.map(function (id) { return items.find(function (n) { return n[0] === id; }); }).filter(Boolean).slice(0, 4);
+      rest = items.filter(function (n) { return main.indexOf(n) < 0; });
+    } else { main = items.slice(0, 4); rest = []; }
+    var word = function (n) { return n[0] === "pages" ? "Edit" : n[0] === "content" ? "Edit" : n[1]; };
+    var svg = function (n) { return '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="o" d="' + n[2] + '"></path><path class="d" d="' + n[3] + '"></path></svg>'; };
+    var who = demo ? "Sample mode. Example data only, nothing is saved." : "Signed in as " + (state.email || "");
+    return '<nav class="phbar" aria-label="Menu">' + main.map(function (n) {
+        var on = n[0] === state.tab && !state.phMore;
+        return '<button type="button" class="pb' + (on ? " on" : "") + '" data-tab="' + n[0] + '"' + (on ? ' aria-current="page"' : "") + '>' + svg(n) + '<span>' + esc(word(n)) + '</span></button>';
+      }).join("") +
+      '<button type="button" class="pb' + (state.phMore ? " on" : "") + '" data-act="ph-more" aria-expanded="' + !!state.phMore + '">' + ic("dots", 22) + '<span>More</span></button></nav>' +
+      (state.phMore ? '<div class="phsheet" role="dialog" aria-label="More"><div class="row between"><b class="phs-h">More</b><button type="button" class="soft slim" data-act="ph-more">Close</button></div>' +
+        rest.map(function (n) { return '<button type="button" class="phrow" data-tab="' + n[0] + '">' + svg(n) + '<span>' + esc(n[1]) + '</span></button>'; }).join("") +
+        '<div class="phacct"><span class="small">' + esc(who) + '</span><div class="row"><button type="button" class="soft slim" data-act="refresh">Refresh</button>' + (demo ? "" : '<button type="button" class="soft slim" data-act="signout">Sign out</button>') + '</div><span class="small">Version ' + VERSION + '</span></div></div>' : "");
   }
   // The slim menu down the left, shared by every screen and the page editor.
   function viewRail(nav) {
@@ -4808,7 +4829,7 @@
     if (tab === "home" || tab === "people") { state.inSite = false; }
     else if (site()) state.place[site().id] = tab;
     state.prevTab = state.tab; state.tab = tab; state.open = null; state.draft = null; state.dirty = false; state.leave = null; state.confirm = null; state.notice = null;
-    state.csearch = ""; state.cmore = false; state.edMenu = "";
+    state.csearch = ""; state.cmore = false; state.edMenu = ""; state.phMore = false;
     if (tab !== "pages") edAddress(); else if (site() && pgOf()) edAddress(site(), pgOf());
     if (state.status === "saved") state.status = "live";
     state.flash = ""; state.ask = null;
@@ -4816,6 +4837,8 @@
     if (typeof window.scrollTo === "function") window.scrollTo(0, 0);
   }
 
+  // Escape closes the phone menu's More sheet.
+  app.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && state.phMore) { state.phMore = false; render(); } });
   // Formatting buttons must not take the cursor out of the text.
   app.addEventListener("mousedown", function (ev) {
     var b = ev.target.closest && ev.target.closest(".rt-b"); if (b) ev.preventDefault();
@@ -4957,6 +4980,7 @@
     if (el.dataset.act && el.dataset.act.indexOf("sp-") === 0) { shopClick(el); return; }
     if (el.dataset.tab) { var to = el.dataset.tab; guard(function () { go(to); }); return; }
     var a = el.dataset.act, s = site();
+    if (a === "ph-more") { state.phMore = !state.phMore; render(); return; }
     if (a === "code-open") { codeClick(el); return; }
     if (a === "ed-pop") { var wm = el.dataset.menu; state.edMenu = state.edMenu === wm || (wm === "more" && (state.edMenu === "keys" || state.edMenu === "help") && !ev.target.closest(".ed-pop")) ? "" : wm; if (wm === "page") state.ppGroup = ""; patchEdTop(); if (state.edMenu === "page") { var q = app.querySelector("#pp-q"); if (q) q.focus(); } return; }
     if (a === "ed-ppgroup") { state.ppGroup = el.dataset.g || ""; patchEdTop(); var q2 = app.querySelector("#pp-q"); if (q2) q2.focus(); return; }
@@ -4966,7 +4990,7 @@
     if (a === "ed-copy") { var cid = el.dataset.copy || ""; guard(function () { workOn(cid); }); return; }
     if (a === "ed-panel") { edPanel(el.dataset.panel); return; }
     if (a === "ed-inspector") { edInspector(); return; }
-    if (a === "refresh") { state.content = {}; state.history = {}; if (state.people) state.people.list = null; load(); }
+    if (a === "refresh") { state.phMore = false; state.content = {}; state.history = {}; if (state.people) state.people.list = null; load(); }
     else if (a === "v-notes") { var vs = state.versions[state.site]; if (vs) { vs.open = vs.open === el.dataset.v ? "" : el.dataset.v; render(); } }
     else if (a === "v-archive") { var va = state.versions[state.site]; if (va) { va.archive = !va.archive; render(); } }
     else if (a === "v-seen") { markSeen(el.dataset.site, el.dataset.v); render(); }

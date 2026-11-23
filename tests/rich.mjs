@@ -4,7 +4,7 @@ import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, goTab } from "./where.mjs";
 import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict";
 import { createRequire } from "node:module"; const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT || "playwright");
 const here = path.resolve("."), read = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; } };
-const war = read("../world-art-review/content/site.json"), gam = read("../global-art-monitor/data/content.json");
+const war = read(W_DIR + "/content/site.json"), gam = read(G_DIR + "/data/content.json");
 const bodies = [];
 if (war) { war.articles.forEach((a) => bodies.push(a.body)); war.artists.forEach((a) => { a.seen && bodies.push(a.seen); (a.sections || []).forEach((x) => bodies.push(x.html)); (a.glance || []).forEach((r) => /</.test(r[1]) && bodies.push(r[1])); }); }
 if (gam) gam.features.forEach((f) => bodies.push(f.body));
