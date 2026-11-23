@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "62";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "63";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -310,7 +310,7 @@
   function firstTab(x) { return hasScreen(x, "pages") ? "pages" : "content"; }
   function photosTab(s) { return s && s.files ? "files" : "photos"; }
   function navIndex(tab) { var i = navItems().findIndex(function (n) { return n[0] === tab; }); return i < 0 ? 0 : i; }
-  function mark() { return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#F2F3F5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7"></path><path d="M6 10v10h12V10"></path><path d="M10 20v-5h4v5"></path></svg>'; }
+  function mark() { return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7"></path><path d="M6 10v10h12V10"></path><path d="M10 20v-5h4v5"></path></svg>'; }
 
   // The floating bar: which site, and what state its changes are in.
   function islandBusy() { return state.status !== "live" || (curCopy().kind === "trial" && curCopy().ahead > 0); }
@@ -318,7 +318,7 @@
     var s = site(), list = copiesOf(s), c = curCopy(), trial = c.kind === "trial", busy = state.status === "saving";
     if (!state.inSite || !s) {
       var ppl = state.tab === "people";
-      return '<span class="dot" aria-hidden="true" style="background:#9A9EA6"></span><b class="island-name">' + (ppl ? "People" : "All sites") + '</b><span class="small">' + (state.status === "saving" ? "Saving" : state.flash || (ppl ? "Who can sign in, and which sites they work on" : "Pick a site to work on")) + '</span>';
+      return '<span class="dot" aria-hidden="true" style="background:var(--dim)"></span><b class="island-name">' + (ppl ? "People" : "All sites") + '</b><span class="small">' + (state.status === "saving" ? "Saving" : state.flash || (ppl ? "Who can sign in, and which sites they work on" : "Pick a site to work on")) + '</span>';
     }
     if (s.shop) return '<span class="dot" aria-hidden="true" style="background:' + colours(s.id)[0] + '"></span><b class="island-name">' + esc(s.name) + '</b><span class="small">' + esc(busy || (shopOf(s) && shopOf(s).busy) ? "Saving to Shopify" : state.flash || "Shop on Shopify. Saves go straight to " + (s.domain || "the shop")) + '</span>';
     var copyPick = list.length > 1 && isAdmin()
@@ -329,7 +329,7 @@
     var canUndo = trial ? c.ahead > 0 : (c.steps && c.steps.length > 0);
     var act = !isAdmin() && c.behind && !busy ? '<button type="button" class="soft slim" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Bring my copy up to date</button>' + (c.ahead ? '<button type="button" class="btn slim" data-act="ask-makelive">Publish</button>' : "")
       : trial && c.ahead && !busy ? '<button type="button" class="btn slim" data-act="ask-makelive">' + (isAdmin() ? "Make live" : "Publish") + '</button>'
-      : '<span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#3DDC84" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>';
+      : '<span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>';
     return '<span class="dot" aria-hidden="true" style="background:' + (s ? colours(s.id)[0] : "#C9C2D3") + '"></span>' +
       '<b class="island-name">' + esc(s.name) + '</b>' + copyPick +
       '<button type="button" class="soft slim" data-act="undo-step"' + (canUndo && !busy ? "" : " disabled") + '>Undo</button>' +

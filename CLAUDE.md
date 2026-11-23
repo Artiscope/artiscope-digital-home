@@ -34,33 +34,38 @@ How they like to work. Follow this every time:
 - No boxed arrow icons or arrow buttons. Use words and spacing
   ("Previous", "Next", "Close", "Open").
 - Reuse the patterns already there before inventing new ones.
-- Console look (since Version 47): "Flat and crisp", from the owner's
-  design guide (`Digital Home design guide`, 17 November 2026). Read the
-  last block of `assets/app.css` before changing any style.
-  - Everything flat: no shadows, glows, gradients or pressed-in shapes.
-    Shapes are told apart by a step in charcoal and a 1.5px edge, drawn
-    inside the shape (`inset 0 0 0 1.5px`, the `--shadow`,
-    `--shadow-small` and `--pressed-small` variables now hold edges).
-    No lines between rows.
-  - Surfaces: panels and cards #26272B with edge #3A3C42, 16px corners;
-    buttons one step lighter #2C2E33 with edge #44474E (hover edge
-    #6E727A, pressed fill #1C1D21), 10px corners, 34px tall; boxes you
-    type in, counts and quiet cards one step darker #1C1D21 with edge
-    #34363C; the preview well #1F2024.
-  - One accent, ice blue #8EC5FF: Save and Publish are the only solid
-    colour (words #0E1A26, bold, 40px tall, pressed #7CB9F7; `.btn.key`
-    or the save actions listed in `app.css`). Chosen always looks the
-    same: fill #1E2834, ice blue edge and icon, words #F2F3F5 semi-bold.
-    Links, switches when on (54 by 30), slider fill (`--pct`, set by
-    `rangeFill`) and the preview outline and name tag are ice blue.
-  - Words #D4D7DC, headings #F2F3F5, muted #9A9EA6, turned off #6E727A.
-    Status only as 9px dots or words: green #4CC38A, amber #E8B44C, red
-    #F07A7A. Remove is red words on an ordinary button. No colour on
-    panels or large areas (the copy cards carry a dot, not a band).
-  - Labels are 11px capitals, 0.08em spacing, semi-bold, muted. Fonts:
-    Castoro for headings (40px greeting), Libre Franklin 14px for words.
-    Outline icons only, from the `IC` set in `assets/app.js`.
+- Console look (since Version 63): "Snow and teal", Option G of the
+  colour options the owner chose on 23 November 2026 (canvas:
+  https://claude.ai/artifact/XsiwECaQLDuA2yp91Y5gFZ). It is the last block
+  of `assets/app.css` and wins over everything above it (the older
+  "Flat and crisp" charcoal block stays above it, overridden). Read that
+  last block before changing any style.
+  - Flat: no glows, gradients or pressed-in shapes. Panels and cards are
+    white #FFFFFF on the page #F5F8F8, told apart by a 1px edge #DDE5E5
+    drawn inside (`--shadow`); menus and pickers float with a soft
+    shadow (`--shadow-pop`). 16px corners on panels, 10px on buttons. No
+    lines between rows.
+  - Buttons white with a 1.5px edge #C9D3D3 (hover #8B9696, pressed
+    #E6EDED), 34px tall. Boxes you type in are white with a 1.5px edge
+    #8B9696 (`--input`, `--input-edge`, 3 to 1); focus makes it 2px teal.
+    Quiet cards, counts and steps #F2F6F6 (`--field`); the preview well
+    #E8EEEE.
+  - One accent, deep teal #0D6767 (`--ice` keeps its old name): Save,
+    Publish and the main action are the only solid colour (white words,
+    bold, 40px tall, pressed #0A5656). Chosen always looks the same: fill
+    #E0F0EF, teal edge and icon, words #121818 semi-bold. Links, switches
+    when on, slider fill and keyboard focus are teal.
+  - Words #2B3333, headings #121818, muted #56605F, turned off #646E6D.
+    Every word colour is at least 4.5 to 1 on what it sits on. Status
+    only as 9px dots or words: green #1F7444, amber #8A5800, red #B3261E.
+    Remove is red words on an ordinary button.
+  - Labels are 12px sentence case, semi-bold, muted (no small capitals).
+    Fonts: Castoro for headings (40px greeting), Libre Franklin 14px for
+    words. Outline icons only, from the `IC` set in `assets/app.js`.
   - A new control uses an existing surface and state, never a new colour.
+  - Steps 2 to 5 of the agreed UI plan are still to come (where you are,
+    fewer boxes and one main action, the editor, phone): each waits for
+    the owner's go ahead.
   - All sites (`viewHome`): live sites three to a row, each with a small
     picture of its home page (an iframe laid out 1280 wide and scaled,
     `homeFit`), then the Practice site and the sites still to build on
@@ -220,7 +225,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (23 November 2026, Version 62)
+## Where things stand (23 November 2026, Version 63)
 
 Done:
 
@@ -1205,6 +1210,21 @@ Done:
   - Still to come (the plan's Phase 2 onwards): the Zen Xander site itself
     in the console, then payments. Options (sizes, frames, colours) are
     still changed in Shopify.
+
+- Version 63 (23 November): the console's new look, step 1 of 5 of the
+  UI plan. The owner compared ten colour options on a canvas
+  (https://claude.ai/artifact/XsiwECaQLDuA2yp91Y5gFZ) and chose Option G,
+  Snow and teal. Colours and text only: a last block in `assets/app.css`
+  sets the roles (see Design rules), clearer text boxes, a teal focus
+  ring, sentence-case labels, light drawings in Add a section, and the
+  menu's house icon and saved tick follow the words' colour. No screen,
+  control or behaviour changed. Next steps, each with the owner's go
+  ahead: 2 where you are (side menu with words, path, Live or Trial copy
+  marker, a site opens on its Overview), 3 fewer boxes and one main
+  action per screen (Needs you on the Overview), 4 the editor (top bar
+  in three groups with words, panels side by side from 1280, no floating
+  bar, teal outline in the sites' editor link), 5 phone (a bar at the
+  foot, 44px buttons).
 
 Waiting for the owner:
 

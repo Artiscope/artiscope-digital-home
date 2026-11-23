@@ -1569,3 +1569,124 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focu
 .sp input[type="file"] { color: var(--muted); font-size: 13px; }
 .sp input[type="file"]::file-selector-button { min-height: 34px; margin-right: 10px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--btn); box-shadow: var(--shadow-small); color: var(--bright); font: 600 14px "Libre Franklin", sans-serif; cursor: pointer; }
 .sp .page-head { margin-bottom: 18px; }
+
+/* =====================================================================
+   Snow and teal (Option G, chosen 23 November 2026, Version 63).
+   White panels on a pale grey-green page, one deep teal for the main
+   action, what is chosen, links and keyboard focus. Every word colour
+   is at least 4.5 to 1 against what it sits on; boxes you type in have
+   an edge of at least 3 to 1. Status keeps its meaning everywhere:
+   green live, amber waiting, red remove, always beside a word.
+   This block comes last and wins over everything above it.
+   ===================================================================== */
+:root {
+  --page: #F5F8F8;          /* the background behind everything */
+  --bg: #FFFFFF; --rail: #FFFFFF;                 /* panels and cards */
+  --tint: #E8EEEE; --well: #E8EEEE;               /* behind the page preview */
+  --btn: #FFFFFF; --hover: #EEF3F3; --press: #E6EDED;
+  --field: #F2F6F6;          /* quiet cards, counts and steps */
+  --input: #FFFFFF;          /* boxes you type in */
+  --edge: #DDE5E5; --btn-edge: #C9D3D3; --btn-edge-hover: #8B9696;
+  --field-edge: #DDE5E5; --input-edge: #8B9696;
+  --text: #2B3333; --bright: #121818; --muted: #56605F; --dim: #646E6D;
+  --ice: #0D6767; --ice-press: #0A5656; --on-ice: #FFFFFF; --chosen: #E0F0EF;
+  --accent: #0D6767; --accent-deep: #094D4D; --violet: #0D6767; --select: #E0F0EF; --select-text: #121818;
+  --live: #1F7444; --warn: #8A5800; --problem: #B3261E;
+  --silver: #0D6767; --silver-text: #FFFFFF; --knob: #FFFFFF;
+  --veil: rgba(18, 24, 24, .36);
+  --shadow: inset 0 0 0 1px var(--edge);
+  --shadow-small: inset 0 0 0 1.5px var(--btn-edge);
+  --shadow-pop: inset 0 0 0 1px var(--edge), 0 8px 28px rgba(18, 24, 24, .10);
+  --pressed: inset 0 0 0 1px var(--field-edge);
+  --pressed-small: inset 0 0 0 1px var(--field-edge);
+  --lift: var(--shadow); --lift-small: var(--shadow-small); --sink: var(--pressed); --sink-small: var(--pressed-small);
+  --chosen-edge: inset 0 0 0 1.5px var(--ice);
+  color-scheme: light;
+}
+body, .shell, .main, .bd, .ed, .code-view { background: var(--page); }
+body { color: var(--text); }
+a { color: var(--ice); }
+a:hover { color: var(--accent-deep); }
+:focus-visible { outline: 2px solid var(--ice); outline-offset: 2px; }
+
+/* the side menu: white, with a soft edge against the page */
+.rail { background: var(--bg); box-shadow: inset -1px 0 0 var(--edge); }
+.navb { color: var(--muted); }
+.navb:hover { color: var(--bright); background: var(--hover); }
+.brand-mark { color: var(--bright); }
+.acct summary { background: var(--btn); box-shadow: inset 0 0 0 1.5px var(--btn-edge); color: var(--bright); }
+
+/* menus, pickers and popups float a little above the page */
+.ed-pop, .acct-menu, .pk, .lib, .tpl-pop, .tpl-dlg, .lopts, .fbar { box-shadow: var(--shadow-pop); }
+.pk-veil, .lib-veil, .tpl-dlg-wrap { background: var(--veil); }
+.rkind { letter-spacing: .01em; }
+
+/* buttons: white with a grey-green edge; pressed one step darker */
+.soft:active, .btn:active, .tb:active, .pp-item:active, .navb:active, .rbtns .tw:active, .cfoot .tw:active, .lib .tw:active, .tpanel .tw:active, .tbox .tw:active, .fontbtn:active, .rtag:active, .rt-b:active, .fbar button:active { background: var(--press); }
+.btn[disabled], .soft[disabled], .tb[disabled], .btn[disabled]:hover, .soft[disabled]:hover, .tb[disabled]:hover { background: var(--field); box-shadow: inset 0 0 0 1px var(--field-edge); color: var(--dim); }
+.btn.key[disabled], .btn[data-act="ed-save"][disabled], .btn[data-act="ed-save-publish"][disabled], .btn[data-act="theme-publish"][disabled] { background: var(--field); color: var(--dim); box-shadow: inset 0 0 0 1px var(--field-edge); }
+.btn.danger:hover { color: var(--problem); }
+.btn:hover { color: var(--bright); }
+
+/* boxes you type in: white with a clear edge; focus turns it teal and thicker */
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="search"], input[type="date"], input[type="time"], input:not([type]), select.box, select, textarea, .fontpick input[type="search"], .ed-right .numbox input[type="number"], .ed-right .colour input.hex, .ed-right .cfoot input.hex, .bd-in, .sp input:not([type]), .sp input[type="search"], .sp select { background-color: var(--input); box-shadow: inset 0 0 0 1.5px var(--input-edge); color: var(--bright); }
+input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, input[type="number"]:focus, input[type="search"]:focus, input[type="date"]:focus, input[type="time"]:focus, input:not([type]):focus, select.box:focus, select:focus, textarea:focus, .bd-in:focus, .sp input:not([type]):focus, .sp input[type="search"]:focus, .sp select:focus, .sp textarea:focus { outline: none; box-shadow: inset 0 0 0 2px var(--ice); }
+input::placeholder, textarea::placeholder { color: var(--dim); }
+select.box option, select option { background: #FFFFFF; color: var(--bright); }
+.code-box .code-ta, .code-box .code-ta:focus { box-shadow: none; background: transparent; }
+
+/* switches and sliders */
+.switch .knob { background: var(--field); box-shadow: inset 0 0 0 1.5px var(--input-edge); }
+.switch .knob::after { background: var(--dim); box-shadow: none; }
+.switch input:checked + .knob { background: var(--ice); box-shadow: none; }
+.switch input:checked + .knob::after { background: var(--knob); }
+.switch input:focus-visible + .knob { box-shadow: inset 0 0 0 1.5px var(--input-edge), 0 0 0 2px var(--page), 0 0 0 4px var(--ice); }
+.switch input:disabled + .knob { background: var(--field); box-shadow: inset 0 0 0 1px var(--field-edge); }
+.switch input:disabled + .knob::after { background: var(--btn-edge); }
+.sw2 i { box-shadow: none; }
+.sw2.off { background: var(--field); box-shadow: inset 0 0 0 1.5px var(--input-edge); }
+.sw2.off i { background: var(--dim); }
+.slider input[type="range"] { background: linear-gradient(to right, var(--ice) var(--pct, 0%), var(--btn-edge) var(--pct, 0%)); }
+.slider input[type="range"]::-webkit-slider-thumb { background: var(--knob); box-shadow: 0 0 0 1.5px var(--ice); }
+.slider input[type="range"]::-moz-range-thumb { background: var(--knob); box-shadow: 0 0 0 1.5px var(--ice); }
+.slider input[type="range"]:disabled { background: var(--btn-edge); }
+.cpop .chue::-webkit-slider-thumb { box-shadow: 0 0 0 1.5px var(--bright); }
+.libf input { accent-color: var(--ice); }
+
+/* labels: sentence case, 12 pixels, semi-bold, easier to read than small capitals */
+.cap, .ed .grp, .pk-gl, .ed-right .sub, .sp-table th, .rkind, .lopts .cap { font-size: 12px; font-variant-caps: normal; text-transform: none; letter-spacing: .01em; font-weight: 600; color: var(--muted); }
+
+/* the editor's rows */
+.ed .sec.blk { color: var(--text); }
+.ed .sec.off { color: var(--dim); }
+.ed .sec.over:not(.on) { background: var(--hover); }
+.ed-right .small a { color: var(--ice); text-decoration-color: currentColor; }
+.ed .fullbar { background: var(--field); box-shadow: inset 0 0 0 1px var(--field-edge); color: var(--muted); }
+.ed .fullbar .tw { color: var(--bright); background: var(--btn); box-shadow: inset 0 0 0 1.5px var(--btn-edge); }
+.ed .fullbar .tw:hover { box-shadow: inset 0 0 0 1.5px var(--btn-edge-hover); }
+.ed .fullbar .tw:active { background: var(--press); }
+.ed-frame { box-shadow: inset 0 0 0 1px var(--edge); }
+.ed-frame.phone iframe, .bd-frame.phone iframe { box-shadow: 0 0 0 10px var(--bg), 0 0 0 11px var(--edge); }
+
+/* the drawings in Add a section: light grey shapes on white */
+.pk-draw { background: var(--field); }
+.pk-draw i, .pv-cards span, .pv-space span, .pv-gallery span { background: #CFD9D9; }
+.pv-banner, .pv-panel, .pv-ann, .pv-popwrap { background: #E6EDED; color: var(--bright); }
+.pv-banner b, .pv-panel b { color: var(--bright); }
+.pv-banner span, .pv-img { background: #BFCBCB; }
+.pv-panel i { background: #CFD9D9; }
+
+/* pictures, swatches and code */
+.cswatch, .tbox .ti i, .tile .swatches i, .hbadge, .bd-sw i { box-shadow: inset 0 0 0 1.5px rgba(18, 24, 24, .16); }
+.cswatch.themed { background: repeating-linear-gradient(135deg, #E8EEEE 0 5px, #F5F8F8 5px 10px); }
+.imgpick .picthumb, .libf img, .libf video { background: var(--field); }
+.rthumb.none { background: var(--chosen); color: var(--bright); }
+.cssbox .code { background: var(--field); box-shadow: inset 0 0 0 1px var(--field-edge); }
+.cssbox .gut { background: #E8EEEE; color: var(--muted); }
+.code-ta::selection { background: #BFE3E0; color: var(--bright); }
+.code-status { color: var(--text); }
+.hpic { background: var(--well); box-shadow: inset 0 0 0 1px var(--edge); }
+
+/* status words keep their colour; small dots beside them */
+.lamp.q { background: var(--dim); }
+.island .tick { color: var(--live); }
