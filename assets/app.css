@@ -1741,3 +1741,53 @@ select.box option, select option { background: #FFFFFF; color: var(--bright); }
 }
 .ov-head a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: var(--bright); }
 .ov-head a.btn:hover { color: var(--bright); }
+
+/* ---------- Fewer boxes, one main action (Version 65, step 3 of the UI plan) ---------- */
+/* All sites: a sentence for the counts, Start a new site as the one main button */
+.hhead .btn.key { min-height: 40px; padding: 0 18px; }
+.hhead p .hcounts { display: inline; padding: 0; background: none; box-shadow: none; font-size: inherit; color: inherit; }
+.hsec { margin: 34px 0 14px; align-items: baseline; }
+.hsec .cardh { margin: 0; }
+/* a live site's whole card opens it: its name is the button, stretched over the card */
+.hcard.open { position: relative; }
+.hcard.open:hover { background: #FBFCFC; box-shadow: inset 0 0 0 1px var(--btn-edge-hover); }
+.hcard.open:has(.hopen:focus-visible) { box-shadow: inset 0 0 0 1px var(--edge), 0 0 0 2px var(--page), 0 0 0 4px var(--ice); }
+.hopen { display: flex; flex-direction: column; min-width: 0; margin: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.hopen::after { content: ""; position: absolute; inset: 0; border-radius: 16px; }
+.hopen:focus-visible { outline: none; }
+.hopen .small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hfoot > a { position: relative; z-index: 1; margin-left: auto; }
+/* practice and still to build: quiet rows, one button each */
+.hlist { display: flex; flex-direction: column; gap: 8px; }
+.hquiet { flex-direction: row; align-items: center; gap: 16px; padding: 14px 18px; }
+.hq-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hq-t b { color: var(--bright); font-weight: 600; }
+.hquiet .hstate { flex: none; }
+.hquiet .btn { margin-left: 0; flex: none; }
+
+/* Overview: Needs you first, then three quiet tiles, then the copies */
+.ov-sec { margin-top: 8px; }
+.ov-h { margin: 0 0 12px; align-items: baseline; }
+.ov-h .cardh { margin: 0; }
+.needs { background: var(--bg); border-radius: 16px; box-shadow: var(--shadow); padding: 6px 0; }
+.need { display: flex; align-items: center; gap: 14px; padding: 12px 20px; }
+.need .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.need b { color: var(--bright); font-weight: 600; }
+.need .soft { flex: none; }
+.needs-none { display: flex; align-items: center; gap: 10px; margin: 0; color: var(--muted); }
+.ov-tiles { margin-top: 26px; gap: 20px; }
+.tile { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 22px; min-height: 168px; text-align: left; }
+.tile .lbl { font-size: 12px; font-weight: 600; color: var(--muted); }
+.tile .bignum { font-size: 34px; color: var(--bright); margin: 6px 0 2px; }
+.tile .swatches { margin: 6px 0 4px; }
+.tile .go { margin-top: auto; padding-top: 8px; color: var(--ice); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+/* the copies: no band across the top of each card */
+.copytop, .copycard.on .copytop { background: transparent; box-shadow: none; padding-bottom: 0; }
+@media (max-width: 700px) {
+  .hhead .btn.key { width: 100%; }
+  .need { flex-wrap: wrap; align-items: flex-start; padding: 12px 16px; }
+  .need .lamp { margin-top: 6px; }
+  .need .soft { margin-left: 23px; }
+  .hquiet { flex-wrap: wrap; }
+  .hquiet .btn { margin-left: 54px; }
+}

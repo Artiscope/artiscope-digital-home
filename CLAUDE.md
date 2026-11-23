@@ -72,9 +72,21 @@ How they like to work. Follow this every time:
     and "Redo" sit in the marker only when there is one to take back. A
     site opens on its Overview (`openSite`), whose main button is Edit
     pages. Under 901px the menu is still the strip at the top until step 5.
-  - Steps 3 to 5 of the agreed UI plan are still to come (fewer boxes and
-    one main action, the editor, phone): each waits for the owner's go
-    ahead.
+  - One main action per screen (Version 65): solid teal only for it
+    (`.btn.key`): Start a new site on All sites, Edit pages on a site's
+    Overview, Choose photos on Files, Invite an editor on People, Add a
+    product on Products, Save in the editor. All sites: a live site's
+    whole card opens it (its name is the `.hopen` button with
+    `data-act="open-site"`, stretched over the card; no Open button),
+    practice and sites to build are quiet rows (`.hquiet`), the counts are
+    a sentence (`.hcounts`). Overview: Needs you first (`.needs`, `.need`:
+    photos with no description, places with no picture, empty photo
+    spots, trial copies with changes not live, an editor's copy behind or
+    ahead; `ov-files` opens Files at that filter), then three quiet tiles
+    (Theme, Files or Photos, Versions; History when one is missing), then
+    the copies. Files are read on the Overview too, for Needs you.
+  - Steps 4 and 5 of the agreed UI plan are still to come (the editor,
+    phone): each waits for the owner's go ahead.
   - All sites (`viewHome`): live sites three to a row, each with a small
     picture of its home page (an iframe laid out 1280 wide and scaled,
     `homeFit`), then the Practice site and the sites still to build on
@@ -234,7 +246,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (23 November 2026, Version 64)
+## Where things stand (23 November 2026, Version 65)
 
 Done:
 
@@ -1244,6 +1256,11 @@ Done:
   site now opens on its Overview, with View the live site and Edit pages
   at the top; Open the editor after Start building still goes straight
   to the editor. Tests that open a site press Edit pages first.
+
+- Version 65 (23 November): step 3 of 5 of the UI plan, fewer boxes and
+  one main action per screen (see Design rules). The agents' drafts are
+  not in Needs you yet: the console does not read the weekday agents'
+  pull requests, so that waits for the owner's say.
 
 Waiting for the owner:
 

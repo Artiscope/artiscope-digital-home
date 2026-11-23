@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "64";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "65";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -141,7 +141,7 @@
         if (state.openPanel) { made.leftPanel = state.openPanel; made.leftHidden = false; state.openPanel = ""; }
         render();
       }
-      if (state.tab === "files" && (force || !state.files[s.id])) {
+      if ((state.tab === "files" || (state.tab === "overview" && s.files && hasScreen(s, "files"))) && (force || !state.files[s.id])) {
         var fl = await api("files", { site: s.id }), was = state.files[s.id] || {};
         state.files[s.id] = { files: fl.files || [], spots: fl.spots || [], imageBase: fl.imageBase || "", filter: was.filter || state.fileFilter || "all", open: "", assign: "", pick: "" }; render();
       }
@@ -499,32 +499,32 @@
     var badge = function (x) { var c = colours(x.live || x.playground || x.outside || x.shop ? x.id : ""); return '<span class="hbadge" aria-hidden="true" style="background:' + c[0] + ";color:" + c[1] + '">' + esc(x.playground ? "PB" : x.practice ? "P" : x.live || x.outside || x.shop ? initials(x.name) : x.name.replace(/\D/g, "")) + '</span>'; };
     var card = function (x) {
       var addr = siteAddr(x), pic = demo && x.id === "world-art-review" && params.get("preview") ? params.get("preview") : demo && x.id === "global-art-monitor" && params.get("gampreview") ? params.get("gampreview") : demo && x.id === "street-art-dispatch" && params.get("sadpreview") ? params.get("sadpreview") : addr;
-      return '<div class="card hcard">' +
+      return '<div class="card hcard' + (x.outside ? "" : " open") + '">' +
         '<span class="hpic" aria-hidden="true">' + (pic ? '<iframe src="' + esc(pic) + '" tabindex="-1" loading="lazy" title="" scrolling="no"></iframe>' : "") + '</span>' +
-        '<span class="hname">' + badge(x) + '<span><b>' + esc(x.name) + '</b><span class="small">' + esc(x.domain) + '</span></span></span>' +
+        '<span class="hname">' + badge(x) + (x.outside ? '<span><b>' + esc(x.name) + '</b><span class="small">' + esc(x.domain) + '</span></span>'
+          : '<button type="button" class="hopen" data-act="open-site" data-site="' + esc(x.id) + '"><b>' + esc(x.name) + '</b><span class="small">' + esc(x.domain) + '</span></button>') + '</span>' +
         (x.shop ? '<span class="hfoot"><span class="hstate"><i class="lamp ' + (x.shop.ready ? "g" : "a") + '" aria-hidden="true"></i>' + (x.shop.ready ? "Shop on Shopify" : "Shop. Waiting for the Shopify key") + '</span>' +
-          (addr ? '<a href="' + esc(addr) + '" target="_blank" rel="noopener">View shop</a>' : "") +
-          '<button type="button" class="btn slim" data-act="open-site" data-site="' + esc(x.id) + '">Open</button></span></div>'
+          (addr ? '<a href="' + esc(addr) + '" target="_blank" rel="noopener">View shop</a>' : "") + '</span></div>'
         : x.outside ? '<span class="hfoot"><span class="hstate"><i class="lamp g" aria-hidden="true"></i>Live. Not in the editor yet</span>' +
           (addr ? '<a href="' + esc(addr) + '" target="_blank" rel="noopener">View site</a>' : "") +
           (x.repo ? '<a href="https://github.com/' + esc(x.repo) + '" target="_blank" rel="noopener">GitHub</a>' : "") + '</span></div>'
         : '<span class="hfoot"><span class="hstate"><i class="lamp ' + siteLamp(x) + '" aria-hidden="true"></i>' + esc(statusLine(x)) + '</span>' +
-          (addr ? '<a href="' + esc(addr) + '" target="_blank" rel="noopener">View site</a>' : "") +
-          '<button type="button" class="btn slim" data-act="open-site" data-site="' + esc(x.id) + '">Open</button></span></div>');
+          (addr ? '<a href="' + esc(addr) + '" target="_blank" rel="noopener">View site</a>' : "") + '</span></div>');
     };
     var quiet = function (x) {
-      return '<div class="card hquiet">' +
-        '<span class="hname">' + badge(x) + '<span><b>' + esc(x.name) + '</b><span class="small">' + esc(x.playground ? "A whole site to build and try things on" : x.practice ? "Private copy of World Art Review" : x.live ? x.domain : "Domain owned") + '</span></span></span>' +
-        '<span class="small hnote">' + esc(x.playground ? (x.live ? "Everyone you give it to can do everything here. Start again wipes it for the next person." : "Waiting to be set up on GitHub.") : x.practice ? "Try anything here. Nobody outside the team can see it, and nothing you do reaches the real site." : x.live ? statusLine(x) : "Not built yet. The domain is ready when you are.") + '</span>' +
-        '<span class="hfoot">' + (x.practice && x.live ? '<span class="hstate"><i class="lamp q" aria-hidden="true"></i>Private</span>' : "") +
-          '<button type="button" class="btn slim" data-act="open-site" data-site="' + esc(x.id) + '">' + (x.live ? "Open" : "Start building") + '</button></span></div>';
+      return '<div class="card hquiet">' + badge(x) +
+        '<span class="hq-t"><b>' + esc(x.name) + '</b><span class="small hnote">' + esc(x.playground ? (x.live ? "A whole site to build and try things on. Start again wipes it for the next person." : "Waiting to be set up on GitHub.") : x.practice ? "A private copy of World Art Review. Nothing you do here reaches the real site." : x.live ? statusLine(x) : "Not built yet. The domain is ready when you are.") + '</span></span>' +
+        (x.practice && x.live ? '<span class="hstate"><i class="lamp q" aria-hidden="true"></i>Private</span>' : "") +
+        '<button type="button" class="btn slim" data-act="open-site" data-site="' + esc(x.id) + '">' + (x.live ? "Open" : "Start building") + '</button></div>';
     };
+    var toBuild = all.find(function (x) { return !x.live && !x.playground && !x.outside && !x.shop && !x.practice; });
+    var counts = [nLive + (nLive === 1 ? " live site" : " live sites")].concat(nPrac ? [nPrac + " for practice"] : [], nBuild ? [nBuild + " still to build"] : []);
     return '<div class="page-head hhead"><div><span class="cap">' + esc(today()) + '</span><h1>' + greeting() + '</h1>' +
-      (isAdmin() ? '<p>Pick a site to work on. On a live site, Save goes straight to visitors. On a trial copy nothing is seen until you make it live, and every step can be undone.</p>'
-        : '<p>' + (all.length === 1 ? "Your site." : "Your sites.") + ' Open one to work on your own copy of it. Nothing you save is seen until you publish it, and every step can be undone.</p>') + '</div>' +
-      (isAdmin() ? '<span class="hcounts"><span><i class="lamp g" aria-hidden="true"></i><b>' + nLive + '</b> live</span>' + (nBuild ? '<span><b>' + nBuild + '</b> to build</span>' : "") + (nPrac ? '<span><b>' + nPrac + '</b> practice</span>' : "") + '</span>' : "") + '</div>' +
-      (live.length ? '<p class="cap hcap">Live sites</p><div class="sites hgrid">' + live.map(card).join("") + '</div>' : "") +
-      (rest.length ? '<p class="cap hcap">' + (nBuild ? "Practice and still to build" : "Practice") + '</p><div class="sites hgrid">' + rest.map(quiet).join("") + '</div>' : "") + viewNewVersions();
+      (isAdmin() ? '<p>Pick a site to work on. <span class="hcounts">' + esc(counts.length > 1 ? counts.slice(0, -1).join(", ") + " and " + counts[counts.length - 1] : counts[0]) + '.</span></p>'
+        : '<p>' + (all.length === 1 ? "Your site." : "Your sites.") + ' Open one to work on your own copy of it. Nothing you save is seen until you publish it.</p>') + '</div>' +
+      (isAdmin() && toBuild ? '<button type="button" class="btn key" data-act="start-new" data-site="' + esc(toBuild.id) + '">Start a new site</button>' : "") + '</div>' +
+      (live.length ? '<div class="row between hsec"><h2 class="cardh">Live sites</h2><span class="small">Pick one to work on</span></div><div class="sites hgrid">' + live.map(card).join("") + '</div>' : "") +
+      (rest.length ? '<div class="row between hsec"><h2 class="cardh">' + (nBuild ? "Practice and still to build" : "Practice") + '</h2></div><div class="hlist">' + rest.map(quiet).join("") + '</div>' : "") + viewNewVersions();
   }
   function viewUnbuilt(x) {
     return '<div class="page-head"><h1>' + esc(x.name) + '</h1>' +
@@ -533,29 +533,47 @@
   }
   function viewOverview() {
     var s = site(); if (!s) return viewHome();
-    var cols = state.content[s.id];
-    var entries = cols ? cols.reduce(function (n, c) { return n + c.entries.length; }, 0) : null;
     var empty = (s.slots || []).filter(function (x) { return !x.filled && !x.waiting; }).length, waiting = s.inbox ? s.inbox.length : 0;
-    var t = state.theme[s.id], colourCount = t ? t.spec.colours.length + t.spec.fonts.length : null;
-    function tile(tab, n, name, sub, act) {
-      return '<button type="button" class="card lift sitecard tile" data-tab="' + tab + '"><span class="bignum">' + (n == null ? "..." : n) + '</span><b>' + name + '</b><span class="small">' + esc(sub) + '</span><span class="small" style="color:var(--accent);margin-top:4px">' + act + '</span></button>';
-    }
+    var t = state.theme[s.id], fd = s.files ? state.files[s.id] : null;
     var addr = s.live ? siteAddr(s) : "", editTab = hasScreen(s, "pages") ? "pages" : "content";
-    return '<div class="page-head ov-head"><div class="stack" style="gap:4px"><h1>' + esc(s.name) + '</h1>' +
+    var head = '<div class="page-head ov-head"><div class="stack" style="gap:4px"><h1>' + esc(s.name) + '</h1>' +
       '<p>' + esc(s.domain) + (isAdmin() ? '. Everything for this site is here. Use a trial copy to try things first.' : '. You work on your own copy. Nothing you save is seen until you publish it.') + '</p></div>' +
       '<div class="row">' + (addr ? '<a class="btn" href="' + esc(addr) + '" target="_blank" rel="noopener">View the live site</a>' : "") +
-        '<button type="button" class="btn key" data-tab="' + editTab + '">' + (editTab === "pages" ? "Edit pages" : "Edit the words") + '</button></div></div>' +
-      '<div class="grid-3">' +
-        (s.edits ? tile("pages", "", "Pages", "Every page, article and " + (s.starter && (s.template || "starter") === "starter" ? "artist page" : s.id === "street-art-dispatch" || s.template === "street-art-dispatch" ? "artist profile" : "artist portfolio") + ", edited beside the real page", "Open the editor")
-          : tile("content", entries, "Content", (cols ? cols.map(function (c) { return c.label.toLowerCase(); }).join(", ") : "Articles, artists and more"), cols && cols.some(function (c) { return c.canHide; }) ? "Edit, hide or delete" : "Edit the words")) +
-        (!hasScreen(s, "theme") ? "" : t ? '<button type="button" class="card lift sitecard tile" data-tab="theme"><span class="swatches" aria-hidden="true">' + t.spec.colours.map(function (c) { return '<i style="background:' + esc(t.values.colours[c.id] || c.default) + '" title="' + esc(c.label) + '"></i>'; }).join("") + '</span>' +
-          '<b>Theme</b><span class="small">' + t.spec.fonts.map(function (f) { return esc(t.values.fonts[f.id] || f.default); }).join(" &nbsp;&middot;&nbsp; ") + '</span><span class="small" style="color:var(--accent);margin-top:6px">Change the look</span></button>'
-          : tile("theme", "", "Theme", "Colours and typefaces", "Change the look")) +
-        (!hasScreen(s, "photos") ? tile("versions", s.versions && s.versions[0] ? s.versions[0].number : "", "Versions", "Every publish, numbered, with notes on what changed", "See the versions") +
-          (isAdmin() ? tile("history", "", "History", "Every change made to the site, and who made it", "See the history") : "")
-        : s.files ? tile("files", state.files[s.id] ? state.files[s.id].files.length : "", "Files", "Every photo on the site, what it shows and where it is used", "Upload and describe")
-          : tile("photos", empty, "Photos", empty + " empty " + (empty === 1 ? "spot" : "spots") + ", " + waiting + " on the way", "Add photos")) +
-      '</div>' + (s.playground && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start building</h2><span class="small">Try the steps for a new site here: a name, a look and the starting pages. The practice build is rebuilt with your choices, and no new repository is made.</span><div class="row"><button type="button" class="soft" data-act="bd-start" data-site="' + esc(s.id) + '">Start building</button></div></div>' : "") +
+        '<button type="button" class="btn key" data-tab="' + editTab + '">' + (editTab === "pages" ? "Edit pages" : "Edit the words") + '</button></div></div>';
+    // Needs you: only what someone can act on now, each with its own button.
+    var needs = [], list = copiesOf(s), c = curCopy();
+    if (s.files && hasScreen(s, "files") && fd) {
+      var nd = fileCount(fd, "nodesc"), em = fileCount(fd, "empty");
+      if (nd) needs.push([nd + (nd === 1 ? " photo has no description" : " photos have no description"), "People using screen readers hear nothing for " + (nd === 1 ? "it" : "them") + ".", '<button type="button" class="soft slim" data-act="ov-files" data-f="nodesc">Describe ' + (nd === 1 ? "it" : "them") + '</button>']);
+      if (em) needs.push([em + (em === 1 ? " place has no picture" : " places have no picture"), "Choose a photo for " + (em === 1 ? "it" : "each") + " in Files.", '<button type="button" class="soft slim" data-act="ov-files" data-f="empty">Choose ' + (em === 1 ? "a picture" : "pictures") + '</button>']);
+    }
+    if (!s.files && hasScreen(s, "photos") && empty) needs.push([empty + (empty === 1 ? " empty spot" : " empty spots") + " for a photo", waiting ? waiting + (waiting === 1 ? " photo is" : " photos are") + " on the way." : "Upload photos for them.", '<button type="button" class="soft slim" data-tab="photos">Add photos</button>']);
+    if (isAdmin()) list.filter(function (x) { return x.kind === "trial" && x.ahead; }).forEach(function (x) {
+      needs.push(["Trial copy " + x.name + ": " + x.ahead + (x.ahead === 1 ? " change" : " changes") + " not live yet", "Make it live once you are happy with it, or keep trying things.", '<button type="button" class="soft slim" data-act="ask-big" data-kind="makelive" data-copy="' + esc(x.id) + '">Make it live</button>']);
+    });
+    else if (c && c.kind !== "live") {
+      if (c.behind) needs.push(["The live site has changed since your copy was made", "Bring your copy up to date before you carry on.", '<button type="button" class="soft slim" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Bring it up to date</button>']);
+      if (c.ahead) needs.push([c.ahead + (c.ahead === 1 ? " change" : " changes") + " on your copy not published yet", "Publish when you are ready. The admin gets the release notes.", '<button type="button" class="soft slim" data-act="ask-makelive">Publish</button>']);
+    }
+    var checking = s.files && hasScreen(s, "files") && !fd;
+    var needsHtml = '<section class="ov-sec"><div class="row between ov-h"><h2 class="cardh">Needs you</h2>' + (needs.length ? '<span class="small">' + needs.length + (needs.length === 1 ? " thing" : " things") + '</span>' : "") + '</div>' +
+      (needs.length ? '<div class="needs">' + needs.map(function (n) { return '<div class="need"><i class="lamp a" aria-hidden="true"></i><div class="t"><b>' + esc(n[0]) + '</b><span class="small">' + esc(n[1]) + '</span></div>' + n[2] + '</div>'; }).join("") + '</div>'
+        : '<p class="needs-none"><i class="lamp g" aria-hidden="true"></i>' + (checking ? "Checking the photos" : "Nothing needs you right now.") + '</p>') + '</section>';
+    // Three quiet tiles: the look, the photos and the versions.
+    function tile(tab, n, name, sub, act) {
+      return '<button type="button" class="card lift sitecard tile" data-tab="' + tab + '"><span class="lbl">' + name + '</span>' + (n === "" ? "" : '<span class="bignum">' + (n == null ? "..." : esc(n)) + '</span>') + '<span class="small">' + esc(sub) + '</span><span class="go">' + act + '</span></button>';
+    }
+    var v0 = s.versions && s.versions[0];
+    var tiles = [];
+    if (hasScreen(s, "theme")) tiles.push(t ? '<button type="button" class="card lift sitecard tile" data-tab="theme"><span class="lbl">Theme</span><span class="swatches" aria-hidden="true">' + t.spec.colours.map(function (cl) { return '<i style="background:' + esc(t.values.colours[cl.id] || cl.default) + '" title="' + esc(cl.label) + '"></i>'; }).join("") + '</span>' +
+        '<span class="small">' + t.spec.fonts.map(function (f) { return esc(t.values.fonts[f.id] || f.default); }).join(", ") + '</span><span class="go">Change the look</span></button>'
+      : tile("theme", "", "Theme", "Colours and typefaces", "Change the look"));
+    if (s.files && hasScreen(s, "files")) tiles.push(tile("files", fd ? fd.files.length : null, "Files", fd ? (fd.files.length === 1 ? "photo" : "photos") + (fileCount(fd, "nodesc") ? ", " + fileCount(fd, "nodesc") + " without a description" : ", every one described") : "photos on the site", "See every photo"));
+    else if (hasScreen(s, "photos")) tiles.push(tile("photos", empty, "Photos", (empty === 1 ? "empty spot, " : "empty spots, ") + waiting + " on the way", "Add photos"));
+    tiles.push(tile("versions", v0 ? v0.number : "", "Versions", v0 ? "live now. Going back is always possible" : "Every publish, numbered, with notes on what changed", "See all versions"));
+    if (tiles.length < 3 && isAdmin()) tiles.push(tile("history", "", "History", "Every change made to the site, and who made it", "See the history"));
+    return head + needsHtml + '<div class="grid-3 ov-tiles">' + tiles.join("") + '</div>' +
+      (s.playground && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start building</h2><span class="small">Try the steps for a new site here: a name, a look and the starting pages. The practice build is rebuilt with your choices, and no new repository is made.</span><div class="row"><button type="button" class="soft" data-act="bd-start" data-site="' + esc(s.id) + '">Start building</button></div></div>' : "") +
       (s.starter && !s.playground && isAdmin() ? finishCard(s) + (s.want ? '<div style="max-width:820px;margin-top:22px">' + domainCard(s) + '</div>' : "") : "") +
       (s.playground && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start the practice build again</h2><span class="small">Every page, the look, the words, the photos and any code changes go, and so do its copies. It becomes the starter again, ready for the next person to build from.</span><div class="row"><button type="button" class="soft" data-act="ask-startagain">Start again</button></div></div>' : "") +
       (s.practice && !s.playground && isAdmin() ? '<div class="card stack" style="max-width:820px;margin-top:22px"><h2 class="cardh">Start the Practice site again</h2><span class="small">Its words, pages, theme and photos become World Art Review\'s as they are now. Its versions stay in the list. Anyone practising is asked to bring their copy up to date.</span><div class="row"><button type="button" class="soft" data-act="ask-resetpractice">Start again from World Art Review</button></div></div>' : "") +
@@ -3416,7 +3434,7 @@
     var ready = state.fileAdd.length && state.fileAdd.every(function (p) { return p.alt.trim(); });
     var upload = '<div class="card stack-wide">' +
       '<div class="row between"><div class="stack" style="gap:2px"><b style="color:var(--bright)">Upload photos</b><span class="small">JPG or PNG, several at once if you like. Resized for the web, never cropped.</span></div>' +
-      '<label class="btn slim upl">Choose photos<input type="file" accept="image/jpeg,image/png" multiple data-change="files-add" hidden></label></div>' +
+      '<label class="btn key slim upl">Choose photos<input type="file" accept="image/jpeg,image/png" multiple data-change="files-add" hidden></label></div>' +
       (adding ? '<div class="stack-wide">' + adding + '</div><div class="row"><button type="button" class="btn" data-act="files-send"' + (ready && state.status !== "saving" ? "" : " disabled") + '>' + (state.fileAdd.length === 1 ? "Add this photo" : "Add these " + state.fileAdd.length + " photos") + '</button>' +
         (ready ? "" : '<span class="small">Describe every photo first.</span>') + '</div>' : "") + '</div>';
     var filters = '<div class="seg mini filters" role="group" aria-label="Show">' + FILE_FILTERS.map(function (f) {
@@ -3597,7 +3615,7 @@
   }
   function viewNewVersions() {
     var list = newVersions(); if (!list.length) return "";
-    return '<p class="cap hcap">New versions</p><div class="stack" style="margin-bottom:22px">' + list.map(function (n) {
+    return '<div class="row between hsec"><h2 class="cardh">New versions</h2><span class="small">Published by someone else</span></div><div class="stack" style="margin-bottom:22px">' + list.map(function (n) {
       return '<div class="card stack newv"><div class="row between"><b class="cardh">' + esc(n.site.name + " " + n.v.number) + '</b><span class="chip live">Live</span></div>' +
         '<span class="small">Published by ' + esc(n.v.by) + (when(n.v.when) ? ", " + esc(when(n.v.when)) : "") + '. GitHub also emails these notes to anyone watching the site\'s releases.</span>' +
         '<pre class="vnotes">' + esc(n.v.notes) + '</pre>' +
@@ -3677,7 +3695,7 @@
       }
     }
     return '<div class="page-head"><h1>People</h1><p>You are the admin. Everyone else is an editor: they work on their own copy of the sites you choose, and can publish it. A change here works from their next click.</p>' +
-      '<div class="row"><button type="button" class="btn" data-act="people-invite">Invite an editor</button></div></div>' +
+      '<div class="row"><button type="button" class="btn key" data-act="people-invite">Invite an editor</button></div></div>' +
       (pp.note ? '<p class="notice" role="status">' + esc(pp.note) + '</p>' : "") +
       '<div class="people"><div class="plist">' + rows + '</div><aside class="card ppanel" aria-label="Settings">' + panel + '</aside></div>';
   }
@@ -4390,7 +4408,7 @@
     var seg = [["all", "All " + counts.all], ["ACTIVE", "On sale " + counts.ACTIVE], ["DRAFT", "Draft " + counts.DRAFT], ["ARCHIVED", "Archived " + counts.ARCHIVED]];
     return '<div class="page-head"><div class="row between sp-head"><div><h1>Products</h1>' +
       '<p>' + counts.all + ' products in the ' + esc(s.name) + ' shop, ' + counts.ACTIVE + ' of them on sale. Read from Shopify ' + esc(when(L.at)) + '.</p></div>' +
-      '<div class="row"><button type="button" class="soft" data-act="sp-view" data-v="prices">Change prices</button><button type="button" class="soft" data-act="sp-view" data-v="add">Add a product</button><button type="button" class="linklike small" data-act="sp-reload">Read again</button></div></div></div>' +
+      '<div class="row"><button type="button" class="soft" data-act="sp-view" data-v="prices">Change prices</button><button type="button" class="btn key" data-act="sp-view" data-v="add">Add a product</button><button type="button" class="linklike small" data-act="sp-reload">Read again</button></div></div></div>' +
       '<div class="card stack sp-list">' +
       '<p class="sunk sp-note"><i class="lamp g" aria-hidden="true"></i>Changes you save here go straight to ' + esc(s.domain || "the shop") + '. Shopify still takes the payments.</p>' +
       '<div class="row between"><div class="seg" role="group" aria-label="Show">' + seg.map(function (x) { return '<button type="button" class="' + (sh.filter === x[0] ? "on" : "") + '" data-act="sp-filter" data-v="' + x[0] + '"' + (sh.filter === x[0] ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' + esc(x[1]) + '</button>'; }).join("") + '</div>' +
@@ -4991,6 +5009,8 @@
       Array.prototype.forEach.call(app.querySelectorAll('[data-act="egroup"]'), function (x) { x.className = x.dataset.g === el.dataset.g ? "on" : ""; });
     }
     else if (a === "cmore") { state.cmore = true; filterList(); }
+    else if (a === "start-new") { openSite(el.dataset.site); }
+    else if (a === "ov-files") { var ovs = site(); state.fileFilter = el.dataset.f; if (ovs && state.files[ovs.id]) state.files[ovs.id].filter = el.dataset.f; go("files"); }
     else if (a === "files-filter") { var ff = filesOf(); if (ff) { ff.filter = state.fileFilter = el.dataset.f; ff.assign = ""; ff.pick = ""; render(); } }
     else if (a === "files-describe") { var fe = filesOf(); if (fe) { fe.open = el.dataset.name || ""; state.confirm = null; render(); var box = fe.open && app.querySelector("#fd-alt"); if (box) box.focus(); } }
     else if (a === "files-assign") { var fg = filesOf(); if (fg) { fg.assign = el.dataset.key || ""; fg.pick = ""; render(); } }
