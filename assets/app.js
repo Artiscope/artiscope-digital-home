@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "65";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "66";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -1504,14 +1504,14 @@
     var n = function (x) { return x + (x === 1 ? " change" : " changes"); };
     var said = saving ? "Saving" : dirty ? "Edited, not saved" : state.flash || (!isAdmin() && c.behind ? "The live site has moved on" : trial || !isAdmin() ? (c.ahead ? n(c.ahead) + (isAdmin() ? " on this copy" : " not published yet") : "Same as the live site") : "All saved");
     var copyName = !isAdmin() ? "Your copy" : trial ? "Trial copy: " + c.name : "Live", panel = pgd ? pgd.leftPanel || "sections" : "sections", leftOn = pgd ? !pgd.leftHidden && !state.fullView : true;
-    var sw = function (id, icon, label, key) { var on = leftOn && panel === id; return '<button type="button" class="tb' + (on ? " on" : "") + '" data-act="ed-panel" data-panel="' + id + '" aria-pressed="' + on + '" aria-label="' + label + '" data-tip="' + label + '" data-key="' + key + '">' + ic(icon, 17) + '</button>'; };
+    var sw = function (id, icon, label, word, key) { var on = leftOn && panel === id; return '<button type="button" class="tb word' + (on ? " on" : "") + '" data-act="ed-panel" data-panel="' + id + '" aria-pressed="' + on + '" aria-label="' + label + '" title="' + label + ' (' + key + ')">' + ic(icon, 16) + '<span class="swl">' + word + '</span></button>'; };
     var insp = !pgd || pgd.inspector !== false;
     return '<div class="lefty"><button type="button" class="tb word ed-exit" data-tab="overview" title="Back to the overview" aria-label="Exit">' + ic("exit", 17) + '<span>Exit</span></button>' +
-        '<div class="seg tbs" role="group" aria-label="Left panel">' + sw("sections", "layout", "Sections", ED_CTRL + "+Alt+1") + sw("theme", "palette", "Theme settings", ED_CTRL + "+Alt+2") + sw("addons", "addons", "Add-ons", ED_CTRL + "+Alt+3") + '</div></div>' +
-      '<div class="mid">' +
+
         '<span class="popat"><button type="button" class="tb word ed-sitebtn' + (m === "site" ? " on" : "") + '" data-act="ed-pop" data-menu="site" aria-haspopup="dialog" aria-expanded="' + (m === "site") + '"><span class="ed-site">' + esc(s.name) + '</span><i class="lamp ' + (trial ? "a" : "g") + '" aria-hidden="true"></i><span class="copyname" title="' + esc(copyName) + '">' + esc(copyName) + '</span></button>' + (m === "site" ? sitePop(s) : "") + '</span>' +
         (pgd ? '<span class="popat"><button type="button" class="tb word ed-pagebtn' + (m === "page" ? " on" : "") + '" data-act="ed-pop" data-menu="page" aria-haspopup="dialog" aria-expanded="' + (m === "page") + '">' + ic(tplHere(pgd) ? "tpl" : pageIcon(pgd), 16) + '<span class="pn">' + esc(tplHere(pgd) ? tplCur(pgd).name : pageLabel(pgd)) + '</span><span class="ch">Change</span></button>' + pagePicker(pgd) + (m === "page" ? pagePop(pgd) : "") + '</span>' : "") +
       '</div>' +
+      '<div class="mid">' + '<div class="seg tbs edsw" role="group" aria-label="Left panel">' + sw("sections", "layout", "Sections", "Sections", ED_CTRL + "+Alt+1") + sw("theme", "palette", "Theme settings", "Theme", ED_CTRL + "+Alt+2") + sw("addons", "addons", "Add-ons", "Add-ons", ED_CTRL + "+Alt+3") + '</div>' + '</div>' +
       '<div class="righty">' +
         '<button type="button" class="tb word insp" data-act="ed-inspector" role="switch" aria-checked="' + insp + '" title="Inspector: pick parts of the page by clicking them (' + ED_CTRL + '+Shift+I)">' + ic("cursor", 16) + '<span class="lbl">Inspector</span><span class="sw2' + (insp ? "" : " off") + '" aria-hidden="true"><i></i></span></button>' +
         '<div class="seg tbs" role="group" aria-label="Screen size"><button type="button" class="tb word' + (!pgd || pgd.mode === "computer" ? " on" : "") + '" data-act="ed-mode" data-mode="computer" aria-label="Computer view" title="Computer view">' + ic("monitor", 17) + '<span class="lbl">Computer</span></button><button type="button" class="tb word' + (pgd && pgd.mode === "phone" ? " on" : "") + '" data-act="ed-mode" data-mode="phone" aria-label="Phone view" title="Phone view">' + ic("phone", 17) + '<span class="lbl">Phone</span></button></div>' +
@@ -2238,7 +2238,7 @@
   function edTools(pgd) {
     var sel = pgSel(pgd), t = toolsFor(pgd, sel); if (!t) return "";
     if (state.confirm === t.key) return '<div class="ptools ask" role="group" aria-label="Remove this ' + t.word + '"><span class="small">Remove this ' + t.word + '?</span><button type="button" class="btn slim" data-act="ed-remove">Yes, remove</button><button type="button" class="soft slim" data-act="cancel">Keep it</button></div>';
-    var b = function (act, icon, label, extra) { return '<button type="button" class="tb' + (extra || "") + '" data-act="' + act + '" aria-label="' + label + ' this ' + t.word + '" title="' + label + '">' + ic(icon, 17) + '</button>'; };
+    var b = function (act, icon, label, extra) { return '<button type="button" class="tw' + (extra || "") + '" data-act="' + act + '" aria-label="' + label + ' this ' + t.word + '">' + label + '</button>'; };
     return '<div class="ptools" role="toolbar" aria-label="Change this ' + t.word + '">' +
       (t.canHide ? b("ed-hide", t.hid ? "eyeoff" : "eye", t.hid ? "Show" : "Hide") : "") +
       (t.movable ? b("ed-dup", "copy", "Duplicate") : "") +
@@ -2608,16 +2608,9 @@
     } else return;
     pgd.panel = ""; edPatch(); focusPicker();
   }
-  // The small bar at the bottom of the preview for whatever is picked: Duplicate, Hide and Remove.
-  function edFloatBar(pgd) {
-    if (pgd.inspector === false || pgd.picker2 || pgd.lib || themeOpen(pgd)) return "";
-    var sel = pgSel(pgd), t = toolsFor(pgd, sel); if (!t || (!t.movable && !t.canHide)) return "";
-    var name = t.isBlock ? (sel.single ? sel.bk.label : sel.bk.label) : secName(pgd, sel.sec);
-    return '<div class="fbar" role="toolbar" aria-label="' + esc(name) + '"><span class="fb-name">' + esc(name) + '</span>' +
-      (t.movable ? '<button type="button" data-act="ed-dup">' + ic("copy", 16) + 'Duplicate</button>' : "") +
-      (t.canHide ? '<button type="button" data-act="ed-hide">' + ic(t.hid ? "eye" : "eyeoff", 16) + (t.hid ? "Show" : "Hide") + '</button>' : "") +
-      (t.canDel ? '<button type="button" class="danger" data-act="ed-remove">' + ic("bin", 16) + 'Remove</button>' : "") + '</div>';
-  }
+  // The picked item's actions (Hide, Duplicate, Move, Remove) live only in its settings panel since Version 66,
+  // so the bar over the preview that repeated them draws nothing. Kept so older calls still work.
+  function edFloatBar() { return ""; }
   var DESK_WIDTH = 1280;
   function edFit() {
     var box = app.querySelector && app.querySelector(".ed-frame"), fr = box && box.querySelector("iframe"); if (!box || !fr) return;

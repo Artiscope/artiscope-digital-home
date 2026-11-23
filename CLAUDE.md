@@ -85,8 +85,20 @@ How they like to work. Follow this every time:
     ahead; `ov-files` opens Files at that filter), then three quiet tiles
     (Theme, Files or Photos, Versions; History when one is missing), then
     the copies. Files are read on the Overview too, for Needs you.
-  - Steps 4 and 5 of the agreed UI plan are still to come (the editor,
-    phone): each waits for the owner's go ahead.
+  - The editor (Version 66): the top bar in three groups (`edTop`):
+    Exit, the site and the page on the left; the Sections, Theme and
+    Add-ons switches in words in the middle (`.edsw`, icons dropped below
+    1500px); inspector, view, undo, More and Save on the right, with
+    names shortened below 1400 and 1200 so it fits from 1120. From 1280
+    to 1799 wide the list, preview and settings sit side by side (300,
+    the rest, 320); below 1280 the settings sit under the list. The
+    floating bar over the preview is gone (`edFloatBar` returns
+    nothing): the picked item's Hide, Duplicate, Move up and Move down
+    are words, two to a row, at the top of its settings (`edTools`,
+    `.ptools`). The picked outline, name tag and plus in every site's
+    editor link are teal #0D6767 with white words.
+  - Step 5 of the agreed UI plan is still to come (phone): it waits for
+    the owner's go ahead.
   - All sites (`viewHome`): live sites three to a row, each with a small
     picture of its home page (an iframe laid out 1280 wide and scaled,
     `homeFit`), then the Practice site and the sites still to build on
@@ -246,7 +258,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (23 November 2026, Version 65)
+## Where things stand (23 November 2026, Version 66)
 
 Done:
 
@@ -1261,6 +1273,25 @@ Done:
   one main action per screen (see Design rules). The agents' drafts are
   not in Needs you yet: the console does not read the weekday agents'
   pull requests, so that waits for the owner's say.
+
+- Version 66 (23 November): step 4 of 5 of the UI plan, the editor (see
+  Design rules). The teal outline went to all six site repositories, the
+  starter and every template.
+  - On 23 November the owner merged the weekday agents' drafts (Banksy on
+    World Art Review, Global Art Monitor, Street Art Dispatch and The Art
+    Correspondent, prices kept in their sale currency on Global Art
+    Monitor). Many checks count the sites' content as it was on 19 and 20
+    November, so the suite is run against copies at those commits, with
+    only the change being made added: `git worktree add --detach
+    /tmp/ts/<repo> <commit>` for world-art-review 055fa62,
+    street-art-dispatch 8b85f25, the-art-correspondent a1b8b91 and
+    global-art-monitor d575fa8 (with today's `assets/render.js`, `site.js`
+    and `site.css` copied in), then `WAR_DIR`, `SAD_DIR`, `TAC_DIR` and
+    `GAM_DIR` pointing at them for `npm run sync` and the tests. Moving
+    the checks onto the new content is a job for later.
+  - Global Art Monitor's new fixed word `table.mixed-note` is in
+    `GAM_WORDS` (added after `TGAM_WORDS`, so the older template copy of
+    its code does not need it).
 
 Waiting for the owner:
 

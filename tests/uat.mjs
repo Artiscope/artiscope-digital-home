@@ -147,7 +147,7 @@ if (process.env.AUDIT) {
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all eight sites, The Art Correspondent, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 8, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 65"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 66"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -829,15 +829,16 @@ await check("The plus above a block adds a block just there", async () => {
   must(after[0] === n + 1 && after[1] === 0, "after " + after.join(","));
   await page.click('[data-act="ed-discard"]', { timeout: 1500 }).catch(() => {}); await settle(800);
 });
-await check("Clicking picks it, and a floating bar under the page offers Duplicate, Hide and Remove", async () => {
+await check("Clicking picks it, and its settings offer Hide, Duplicate, Move up and Move down in words, with no bar over the page", async () => {
   await mouseIn("worldartreview.com", "#numbers h2", { x: 10, y: 10 }); await settle(500);
   must((await page.evaluate(() => window.__adh.pgOf().sel.id)) === "numbers", "not picked");
-  const bar = await page.locator(".fbar button").allInnerTexts(); must(bar.map((x) => x.trim()).join() === "Duplicate,Hide,Remove", "bar: " + bar.join(","));
-  const n = (await homeSecs()).length; await page.click('.fbar [data-act="ed-dup"]'); await settle(400); must((await homeSecs()).length === n + 1, "Duplicate");
+  must(!(await page.locator(".fbar").count()), "a bar is still over the page");
+  const tools = await page.locator(".ptools button").allInnerTexts(); must(tools.map((x) => x.trim()).join() === "Hide,Duplicate,Move up,Move down", "tools: " + tools.join(","));
+  const n = (await homeSecs()).length; await page.click('.ptools [data-act="ed-dup"]'); await settle(400); must((await homeSecs()).length === n + 1, "Duplicate");
   await page.click('[data-act="ed-discard"]', { timeout: 1500 }).catch(() => {}); await settle(800);
-  await mouseIn("worldartreview.com", "#numbers h2", { x: 10, y: 10 }); await settle(400); await page.click('.fbar [data-act="ed-hide"]'); await settle(400);
+  await mouseIn("worldartreview.com", "#numbers h2", { x: 10, y: 10 }); await settle(400); await page.click('.ptools [data-act="ed-hide"]'); await settle(400);
   must((await page.evaluate(() => window.__adh.pgOf().doc.pages.home.sections.find((x) => x.id === "numbers").visible)) === false, "Hide");
-  await shot("18b-floating-bar");
+  await shot("18b-settings-tools");
   await page.click('[data-act="ed-discard"]', { timeout: 1500 }).catch(() => {}); await settle(800);
 });
 await check("With the inspector off there are no outlines and no floating bar", async () => {
@@ -856,7 +857,7 @@ await check("Global Art Monitor and Street Art Dispatch outline and add the same
     await mouseIn(host, "#adh-hover .adh-plus.bottom"); await settle(500);
     const pk = await page.evaluate(() => window.__adh.pgOf().picker2); must(pk && pk.mode === "section" && pk.g === "page", id + " picker " + JSON.stringify(pk));
     await page.keyboard.press("Escape"); await settle(300);
-    await mouseIn(host, '[data-adh="' + first + '"]', { x: 20, y: 20 }); await settle(500); must(await page.isVisible(".fbar"), id + ": no floating bar");
+    await mouseIn(host, '[data-adh="' + first + '"]', { x: 20, y: 20 }); await settle(500); must((await page.evaluate(() => (window.__adh.pgOf().sel || {}).id)) === first, id + ": not picked");
     await shot("18c-" + id);
   }
   await openSite("world-art-review");
@@ -1874,7 +1875,7 @@ await check("Edit default text opens from More, with the site's words in groups"
   await openSite("global-art-monitor");
   await page.click('[data-act="ed-pop"][data-menu="more"]'); await page.click('.ed-pop.mp [data-act="wd-open"]'); await settle(500);
   must(await page.isVisible(".wdpanel"), "no panel");
-  must(/Search 85 words/.test(await page.getAttribute("#wd-q", "placeholder")), "placeholder: " + await page.getAttribute("#wd-q", "placeholder"));
+  must(/Search 86 words/.test(await page.getAttribute("#wd-q", "placeholder")), "placeholder: " + await page.getAttribute("#wd-q", "placeholder"));
   const groups = await page.$$eval(".wd-grp .t", (x) => x.map((y) => y.textContent));
   must(groups.includes("Buttons") && groups.includes("Auction table") && groups.includes("Page not found") && groups.includes("Words for screen readers"), "groups: " + groups);
   await shot("90-words");

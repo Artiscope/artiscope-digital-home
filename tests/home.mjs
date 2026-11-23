@@ -1361,6 +1361,8 @@ export const TSAD_WORDS = Object.fromEntries(Object.entries({ ...SAD_WORDS, "for
 const TGAM_SECTIONS = Object.fromEntries(Object.entries(GAM_SECTIONS).map(([k, v]) => [k, v.starter ? { ...v, starter: ST_BRACKET(v.fields, k === "visit" ? { ...v.starter, heading: "Visit us" } : v.starter, k) } : v]));
 const TGAM_ITEMS = Object.fromEntries(Object.entries(GAM_ITEMS).map(([k, v]) => [k, { ...v, parts: v.parts.map((part) => part.fields ? { ...part, fields: part.fields.map((f) => f.name === "site.disclosure" ? { ...f, hint: "Who publishes the site, and any interest it has in the artists it covers. Readers are always told." } : f) } : part) }]));
 export const TGAM_WORDS = { ...GAM_WORDS, "loading.line": "Loading the latest figures.", "form.subject": "Please add me to the mailing list" };
+// Added to Global Art Monitor on 23 November (prices kept in their sale currency). The template is an older copy of its code without this note, so it stays off the template's list.
+GAM_WORDS["table.mixed-note"] = "These sales were held in more than one currency. Each price is shown in the currency of its sale, and the bars are scaled within each currency, so bars in different currencies cannot be compared with each other.";
 // The World Art Review template: its sections with bracketed starting words, and the search label naming the site.
 const TWAR_SECTIONS = Object.fromEntries(Object.entries(WAR_SECTIONS).map(([k, v]) => [k, v.starter ? { ...v, starter: ST_BRACKET(v.fields, v.starter, k) } : v]));
 export const TWAR_WORDS = { ...WAR_WORDS, "sr.search": "Search {site}", "form.subject": "Please add me to the mailing list" };

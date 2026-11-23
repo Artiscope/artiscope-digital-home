@@ -190,8 +190,8 @@
   function style() {
     if (document.getElementById("adh-style")) { return; }
     var st = document.createElement("style"); st.id = "adh-style";
-    st.textContent = ".adh-picked{outline:2px dashed #8EC5FF;outline-offset:-2px}.adh-picked-block{outline:2px solid #8EC5FF;outline-offset:3px;position:relative}" +
-      ".adh-picked-block[data-adh-label]::before{content:attr(data-adh-label);position:absolute;left:0;top:-30px;z-index:2147482000;background:#8EC5FF;color:#0E1A26;font:600 12px/1 'Libre Franklin',Arial,sans-serif;padding:6px 10px;border-radius:7px;white-space:nowrap;pointer-events:none}";
+    st.textContent = ".adh-picked{outline:2px dashed #0D6767;outline-offset:-2px}.adh-picked-block{outline:2px solid #0D6767;outline-offset:3px;position:relative}" +
+      ".adh-picked-block[data-adh-label]::before{content:attr(data-adh-label);position:absolute;left:0;top:-30px;z-index:2147482000;background:#0D6767;color:#FFFFFF;font:600 12px/1 'Libre Franklin',Arial,sans-serif;padding:6px 10px;border-radius:7px;white-space:nowrap;pointer-events:none}";
     document.head.appendChild(st);
   }
   function draw(m) {
@@ -267,7 +267,7 @@
       if (exact.test(own) || exact.test(all)) { hit = el; } else if (!loose && part.test(own)) { loose = el; }
     }
     hit = hit || loose; if (!hit) { return 0; }
-    if (!document.getElementById("adh-found-css")) { var st = document.createElement("style"); st.id = "adh-found-css"; st.textContent = ".adh-found{outline:2px solid #8EC5FF!important;outline-offset:3px;border-radius:4px}#adh-found-tag{position:absolute;z-index:2147483000;background:#8EC5FF;color:#0E1A26;font:600 12px/1 'Libre Franklin',Arial,sans-serif;padding:6px 10px;border-radius:7px;white-space:nowrap;pointer-events:none}"; document.head.appendChild(st); }
+    if (!document.getElementById("adh-found-css")) { var st = document.createElement("style"); st.id = "adh-found-css"; st.textContent = ".adh-found{outline:2px solid #0D6767!important;outline-offset:3px;border-radius:4px}#adh-found-tag{position:absolute;z-index:2147483000;background:#0D6767;color:#FFFFFF;font:600 12px/1 'Libre Franklin',Arial,sans-serif;padding:6px 10px;border-radius:7px;white-space:nowrap;pointer-events:none}"; document.head.appendChild(st); }
     hit.classList.add("adh-found");
     var b = hit.getBoundingClientRect(), y = window.pageYOffset + b.top - Math.max(80, (window.innerHeight - b.height) / 2);
     window.scrollTo(0, Math.max(0, y));
@@ -304,10 +304,10 @@
   function hoverStyle() {
     if (document.getElementById("adh-hover-style")) { return; }
     var st = document.createElement("style"); st.id = "adh-hover-style";
-    st.textContent = "#adh-hover{position:absolute;z-index:2147483000;pointer-events:none;outline:2px solid #8EC5FF;outline-offset:2px;display:none}#adh-hover.on{display:block}#adh-hover.blk{outline-style:dashed}" +
-      "#adh-hover .adh-tag{position:absolute;left:-2px;top:-30px;background:#8EC5FF;color:#0E1A26;font:600 12px/1 'Libre Franklin',Arial,sans-serif;padding:6px 10px;border-radius:7px;white-space:nowrap}#adh-hover.inside .adh-tag{top:6px;left:6px}" +
-      "#adh-hover .adh-plus{pointer-events:auto;position:absolute;left:50%;width:28px;height:28px;margin-left:-14px;padding:0;border:0;border-radius:50%;background:#8EC5FF;color:#0E1A26;font:600 18px/28px Arial,sans-serif;text-align:center;box-shadow:none;cursor:pointer}" +
-      "#adh-hover .adh-plus.top{top:-16px}#adh-hover .adh-plus.bottom{bottom:-16px}#adh-hover.noplus .adh-plus{display:none}#adh-hover .adh-plus:hover{background:#7CB9F7;color:#0E1A26}";
+    st.textContent = "#adh-hover{position:absolute;z-index:2147483000;pointer-events:none;outline:2px solid #0D6767;outline-offset:2px;display:none}#adh-hover.on{display:block}#adh-hover.blk{outline-style:dashed}" +
+      "#adh-hover .adh-tag{position:absolute;left:-2px;top:-30px;background:#0D6767;color:#FFFFFF;font:600 12px/1 'Libre Franklin',Arial,sans-serif;padding:6px 10px;border-radius:7px;white-space:nowrap}#adh-hover.inside .adh-tag{top:6px;left:6px}" +
+      "#adh-hover .adh-plus{pointer-events:auto;position:absolute;left:50%;width:28px;height:28px;margin-left:-14px;padding:0;border:0;border-radius:50%;background:#0D6767;color:#FFFFFF;font:600 18px/28px Arial,sans-serif;text-align:center;box-shadow:none;cursor:pointer}" +
+      "#adh-hover .adh-plus.top{top:-16px}#adh-hover .adh-plus.bottom{bottom:-16px}#adh-hover.noplus .adh-plus{display:none}#adh-hover .adh-plus:hover{background:#7CB9F7;color:#FFFFFF}";
     document.head.appendChild(st);
   }
   function hoverBox() {

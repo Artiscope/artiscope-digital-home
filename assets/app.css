@@ -1791,3 +1791,41 @@ select.box option, select option { background: #FFFFFF; color: var(--bright); }
   .hquiet { flex-wrap: wrap; }
   .hquiet .btn { margin-left: 54px; }
 }
+
+/* ---------- The editor (Version 66, step 4 of the UI plan) ---------- */
+/* the top bar in three groups: where (Exit, site, page), what the left column shows (in words), and the work (view, undo, save) */
+.ed-top .lefty { justify-content: flex-start; }
+.ed-top .mid { flex: none; justify-content: center; }
+.ed-top .edsw .tb.word { gap: 7px; padding: 0 12px; }
+.ed-top .edsw .swl { display: inline; }
+@media (max-width: 1500px) { .ed-top .edsw .tb.word svg { display: none; } .ed-top .edsw .tb.word { padding: 0 11px; } }
+@media (max-width: 1350px) { .ed-top .righty .state { max-width: 92px; } }
+/* list, preview and settings side by side from 1280 pixels wide; below that the settings sit under the list */
+@media (min-width: 1280px) and (max-width: 1799px) {
+  .ed.with-right:not(.full) { grid-template-columns: 300px minmax(0, 1fr) 320px; grid-template-rows: 64px minmax(0, 1fr); gap: 14px 16px; }
+  .ed.with-right:not(.full) .ed-left { grid-column: 1; grid-row: 2; }
+  .ed.with-right:not(.full) .ed-mid { grid-column: 2; grid-row: 2; }
+  .ed.with-right:not(.full) .ed-right { grid-column: 3; grid-row: 2; }
+  .ed.noleft.with-right:not(.full) { grid-template-columns: minmax(0, 1fr) 320px; }
+  .ed.noleft.with-right:not(.full) .ed-mid { grid-column: 1; }
+  .ed.noleft.with-right:not(.full) .ed-right { grid-column: 2; }
+}
+/* narrower laptops: shorter names and tighter switches, so the bar always fits */
+@media (max-width: 1400px) {
+  .ed-top .edsw .tb.word { padding: 0 9px; }
+  .ed-top .insp svg { display: none; }
+  .ed-sitebtn .ed-site { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ed-pagebtn .pn { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@media (max-width: 1200px) {
+  .ed-sitebtn .ed-site { max-width: 96px; }
+  .ed-pagebtn .pn { max-width: 76px; }
+  .ed-top .edsw .tb.word { padding: 0 8px; }
+}
+/* the picked item's actions, in words, two to a row */
+.ptools:not(.ask) { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0; background: none; box-shadow: none; }
+.ptools:not(.ask) .tw { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 10px; border: 0; border-radius: 10px; background: var(--btn); box-shadow: inset 0 0 0 1.5px var(--btn-edge); color: var(--bright); font: 600 13px "Libre Franklin", Arial, sans-serif; cursor: pointer; }
+.ptools:not(.ask) .tw:hover { box-shadow: inset 0 0 0 1.5px var(--btn-edge-hover); }
+.ptools:not(.ask) .tw[disabled] { background: var(--field); box-shadow: inset 0 0 0 1px var(--field-edge); color: var(--dim); cursor: default; }
+.ptools:not(.ask) { width: 100%; }
+.ed-right .rhead { box-shadow: inset 1px 1px 0 var(--edge), inset -1px 0 0 var(--edge); background: var(--bg); }

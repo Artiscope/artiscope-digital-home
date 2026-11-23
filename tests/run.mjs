@@ -3,7 +3,8 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 import { parseCalendar, setAnswer, parseLog, safePhotoName, parseSlots, slotPhotoName, notePhotoName, cleanText, handle, SITES, cleanPages, cleanCss, cleanSettings } from "./home.mjs";
 
-const empty = fs.readFileSync((G_DIR + "/CONTENT-CALENDAR.md"), "utf8");
+// A calendar with nothing in it. (The real one now has ideas from the weekday agent, so it is not used here.)
+const empty = "# Content calendar\n\n## Waiting for your answer\n\n## Approved, to be written\n\n## Written\n\n## Declined\n";
 assert.deepEqual(parseCalendar(empty), { waiting: [], approved: [] });
 
 const cal = `# Content calendar
