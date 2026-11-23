@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "63";   // shown on screen so it is clear which copy is loaded
+  var VERSION = "64";   // shown on screen so it is clear which copy is loaded
   var cfg = window.ADH_CONFIG || {};
   var params = new URLSearchParams(window.location.search);
   var demo = !cfg.supabaseKey || params.has("demo");
@@ -316,29 +316,47 @@
   function islandBusy() { return state.status !== "live" || (curCopy().kind === "trial" && curCopy().ahead > 0); }
   function islandInner() {
     var s = site(), list = copiesOf(s), c = curCopy(), trial = c.kind === "trial", busy = state.status === "saving";
-    if (!state.inSite || !s) {
-      var ppl = state.tab === "people";
-      return '<span class="dot" aria-hidden="true" style="background:var(--dim)"></span><b class="island-name">' + (ppl ? "People" : "All sites") + '</b><span class="small">' + (state.status === "saving" ? "Saving" : state.flash || (ppl ? "Who can sign in, and which sites they work on" : "Pick a site to work on")) + '</span>';
-    }
-    if (s.shop) return '<span class="dot" aria-hidden="true" style="background:' + colours(s.id)[0] + '"></span><b class="island-name">' + esc(s.name) + '</b><span class="small">' + esc(busy || (shopOf(s) && shopOf(s).busy) ? "Saving to Shopify" : state.flash || "Shop on Shopify. Saves go straight to " + (s.domain || "the shop")) + '</span>';
+    // Outside a site the bar only speaks while something is being saved or has just been said.
+    if (!state.inSite || !s) return busy || state.flash ? '<span class="small" id="island-text">' + esc(busy ? "Saving" : state.flash) + '</span>' : "";
+    if (s.shop) return '<i class="lamp g" aria-hidden="true"></i><b class="mode-name">Shop on Shopify</b><span class="small" id="island-text">' + esc(busy || (shopOf(s) && shopOf(s).busy) ? "Saving to Shopify" : state.flash || "Saves go straight to " + (s.domain || "the shop")) + '</span>';
+    var mine = !isAdmin();
     var copyPick = list.length > 1 && isAdmin()
       ? '<label class="small" for="copy-pick" style="position:absolute;left:-9999px">Working on</label><select id="copy-pick" class="copypick" data-change="copy">' +
-        list.map(function (x) { return '<option value="' + esc(x.kind === "live" ? "" : x.id) + '"' + (x.id === c.id ? " selected" : "") + '>' + esc(x.kind === "live" ? "Live site" : "Trial: " + x.name) + '</option>'; }).join("") + '</select>'
+        list.map(function (x) { return '<option value="' + esc(x.kind === "live" ? "" : x.id) + '"' + (x.id === c.id ? " selected" : "") + '>' + esc(x.kind === "live" ? "Live site" : "Trial copy: " + x.name) + '</option>'; }).join("") + '</select>'
       : "";
-    var text = busy ? "Saving" : state.flash ? state.flash : copyWords(c);
+    var label = copyPick || '<b class="mode-name">' + esc(mine ? "Your copy" : trial ? "Trial copy: " + c.name : "Live site") + '</b>';
+    var words = mine ? (c.behind ? "The live site has changed since your copy was made" : c.ahead ? c.ahead + (c.ahead === 1 ? " change" : " changes") + " not published yet" : "The same as the live site")
+      : trial ? (c.ahead ? c.ahead + (c.ahead === 1 ? " change" : " changes") + " on this copy, not live yet" : "The same as the live site")
+      : "Saves go straight to visitors";
+    var text = busy ? "Saving" : state.flash ? state.flash : words;
     var canUndo = trial ? c.ahead > 0 : (c.steps && c.steps.length > 0);
-    var act = !isAdmin() && c.behind && !busy ? '<button type="button" class="soft slim" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Bring my copy up to date</button>' + (c.ahead ? '<button type="button" class="btn slim" data-act="ask-makelive">Publish</button>' : "")
+    var act = mine && c.behind && !busy ? '<button type="button" class="soft slim" data-act="refresh-copy" data-copy="' + esc(c.id) + '">Bring my copy up to date</button>' + (c.ahead ? '<button type="button" class="btn slim" data-act="ask-makelive">Publish</button>' : "")
       : trial && c.ahead && !busy ? '<button type="button" class="btn slim" data-act="ask-makelive">' + (isAdmin() ? "Make live" : "Publish") + '</button>'
-      : '<span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>';
-    return '<span class="dot" aria-hidden="true" style="background:' + (s ? colours(s.id)[0] : "#C9C2D3") + '"></span>' +
-      '<b class="island-name">' + esc(s.name) + '</b>' + copyPick +
-      '<button type="button" class="soft slim" data-act="undo-step"' + (canUndo && !busy ? "" : " disabled") + '>Undo</button>' +
-      '<button type="button" class="soft slim" data-act="redo-step"' + (c.canRedo && !busy ? "" : " disabled") + '>Redo</button>' +
-      '<span class="small" id="island-text">' + esc(text) + '</span>' + act;
+      : "";
+    // Undo here takes back the last save, so it only shows when there is one to take back.
+    var undo = (canUndo && !busy ? '<button type="button" class="linklike small" data-act="undo-step">Undo the last save</button>' : "") +
+      (c.canRedo && !busy ? '<button type="button" class="linklike small" data-act="redo-step">Redo</button>' : "");
+    return '<i class="lamp ' + (trial || mine ? "a" : "g") + '" aria-hidden="true"></i>' + label +
+      '<span class="small" id="island-text">' + esc(text) + '</span>' + undo + act;
+  }
+  // The mode the bar is in: live (green edge), a copy (amber edge), or nothing to say.
+  function islandClass() {
+    var s = site(), c = curCopy();
+    var mode = !state.inSite || !s ? "" : s.shop || (isAdmin() && c.kind !== "trial") ? " live" : " trial";
+    return "island" + mode + (islandBusy() ? " busy" : "");
+  }
+  // Where you are: All sites, then the site, then the screen.
+  function crumbs() {
+    var s = site();
+    if (!state.inSite || !s) return '<nav class="crumbs" aria-label="Where you are"><b>' + (state.tab === "people" && isAdmin() ? "People" : "All sites") + '</b></nav>';
+    var first = s.shop ? "products" : "overview", here = (navItems().find(function (n) { return n[0] === state.tab; }) || [])[1];
+    return '<nav class="crumbs" aria-label="Where you are"><button type="button" class="linklike" data-tab="home">All sites</button><span aria-hidden="true">/</span>' +
+      (state.tab === first || !here ? '<b class="island-name">' + esc(s.name) + '</b>'
+        : '<button type="button" data-tab="' + first + '" class="linklike island-name">' + esc(s.name) + '</button><span aria-hidden="true">/</span><b>' + esc(here) + '</b>') + '</nav>';
   }
   function patchIsland() {
     var el = app.querySelector && app.querySelector(".island"); if (!el) return;
-    el.className = "island" + (islandBusy() ? " busy" : ""); el.innerHTML = islandInner();
+    el.className = islandClass(); el.innerHTML = islandInner();
   }
 
   // What the bar says about the copy being worked on.
@@ -411,7 +429,7 @@
     var nav = navHtml();
     return '<div class="shell">' + viewRail(nav) +
       '<main class="main">' +
-        '<div class="island-row"><div class="island' + (islandBusy() ? " busy" : "") + '" role="status">' + islandInner() + '</div></div>' +
+        '<div class="island-row">' + crumbs() + '<div class="' + islandClass() + '" role="status">' + islandInner() + '</div></div>' +
         '<div class="column fade">' +
           (state.notice ? '<p class="notice' + (state.notice.problem ? " problem" : "") + '" role="status">' + esc(state.notice.text) + '</p>' : "") +
           viewAsk() + inner +
@@ -429,17 +447,23 @@
             '<button type="button" class="linklike small" data-act="refresh">Refresh</button>' +
             (demo ? "" : '<button type="button" class="linklike small" data-act="signout">Sign out</button>') +
           '</div></details>' +
-          '<span class="small ver">Version ' + VERSION + '</span>' +
+          '<span class="small ver">' + (demo ? "Sample mode. " : "") + 'Version ' + VERSION + '</span>' +
         '</div>' +
       '</nav>';
   }
   function navHtml() {
-    return navItems().map(function (n) {
+    var s = site(), c = s ? curCopy() : null;
+    var head = state.inSite && s ? '<div class="railsite"><b>' + esc(s.name) + '</b><span class="small"><i class="lamp ' + (s.shop || (isAdmin() && c.kind !== "trial") ? "g" : "a") + '" aria-hidden="true"></i>' +
+      esc(s.shop ? "Shop on Shopify" : !isAdmin() ? "Your copy" : c.kind === "trial" ? "Trial copy" : "Live site") + '</span></div>' : "";
+    return navItems().map(function (n, i) { return navButton(n) + (i === 0 ? head : ""); }).join("");
+  }
+  function navButton(n) {
+    return [n].map(function (n) {
       var on = n[0] === state.tab || (n[0] === "pages" && state.tab === "pages");
       return '<button type="button" class="navb' + (on ? " on" : "") + '" data-tab="' + n[0] + '"' + (on ? ' aria-current="page"' : "") + '>' +
         '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="o" d="' + n[2] + '"></path><path class="d" d="' + n[3] + '"></path></svg>' +
         '<span>' + n[1] + '</span></button>';
-    }).join("");
+    })[0];
   }
 
   // After drawing, let the menu and tab highlights glide to their new place.
@@ -503,7 +527,7 @@
       (rest.length ? '<p class="cap hcap">' + (nBuild ? "Practice and still to build" : "Practice") + '</p><div class="sites hgrid">' + rest.map(quiet).join("") + '</div>' : "") + viewNewVersions();
   }
   function viewUnbuilt(x) {
-    return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><h1>' + esc(x.name) + '</h1>' +
+    return '<div class="page-head"><h1>' + esc(x.name) + '</h1>' +
       (x.playground ? '<p>Not ready yet. The practice build opens here once its repository, Artiscope/practice-build, is set up on GitHub and filled with the starter.</p></div>'
         : '<p>Not built yet. The domain is ready when you are. Building a new site from here, with every section, block and look the other sites have, is the next step.</p></div>');
   }
@@ -516,8 +540,11 @@
     function tile(tab, n, name, sub, act) {
       return '<button type="button" class="card lift sitecard tile" data-tab="' + tab + '"><span class="bignum">' + (n == null ? "..." : n) + '</span><b>' + name + '</b><span class="small">' + esc(sub) + '</span><span class="small" style="color:var(--accent);margin-top:4px">' + act + '</span></button>';
     }
-    return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><h1>' + esc(s.name) + '</h1>' +
-      '<p>' + esc(s.domain) + (isAdmin() ? '. Everything for this site is here. Saves on the live site reach visitors straight away. Use a trial copy to try things first.' : '. You work on your own copy. Nothing you save is seen until you publish it.') + '</p></div>' +
+    var addr = s.live ? siteAddr(s) : "", editTab = hasScreen(s, "pages") ? "pages" : "content";
+    return '<div class="page-head ov-head"><div class="stack" style="gap:4px"><h1>' + esc(s.name) + '</h1>' +
+      '<p>' + esc(s.domain) + (isAdmin() ? '. Everything for this site is here. Use a trial copy to try things first.' : '. You work on your own copy. Nothing you save is seen until you publish it.') + '</p></div>' +
+      '<div class="row">' + (addr ? '<a class="btn" href="' + esc(addr) + '" target="_blank" rel="noopener">View the live site</a>' : "") +
+        '<button type="button" class="btn key" data-tab="' + editTab + '">' + (editTab === "pages" ? "Edit pages" : "Edit the words") + '</button></div></div>' +
       '<div class="grid-3">' +
         (s.edits ? tile("pages", "", "Pages", "Every page, article and " + (s.starter && (s.template || "starter") === "starter" ? "artist page" : s.id === "street-art-dispatch" || s.template === "street-art-dispatch" ? "artist profile" : "artist portfolio") + ", edited beside the real page", "Open the editor")
           : tile("content", entries, "Content", (cols ? cols.map(function (c) { return c.label.toLowerCase(); }).join(", ") : "Articles, artists and more"), cols && cols.some(function (c) { return c.canHide; }) ? "Edit, hide or delete" : "Edit the words")) +
@@ -4317,7 +4344,7 @@
       }, function (e) { b.busy = false; b.err = e.message; render(); });
       return;
     }
-    if (a === "bd-open") { var id = b.site; state.build = null; state.inSite = false; state.tab = "home"; load().then(function () { openSite(id); }); return; }
+    if (a === "bd-open") { var id = b.site; state.build = null; state.inSite = false; state.tab = "home"; load().then(function () { openSite(id); var ns = site(); if (ns && state.inSite && state.site === id && hasScreen(ns, "pages")) go("pages"); }); return; }
   }
   // The domain check and Try again work from the Ready screen and from the site's Overview.
   function domainAct(a, el) {
@@ -4341,7 +4368,7 @@
   function spPic(url, alt) { return url ? '<img class="sp-pic" src="' + esc(url) + '" alt="' + esc(alt || "") + '" loading="lazy">' : '<span class="sp-pic" aria-hidden="true"></span>'; }
   function spWho(by) { return by === "admin" ? "Admin" : (state.data && state.data.names && state.data.names[by]) || "An editor"; }
   function viewShopWait(sh, s) {
-    return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><h1>' + esc(s.name) + '</h1><p>A shop on Shopify. Its products and prices are changed here, and Shopify still takes the payments.</p></div>' +
+    return '<div class="page-head"><h1>' + esc(s.name) + '</h1><p>A shop on Shopify. Its products and prices are changed here, and Shopify still takes the payments.</p></div>' +
       '<div class="card stack" style="max-width:820px"><h2 class="cardh">' + (s.shop.ready ? "Shopify did not answer" : "Waiting for the Shopify key") + '</h2>' +
       (sh.err ? '<p class="notice problem" role="status">' + esc(sh.err) + '</p>' : "") +
       (s.shop.ready ? '<div class="row"><button type="button" class="soft" data-act="sp-reload">Try again</button></div>' :
@@ -4361,7 +4388,7 @@
     var shown = L.products.filter(function (p) { return (sh.filter === "all" || p.status === sh.filter) && (!sh.col || p.collections.indexOf(sh.col) >= 0) && (!q || p.title.toLowerCase().indexOf(q) >= 0); });
     var cut = sh.more || q ? shown : shown.slice(0, 25);
     var seg = [["all", "All " + counts.all], ["ACTIVE", "On sale " + counts.ACTIVE], ["DRAFT", "Draft " + counts.DRAFT], ["ARCHIVED", "Archived " + counts.ARCHIVED]];
-    return '<div class="page-head"><button type="button" class="linklike" data-tab="home" style="align-self:flex-start">All sites</button><div class="row between sp-head"><div><h1>Products</h1>' +
+    return '<div class="page-head"><div class="row between sp-head"><div><h1>Products</h1>' +
       '<p>' + counts.all + ' products in the ' + esc(s.name) + ' shop, ' + counts.ACTIVE + ' of them on sale. Read from Shopify ' + esc(when(L.at)) + '.</p></div>' +
       '<div class="row"><button type="button" class="soft" data-act="sp-view" data-v="prices">Change prices</button><button type="button" class="soft" data-act="sp-view" data-v="add">Add a product</button><button type="button" class="linklike small" data-act="sp-reload">Read again</button></div></div></div>' +
       '<div class="card stack sp-list">' +
@@ -4529,7 +4556,7 @@
   function viewShopChanges() {
     var s = site(), sh = shopOf(s); if (!sh) return viewHome();
     var list = sh.changes[""];
-    return '<div class="page-head"><button type="button" class="linklike" data-tab="products" style="align-self:flex-start">Products</button><h1>Changes</h1><p>Every change made to the ' + esc(s.name) + ' shop from the console, newest first. Put back sets each part as it was, if nobody has changed it since.</p></div>' +
+    return '<div class="page-head"><h1>Changes</h1><p>Every change made to the ' + esc(s.name) + ' shop from the console, newest first. Put back sets each part as it was, if nobody has changed it since.</p></div>' +
       '<div class="card stack" style="max-width:920px">' + (list == null ? '<span class="small">Reading the list.</span>' : list.length ? list.map(spChangeRow).join("") : '<span class="small">Nothing yet.</span>') + '</div>';
   }
 
@@ -4762,7 +4789,8 @@
     }
     state.flash = ""; state.ask = null; state.site = id; state.inSite = true; state.photoFiles = []; state.prevCtab = 0;
     var back = state.place[id]; if (back && !hasScreen(x, back)) back = "";
-    go(x.live ? (back || firstTab(x)) : "overview");
+    // A site always opens on its Overview, where Edit pages is the main button.
+    go(back && back !== "pages" && back !== "content" ? back : "overview");
   }
   function go(tab) {
     if (tab === "products" && site() && site().shop) { var gsh = shopOf(); gsh.view = "list"; gsh.confirm = ""; }

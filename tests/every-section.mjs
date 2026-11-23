@@ -20,7 +20,7 @@ try {
     const errors = []; page.on("pageerror", (e) => errors.push(String(e))); page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|ERR_FAILED/.test(m.text())) errors.push("console: " + m.text()); });
     await page.route((u) => !u.hostname.includes("localhost"), (r) => r.abort());
     await page.goto(consoleAt + "/index.html?demo&preview=" + encodeURIComponent(warAt) + "&gampreview=" + encodeURIComponent(gamAt) + "&sadpreview=" + encodeURIComponent(sadAt));
-    await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="' + siteKey + '"]');
+    await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="' + siteKey + '"]'); await page.click('.ov-head [data-tab="pages"]');
     await page.waitForSelector("#ed-sections .sec"); await page.waitForTimeout(2500);
     await page.click('.ed-pagebtn'); await page.click('.pp [data-act="ed-new"]'); await page.click('[data-act="ed-new"][data-what="page"]'); await page.fill("#nw-title", "Every section"); await page.click('form[data-form="ednew"] button[type=submit]'); await page.waitForTimeout(1500);
     await page.click('.addl[data-act="ed-secpicker"][data-g="page"]'); await page.waitForSelector(".pk-item");

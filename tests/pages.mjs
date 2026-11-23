@@ -14,7 +14,7 @@ try {
   const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
   await page.route((u) => !u.hostname.includes("localhost"), (r) => r.abort());
   await page.goto(consoleAt + "/index.html?demo&preview=" + encodeURIComponent(siteAt));
-  await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="world-art-review"]');
+  await page.waitForSelector('[data-act="open-site"]'); await page.click('[data-act="open-site"][data-site="world-art-review"]'); await page.click('.ov-head [data-tab="pages"]');
   await page.waitForSelector("#ed-sections .sec"); await page.waitForTimeout(3500);
   const frame = () => page.frames().find((f) => f.url().startsWith(siteAt));
   const ids = () => frame().evaluate(() => [...document.querySelectorAll("#main > section")].map((s) => s.id));

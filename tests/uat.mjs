@@ -147,7 +147,7 @@ if (process.env.AUDIT) {
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all eight sites, The Art Correspondent, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 8, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 63"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 64"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -1447,7 +1447,7 @@ await check("An editor gets their own copy, saves, then saves and publishes, and
   const tag = (ppl.table.find((p) => p.email === "writer@example.org") || {}).id; must(!!tag, "not invited");
   signedIn = "writer@example.org";
   try {
-    await goHome(); await page.click('[data-act="open-site"][data-site="world-art-review"]'); await page.waitForSelector("#ed-sections .sec", { timeout: 15000 }); await settle(1500);
+    await goHome(); await page.click('[data-act="open-site"][data-site="world-art-review"]'); await page.click('.ov-head [data-tab="pages"]'); await page.waitForSelector("#ed-sections .sec", { timeout: 15000 }); await settle(1500);
     must(Object.keys(hub.refs(WR)).includes("adh/trial-own-" + tag), "no copy was made for the editor");
     must(!(await page.$("select.copypick")), "an editor should not be able to switch to the live site");
     const before = read(WR, "content/pages.json").pages.home.sections.length;

@@ -63,9 +63,18 @@ How they like to work. Follow this every time:
     Fonts: Castoro for headings (40px greeting), Libre Franklin 14px for
     words. Outline icons only, from the `IC` set in `assets/app.js`.
   - A new control uses an existing surface and state, never a new colour.
-  - Steps 2 to 5 of the agreed UI plan are still to come (where you are,
-    fewer boxes and one main action, the editor, phone): each waits for
-    the owner's go ahead.
+  - Where you are (Version 64): a side menu 236px wide with words beside
+    the icons (`viewRail`, `navHtml`, `navButton`), the site's name and
+    mode under All sites (`.railsite`); a path at the top of every screen
+    (`crumbs`: All sites / site / screen) and the mode marker beside it
+    (`.island`, `islandClass`: green edge for the live site or a shop,
+    amber for a trial copy or an editor's own copy). "Undo the last save"
+    and "Redo" sit in the marker only when there is one to take back. A
+    site opens on its Overview (`openSite`), whose main button is Edit
+    pages. Under 901px the menu is still the strip at the top until step 5.
+  - Steps 3 to 5 of the agreed UI plan are still to come (fewer boxes and
+    one main action, the editor, phone): each waits for the owner's go
+    ahead.
   - All sites (`viewHome`): live sites three to a row, each with a small
     picture of its home page (an iframe laid out 1280 wide and scaled,
     `homeFit`), then the Practice site and the sites still to build on
@@ -225,7 +234,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (23 November 2026, Version 63)
+## Where things stand (23 November 2026, Version 64)
 
 Done:
 
@@ -1225,6 +1234,16 @@ Done:
   in three groups with words, panels side by side from 1280, no floating
   bar, teal outline in the sites' editor link), 5 phone (a bar at the
   foot, 44px buttons).
+
+- Version 64 (23 November): step 2 of 5 of the UI plan, where you are.
+  The side menu has words beside its icons and shows the site you are in
+  with its mode; every screen has a path at the top (All sites / World
+  Art Review / Versions) and a marker saying Live site (saves go straight
+  to visitors), Trial copy: name, Your copy, or Shop on Shopify, with
+  Make live, Publish and "Undo the last save" there when they apply. A
+  site now opens on its Overview, with View the live site and Edit pages
+  at the top; Open the editor after Start building still goes straight
+  to the editor. Tests that open a site press Edit pages first.
 
 Waiting for the owner:
 

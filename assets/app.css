@@ -1690,3 +1690,54 @@ select.box option, select option { background: #FFFFFF; color: var(--bright); }
 /* status words keep their colour; small dots beside them */
 .lamp.q { background: var(--dim); }
 .island .tick { color: var(--live); }
+
+/* ---------- Where you are (Version 64, step 2 of the UI plan) ---------- */
+/* the top of every screen: the path on the left, the Live site or Trial copy marker on the right */
+.island-row { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; margin: 0 -24px 14px; padding: 10px 24px; background: var(--page); }
+.crumbs { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.crumbs .linklike { color: var(--muted); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; min-height: 32px; display: inline-flex; align-items: center; }
+.crumbs .linklike:hover { color: var(--bright); }
+.crumbs b, .crumbs .island-name { font-family: inherit; font-size: 13px; }
+.crumbs b { color: var(--bright); font-weight: 600; }
+.island { flex: 0 1 auto; display: flex; align-items: center; gap: 10px; width: auto; height: auto; min-height: 40px; max-width: 72%; padding: 0 14px 0 16px; border-radius: 999px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--edge); white-space: nowrap; overflow: hidden; font-size: 13px; }
+.island:empty { display: none; }
+.island.live { box-shadow: inset 0 0 0 1.5px var(--live); }
+.island.trial { box-shadow: inset 0 0 0 1.5px var(--warn); }
+.island .mode-name { color: var(--bright); font-weight: 600; white-space: nowrap; }
+.island #island-text { margin: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.island .lamp { flex: none; }
+.island.busy .lamp { animation: pulse 1.1s ease-in-out infinite; }
+.island .linklike { flex: none; color: var(--ice); font-size: 13px; min-height: 32px; display: inline-flex; align-items: center; }
+.island .btn.slim, .island .soft.slim { flex: none; min-height: 30px; }
+.island select.copypick { color: var(--bright); font-weight: 600; background-color: transparent; box-shadow: none; padding: 0 4px; min-height: 30px; }
+.island select.copypick:focus { box-shadow: inset 0 0 0 2px var(--ice); }
+.page-head.ov-head { flex-direction: row; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px; }
+.ov-head .btn { min-height: 40px; padding: 0 18px; }
+
+/* the side menu: words beside the icons, the site you are in under All sites */
+.railsite { display: none; }
+@media (min-width: 901px) {
+  .rail { width: 236px; align-items: stretch; padding: 22px 14px 18px; gap: 2px; }
+  .rail .brand { justify-content: flex-start; gap: 12px; padding: 0 6px 20px; }
+  .rail .brand-name { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip: auto; white-space: normal; font-family: var(--serif); font-size: 17px; line-height: 1.15; color: var(--bright); }
+  .rail .nav { gap: 2px; }
+  .navb { flex-direction: row; justify-content: flex-start; gap: 12px; min-height: 42px; padding: 0 12px; font-size: 14px; font-weight: 500; color: var(--text); text-align: left; border-radius: 10px; }
+  .navb .ico { width: 19px; height: 19px; }
+  .navb:hover { color: var(--bright); background: var(--hover); }
+  .railsite { display: flex; flex-direction: column; gap: 4px; padding: 18px 12px 10px; }
+  .railsite b { font-family: var(--serif); font-weight: 400; font-size: 20px; line-height: 1.2; color: var(--bright); overflow-wrap: anywhere; }
+  .railsite .small { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); }
+  .rail-foot { flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; padding: 12px 6px 0; }
+  .rail-foot .ver { font-size: 12px; white-space: normal; }
+  .acct-menu { left: 0; bottom: 44px; }
+}
+@media (max-width: 900px) {
+  .island-row { position: static; flex-wrap: wrap; margin: 0 -14px 10px; padding: 10px 14px; min-height: 0; }
+  .island { max-width: 100%; flex-wrap: wrap; white-space: normal; border-radius: 14px; padding: 8px 12px; row-gap: 4px; }
+  .island #island-text { white-space: normal; }
+  .page-head.ov-head { align-items: flex-start; }
+  .ov-head .row { width: 100%; }
+  .ov-head .row .btn { flex: 1 1 auto; }
+}
+.ov-head a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: var(--bright); }
+.ov-head a.btn:hover { color: var(--bright); }
