@@ -6,14 +6,17 @@ const gamC = JSON.parse(fs.readFileSync((G_DIR + "/data/content.json"), "utf8"))
 const gamS = JSON.parse(fs.readFileSync((G_DIR + "/data/sales.json"), "utf8"));
 const W = SITES[0].collections, G = SITES[1].collections;
 const by = (cols, id) => cols.find((c) => c.id === id);
-assert.equal(entriesOf(war, by(W, "articles")).length, 16);
-assert.equal(entriesOf(war, by(W, "artists")).length, 3);
-assert.equal(entriesOf(war, by(W, "artworks")).length, 12);
-assert.equal(entriesOf(war, by(W, "sources")).length, 21);
-assert.equal(entriesOf(gamC, by(G, "articles")).length, 6);
-assert.equal(entriesOf(gamS, by(G, "sales")).length, 8);
-assert.equal(entriesOf(gamC, by(G, "artists")).length, 2);
+// one entry for every item in the site's own files, however many there are today
+assert.equal(entriesOf(war, by(W, "articles")).length, war.articles.length);
+assert.equal(entriesOf(war, by(W, "artists")).length, war.artists.length);
+assert.equal(entriesOf(war, by(W, "artworks")).length, war.artists.reduce((t, a) => t + (Array.isArray(a.works) ? a.works.length : 0), 0));
+assert.equal(entriesOf(war, by(W, "sources")).length, Object.keys(war.sources).length);
+assert.equal(entriesOf(gamC, by(G, "articles")).length, gamC.features.length);
+assert.equal(entriesOf(gamS, by(G, "sales")).length, gamS.sales.length);
+assert.equal(entriesOf(gamC, by(G, "artists")).length, Object.keys(gamC.bios).length);
 assert.equal(entriesOf(gamC, by(G, "site")).length, 1);
+assert.ok(war.artists.some((a) => a.slug === "zara-muse") && war.artists.some((a) => a.slug === "konn-artiss"), "the checks below use Zara Muse and Konn Artiss");
+const zaraOf = (d) => d.artists.find((a) => a.slug === "zara-muse");
 // fields: locked ones never appear; kinds are right
 const art = entriesOf(war, by(W, "articles"))[0].ref;
 const names = fieldsOf(art).map((f) => f.name);
@@ -46,7 +49,7 @@ const liveFile = (file) => hub.read(WR, "main", file);
 const writes = { at: () => hub.lastMessage(WR, work() || "main") };
 const post = (b) => new Request("https://x", { method: "POST", headers: { Authorization: "Bearer t", apikey: "k" }, body: JSON.stringify(b) });
 let r = await handle(post({ action: "content", site: "world-art-review" })); let d = await r.json();
-assert.equal(d.collections.length, 4); assert.equal(d.collections[0].entries.length, 16);
+assert.equal(d.collections.length, 4); assert.equal(d.collections[0].entries.length, war.articles.length);
 const first = d.collections[0].entries[0];
 r = await handle(post({ action: "saveEntry", site: "world-art-review", collection: "articles", id: first.id, values: { title: "Edited in a test" } })); assert.equal(r.status, 200);
 assert.equal(JSON.parse(store["content/site.json"]).articles[0].title, "Edited in a test");
@@ -55,16 +58,16 @@ r = await handle(post({ action: "setHidden", site: "world-art-review", collectio
 assert.equal(JSON.parse(store["content/site.json"]).articles[0].hidden, true);
 r = await handle(post({ action: "setHidden", site: "world-art-review", collection: "artists", id: "zara-muse", hidden: true })); assert.equal(r.status, 400);
 r = await handle(post({ action: "deleteEntry", site: "world-art-review", collection: "artworks", id: "zara-muse~1" })); assert.equal(r.status, 200);
-assert.equal(JSON.parse(store["content/site.json"]).artists[0].works.length, 7);
+assert.equal(zaraOf(JSON.parse(store["content/site.json"])).works.length, zaraOf(war).works.length - 1);
 r = await handle(post({ action: "deleteEntry", site: "world-art-review", collection: "artists", id: "zara-muse" })); assert.equal(r.status, 400);
 r = await handle(post({ action: "removePhoto", site: "world-art-review", slot: "artist-zara-muse" })); assert.equal(r.status, 200);
-assert.equal(JSON.parse(store["content/site.json"]).artists[0].image, null);
+assert.equal(zaraOf(JSON.parse(store["content/site.json"])).image, null);
 assert.equal(JSON.parse(store["image-slots.json"]).slots.find((x) => x.id === "artist-zara-muse").filled, false);
 r = await handle(post({ action: "saveEntry", site: "world-art-review", collection: "nope", id: "x", values: {} })); assert.equal(r.status, 400);
 
 // parts inside an entry: portfolio sections, at a glance, timeline, glossary
 {
-  const col = by(W, "artists"), zara = JSON.parse(JSON.stringify(entriesOf(war, col)[0].ref));
+  const col = by(W, "artists"), zara = JSON.parse(JSON.stringify(entriesOf(war, col).find((x) => x.id === "zara-muse").ref));
   const fs2 = fieldsOf(zara, [], col.inside), get = (n) => fs2.find((f) => f.name === n);
   assert.equal(get("sections.0.html").type, "long"); assert.equal(get("sections.0.html").group, "Portfolio sections");
   assert.equal(get("sections.0.html").label, "Biography: text");
@@ -73,11 +76,11 @@ r = await handle(post({ action: "saveEntry", site: "world-art-review", collectio
   const n2 = applyValues(zara, { "sections.0.html": "<p>New text.</p>", "glance.1.1": "Paris", "sections.0.id": "x", "works.0.title": "x", "glance.1.0": "x" }, [], col.inside);
   assert.equal(n2, 2); assert.equal(zara.sections[0].html, "<p>New text.</p>"); assert.equal(zara.glance[1][1], "Paris");
   assert.equal(zara.glance[1][0], "Based in"); assert.equal(zara.sections[0].id, "bio");
-  const konn = entriesOf(war, col)[1].ref;
+  const konn = entriesOf(war, col).find((x) => x.id === "konn-artiss").ref;
   assert.equal(fieldsOf(konn, [], col.inside).find((f) => /placeholder/.test(String(f.value))).type, "long", "short text with marks opens in the writing editor");
   assert.ok(!fieldsOf(entriesOf(war, by(W, "articles"))[0].ref).some((f) => f.name === "sources" || f.name === "artists"));
   const gl = by(G, "glossary"), rows = entriesOf(gamC, gl);
-  assert.equal(rows.length, 16); assert.equal(rows[0].title, "Hammer price");
+  assert.equal(rows.length, gamC.glossary.length); assert.equal(rows[0].title, gamC.glossary[0][0]);
   assert.deepEqual(fieldsOf(rows[0].ref, [], gl.columns).map((f) => f.label), ["Term", "Meaning"]);
   const sec = by(G, "sections"), srow = JSON.parse(JSON.stringify(entriesOf(gamC, sec)[0].ref));
   assert.deepEqual(fieldsOf(srow, [], sec.columns).map((f) => f.name), ["1", "2"]);

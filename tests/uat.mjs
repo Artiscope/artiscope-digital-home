@@ -39,7 +39,7 @@ let signedIn = "tester@artiscope.co.uk";
 globalThis.Deno = { env: { get: (k) => ({ GITHUB_TOKEN: "t", ALLOWED_EMAILS: "tester@artiscope.co.uk", SUPABASE_URL: "https://s", SUPABASE_SERVICE_ROLE_KEY: "k", SCHEDULE_KEY: "a-long-random-key-for-the-clock-0123456789", SHOPIFY_TOKEN: "shpat_uat" }[k] || "") }, serve() {} };
 const { makeShop } = await import("./fakeshop.mjs"); const shop = makeShop("zx-test"); shop.setKey("shpat_uat");
 const { makePeople } = await import("./fakepeople.mjs"); const ppl = makePeople();
-const { handle, STARTER_KINDS, useSiteList } = await import("./home.mjs");
+const { handle, STARTER_KINDS, useSiteList, GAM_WORDS } = await import("./home.mjs");
 const { makeGitHub } = await import("./fakegit.mjs");
 const files = (dir, list) => Object.fromEntries(list.filter((f) => fs.existsSync(dir + f)).map((f) => [f, fs.readFileSync(dir + f, "utf8")]));
 const pics = (dir, sub) => Object.fromEntries(fs.readdirSync(dir + sub).map((f) => [sub + "/" + f, "picture"]));
@@ -147,7 +147,7 @@ if (process.env.AUDIT) {
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with all eight sites, The Art Correspondent, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 8, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 67"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 68"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -1875,7 +1875,8 @@ await check("Edit default text opens from More, with the site's words in groups"
   await openSite("global-art-monitor");
   await page.click('[data-act="ed-pop"][data-menu="more"]'); await page.click('.ed-pop.mp [data-act="wd-open"]'); await settle(500);
   must(await page.isVisible(".wdpanel"), "no panel");
-  must(/Search 86 words/.test(await page.getAttribute("#wd-q", "placeholder")), "placeholder: " + await page.getAttribute("#wd-q", "placeholder"));
+  // the site gains fixed words as it grows, so the number is the server's own list for it
+  must(new RegExp("Search " + Object.keys(GAM_WORDS).length + " words").test(await page.getAttribute("#wd-q", "placeholder")), "placeholder: " + await page.getAttribute("#wd-q", "placeholder"));
   const groups = await page.$$eval(".wd-grp .t", (x) => x.map((y) => y.textContent));
   must(groups.includes("Buttons") && groups.includes("Auction table") && groups.includes("Page not found") && groups.includes("Words for screen readers"), "groups: " + groups);
   await shot("90-words");
@@ -2229,7 +2230,9 @@ const tacFrame = () => page.frames().filter((f) => f.url().startsWith("https://t
 const tacText = async () => { const f = tacFrame(); return f ? await f.innerText("body").catch(() => "") : ""; };
 await check("The Art Correspondent opens in the editor in its own design, with Stories and Subjects in the page picker", async () => {
   await openSite("site-7"); await settle(1200);
-  const t = await tacText(); must(t.includes("Behind Every Work, There Is a Story.") && t.includes("All 22 stories") && t.includes("Filed from the studio floor."), "home: " + t.slice(0, 200));
+  // the number of stories grows as drafts are merged, so it is counted from the site's own file
+  const nStories = JSON.parse(fs.readFileSync(TACDIR + "data/content.json", "utf8")).articles.filter((x) => !x.hidden).length;
+  const t = await tacText(); must(t.includes("Behind Every Work, There Is a Story.") && t.includes("All " + nStories + " stories") && t.includes("Filed from the studio floor."), "home: " + t.slice(0, 200));
   must(!/published by Grove/i.test(t), "a publisher line");
   await page.click(".ed-pagebtn"); await settle(400); const pp = await text(".pp");
   must(pp.includes("Stories") && pp.includes("Subjects"), "picker: " + pp.slice(0, 300)); await page.keyboard.press("Escape");

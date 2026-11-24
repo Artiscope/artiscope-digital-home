@@ -17,8 +17,8 @@ const slotsSeed = JSON.parse(fs.readFileSync(WAR + "image-slots.json", "utf8"));
   const spots = pictureSpots(data);
   const zara = spots.find((x) => x.key === "artist:zara-muse");
   assert.equal(zara.image, "zara-muse-portrait.jpg"); assert.equal(zara.group, "Artists");
-  assert.equal(spots.filter((x) => x.kind === "work").length, 12);
-  assert.equal(spots.find((x) => x.kind === "work").slot, "work-zara-muse-malala-yousafzai");
+  assert.equal(spots.filter((x) => x.kind === "work").length, war.artists.reduce((t, a) => t + (Array.isArray(a.works) ? a.works.length : 0), 0), "one spot for every artwork");
+  assert.equal(spots.find((x) => x.key === "work:zara-muse:0").slot, "work-zara-muse-malala-yousafzai");
   assert.equal(spots.find((x) => x.key === "article:palette-knife-painting").image, "article-palette-knife-painting.jpg");
   const slots = JSON.parse(JSON.stringify(slotsSeed));
   const res = applyPictures(data, { "artist:konn-artiss": { image: "ice.jpg", alt: "Ice blocks", credit: "Photo: x" }, "artist:zara-muse": { alt: "Zara Muse's portrait" } }, slots);
@@ -29,7 +29,7 @@ const slotsSeed = JSON.parse(fs.readFileSync(WAR + "image-slots.json", "utf8"));
   assert.throws(() => applyPictures(data, { "artist:nobody": { image: "a.jpg" } }));
   assert.throws(() => applyPictures(data, { "artist:zara-muse": { image: "../secret" } }));
   assert.equal(applyPictures(data, { "artist:zara-muse": { image: "", alt: "" } }, slots).done.length, 1);
-  assert.equal(data.artists[0].image, null); assert.equal(slots.slots.find((x) => x.id === "artist-zara-muse").filled, false);
+  assert.equal(data.artists.find((a) => a.slug === "zara-muse").image, null); assert.equal(slots.slots.find((x) => x.id === "artist-zara-muse").filled, false);
   const pages = { shared: {}, pages: { home: { title: "Home", sections: [{ id: "p1", type: "picture", visible: false, settings: { image: "ice.jpg", alt: "" } }] } } };
   const used = usageOf("ice.jpg", pages, { picture: { label: "Picture" } }, pictureSpots(data));
   assert.deepEqual(used.map((u) => u.label), ["Home page: Picture (hidden)", "Artist: Konn Artiss"]);
@@ -104,7 +104,7 @@ const site = () => JSON.parse(hub.read(WR, "main", "content/site.json"));
   // put a photo in an empty place
   assert.equal((await call({ action: "saveFiles", op: "assign", name: "zara-muse-portrait.jpg", spot: "work:zara-muse:0" })).status, 400, "needs a description");
   r = await call({ action: "saveFiles", op: "assign", name: "studio-wall.png", spot: "work:zara-muse:0" }); assert.equal(r.ok, true);
-  assert.equal(site().artists[0].works[0].image, "images/studio-wall.png"); assert.equal(site().artists[0].works[0].alt, "A studio wall");
+  const zw = site().artists.find((a) => a.slug === "zara-muse").works[0]; assert.equal(zw.image, "images/studio-wall.png"); assert.equal(zw.alt, "A studio wall");
   assert.equal(JSON.parse(hub.read(WR, "main", "image-slots.json")).slots.find((x) => x.id === "work-zara-muse-malala-yousafzai").filled, true);
   // delete: refused while used, done when not
   assert.equal((await call({ action: "saveFiles", op: "remove", name: "studio-wall.png" })).status, 409);

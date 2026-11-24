@@ -17,7 +17,7 @@ const W = SITES[0];
   assert.equal(ed.artists[0].works[0].alt, ""); assert.ok(!("image" in war.artists[0].works[0]) || war.artists[0].works[0].image !== undefined);
   let r = cleanSite(W.items, ed, war); assert.deepEqual(r.changed, []); assert.equal(canon(r.data), canon(war));
   // a few real edits
-  const g = siteForEditor(war), zara = g.artists[0];
+  const g = siteForEditor(war), zara = g.artists.find((a) => a.slug === "zara-muse");
   zara.timeline.push({ when: "", what: "Joins Grove Gallery.", reported: true, src: ["grove-zm", "nope"] });
   zara.works[10 % zara.works.length].size = "none";
   zara.works[0].image = "malala.jpg"; zara.works[0].alt = "A portrait of Malala";
@@ -27,12 +27,12 @@ const W = SITES[0];
   g.articles.push({ slug: "a-fresh-piece", title: "A fresh piece", section: "reviews" });
   r = cleanSite(W.items, g, war);
   assert.deepEqual(r.changed, ["Add source: A new review", "Edit portfolio: Zara Muse", "Edit article: Understanding palette-knife painting", "Add article: A fresh piece"]);
-  const z = r.data.artists[0];
+  const z = r.data.artists.find((a) => a.slug === "zara-muse"), wz = war.artists.find((a) => a.slug === "zara-muse");
   assert.deepEqual(z.timeline.at(-1), { when: null, what: "Joins Grove Gallery.", reported: true, src: ["grove-zm"] });
-  assert.equal(z.works[0].image, "images/malala.jpg"); assert.equal(z.works[0].tone, war.artists[0].works[0].tone, "an artwork keeps its colour");
+  assert.equal(z.works[0].image, "images/malala.jpg"); assert.equal(z.works[0].tone, wz.works[0].tone, "an artwork keeps its colour");
   assert.equal(z.works[10 % z.works.length].size, false);
   assert.deepEqual(z.related, ["a-palette-knife-painting"]);
-  assert.equal(r.data.artists[1], war.artists[1] === undefined ? undefined : r.data.artists[1]); assert.equal(canon(r.data.artists[1]), canon(war.artists[1]), "untouched artists stay exactly as they were");
+  for (const a of war.artists) if (a.slug !== "zara-muse") assert.equal(canon(r.data.artists.find((x) => x.slug === a.slug)), canon(a), "untouched artists stay exactly as they were");
   const fresh = r.data.articles.at(-1); assert.equal(fresh.hidden, true); assert.equal(fresh.section, "reviews"); assert.equal(fresh.status, "Draft for review");
   // refusals
   const bad2 = siteForEditor(war); bad2.articles.push({ slug: "Bad Slug", title: "x" }); assert.throws(() => cleanSite(W.items, bad2, war), /web address/);
@@ -40,7 +40,9 @@ const W = SITES[0];
   const bad4 = siteForEditor(war); bad4.articles[0].title = " "; assert.throws(() => cleanSite(W.items, bad4, war), /title/);
   // a source can be deleted only when nothing cites it; an artist only when no article names them
   const ds = siteForEditor(war); delete ds.sources["ap-muse"]; assert.throws(() => cleanSite(W.items, ds, war), /still cited/);
-  const unused = Object.keys(war.sources).find((id) => !JSON.stringify({ a: war.artists, b: war.articles }).includes('"' + id + '"') && !JSON.stringify(war.articles).includes('\\"' + id + '\\"'));
+  // a source nothing cites, by the console's own rule: named in a list, or as data-src in any words
+  const citedText = JSON.stringify({ a: war.artists, b: war.articles });
+  const unused = Object.keys(war.sources).find((id) => !citedText.includes('"' + id + '"') && !citedText.includes('\\"' + id + '\\"'));
   if (unused) { const d2 = siteForEditor(war); delete d2.sources[unused]; const rr = cleanSite(W.items, d2, war); assert.ok(!(unused in rr.data.sources)); assert.match(rr.changed[0], /^Delete source/); }
   const da = siteForEditor(war); da.artists = da.artists.filter((a) => a.slug !== "zara-muse"); assert.throws(() => cleanSite(W.items, da, war), /named in the article/);
   const dz = siteForEditor(war); dz.artists = dz.artists.filter((a) => a.slug !== "zen-xander"); assert.deepEqual(cleanSite(W.items, dz, war).changed, ["Delete artist: Zen Xander"]);
@@ -69,11 +71,12 @@ const read = (f) => JSON.parse(hub.read(WR, "main", f));
 {
   const pg = await call({ action: "pages" });
   assert.equal(pg.status, 200); assert.ok(pg.itemKinds.article.parts.some((p) => p.picture)); assert.equal(pg.lists.reviews.section, "reviews");
-  assert.equal(pg.site.articles.length, war.articles.length); assert.ok(pg.pages.lists.artists.intro.startsWith("Each portfolio"));
+  assert.equal(pg.site.articles.length, war.articles.length); assert.equal(pg.pages.lists.artists.intro, JSON.parse(fs.readFileSync(W_DIR + "/content/pages.json", "utf8")).lists.artists.intro, "list headings are the site's own words");
   // a new article with its picture uploaded, a new page in the menu, a new list heading: one Save
   const doc = JSON.parse(JSON.stringify(pg.pages)), content = JSON.parse(JSON.stringify(pg.site));
   content.articles.push({ slug: "studio-visit", title: "A studio visit", section: "library", body: "<p>Words.</p>" });
-  content.artists[2].works = [{ title: "First work", image: "upload:1", alt: "A first work", year: "", medium: "Oil", size: "", note: "", src: [] }];
+  const zx = content.artists.findIndex((a) => a.slug === "zen-xander");
+  content.artists[zx].works = [{ title: "First work", image: "upload:1", alt: "A first work", year: "", medium: "Oil", size: "", note: "", src: [] }];
   doc.pages.visit = { title: "Visit us", sections: [{ id: "text-1", type: "text", visible: true, settings: { heading: ["Find us"], body: "<p>Hi</p>" } }] };
   doc.shared.header.settings.links.push(["Visit us", "#page-visit"]);
   doc.lists.library.intro = "Guides for collectors.";
@@ -82,7 +85,7 @@ const read = (f) => JSON.parse(hub.read(WR, "main", f));
   assert.equal(r.status, 200);
   const s = read("content/site.json"), p = read("content/pages.json"), slots = read("image-slots.json");
   const a = s.articles.find((x) => x.slug === "studio-visit"); assert.equal(a.hidden, true); assert.equal(a.image, "images/zara-muse-portrait.jpg"); assert.equal(a.alt, "The studio");
-  assert.equal(s.artists[2].works[0].image, "images/work.jpg"); assert.equal(hub.read(WR, "main", "images/work.jpg"), "work");
+  assert.equal(s.artists.find((a) => a.slug === "zen-xander").works[0].image, "images/work.jpg"); assert.equal(hub.read(WR, "main", "images/work.jpg"), "work");
   assert.equal(p.pages.visit.title, "Visit us"); assert.deepEqual(p.shared.header.settings.links.at(-1), ["Visit us", "#page-visit"]); assert.equal(p.lists.library.intro, "Guides for collectors.");
   assert.ok(slots.slots.some((x) => x.id === "article-studio-visit" && x.filled), "the new article has a picture spot for the agents");
   assert.ok(slots.slots.some((x) => x.id === "work-zen-xander-first-work"));

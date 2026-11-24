@@ -25,7 +25,8 @@ const results = await page.evaluate((list) => list.map((html) => {
   const shown = ed.innerHTML, out = window.__adh.richOut(ed, keep, window.__adh.richInline(doc.body)); ed.remove();
   return { shown, out };
 }), bodies);
-const norm = (h) => h.replace(/>\s+</g, "><").replace(/\s+/g, " ").replace(/=""/g, "").replace(/\s*\/>/g, ">").replace(/<\/(rect|feDiffuseLighting|feDistantLight|feTurbulence|feComposite|feGaussianBlur|feBlend|feColorMatrix|feMerge|feMergeNode|circle|path|line|stop)>/g, "").trim();
+// a bare "&" and its coded form "&amp;" read the same on the page, so they count as the same here
+const norm = (h) => h.replace(/&(?![a-zA-Z][a-zA-Z0-9]*;|#[0-9]+;|#x[0-9a-fA-F]+;)/g, "&amp;").replace(/>\s+</g, "><").replace(/\s+/g, " ").replace(/=""/g, "").replace(/\s*\/>/g, ">").replace(/<\/(rect|feDiffuseLighting|feDistantLight|feTurbulence|feComposite|feGaussianBlur|feBlend|feColorMatrix|feMerge|feMergeNode|circle|path|line|stop)>/g, "").trim();
 let same = 0;
 results.slice(0, -1).forEach((r, i) => {
   const a = norm(bodies[i]), b = norm(r.out);

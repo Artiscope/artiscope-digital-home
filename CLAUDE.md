@@ -201,6 +201,17 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
 
 - `tests/where.mjs` finds the repositories and the browser. Set
   `WAR_DIR`, `GAM_DIR` or `CHROME` if they are somewhere unusual.
+- The checks run on the sites as they are today, so a draft merged by a
+  weekday agent must not break them (since Version 68). Count from the
+  site's own files, never a fixed number ("one entry for every article in
+  `content/site.json`"); find an artist, article or sale by its slug or
+  title, never by its place in a list (the agents add artists and sales in
+  any order); compare lists of latest articles against the site's own
+  titles. Zara Muse, Konn Artiss and Zen Xander are the fixed points the
+  checks lean on. When a check fails after the agents' drafts are merged,
+  look first for something the console does not know about yet (a new
+  part, field or fixed word in a site's code), and teach the console;
+  change the check only when it was counting.
 - `tests/every-section.mjs` puts every section kind of each site, twice,
   on a new page and checks it at computer and phone size. Screenshots go
   to `/tmp/look`.
@@ -266,7 +277,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (23 November 2026, Version 67)
+## Where things stand (24 November 2026, Version 68)
 
 Done:
 
@@ -1288,15 +1299,8 @@ Done:
   - On 23 November the owner merged the weekday agents' drafts (Banksy on
     World Art Review, Global Art Monitor, Street Art Dispatch and The Art
     Correspondent, prices kept in their sale currency on Global Art
-    Monitor). Many checks count the sites' content as it was on 19 and 20
-    November, so the suite is run against copies at those commits, with
-    only the change being made added: `git worktree add --detach
-    /tmp/ts/<repo> <commit>` for world-art-review 055fa62,
-    street-art-dispatch 8b85f25, the-art-correspondent a1b8b91 and
-    global-art-monitor d575fa8 (with today's `assets/render.js`, `site.js`
-    and `site.css` copied in), then `WAR_DIR`, `SAD_DIR`, `TAC_DIR` and
-    `GAM_DIR` pointing at them for `npm run sync` and the tests. Moving
-    the checks onto the new content is a job for later.
+    Monitor). For a day the suite was run against copies of the sites at
+    earlier commits; since Version 68 every check runs on today's content.
   - Global Art Monitor's new fixed word `table.mixed-note` is in
     `GAM_WORDS` (added after `TGAM_WORDS`, so the older template copy of
     its code does not need it).
@@ -1306,6 +1310,25 @@ Done:
   `W_DIR` and `G_DIR` like the other checks (World Art Review's newer
   content has a bare "&" in a body, which the editor writes back as
   "&amp;": the same page, but not the same text).
+
+- Version 68 (24 November): the automatic checks run on the sites' own
+  content again, with no copies at older commits (see Checks before every
+  publish). Fixing them found three things the console had not caught up
+  with, all from the weekday agents' merged drafts:
+  - Global Art Monitor's artist profiles have a new part, Why the work is
+    valued (`standing` in `data/content.json` bios, drawn by the site's
+    render.js under its own heading, word `item.standing` in `GAM_WORDS`).
+    The console reads it (`gamForEditor`), it has its own box in About the
+    artist, and it saves (`gamFromEditor`). Saves had kept it before, but
+    the editor's preview left it out.
+  - Its `data/sales.json` is no longer grouped by artist. A save now keeps
+    every sale where it sits in the file: an artist's sales fill that
+    artist's old places in their new order, added ones follow the
+    artist's last old place, a new artist's go at the end. Before, any
+    save rewrote the whole file grouped by artist.
+  - The writing editor keeps `target` and `rel` on links (`RICH_ATTR`);
+    it used to drop `rel="noopener"` from the agents' source links.
+  - `tests/rich.mjs` counts a bare "&" and "&amp;" as the same.
 
 Waiting for the owner:
 

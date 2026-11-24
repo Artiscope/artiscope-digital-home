@@ -726,8 +726,9 @@ const GAM_ITEMS = {
       { name: "image", label: "Picture", type: "image", alt: "alt" }, { name: "alt", label: "Describe the picture", type: "text", hint: "Read aloud to people who cannot see it." }, { name: "caption", label: "Caption", type: "text" },
     ] },
     { id: "sales", label: "Sales", about: "Every public sale, with each figure in its own field. An empty figure shows as To confirm.", fields: [{ name: "sales", label: "Sales", type: "rows", fields: G_SALE_FIELDS }], blocks: { field: "sales", label: "Sale", add: "Add a sale" } },
-    { id: "about", label: "About the artist", about: "The paragraphs and the background sources.", fields: [
+    { id: "about", label: "About the artist", about: "The paragraphs, why the work is valued, and the background sources.", fields: [
       { name: "body", label: "Paragraphs", type: "lines", hint: "One paragraph per line." },
+      { name: "standing", label: "Why the work is valued", type: "lines", hint: "One paragraph per line. Shown under its own heading after the paragraphs; leave empty to leave it out." },
       { name: "sources", label: "Background sources", type: "rows", fields: [{ name: 0, label: "Name", type: "text" }, { name: 1, label: "Link", type: "text" }] },
     ] },
   ] },
@@ -750,7 +751,7 @@ export function gamForEditor(content, sales, images, imageFiles) {
     let image = "";
     if ("file" in note) image = note.file && imageFiles.includes(note.file) ? note.file : "";
     else image = (IMAGE_EXTS.map((e) => slug + "." + e).find((n) => imageFiles.includes(n))) || "";
-    return { slug, name: a.name, line: a.line || "", houses: [...(a.houses || [])], summary: bio.summary || "", body: [...(bio.body || [])], sources: (bio.sources || []).map((x) => [...x]),
+    return { slug, name: a.name, line: a.line || "", houses: [...(a.houses || [])], summary: bio.summary || "", body: [...(bio.body || [])], standing: [...(bio.standing || [])], sources: (bio.sources || []).map((x) => [...x]),
       image, alt: note.alt || "", caption: note.caption || "", sales: (sales.sales || []).filter((x) => x.artist === slug).map((x, i) => ({ ...x, _i: i })) };
   });
   return { published: content.published, published_text: content.published_text, site: { ...(content.site || {}) }, sections: (content.sections || []).map((x) => [...x]),
@@ -810,14 +811,14 @@ export function gamFromEditor(kinds, given, content, sales, images, imageFiles) 
   for (const cur of curA) if (!seen.has(cur.slug)) changed.push("Delete article: " + cur.title);
   c.features = feats;
   // artists, with their sales
-  const curSlugs = Object.keys(sales.artists || {}), seenR = new Set(), allSales = [], artistsOut = {}, wasAll = gamForEditor(content, sales, images, imageFiles || []);
+  const curSlugs = Object.keys(sales.artists || {}), seenR = new Set(), bySlug = {}, artistsOut = {}, wasAll = gamForEditor(content, sales, images, imageFiles || []);
   const wordFields = kinds.artist.parts[0].fields, picFields = kinds.artist.parts[1].fields, aboutFields = kinds.artist.parts[3].fields;
   for (const g of gr) {
     const slug = String((g && g.slug) || ""), isNew = !curSlugs.includes(slug);
     if (seenR.has(slug)) throw new Error("Two artists have the same web address.");
     seenR.add(slug);
     if (isNew && !SLUG.test(slug)) throw new Error("A new artist needs a web address of letters, digits and hyphens.");
-    const was = isNew ? { slug, name: "", line: "", houses: [], summary: "", body: [], sources: [], image: "", alt: "", caption: "", sales: [] } : wasAll.artists.find((a) => a.slug === slug);
+    const was = isNew ? { slug, name: "", line: "", houses: [], summary: "", body: [], standing: [], sources: [], image: "", alt: "", caption: "", sales: [] } : wasAll.artists.find((a) => a.slug === slug);
     let touched = isNew;
     const a = { ...((sales.artists || {})[slug] || {}) }, bio = { ...((content.bios || {})[slug] || {}) };
     for (const f of wordFields) { const r = keepOrClean(f, was[f.name], g[f.name], ctx); if (!r.same || isNew) { touched = touched || !r.same; const v = r.same ? was[f.name] : r.v; if (f.name === "summary") bio.summary = v; else a[f.name] = v; } }
@@ -838,7 +839,7 @@ export function gamFromEditor(kinds, given, content, sales, images, imageFiles) 
     if (gsales.length > 200) throw new Error("An artist can have up to 200 sales here.");
     const rows = gsales.map((x) => cleanSale(x, x && x._i != null && curSales[Number(x._i)] ? curSales[Number(x._i)] : null, slug, ctx));
     if (rows.some((r) => r.changed) || rows.length !== curSales.length || rows.some((r, i) => r.sale !== curSales[i] && canon(r.sale) !== canon(curSales[i]))) touched = true;
-    rows.forEach((r) => { delete r.sale._i; allSales.push(r.sale); });
+    bySlug[slug] = rows.map((r) => { delete r.sale._i; return r.sale; });
     if (isNew) changed.push("Add artist: " + a.name); else if (touched) changed.push("Edit profile: " + a.name);
   }
   // an artist can go only once their sales have gone
@@ -847,6 +848,17 @@ export function gamFromEditor(kinds, given, content, sales, images, imageFiles) 
     if (n) throw new Error(name + " still has " + n + (n === 1 ? " sale" : " sales") + " on the site. Remove the sales and save first, then delete the artist.");
     if (c.bios) delete c.bios[slug]; delete im[slug]; changed.push("Delete artist: " + name);
   }
+  // each sale keeps its place in the file: an artist's sales fill that artist's old places in their new order,
+  // added ones follow the artist's last old place, and a new artist's sales go at the end
+  const allSales = [], used = {}, lastAt = {};
+  (sales.sales || []).forEach((x, i) => { lastAt[x.artist] = i; });
+  const next = (slug) => { const k = used[slug] || 0; used[slug] = k + 1; return bySlug[slug][k]; };
+  (sales.sales || []).forEach((x, i) => {
+    const list = bySlug[x.artist]; if (!list) return;
+    if ((used[x.artist] || 0) < list.length) allSales.push(next(x.artist));
+    if (i === lastAt[x.artist]) while ((used[x.artist] || 0) < list.length) allSales.push(next(x.artist));
+  });
+  for (const slug of Object.keys(bySlug)) for (let k = used[slug] || 0; k < bySlug[slug].length; k++) allSales.push(bySlug[slug][k]);
   s.artists = artistsOut; s.sales = allSales;
   return { content: c, sales: s, images: im, changed };
 }
@@ -1363,6 +1375,7 @@ const TGAM_ITEMS = Object.fromEntries(Object.entries(GAM_ITEMS).map(([k, v]) => 
 export const TGAM_WORDS = { ...GAM_WORDS, "loading.line": "Loading the latest figures.", "form.subject": "Please add me to the mailing list" };
 // Added to Global Art Monitor on 23 November (prices kept in their sale currency). The template is an older copy of its code without this note, so it stays off the template's list.
 GAM_WORDS["table.mixed-note"] = "These sales were held in more than one currency. Each price is shown in the currency of its sale, and the bars are scaled within each currency, so bars in different currencies cannot be compared with each other.";
+GAM_WORDS["item.standing"] = "Why the work is valued";
 // The World Art Review template: its sections with bracketed starting words, and the search label naming the site.
 const TWAR_SECTIONS = Object.fromEntries(Object.entries(WAR_SECTIONS).map(([k, v]) => [k, v.starter ? { ...v, starter: ST_BRACKET(v.fields, v.starter, k) } : v]));
 export const TWAR_WORDS = { ...WAR_WORDS, "sr.search": "Search {site}", "form.subject": "Please add me to the mailing list" };

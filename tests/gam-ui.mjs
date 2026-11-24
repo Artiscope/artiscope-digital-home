@@ -34,14 +34,14 @@ try {
   assert.ok((await frame().evaluate(() => document.title)).startsWith("Auction Results"));
   assert.ok(await frame().evaluate(() => document.querySelectorAll("#all-results tbody tr").length > 5));
   // an artist's market profile: its sales, each figure in its own field
-  await frame().click("#all-results tbody tr:first-child td:nth-child(2) a"); await settle();
+  await frame().click('#all-results tbody tr[data-artist="zara-muse"] td:nth-child(2) a'); await settle();
   assert.equal(await page.inputValue(".pagepick"), "artist-zara-muse");
   assert.deepEqual(await page.locator(".ed-left .sec[data-where=item] .nm").evaluateAll((l) => l.map((x) => x.firstChild.textContent)), ["Words", "Picture", "Sales", "About the artist"]);
   await frame().click('[data-adh="sales"] tr[data-adh-row="1"] td:first-child'); await page.waitForSelector(".ed-right :text('Sale 2 of')");
   assert.equal(await page.getAttribute('[data-pf="sales.1.hammer"]', "placeholder"), "To confirm");
   await page.fill('[data-pf="sales.1.hammer"]', ""); await settle();
   assert.ok((await frame().evaluate(() => document.querySelector('[data-adh="sales"] tr[data-adh-row="1"]').innerHTML)).includes("To confirm"), "an empty figure shows as To confirm");
-  assert.equal(await page.evaluate(() => window.__adh.pgOf().site.artists[0].sales[1].hammer), null);
+  assert.equal(await page.evaluate(() => window.__adh.pgOf().site.artists.find((a) => a.slug === "zara-muse").sales[1].hammer), null);
   await page.screenshot({ path: shots + "sale.png" });
   // add a sale
   const rows = await frame().evaluate(() => document.querySelectorAll('[data-adh="sales"] tr[data-adh-row]').length / 1);
@@ -67,7 +67,7 @@ try {
   await page.click('.pk-item[data-key="panel"]'); await settle();
   // one Save keeps it all
   await page.click('[data-act="ed-save"]'); await page.click('[data-act="livesave"]'); await page.waitForSelector("text=Saved. Live in about two minutes"); await page.waitForSelector(".pagepick"); await settle();
-  const after = await page.evaluate(() => { const p = window.__adh.pgOf(); return { press: !!p.doc.pages.press, sales: p.site.artists[0].sales.length, gloss: p.site.glossary.some((g) => g[0] === "Reserve") }; });
+  const after = await page.evaluate(() => { const p = window.__adh.pgOf(); return { press: !!p.doc.pages.press, sales: p.site.artists.find((a) => a.slug === "zara-muse").sales.length, gloss: p.site.glossary.some((g) => g[0] === "Reserve") }; });
   assert.ok(after.press && after.gloss); assert.equal(after.sales, rows + 1);
   // Files lists Global Art Monitor's pictures; Photos and Content have gone
   await goTab(page, "files"); await page.waitForSelector(".filecard");

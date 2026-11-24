@@ -62,8 +62,9 @@ assert.equal(safePhotoName("zara-muse", "../../etc", "png"), "zara-muse-etc.png"
 assert.equal(safePhotoName("zara-muse", "x", "exe"), null);
 assert.equal(safePhotoName("zara-muse", "", "jpg"), null);
 
-const war = parseSlots(fs.readFileSync((W_DIR + "/image-slots.json"), "utf8"));
-assert.equal(war.length, 31);
+const warSlotsRaw = fs.readFileSync((W_DIR + "/image-slots.json"), "utf8");
+const war = parseSlots(warSlotsRaw);
+assert.equal(war.length, JSON.parse(warSlotsRaw).slots.length, "every spot in the site's list is read");
 assert.ok(war.find((x) => x.id === "artist-zara-muse").filled);
 assert.equal(parseSlots("not json").length, 0);
 assert.equal(parseSlots(JSON.stringify({ slots: [{ id: "../x", label: "bad" }, { id: "ok-1", label: "Fine" }] })).length, 1);
