@@ -1433,6 +1433,17 @@ Done:
   - Checks: the Art World Report block in `tests/run.mjs` (`awrDir` in
     `tests/where.mjs`, or `AWR_DIR`), the "The Art World Report" area of
     `tests/uat.mjs` (site-8 in the test list), and the template checks.
+  - After the switch (owner's yes, 24 November): the template's text size
+    no longer jumps at exactly 640 and 1024 wide (`max-width:639px` and
+    `1023px` on `html`), and the opening and page headings are 2.75rem on
+    phones so a long word such as "Understanding" fits. The Privacy page
+    no longer lists jsDelivr and says what the newsletter box does. Every
+    page was measured live at ten widths from 360 to 1440: nothing runs
+    off the screen or over the introduction.
+  - GitHub's publishing step for the site sometimes fails with "No
+    artifacts named github-pages" on its first try; running it again
+    (`gh run rerun <id>`) publishes it. The Art Correspondent has seen the
+    same.
 
 Waiting for the owner:
 

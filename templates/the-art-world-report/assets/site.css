@@ -30,8 +30,8 @@
 html{font-size:16px}
 @media (max-width:1920px){html{font-size:.833333vw}}
 @media (max-width:1440px){html{font-size:1.111111vw}}
-@media (max-width:1024px){html{font-size:1.5625vw}}
-@media (max-width:640px){html{font-size:4.444444vw}}
+@media (max-width:1023px){html{font-size:1.5625vw}}
+@media (max-width:639px){html{font-size:4.444444vw}}
 html.lock{overflow:hidden;height:100%;position:relative}
 body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--text);font-size:calc(1rem * var(--b-scale, 1));line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:hidden}
 h1,h2,h3,p,ul,figure{margin:0}
@@ -97,7 +97,7 @@ em{font-style:italic}
 /* Hero */
 .hero{min-height:100svh;display:flex;align-items:center;padding-block:8rem 5rem}
 .hero .wrap{width:100%}
-.hero h1{font-size:calc(3.25rem * var(--h-scale, 1));line-height:1.04;max-width:13ch;margin-top:2rem}
+.hero h1{font-size:calc(2.75rem * var(--h-scale, 1));line-height:1.04;max-width:13ch;margin-top:2rem}
 .hero .lead{font-size:calc(1.125rem * var(--b-scale, 1));max-width:54ch;margin-top:2.5rem}
 .hero-cta{display:flex;flex-wrap:wrap;align-items:center;gap:1.25rem 2.25rem;margin-top:2.5rem}
 @media (min-width:640px){.hero h1{font-size:calc(4.5rem * var(--h-scale, 1))}}
@@ -156,7 +156,7 @@ em{font-style:italic}
 
 /* Inner pages */
 .page-head{padding-block:10rem 5rem}
-.page-head h1{font-size:calc(3.25rem * var(--h-scale, 1));line-height:1.04;margin-top:1.5rem;max-width:16ch}
+.page-head h1{font-size:calc(2.75rem * var(--h-scale, 1));line-height:1.04;margin-top:1.5rem;max-width:16ch}
 .page-head .lead{font-size:calc(1.125rem * var(--b-scale, 1));max-width:50ch;margin-top:2rem}
 .band-top0{padding-top:1rem}
 .band-top0 .grid-2{margin-top:2.5rem}
