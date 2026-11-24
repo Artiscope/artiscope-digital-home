@@ -14,6 +14,7 @@ export const G_DIR = sibling("GAM_DIR", ["global-art-monitor", "Global-art-monit
 export const sadDir = () => sibling("SAD_DIR", ["street-art-dispatch", "Street-art-dispatch"]);
 // The Art Correspondent likewise
 export const tacDir = () => sibling("TAC_DIR", ["the-art-correspondent", "The-art-correspondent"]);
+export const awrDir = () => sibling("AWR_DIR", ["the-art-world-report", "The-art-world-report"]);
 export const FIX = path.join(C_DIR, "tests", "fixtures");
 // scratch folders the tests write screenshots and copies into
 for (const d of ["/tmp/s2", "/tmp/s4", "/tmp/uat", "/tmp/look"]) fs.mkdirSync(d, { recursive: true });

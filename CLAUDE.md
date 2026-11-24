@@ -127,7 +127,7 @@ to this one, under either spelling of their names (or set `WAR_DIR`,
 | `Artiscope/global-art-monitor` | globalartmonitor.com | GitHub Pages, on every push to main |
 | `Artiscope/street-art-dispatch` | streetartdispatch.com. Its words are all in `data/content.json`; `tools/build.py <folder>` builds every page on publish, and no built pages are kept in the repository | GitHub Pages, on every push to main |
 | `Artiscope/practice-site` | The Practice site, a copy of World Art Review for trying things out | GitHub Pages at artiscope.github.io/practice-site, unlisted, every page marked noindex |
-| `Artiscope/the-art-world-report` | theartworldreport.com, 20 hand-written pages, published straight from its files. Its design is the template `templates/the-art-world-report` (Version 69); moving the site onto it is step 2 | GitHub Pages from the branch |
+| `Artiscope/the-art-world-report` | theartworldreport.com, a site of The Art World Report template, listed in `sites.json` (`site-5`). Built by `tools/build.py <folder>` on publish; no built pages in the repository | GitHub Pages through GitHub Actions, on every push to main |
 | `Artiscope/the-art-correspondent` | theartcorrespondent.com, a site of The Art Correspondent template, listed in `sites.json` (`site-4`). Built by `tools/build.py <folder>` on publish; no built pages in the repository | GitHub Pages through GitHub Actions, on every push to main |
 
 Each site has its own `CLAUDE.md`. Those are written for the unattended
@@ -278,7 +278,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (24 November 2026, Version 69)
+## Where things stand (24 November 2026, Version 70)
 
 Done:
 
@@ -1383,9 +1383,56 @@ Done:
     `ttawr` words in `tests/run.mjs`, `tests/templates.mjs` (seven
     templates), the first "Start building" check and a sixth run in
     "Templates end to end" in `tests/uat.mjs`.
-  - Step 2, waiting for the owner's go ahead: move the live site onto its
-    own template (its data, the publishing steps, the site's brief, a live
-    card on All sites). The owner switches its Pages to GitHub Actions first.
+  - Step 2 followed in Version 70.
+
+- Version 70 (24 November): The Art World Report moved into the console,
+  step 2 of 2, on the site's newest content (another conversation had
+  added three features and a Privacy page that morning; it was paused
+  while this was done, as only one session changes a site at a time).
+  - The site is now a site of its own template: `sites.json` lists it as
+    `site-5`, `kind: "starter"`, `template: "the-art-world-report"`,
+    `live: true` (a spare `site-6` card stays for the next site to build).
+    Its `assets/render.js`, `site.js`, `site.css`, `vendor/lenis.mjs` and
+    `tools/build.mjs` are the template's, file for file (`tests/run.mjs`
+    checks it); change the template and copy them over.
+  - Its data: `data/content.json` holds 12 items (`articles`: section as
+    `kicker`, `card` for its card, `summary` the standfirst,
+    `description`, `date`, research areas as `subjects`, `also`, `more1`
+    to `more3`, `folder` for news and reports, `body`, `sources`), the 5
+    research areas (`artists`), and the site's `mark` and `icons`.
+    `data/pages.json` has 13 pages (home, Features, the six sections,
+    Briefing, About, Contact, Privacy, Terms), each home section named for
+    the editor, and two site words ("On this subject", "More from the
+    Report"). Converted by `/tmp/awr/convert.py` (kept in this session
+    only); every page was compared with the live one word for word, link
+    for link and at both sizes before the switch.
+  - The template gained what the site needed, so new sites get it too: the
+    mark beside the name in the menu bar and footer (`brand`, `markOk`
+    lets only drawing tags through), favicons (`icons`), features in their
+    own folder (`folder`), a feature in other sections' lists (`also`),
+    the line on its card (`card`), the contents list ("In this article",
+    `anchored`, `contents`), More features or More reading (`moreOf`),
+    a note under a page opening (`note`, such as Last updated), Page text
+    with a standfirst and a body, links written `[words](address)` in
+    Cards, Feature cards for several sections (`only` with commas) or one
+    folder, and a Privacy page in the template's starting pages.
+  - Its publishing steps are the starter's (`pages.yml`, `check-copy.yml`,
+    `preview.yml`); the old pages, sitemap and scripts are gone, and
+    `CNAME` and `assets/logo/` are kept. The site has its own `CLAUDE.md`
+    and `README.md`.
+  - While it was being moved the owner merged a change on the live pages
+    (info@artiscope.co.uk as the site's email, and "Published by
+    Artiscope." in the footer's small print); both were carried into its
+    data and its brief before the switch.
+  - Fixed on the way: three news and report pages had a footer link
+    reading Industry News or Reports where Galleries should be.
+  - Decisions taken as suggested (the owner said go ahead without
+    choosing; each can be changed): the Briefing box opens the visitor's
+    email app, with a line saying so; smooth scrolling is kept in the
+    site; the logo is the live site's mark.
+  - Checks: the Art World Report block in `tests/run.mjs` (`awrDir` in
+    `tests/where.mjs`, or `AWR_DIR`), the "The Art World Report" area of
+    `tests/uat.mjs` (site-8 in the test list), and the template checks.
 
 Waiting for the owner:
 

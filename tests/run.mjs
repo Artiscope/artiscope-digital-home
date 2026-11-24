@@ -1,4 +1,4 @@
-import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir, tacDir } from "./where.mjs";
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir, tacDir, awrDir } from "./where.mjs";
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { parseCalendar, setAnswer, parseLog, safePhotoName, parseSlots, slotPhotoName, notePhotoName, cleanText, handle, SITES, cleanPages, cleanCss, cleanSettings } from "./home.mjs";
@@ -464,5 +464,25 @@ globalThis.fetch = realFetch;
   assert.ok(home.includes('<svg class="mark"') && home.includes("Behind Every Work, There Is a Story.") && !home.includes("noindex") && !/published by grove/i.test(home), "the home page has its nib, its words, no publisher line, and search engines are let in");
   const list = h.cleanSiteList({ sites: [{ id: "site-4", name: "The Art Correspondent", domain: "theartcorrespondent.com", repo: "Artiscope/the-art-correspondent", kind: "starter", template: "the-art-correspondent", live: true }] });
   assert.equal(list[0].template, "the-art-correspondent"); assert.ok(list[0].live, "listed as a live site of its own template");
+}
+// The Art World Report, moved into the console (Version 70): drawn by the template's own code, every address in its sitemap built
+{
+  const h = await import("./home.mjs"); const { wordsIn } = await import("./tools/site-words.mjs"); const { execFileSync } = await import("node:child_process");
+  const T = awrDir(), TPL = C_DIR + "/templates/the-art-world-report";
+  for (const f of ["assets/render.js", "assets/site.js", "assets/site.css", "assets/vendor/lenis.mjs", "tools/build.mjs"]) assert.equal(fs.readFileSync(T + "/" + f, "utf8"), fs.readFileSync(TPL + "/" + f, "utf8"), "The Art World Report's " + f + " is the template's");
+  assert.deepEqual(wordsIn([T + "/assets/render.js", T + "/assets/site.js"]).words, h.TTAWR_WORDS, "its words are the template's");
+  const out = "/tmp/run-awr"; fs.rmSync(out, { recursive: true, force: true }); execFileSync("python3", [T + "/tools/build.py", out], { stdio: "pipe" });
+  const c = JSON.parse(fs.readFileSync(T + "/data/content.json", "utf8"));
+  for (const a of c.articles.filter((x) => !x.hidden)) assert.ok(fs.existsSync(out + "/" + (a.folder || "features") + "/" + a.slug + "/index.html"), "a page for " + a.slug);
+  for (const a of c.artists.filter((x) => !x.hidden)) assert.ok(fs.existsSync(out + "/research/" + a.slug + "/index.html"), "a page for " + a.slug);
+  const locs = [...fs.readFileSync(out + "/sitemap.xml", "utf8").matchAll(/<loc>https:\/\/theartworldreport\.com\/([^<]*)<\/loc>/g)].map((m) => m[1]);
+  assert.ok(locs.length >= 30, "every page is in the sitemap");
+  for (const l of locs) assert.ok(fs.existsSync(out + "/" + l + "index.html"), "the address " + l + " is built");
+  assert.equal(fs.readFileSync(out + "/CNAME", "utf8"), "theartworldreport.com\n"); assert.equal(fs.readFileSync(T + "/CNAME", "utf8").trim(), "theartworldreport.com");
+  const home = fs.readFileSync(out + "/index.html", "utf8");
+  assert.ok(home.includes('<svg class="mark"') && home.includes('<mask id="mk1">') && home.includes('<mask id="mk2">') && home.includes("Understanding the <em>Business</em> of Art.") && !home.includes("noindex") && home.includes("assets/favicon.svg"), "the home page has its logo twice, its words and icons, and search engines are let in");
+  assert.ok(!/cdn\.jsdelivr|unpkg/.test(home) && fs.existsSync(out + "/assets/vendor/lenis.mjs"), "nothing loads from another company's script address");
+  const list = h.cleanSiteList({ sites: [{ id: "site-5", name: "The Art World Report", domain: "theartworldreport.com", repo: "Artiscope/the-art-world-report", kind: "starter", template: "the-art-world-report", live: true }] });
+  assert.equal(list[0].template, "the-art-world-report"); assert.ok(list[0].live, "listed as a live site of its own template");
 }
 console.log("ALL TESTS PASSED");

@@ -25,15 +25,32 @@
   function hrefOf(h) { h = String(h || ""); return /^(https?:|mailto:|\/)/i.test(h) ? h : "@@" + h; }
   // the site's own web address, always ending in a slash
   function addressOf(D) { var a = String(((D || {}).site || {}).address || ""); return /^https:\/\/[a-z0-9.-]+(\/[A-Za-z0-9._\/-]*)?$/.test(a) ? a.replace(/\/*$/, "/") : "https://example.org/"; }
+  // The site's logo, drawn beside its name: plain shapes only (rectangles, paths, circles and a mask), never
+  // anything that could run. {id} in it becomes a name of its own on each use, so the header's and the footer's
+  // masks do not clash. Anything else is left out, and the name shows alone.
+  var MARK_TAGS = /^(svg|defs|mask|g|rect|path|circle|ellipse|line|polyline|polygon)$/;
+  var MARK_ATTR = /^(d|x|y|x1|y1|x2|y2|cx|cy|r|rx|ry|width|height|points|fill|stroke|stroke-width|stroke-linejoin|stroke-linecap|transform|mask|id|opacity|viewBox)$/;
+  function markOk(m) {
+    m = String(m || ""); if (!m || m.length > 4000) return false;
+    var ok = true;
+    m.replace(/<\/?([a-zA-Z]+)([^>]*)>/g, function (all, tag, rest) {
+      if (!MARK_TAGS.test(tag)) ok = false;
+      String(rest).replace(/\/\s*$/, "").replace(/\s+([a-zA-Z-]+)="([^"<>]*)"/g, function (x, k, v) { if (!MARK_ATTR.test(k) || /script|javascript|url\((?!#)/i.test(v)) ok = false; return ""; }).replace(/\s+/g, "") && (ok = false);
+      return "";
+    });
+    return ok && !/<[^>]*$/.test(m) && m.replace(/<[^>]*>/g, "").trim() === "";
+  }
   // the small pause before each item of a row comes into view
   function delay(k, step, per) { var d = (k % per) * step; return d ? ' style="--d:' + d + 'ms"' : ""; }
 
   // The data file as one object, the same shape Artiscope Digital Home edits.
   // Features live at features/<name>/ and research areas at research/<name>/.
   var P = { articles: "features", artists: "research" };
+  // A feature lives at features/<name>/ unless it names another folder, such as industry-news or reports.
+  function folderOf(a) { var f = String((a && a.folder) || ""); return /^[a-z0-9-]{1,40}$/.test(f) ? f : P.articles; }
   function fromFiles(content) {
     var c = JSON.parse(JSON.stringify(content || {})), s = c.site || {};
-    return { site: { email: String(s.email || ""), address: String(s.address || ""), indexed: s.indexed === true },
+    return { site: { email: String(s.email || ""), address: String(s.address || ""), indexed: s.indexed === true, mark: String(s.mark || ""), icons: String(s.icons || "") },
       articles: Array.isArray(c.articles) ? c.articles : [], artists: Array.isArray(c.artists) ? c.artists : [] };
   }
 
@@ -55,6 +72,11 @@
     function socialHtml() {
       var all = opts.social && typeof opts.social === "object" ? opts.social : {}, out = Object.keys(all).map(function (k) { return all[k]; }).filter(function (x) { return x && /^https:\/\/[^\s<>"']+$/.test(x.href || ""); });
       return out.length ? '<nav class="foot-social" aria-label="' + W("sr.social", "Social media") + '">' + out.map(function (x) { return '<a href="' + esc(x.href) + '" rel="noopener">' + esc(x.label) + '</a>'; }).join("") + '</nav>\n' : "";
+    }
+    // the site's own small icons for browser tabs and phones, when its details name the folder they are in
+    function icons(r) {
+      var d = String(SITE.icons || ""); if (!/^assets\/([a-z0-9-]+\/)?$/.test(d)) return "";
+      return '<link rel="icon" href="' + r + d + 'favicon.svg" type="image/svg+xml">\n<link rel="icon" href="' + r + d + 'favicon-32.png" sizes="32x32" type="image/png">\n<link rel="apple-touch-icon" href="' + r + d + 'apple-touch-icon.png">\n';
     }
     function iconOk() { return typeof opts.favicon === "string" && /^assets\/images\/[A-Za-z0-9._-]{1,120}\.(png|jpe?g|svg|ico)$/.test(opts.favicon); }
 
@@ -116,11 +138,12 @@
       var depth = (urlPath.match(/\//g) || []).length, r = o.file ? "" : new Array(depth + 1).join("../");
       var go = function (h) { return esc(hrefOf(h).split("@@").join(r)); };
       var name = txt(NAME()), st = hd(), hon = shared("header")[1], home = r || "./";
+      var brand = function (n) { return markOk(SITE.mark) ? '<svg class="mark" viewBox="0 0 100 100" aria-hidden="true">' + SITE.mark.split("{id}").join("mk" + n) + '</svg><span>' + name + '</span>' : name; };
       main = String(main).split("@@").join(r);
       var links = pairs(get(st, "links", [])).map(function (x) { return '<a href="' + go(x.l[1]) + '" data-adh-b="links.' + x.k + '">' + txt(x.l[0]) + '</a>'; }).join("\n        ");
       var menuLinks = pairs(get(st, "menu", [])).map(function (x, i) { return '<a href="' + go(x.l[1]) + '" style="--i:' + i + '" data-adh-b="menu.' + x.k + '">' + txt(x.l[0]) + '</a>'; }).join("\n      ");
       var line = get(st, "line", "");
-      var nav = !hon || o.own ? "" : '<header class="site-header" id="nav">\n  <div class="wrap">\n    <a class="wordmark" href="' + home + '">' + name + '</a>\n    <div class="head-right">\n' +
+      var nav = !hon || o.own ? "" : '<header class="site-header" id="nav">\n  <div class="wrap">\n    <a class="wordmark" href="' + home + '">' + brand(1) + '</a>\n    <div class="head-right">\n' +
         (links ? '      <nav class="head-nav" aria-label="' + W("sr.nav", "Primary") + '">\n        ' + links + '\n      </nav>\n' : "") +
         (menuLinks ? '      <button class="menu-btn" id="menu-open" type="button" aria-expanded="false" aria-controls="menu">' + W("btn.menu", "Menu") + '</button>\n' : "") + '    </div>\n  </div>\n</header>\n' +
         (menuLinks ? '<div class="menu" id="menu" role="dialog" aria-modal="true" aria-label="' + W("btn.menu", "Menu") + '" aria-hidden="true">\n  <div class="menu-panel"></div>\n  <div class="menu-inner">\n' +
@@ -133,7 +156,7 @@
         return '        <div data-adh-b="columns.' + x.k + '">\n' + (c.title ? '          <p class="eyebrow">' + txt(c.title) + '</p>\n' : "") + (ls ? '          <ul>\n' + ls + '\n          </ul>\n' : "") + '        </div>';
       }).join("\n");
       var legal = get(f, "legal", ""), social = socialHtml(), tag = get(f, "tagline", "");
-      var foot = !ft[1] || o.own ? "" : '<footer class="site-footer foot" id="foot">\n  <div class="wrap">\n    <div class="foot-top">\n      <div class="foot-brand">\n        <a class="wordmark" href="' + home + '">' + name + '</a>\n' +
+      var foot = !ft[1] || o.own ? "" : '<footer class="site-footer foot" id="foot">\n  <div class="wrap">\n    <div class="foot-top">\n      <div class="foot-brand">\n        <a class="wordmark" href="' + home + '">' + brand(2) + '</a>\n' +
         (tag ? '        <p class="tag">' + txt(tag) + '</p>\n' : "") + (get(f, "email", true) !== false ? '        <a class="mail" href="mailto:' + esc(MAIL) + '">' + esc(MAIL) + '</a>\n' : "") + '      </div>\n' +
         (cols ? '      <div class="foot-cols">\n' + cols + '\n      </div>\n' : "") + '    </div>\n' + social + (legal ? '    <p class="legal">' + txt(legal).split("{year}").join(String(new Date().getFullYear())) + '</p>\n' : "") + '  </div>\n</footer>';
       var noindex = SITE.indexed !== true ? '<meta name="robots" content="noindex, nofollow">\n' : "";
@@ -141,7 +164,7 @@
         '<title>' + esc(title) + '</title>\n<meta name="description" content="' + esc(desc) + '">\n<link rel="canonical" href="' + esc(SITE_URL + urlPath) + '">\n' +
         '<meta property="og:title" content="' + esc(title) + '">\n<meta property="og:description" content="' + esc(desc) + '">\n' +
         '<meta property="og:type" content="' + (kind === "article" ? "article" : "website") + '">\n<meta property="og:url" content="' + esc(SITE_URL + urlPath) + '">\n' +
-        '<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' +
+        (iconOk() ? "" : icons(r)) + '<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' +
         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:ital@0;1&family=Libre+Franklin:wght@400;500;600&display=swap">\n' +
         (o.head || "") + (iconOk() ? '<link rel="icon" href="' + r + opts.favicon + '">\n' : "") +
         '<link rel="stylesheet" href="' + r + 'assets/site.css">\n' + (THEME || "") + secCssTag() + wordsTag() +
@@ -176,9 +199,20 @@
 
     // ----- the six sections of this design -----
     function band(st) { return { grey: " band-grey", dark: " band-dark" }[get(st, "band", "")] || ""; }
+    // A card's line may lead somewhere: [some words](contact/) becomes a link on those words.
+    function withLinks(t) {
+      return txt(t).replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, function (all, words, h) { h = h.replace(/&amp;/g, "&"); return addrOk(h) ? '<a href="' + esc(hrefOf(h)) + '">' + words + '</a>' : all; });
+    }
     function featureCard(a, k) {
       var kick = String(a.kicker || "").trim();
-      return '<article class="card" data-r' + delay(k, 90, 2) + '>' + (kick ? '<p class="eyebrow">' + txt(kick) + '</p>' : "") + '<h3><a href="@@' + P.articles + '/' + esc(a.slug) + '/">' + txt(String(a.title || "").trim() || "[Feature title]") + '</a></h3></article>';
+      return '<article class="card" data-r' + delay(k, 90, 2) + '>' + (kick ? '<p class="eyebrow">' + txt(kick) + '</p>' : "") + '<h3><a href="@@' + folderOf(a) + '/' + esc(a.slug) + '/">' + txt(String(a.title || "").trim() || "[Feature title]") + '</a></h3>' + (String(a.card || "").trim() ? '<p class="muted">' + txt(a.card) + '</p>' : "") + '</article>';
+    }
+    // Section names, as typed in a setting: several are separated by commas.
+    function sectionNames(v) { return String(v || "").split(",").map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean); }
+    // A feature is in a section when that is its own section, or one of the others it is also listed under.
+    function inSections(a, names) {
+      var mine = [a.kicker].concat(Array.isArray(a.also) ? a.also : []).map(function (x) { return String(x || "").trim().toLowerCase(); });
+      return names.some(function (x) { return mine.indexOf(x) >= 0; });
     }
     function cardGrid(list) { return '<div class="grid-2">\n' + list.map(function (a, k) { return '      ' + featureCard(a, k); }).join("\n") + '\n    </div>'; }
     // The words at the top of a page: full screen on the home page, smaller on the others.
@@ -190,6 +224,7 @@
       var hero = size === "large", id = esc((ctx && ctx.id) || "opening");
       return '<section class="' + (hero ? "hero" : "page-head" + (size === "tall" ? " page-tall" : "")) + '" id="' + id + '">\n  <div class="wrap">\n' +
         (e ? '    <p class="eyebrow" data-r="fade">' + txt(e) + '</p>\n' : "") + (h ? '    <h1 data-lines style="--s:140ms">' + ital(h) + '</h1>\n' : "") +
+        (String(get(st, "note", "") || "").trim() ? '    <p class="byline" data-r style="--d:400ms">' + txt(st.note) + '</p>\n' : "") +
         (t ? '    <p class="lead muted' + (get(st, "wide", false) === true ? " lead-wide" : "") + '" data-words style="--d:' + (hero ? 500 : 400) + 'ms">' + txt(t) + '</p>\n' : "") +
         (topics.length ? '    <ul class="topics" data-r style="--d:400ms">\n' + topics.map(function (x) { return '      <li>' + txt(x.trim()) + '</li>'; }).join("\n") + '\n    </ul>\n' : "") +
         (get(st, "email", false) === true ? '    <p data-r style="--d:600ms"><a class="biglink serif" href="mailto:' + esc(MAIL) + '">' + esc(MAIL) + '</a></p>\n' : "") +
@@ -198,8 +233,8 @@
     };
     // Cards for the features: every feature, or one section's, or one research area's. Newest first.
     S["awr-features"] = function (st, ctx) {
-      var only = String(get(st, "only", "") || "").trim().toLowerCase(), area = String(get(st, "area", "") || "").trim(), n = Math.max(1, Math.min(48, Number(get(st, "count", 6)) || 6));
-      var list = ARTICLES.filter(function (a) { return (!only || String(a.kicker || "").trim().toLowerCase() === only) && (!area || subjectsOf(a).some(function (x) { return x.slug === area; })); });
+      var only = sectionNames(get(st, "only", "")), folder = String(get(st, "folder", "") || "").trim(), area = String(get(st, "area", "") || "").trim(), n = Math.max(1, Math.min(48, Number(get(st, "count", 6)) || 6));
+      var list = ARTICLES.filter(function (a) { return (!only.length || inSections(a, only)) && (!folder || folderOf(a) === folder) && (!area || subjectsOf(a).some(function (x) { return x.slug === area; })); });
       var shown = get(st, "every", true) === false ? list.slice(0, n) : list, e = get(st, "eyebrow", ""), h = get(st, "heading", "");
       var empty = get(st, "empty", "") || "[Features appear here once you add them]";
       return '<section class="band' + band(st) + (get(st, "close", false) === true ? " band-top0" : "") + '" id="' + esc((ctx && ctx.id) || "features") + '">\n  <div class="wrap">\n' +
@@ -213,7 +248,7 @@
       else rows = liveRows(get(st, "cards", [])).filter(function (r) { return r.x.title || r.x.text; }).map(function (r) { return { title: r.x.title || "", text: r.x.text || "", href: r.x.href, tag: ' data-adh-b="cards.' + r.i + '"' }; });
       var cards = rows.map(function (c, k) {
         var t = txt(c.title), head = addrOk(c.href) ? '<a href="' + esc(hrefOf(c.href)) + '">' + t + '</a>' : t;
-        return '      <article class="card card-plain" data-r' + delay(k, 90, 3) + c.tag + '><h3>' + head + '</h3>' + (String(c.text || "").trim() ? '<p class="muted">' + txt(c.text) + '</p>' : "") + '</article>';
+        return '      <article class="card card-plain" data-r' + delay(k, 90, 3) + c.tag + '><h3>' + head + '</h3>' + (String(c.text || "").trim() ? '<p class="muted">' + withLinks(c.text) + '</p>' : "") + '</article>';
       }).join("\n");
       return '<section class="band' + band(st) + '" id="' + esc((ctx && ctx.id) || "cards") + '">\n  <div class="wrap">\n' +
         (e ? '    <p class="eyebrow" data-r="fade">' + txt(e) + '</p>\n' : "") + (h ? '    <h2 class="h-section" data-lines>' + ital(h) + '</h2>\n' : "") +
@@ -236,16 +271,11 @@
       return '<section class="band' + band(st) + '" id="' + esc((ctx && ctx.id) || "links") + '">\n  <div class="wrap">\n' + (e ? '    <p class="eyebrow" data-r="fade">' + txt(e) + '</p>\n' : "") +
         (rows.length ? '    ' + linkList(rows) + '\n' : '    <p class="muted empty" data-r>[Links appear here once you add them]</p>\n') + '  </div>\n</section>';
     };
-    // Words in the reading column: a larger first paragraph, paragraphs, then parts each with a heading.
+    // Words in the reading column, with headings, lists and links, such as Privacy and Terms.
     S["awr-text"] = function (st, ctx) {
-      var ps = function (t) { return String(t || "").split(/\n\s*\n/).map(function (x) { return x.trim(); }).filter(Boolean).map(function (x) { return '<p>' + txt(x).replace(/\n/g, "<br>") + '</p>'; }).join(""); };
-      var lines = arr(st, "paras").filter(function (x) { return typeof x === "string" && x.trim(); });
-      var sf = String(get(st, "standfirst", "") || "").trim(), h = get(st, "heading", "");
-      var parts = liveRows(get(st, "parts", [])).filter(function (r) { return r.x.heading || r.x.text; }).map(function (r) {
-        return '<div class="prose-part" data-adh-b="parts.' + r.i + '">' + (r.x.heading ? '<h2>' + txt(r.x.heading) + '</h2>' : "") + ps(r.x.text) + '</div>';
-      }).join("");
-      return '<section class="band' + band(st) + ' band-text" id="' + esc((ctx && ctx.id) || "text") + '">\n  <div class="wrap">\n    <div class="prose" data-r>' + (h ? '<h2 class="prose-top">' + ital(h) + '</h2>' : "") + (sf ? '<p class="standfirst">' + txt(sf) + '</p>' : "") +
-        lines.map(function (x) { return '<p>' + txt(x.trim()).replace(/\n/g, "<br>") + '</p>'; }).join("") + parts + '</div>\n  </div>\n</section>';
+      var sf = String(get(st, "standfirst", "") || "").trim(), body = String(get(st, "body", "") || "");
+      if (!body.replace(/<[^>]*>/g, "").trim() && !sf) body = "<p>[Write the words for this page here]</p>";
+      return '<section class="article-body" id="' + esc((ctx && ctx.id) || "text") + '">\n  <div class="wrap">\n    <div class="prose">\n' + (sf ? '<p class="standfirst">' + txt(sf) + '</p>\n' : "") + body + '\n    </div>\n  </div>\n</section>';
     };
 
     // ----- sections any page can use, the same set as the other sites, drawn in this site's look -----
@@ -463,7 +493,7 @@
     function sourceList(list) {
       var rows = (list || []).filter(function (x) { return x && String(x.title || "").trim(); });
       if (!rows.length) return opts.mark ? '\n<div class="feature-sources">\n<h2>' + W("item.sources", "Sources") + '</h2>\n<p class="muted">[Add the sources this feature rests on]</p>\n</div>' : "";
-      return '\n<div class="feature-sources">\n<h2>' + W("item.sources", "Sources") + '</h2>\n<ul class="sources">\n' + rows.map(function (x, i) {
+      return '\n<div class="feature-sources">\n<h2 id="sources">' + W("item.sources", "Sources") + '</h2>\n<ul class="sources">\n' + rows.map(function (x, i) {
         var rest = [x.publisher, x.date].filter(function (y) { return String(y || "").trim(); }).map(function (y) { return ", " + txt(y); }).join("");
         return '<li data-adh-b="sources.' + i + '">' + (/^https?:\/\//i.test(String(x.href || "")) ? '<a href="' + esc(x.href) + '">' + txt(x.title) + '</a>' : txt(x.title)) + rest + '</li>';
       }).join("\n") + '\n</ul>\n</div>';
@@ -478,25 +508,51 @@
       var k = String(kick || "").trim().toLowerCase(), hit = "";
       if (k) Object.keys(PAGES.pages || {}).forEach(function (key) {
         var pg = PAGES.pages[key];
-        if (!hit && (pg.sections || []).some(function (x) { return x && x.visible !== false && x.type === "awr-features" && String((x.settings || {}).only || "").trim().toLowerCase() === k; })) hit = "@@" + String(pg.path || "").replace(/index\.html$/, "");
+        if (!hit && (pg.sections || []).some(function (x) { var o = sectionNames((x.settings || {}).only); return x && x.visible !== false && x.type === "awr-features" && o.length === 1 && o[0] === k; })) hit = "@@" + String(pg.path || "").replace(/index\.html$/, "");
       });
       return hit || (k ? "@@" + P.articles + "/" : "");
     }
     function bandLinks(eyebrow, rows, mk) {
       return rows.length ? '\n<section class="band band-grey">\n  <div class="wrap">\n    <p class="eyebrow" data-r="fade">' + eyebrow + '</p>\n    ' + linkList(rows) + '\n  </div>\n</section>' : (opts.mark ? mk : "");
     }
+    // Headings in a feature's words get an anchor of their own when they have none, so the contents list can lead to them.
+    function anchored(body) {
+      var used = {};
+      return String(body).replace(/<h2(\s[^>]*)?>([\s\S]*?)<\/h2>/g, function (all, attrs, inner) {
+        var m = /\sid="([^"]+)"/.exec(attrs || "");
+        if (m) { used[m[1]] = 1; return all; }
+        var id = slug(inner.replace(/<[^>]*>/g, "")) || "part", k = id, n = 2; while (used[k]) k = id + "-" + n++; used[k] = 1;
+        return '<h2' + (attrs || "") + ' id="' + k + '">' + inner + '</h2>';
+      });
+    }
+    function contents(body, sources) {
+      var rows = []; String(body).replace(/<h2[^>]*\sid="([^"]+)"[^>]*>([\s\S]*?)<\/h2>/g, function (all, id, inner) { rows.push([id, inner.replace(/<[^>]*>/g, "").trim()]); return ""; });
+      if (sources) rows.push(["sources", Wt("item.sources", "Sources")]);
+      return rows.length ? '    <nav class="toc" aria-label="' + W("item.toc", "In this article") + '">\n      <p class="eyebrow">' + W("item.toc", "In this article") + '</p>\n      <ul>\n' +
+        rows.map(function (x) { return '        <li><a href="#' + esc(x[0]) + '">' + txt(x[1]) + '</a></li>'; }).join("\n") + '\n      </ul>\n    </nav>\n' : "";
+    }
+    // More reading at the side: the three chosen for this feature, or the next ones in the list.
+    function moreOf(a) {
+      var picked = [a.more1, a.more2, a.more3].map(function (x) { return x && articleOf(String(x)); }).filter(function (x, i, all) { return x && x !== a && x.hidden !== true && all.indexOf(x) === i; });
+      if (!picked.length) picked = ARTICLES.filter(function (x) { return x !== a; }).slice(0, 3);
+      return picked.length ? '    <aside class="more">\n      <p class="eyebrow">' + (folderOf(a) === P.articles ? W("item.more", "More features") : W("item.more-other", "More reading")) + '</p>\n      <ul>\n' + picked.map(function (x) {
+        var k = String(x.kicker || "").trim();
+        return '        <li><a href="@@' + folderOf(x) + '/' + esc(x.slug) + '/">' + (k ? '<span class="sec">' + txt(k) + '</span>' : "") + txt(or(x.title, "[Feature title]")) + '</a></li>';
+      }).join("\n") + '\n      </ul>\n    </aside>\n' : "";
+    }
     function articlePage(a) {
       var subs = subjectsOf(a), kick = String(a.kicker || "").trim(), date = String(a.date || "").trim();
       var label = kick ? '<a href="' + sectionHref(kick) + '">' + txt(kick) + '</a>' : "";
-      var body = String(a.body || "").replace(/<[^>]*>/g, "").trim() ? a.body : "<p>[Write the feature here]</p>";
+      var body = anchored(String(a.body || "").replace(/<[^>]*>/g, "").trim() ? a.body : "<p>[Write the feature here]</p>"), srcs = sourceList(a.sources);
       var main = '<article>\n' + M('<section class="page-head page-head-article">\n  <div class="wrap">\n' + (label ? '    <p class="eyebrow" data-r="fade">' + label + '</p>\n' : "") +
         '    <h1 class="h-article" data-lines>' + txt(or(a.title, "[Feature title]")) + '</h1>\n' +
         '    <p class="byline" data-r style="--d:400ms">' + (date ? W("item.byline-date", "{site} · {date}", { site: txt(NAME()), date: txt(date) }) : W("item.byline", "{site}", { site: txt(NAME()) })) + '</p>\n  </div>\n</section>', "words") + '\n' +
-        M('<section class="article-body">\n  <div class="wrap">\n    <div class="prose">\n<p class="standfirst">' + txt(or(a.summary, "[One or two sentences that open the feature]")) + '</p>\n\n' + body + M(sourceList(a.sources), "sources") + '\n    </div>\n  </div>\n</section>', "body") + '\n</article>' +
+        M('<section class="article-body">\n  <div class="wrap">\n    <div class="article-grid">\n' + contents(body, /<ul class="sources">/.test(srcs)) +
+          '    <div class="prose">\n<p class="standfirst">' + txt(or(a.summary, "[One or two sentences that open the feature]")) + '</p>\n\n' + body + M(srcs, "sources") + '\n    </div>\n' + moreOf(a) + '    </div>\n  </div>\n</section>', "body") + '\n</article>' +
         bandLinks(W("item.related-areas", "Related research areas"), subs.map(function (x) { return { label: or(x.name, "[Research area]"), href: "@@" + P.artists + "/" + x.slug + "/" }; }),
           '\n<section class="band band-grey"><div class="wrap"><p class="eyebrow">' + W("item.related-areas", "Related research areas") + '</p><p class="muted empty">[Choose the research areas this feature is filed under]</p></div></section>');
       main = tplWrap("article", a.slug, main); AO_KIND = "article";
-      return page(P.articles + "/" + a.slug + "/index.html", or(a.title, "[Feature title]") + " | " + NAME(), String(a.description || "").trim() || String(a.summary || ""), main);
+      return page(folderOf(a) + "/" + a.slug + "/index.html", or(a.title, "[Feature title]") + " | " + NAME(), String(a.description || "").trim() || String(a.summary || ""), main);
     }
     // A research area: its name and topics, every feature filed under it, then the sections it relates to.
     function artistPage(x) {
@@ -559,7 +615,7 @@
         var k = Object.keys(PAGES.pages || {}).find(function (x) { return PAGES.pages[x].path === path + (path && !/\/$/.test(path) ? "/" : "") + "index.html"; });
         if (k) return { kind: "page", key: k };
         var m = /^(features|research)\/?$/.exec(path), lk = m && (m[1] === P.articles ? "articles" : "artists"); if (m && listOn(lk)) return { kind: "list", key: lk };
-        if ((m = /^features\/([a-z0-9-]+)\/?$/.exec(path)) && articleOf(m[1])) return { kind: "article", key: m[1] };
+        if ((m = /^([a-z0-9-]+)\/([a-z0-9-]+)\/?$/.exec(path)) && articleOf(m[2]) && folderOf(articleOf(m[2])) === m[1]) return { kind: "article", key: m[2] };
         if ((m = /^research\/([a-z0-9-]+)\/?$/.exec(path)) && artistOf(m[1])) return { kind: "artist", key: m[1] };
         return null;
       },

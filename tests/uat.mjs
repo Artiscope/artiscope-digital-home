@@ -1,4 +1,4 @@
-import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir, tacDir, goTab } from "./where.mjs";
+import { W_DIR, G_DIR, C_DIR, FIX, chromeOptions, sadDir, tacDir, awrDir, goTab } from "./where.mjs";
 // User acceptance run: the real console, signed in, talking to the real server code
 // over an in-memory GitHub seeded from both sites, with the real sites as previews.
 // Each case is recorded as passed or failed with a note; nothing stops the run.
@@ -32,7 +32,7 @@ for (const [f, t] of Object.entries(pbFiles)) { fs.mkdirSync(path.dirname("/tmp/
 execFileSync("python3", ["/tmp/uat-pb-src/tools/build.py", "/tmp/uat-pb"]);
 fs.writeFileSync("/tmp/uat-pb/assets/site.js", fs.readFileSync("/tmp/uat-pb/assets/site.js", "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
 const CR = "Artiscope/artiscope-digital-home", PB = "Artiscope/practice-build";
-const siteList = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4" }, { id: "site-5", name: "Site 5" }, { id: "site-6", name: "Old Notes", domain: "oldnotes.org", repo: "Artiscope/old-notes", kind: "outside" }, { id: "site-7", name: "The Art Correspondent", domain: "theartcorrespondent.com", repo: "Artiscope/the-art-correspondent", kind: "starter", template: "the-art-correspondent", live: true }] };
+const siteList = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4" }, { id: "site-5", name: "Site 5" }, { id: "site-6", name: "Old Notes", domain: "oldnotes.org", repo: "Artiscope/old-notes", kind: "outside" }, { id: "site-7", name: "The Art Correspondent", domain: "theartcorrespondent.com", repo: "Artiscope/the-art-correspondent", kind: "starter", template: "the-art-correspondent", live: true }, { id: "site-8", name: "The Art World Report", domain: "theartworldreport.com", repo: "Artiscope/the-art-world-report", kind: "starter", template: "the-art-world-report", live: true }] };
 
 // ----- the server, with GitHub in memory -----
 let signedIn = "tester@artiscope.co.uk";
@@ -43,11 +43,14 @@ const { handle, STARTER_KINDS, useSiteList, GAM_WORDS } = await import("./home.m
 const { makeGitHub } = await import("./fakegit.mjs");
 const files = (dir, list) => Object.fromEntries(list.filter((f) => fs.existsSync(dir + f)).map((f) => [f, fs.readFileSync(dir + f, "utf8")]));
 const pics = (dir, sub) => Object.fromEntries(fs.readdirSync(dir + sub).map((f) => [sub + "/" + f, "picture"]));
-const WR = "Artiscope/World-art-review", GR = "Artiscope/global-art-monitor", SR = "Artiscope/street-art-dispatch", TR = "Artiscope/the-art-correspondent";
+const WR = "Artiscope/World-art-review", GR = "Artiscope/global-art-monitor", SR = "Artiscope/street-art-dispatch", TR = "Artiscope/the-art-correspondent", AR = "Artiscope/the-art-world-report";
 // The Art Correspondent, as its repository holds it and built as publishing builds it
 const TACDIR = tacDir() + "/";
 fs.rmSync("/tmp/uat-tac", { recursive: true, force: true }); execFileSync("python3", [TACDIR + "tools/build.py", "/tmp/uat-tac"]);
 fs.writeFileSync("/tmp/uat-tac/assets/site.js", fs.readFileSync("/tmp/uat-tac/assets/site.js", "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
+const AWRDIR = awrDir() + "/";
+fs.rmSync("/tmp/uat-awr", { recursive: true, force: true }); execFileSync("python3", [AWRDIR + "tools/build.py", "/tmp/uat-awr"]);
+fs.writeFileSync("/tmp/uat-awr/assets/site.js", fs.readFileSync("/tmp/uat-awr/assets/site.js", "utf8").split('"https://artiscope.github.io"').join('"' + consoleAt + '"'));
 const SADDIR = sadDir() + "/", sad0 = JSON.parse(fs.readFileSync(SADDIR + "data/content.json", "utf8"));
 const hub = makeGitHub({
   [WR]: { ...files(WARDIR, ["src/index.html", "tools/build_site.py", "content/site.json", "content/pages.json", "content/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(WARDIR, "images") },
@@ -55,6 +58,7 @@ const hub = makeGitHub({
   [CR]: { "sites.json": JSON.stringify(siteList), ...Object.fromEntries(Object.entries(starterFiles).map(([f, t]) => ["starter/" + f, t])), ...tsadFiles },
   [PB]: pbFiles,
   [TR]: files(TACDIR, ["data/content.json", "data/pages.json", "data/theme.json", "data/files.json", "assets/render.js", "assets/site.css", "assets/site.js", "tools/build.mjs", "tools/build.py"]),
+  [AR]: files(AWRDIR, ["data/content.json", "data/pages.json", "data/theme.json", "data/files.json", "assets/render.js", "assets/site.css", "assets/site.js", "assets/vendor/lenis.mjs", "tools/build.mjs", "tools/build.py"]),
   [GR]: { ...files(GAMDIR, ["data/content.json", "data/sales.json", "data/images.json", "data/pages.json", "data/theme.json", "image-slots.json", "AGENT-LOG.md", "CONTENT-CALENDAR.md"]), ...pics(GAMDIR, "assets/images") },
 });
 let breakGitHub = false;
@@ -112,6 +116,7 @@ await page.route("**/*", async (route) => {
   if (url.startsWith("https://globalartmonitor.com/")) return serveSite("/tmp/uat-gam", route, url);
   if (url.startsWith("https://streetartdispatch.com/")) return serveSite("/tmp/uat-sad", route, url);
   if (url.startsWith("https://theartcorrespondent.com/")) return serveSite("/tmp/uat-tac", route, url);
+  if (url.startsWith("https://theartworldreport.com/")) return serveSite("/tmp/uat-awr", route, url);
   if (url.startsWith("https://artiscope.github.io/practice-build/")) return serveSite("/tmp/uat-pb", route, url.replace("https://artiscope.github.io/practice-build/", "https://pb.local/"));
   if (url.startsWith("https://artiscope.github.io/grove-prints/") && fs.existsSync("/tmp/uat-new")) return serveSite("/tmp/uat-new", route, url.replace("https://artiscope.github.io/grove-prints/", "https://new.local/"));
   return route.abort();
@@ -146,8 +151,8 @@ if (process.env.AUDIT) {
 // =============== 1. Getting in ===============
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
-await check("Signed-in console opens on All sites, with all eight sites, The Art Correspondent, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(); must(n === 8, n + " sites shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 69"), "no version"));
+await check("Signed-in console opens on All sites, with every site, The Art Correspondent, The Art World Report, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(), want = 4 + siteList.sites.filter((x) => x.kind !== "outside").length; must(n === want, n + " sites shown, not " + want); for (const id of ["site-7", "site-8", "practice-build"]) must(await page.locator('[data-act="open-site"][data-site="' + id + '"]').count(), id + " is not shown"); await shot("01-home"); });
+await check("Version number is shown", async () => must((await text("body")).includes("Version 70"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -2261,6 +2266,42 @@ await check("A subject page lists its stories, and Exhibitions opens as a list m
   await page.click('.sec[data-where="page"][data-id="exhibitions-list"]'); await settle(600);
   must((await page.inputValue('input[data-pf="heading"]')) === "Shows and installations in our reporting", "the list's settings did not open");
   await shot("132-tac-exhibitions");
+});
+
+// =============== 19b. The Art World Report, moved into the console ===============
+area = "The Art World Report";
+const awrFrame = () => page.frames().filter((f) => f.url().startsWith("https://theartworldreport.com")).pop();
+const awrText = async () => { const f = awrFrame(); return f ? await f.innerText("body").catch(() => "") : ""; };
+await check("The Art World Report opens in the editor in its own design, with Features and Research areas in the page picker", async () => {
+  await openSite("site-8"); await settle(1200);
+  const t = await awrText(); must(t.includes("Understanding the Business of Art.") && t.includes("News and reports.") && t.includes("How Auction Guarantees Work") && t.includes("Gallery business"), "home: " + t.replace(/\s+/g, " ").slice(0, 300));
+  await page.click(".ed-pagebtn"); await settle(400); const pp = await text(".pp");
+  const nItems = JSON.parse(fs.readFileSync(AWRDIR + "data/content.json", "utf8")).articles.length, nPages = Object.keys(JSON.parse(fs.readFileSync(AWRDIR + "data/pages.json", "utf8")).pages).length;
+  must(pp.replace(/\s+/g, " ").includes("Features " + nItems) && pp.includes("Research areas") && pp.replace(/\s+/g, " ").includes("Pages " + nPages), "picker: " + pp.replace(/\s+/g, " ").slice(0, 300)); await page.keyboard.press("Escape");
+  await shot("135-awr-home");
+});
+await check("A feature shows its section, contents list, More features and research areas, and a changed standfirst saves to the site", async () => {
+  await page.selectOption(".pagepick", "a-how-auction-guarantees-work"); await settle(1800);
+  const t = (await awrText()).toLowerCase();
+  must(t.includes("how auction guarantees work") && t.includes("in this article") && t.includes("more features") && t.includes("related research areas") && t.includes("the art world report · 24 november 2026") && t.includes("market analysis"), "feature: " + t.replace(/\s+/g, " ").slice(0, 300));
+  await page.click('.sec[data-where="item"][data-id="words"]'); await page.fill('[data-pf="summary"]', "Changed by Tess."); await settle(800);
+  must((await awrText()).includes("Changed by Tess."), "the change is not in the preview");
+  await shot("136-awr-feature");
+  await liveSave();
+  const c = read(AR, "data/content.json"), a = c.articles.find((x) => x.slug === "how-auction-guarantees-work"), was = JSON.parse(fs.readFileSync(AWRDIR + "data/content.json", "utf8")).articles.find((x) => x.slug === "how-auction-guarantees-work");
+  must(a.summary === "Changed by Tess." && a.more1 === was.more1 && a.card === was.card && JSON.stringify(a.subjects) === JSON.stringify(was.subjects) && a.body === was.body, "saved: " + JSON.stringify(a).slice(0, 300));
+  must(JSON.stringify(c.site) === JSON.stringify(JSON.parse(fs.readFileSync(AWRDIR + "data/content.json", "utf8")).site), "the site's details, logo included, did not stay as they were");
+});
+await check("A news story opens in its own folder, a research area lists its features, and Privacy opens as page text", async () => {
+  await page.selectOption(".pagepick", "a-new-york-november-2026-auctions"); await settle(1800);
+  let t = (await awrText()).toLowerCase(); must(t.includes("more from the report") && t.includes("industry news") && !t.includes("more features"), "news: " + t.replace(/\s+/g, " ").slice(0, 300));
+  await page.selectOption(".pagepick", "artist-auction-industry"); await settle(1800);
+  t = await awrText(); must(t.includes("Auction industry") && /on this subject/i.test(t) && t.includes("How Auction Guarantees Work"), "research: " + t.replace(/\s+/g, " ").slice(0, 300));
+  await page.selectOption(".pagepick", "page-privacy"); await settle(1800);
+  t = await awrText(); must(t.includes("Privacy") && /last updated/i.test(t), "privacy: " + t.replace(/\s+/g, " ").slice(0, 200));
+  await page.click('.sec[data-where="page"][data-id="privacy-2"]'); await settle(600);
+  must((await text(".ed-right")).includes("Words"), "the page text's settings did not open");
+  await shot("137-awr-privacy");
 });
 
 // =============== 20. A shop on Shopify: products and prices from the console ===============

@@ -21,7 +21,16 @@
     },
     {
       "id": "site-5",
-      "name": "Site 5",
+      "name": "The Art World Report",
+      "domain": "theartworldreport.com",
+      "repo": "Artiscope/the-art-world-report",
+      "kind": "starter",
+      "template": "the-art-world-report",
+      "live": true
+    },
+    {
+      "id": "site-6",
+      "name": "Site 6",
       "domain": "",
       "repo": "",
       "live": false

@@ -405,7 +405,7 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
   assert.equal(d.spec.templates.find((x) => x.id === T).global, "TAWR");
   let plan = d.plan;
-  assert.deepEqual(Object.keys(plan.pages.pages).sort(), ["about", "briefing", "contact", "features", "home", "section"]);
+  assert.deepEqual(Object.keys(plan.pages.pages).sort(), ["about", "briefing", "contact", "features", "home", "privacy", "section"]);
   assert.deepEqual(plan.pages.pages.home.sections.map((x) => x.type), ["awr-opening", "awr-features", "awr-cards", "awr-briefing", "awr-cards"]);
   assert.equal(plan.pages.shared.header.settings.name, "The Ledger Room");
   assert.equal(plan.pages.shared.footer.settings.tagline, "Notes on the art trade");
@@ -413,7 +413,7 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   assert.deepEqual(plan.theme.colours, { page: "#FFFFFF", band: "#191917", accent: "#F3F3F3", ink: "#191917" }); assert.deepEqual(plan.theme.fonts, { display: "Libre Caslon Text", text: "Libre Franklin", sans: "Libre Franklin" });
   { const all = JSON.stringify({ ...plan.pages, _how_to_edit: "" }) + JSON.stringify(plan.content), m = all.match(NOT_OURS); assert.ok(!m, "nothing of the site it was made from: " + (m && all.slice(Math.max(0, m.index - 60), m.index + 40))); }
   for (const pg of Object.values(plan.pages.pages)) for (const s of pg.sections) for (const [k, v] of Object.entries(s.settings)) {
-    if (typeof v === "string" && v && /^(heading|text)$/.test(k)) assert.ok(/^\[.*\]$/.test(v), s.id + "." + k + " = " + v);
+    if (typeof v === "string" && v && /^(heading|text)$/.test(k) && v !== "Privacy") assert.ok(/^\[.*\]$/.test(v), s.id + "." + k + " = " + v);
   }
   ok("The Art World Report plan: home, features, a section, the newsletter, About and Contact, with placeholders and its own look");
   d = await as(ADMIN, { action: "createSite", site: "site-16", choices: { name: "The Ledger Room", tagline: "Notes on the art trade", email: "hello@ledgerroom.org", template: T } });
@@ -422,16 +422,18 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   const card = h.SITES.find((x) => x.id === "site-16");
   assert.ok(card.sectionKinds["awr-features"] && card.sectionKinds.columns && card.items.article.label === "Feature" && card.items.artist.label === "Research area");
   const af = card.items.article.parts.flatMap((p) => p.fields.map((f) => f.name)), rf = card.items.artist.parts.flatMap((p) => p.fields.map((f) => f.name));
-  assert.ok(["kicker", "summary", "description", "date", "subjects", "body", "sources"].every((x) => af.includes(x)) && !af.includes("image"), "a feature: section, standfirst, search words, date, research areas, words and sources");
+  assert.ok(["kicker", "summary", "description", "date", "subjects", "body", "sources", "card", "folder", "also", "more1", "more2", "more3"].every((x) => af.includes(x)) && !af.includes("image"), "a feature: section, standfirst, search words, date, research areas, words, sources, card line, folder, other sections and More reading");
   assert.ok(["name", "line", "description", "topics", "related"].every((x) => rf.includes(x)), "a research area: name, short line, search words, topics and related sections");
   assert.deepEqual(card.paths, { articles: "features", artists: "research" });
   d = await as(ADMIN, { action: "pages", site: "site-16" }); assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
   assert.ok(d.pages.pages.home && d.kinds["awr-briefing"] && d.paths.articles === "features", "it opens in the editor with its own sections");
   const K = card.items, base = { site: { email: "hello@ledgerroom.org", address: "https://artiscope.github.io/the-ledger-room/", indexed: false }, articles: [], artists: [] };
   let r = h.starterFromEditor({ artists: [{ slug: "dealers", name: "Dealers", line: "Pricing, placement", description: "Our notes on dealers.", topics: ["Pricing", "Placement"], related: [{ label: "[A section]", href: "section/" }], hidden: false }],
-    articles: [{ slug: "first", title: "The first note", kicker: "[A section]", summary: "It begins here.", description: "For search.", date: "24 November 2026", subjects: ["dealers"], body: "<p>Words with <em>emphasis</em>.</p>", sources: [{ title: "A report", publisher: "A publisher, 2026", href: "https://example.org/report" }], hidden: false }] }, base, K);
+    articles: [{ slug: "first", title: "The first note", kicker: "[A section]", card: "A line for its card.", summary: "It begins here.", description: "For search.", date: "24 November 2026", subjects: ["dealers"], body: "<h2>The start</h2><p>Words with <em>emphasis</em>.</p>", sources: [{ title: "A report", publisher: "A publisher, 2026", href: "https://example.org/report" }], more1: "yearly", hidden: false },
+      { slug: "yearly", title: "The yearly figures", kicker: "Reports", folder: "reports", also: ["[A section]"], summary: "Numbers.", date: "24 November 2026", subjects: [], body: "<p>Figures.</p>", sources: [], hidden: false }] }, base, K);
   const f0 = r.content.articles[0], a0 = r.content.artists[0];
-  assert.deepEqual([f0.kicker, f0.subjects, f0.description, f0.date], ["[A section]", ["dealers"], "For search.", "24 November 2026"]);
+  assert.deepEqual([f0.kicker, f0.subjects, f0.description, f0.date, f0.card, f0.more1], ["[A section]", ["dealers"], "For search.", "24 November 2026", "A line for its card.", "yearly"]);
+  assert.deepEqual([r.content.articles[1].folder, r.content.articles[1].also], ["reports", ["[A section]"]]);
   assert.deepEqual([a0.topics, a0.related, a0.description], [["Pricing", "Placement"], [{ label: "[A section]", href: "section/" }], "Our notes on dealers."]);
   ok("Create site copies the design; a feature keeps its section and research areas, a research area its topics and related sections");
   const tmp = "/tmp/build-tawr"; fs.rmSync(tmp, { recursive: true, force: true }); fs.cpSync(C_DIR + "/templates/" + T, tmp, { recursive: true });
@@ -444,8 +446,13 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   assert.ok(home.includes('<h3><a href="research/dealers/">Dealers</a></h3><p class="muted">Pricing, placement</p>'), "and the research area's card");
   assert.ok(feat.includes('<p class="standfirst">It begins here.</p>') && feat.includes("<em>emphasis</em>") && feat.includes('<a href="https://example.org/report">A report</a>, A publisher, 2026') && feat.includes('<a href="../../research/dealers/">Dealers</a>') && feat.includes('<a href="../../section/">[A section]</a>'), "the feature: standfirst, words, sources, its research area and its section");
   assert.ok(feat.includes("The Ledger Room · 24 November 2026") && feat.includes('content="For search."'), "byline and search words");
+  assert.ok(feat.includes('<a href="#the-start">The start</a>') && feat.includes('<h2 id="the-start">The start</h2>') && feat.includes('<a href="#sources">Sources</a>'), "the contents list leads to each heading and the sources");
+  assert.ok(feat.includes('<aside class="more">') && feat.includes('<a href="../../reports/yearly/"><span class="sec">Reports</span>The yearly figures</a>'), "More reading beside it, in its own folder");
+  const rep2 = rd2("reports/yearly/index.html"); assert.ok(rep2.includes("More reading") && !fs.existsSync(tmp + "/_site/features/yearly/index.html"), "a report lives in its own folder");
+  assert.ok(home.includes('<p class="muted">A line for its card.</p>'), "the card line");
   assert.ok(area.includes("<li>Pricing</li>") && area.includes("The first note") && area.includes('href="../../section/">[A section]</a>') && area.includes('content="Our notes on dealers."'), "the research area: topics, its features and related sections");
-  assert.ok(sec.includes("The first note") && !fs.existsSync(tmp + "/_site/research/index.html"), "the section page lists its feature; no research list until something leads to it");
+  assert.ok(sec.includes("The first note") && sec.includes("The yearly figures") && !fs.existsSync(tmp + "/_site/research/index.html"), "the section page lists its feature and one also listed there; no research list until something leads to it");
+  const priv = rd2("privacy/index.html"); assert.ok(priv.includes('<section class="article-body"') && priv.includes("<h2>[A heading]</h2>") && priv.includes('<p class="byline" data-r style="--d:400ms">[Last updated, with the date]</p>'), "Privacy: page text with a dated line");
   assert.ok(home.includes("mailto:hello@ledgerroom.org") && home.includes("This opens your own email app"), "the newsletter box opens the visitor's email app, and says so");
   assert.ok(!NOT_OURS.test(home + feat + area + sec) && !/—/.test(home + feat + area + sec), "no one else's names and no long dashes");
   ok("the new site builds: features, research areas, sections and the newsletter");

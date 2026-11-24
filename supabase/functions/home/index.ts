@@ -1594,19 +1594,21 @@ export const AWR_KINDS = ["awr-opening", "awr-features", "awr-cards", "awr-brief
 const AWR_OWN = {
   "awr-opening": { label: "Page opening", about: "The words at the top of a page: a small line, a large heading, an introduction, and a button and a link. Full screen on the home page, smaller on the others.",
     summary: (st) => String(st.heading || "Page opening").replace(/\*/g, ""), library: "Words at the top of a page",
-    starter: { size: "page", eyebrow: "[A small line]", heading: "[A heading for the page]", text: "[A line that says what the page is about]", wide: false, topics: [], email: false, button: "", button_href: "", link: "", href: "" }, fields: [
+    starter: { size: "page", eyebrow: "[A small line]", heading: "[A heading for the page]", note: "", text: "[A line that says what the page is about]", wide: false, topics: [], email: false, button: "", button_href: "", link: "", href: "" }, fields: [
     { name: "size", label: "Size", type: "choice", seg: true, dflt: "page", options: [["large", "Full screen"], ["page", "Page heading"], ["tall", "Tall"]], hint: "Full screen suits the home page. Tall suits a short page, such as Contact." },
-    AWR_EYEBROW, AWR_HEADING, { name: "text", label: "Introduction", type: "long", plain: true, hint: "Leave empty to hide." },
+    AWR_EYEBROW, AWR_HEADING, { name: "note", label: "Small line under the heading", type: "text", hint: "Such as Last updated 24 November 2026. Leave empty to hide." },
+    { name: "text", label: "Introduction", type: "long", plain: true, hint: "Leave empty to hide." },
     { name: "wide", label: "Wider introduction", type: "yesno", hint: "For a longer introduction, as on About." },
     { name: "topics", label: "Topics in a row", type: "lines", hint: "Short words under the heading, one per line. Leave empty to hide." },
     { name: "email", label: "Show the email address, large", type: "yesno", hint: "As on Contact. The address is the one in Site details." },
     { name: "button", label: "Button words", type: "text", hint: "Leave empty for no button." }, { ...AWR_HREF, name: "button_href", label: "Button address" },
     { name: "link", label: "Link words", type: "text", hint: "A link beside the button. Leave empty for none." }, AWR_HREF] },
   "awr-features": { label: "Feature cards", about: "Cards for the features, newest first: every feature, one section's, or one research area's. A feature appears here as soon as it is shown on the site.",
-    summary: (st) => (st.only ? st.only : st.area ? "One research area" : "Every feature") + (st.every === false ? ", up to " + (st.count || 6) : ""), library: "The features as cards",
-    starter: { eyebrow: "Features", heading: "", only: "", area: "", every: true, count: 6, empty: "Nothing has been published in this section yet.", band: "", close: false }, fields: [
+    summary: (st) => (st.only ? st.only : st.folder ? "Everything in " + st.folder + "/" : st.area ? "One research area" : "Every feature") + (st.every === false ? ", up to " + (st.count || 6) : ""), library: "The features as cards",
+    starter: { eyebrow: "Features", heading: "", only: "", folder: "", area: "", every: true, count: 6, empty: "Nothing has been published in this section yet.", band: "", close: false }, fields: [
     AWR_EYEBROW, AWR_HEADING,
-    { name: "only", label: "Only features in this section", type: "text", hint: "Such as Galleries, to make the page of one section. Leave empty for every section." },
+    { name: "only", label: "Only features in these sections", type: "text", hint: "Such as Galleries, to make the page of one section, or Industry News, Reports for several. A feature counts when it is its own section or one it is also listed under. Leave empty for every section." },
+    { name: "folder", label: "Only features in this folder", type: "text", hint: "Such as features, to leave out the news and reports kept in their own folders. Leave empty for every folder." },
     { name: "area", label: "Only features in this research area", type: "artists", one: true, hint: "Leave empty for every research area." },
     { name: "every", label: "Show every feature", type: "yesno", dflt: true, hint: "Otherwise How many below decides." },
     { name: "count", label: "How many", type: "range", min: 1, max: 48, step: 1, dflt: 6 },
@@ -1618,7 +1620,7 @@ const AWR_OWN = {
     starter: { eyebrow: "[A small line]", heading: "", source: "hand", band: "", cards: [{ title: "[A heading]", text: "[A line about it]", href: "" }, { title: "[A heading]", text: "[A line about it]", href: "" }, { title: "[A heading]", text: "[A line about it]", href: "" }] }, fields: [
     AWR_EYEBROW, AWR_HEADING,
     { name: "source", label: "Cards", type: "choice", seg: true, dflt: "hand", options: [["hand", "Written here"], ["areas", "Every research area"]], hint: "Every research area shows each one's name and short line, and leads to its page." },
-    { name: "cards", label: "Cards", type: "rows", fields: [{ name: "title", label: "Heading", type: "text" }, { name: "text", label: "Line", type: "long", plain: true }, { ...AWR_HREF, label: "Where the heading leads", hint: ST_ADDR_HINT + " Leave empty for no link." }] },
+    { name: "cards", label: "Cards", type: "rows", fields: [{ name: "title", label: "Heading", type: "text" }, { name: "text", label: "Line", type: "long", plain: true, hint: "To make some words a link, write them in square brackets with the address after them in round brackets, as in [tell us](contact/)." }, { ...AWR_HREF, label: "Where the heading leads", hint: ST_ADDR_HINT + " Leave empty for no link." }] },
     AWR_BAND] },
   "awr-briefing": { label: "Briefing band", about: "The newsletter: a full band with the sign-up box, or a short strip at the foot of a page with a button that leads to it. The box opens the visitor's own email app with a request to join, and a line under it says so.",
     summary: (st) => (st.style === "strip" ? "Short strip: " : "Full band: ") + String(st.heading || "").replace(/\*/g, ""), library: "The newsletter, as a band or a strip",
@@ -1632,14 +1634,11 @@ const AWR_OWN = {
     blocks: { field: "links", label: "Link", add: "Add a link", about: "One link: its words and where it goes." },
     starter: { eyebrow: "[A small line]", band: "grey", links: [{ label: "[A link]", href: "./" }] }, fields: [
     AWR_EYEBROW, { name: "links", label: "Links", type: "rows", fields: [{ name: "label", label: "Words", type: "text" }, AWR_HREF] }, AWR_BAND] },
-  "awr-text": { label: "Page text", about: "Words in the reading column: a heading, a larger first paragraph, paragraphs, then parts each with its own heading.",
-    summary: (st) => String(st.heading || ((st.parts || [])[0] || {}).heading || "Page text").replace(/\*/g, ""), library: "Paragraphs and headed parts",
-    blocks: { field: "parts", label: "Part", add: "Add a part", about: "A heading and the paragraphs under it." },
-    starter: { heading: "", standfirst: "", paras: ["[A paragraph]"], parts: [], band: "" }, fields: [
-    { ...AWR_HEADING, label: "Heading at the top" }, { name: "standfirst", label: "Larger first paragraph", type: "long", plain: true, hint: "Leave empty to hide." },
-    { name: "paras", label: "Paragraphs", type: "lines", hint: "One paragraph per item." },
-    { name: "parts", label: "Parts", type: "rows", fields: [{ name: "heading", label: "Heading", type: "text" }, { name: "text", label: "Paragraphs", type: "long", plain: true, hint: "Leave an empty line between paragraphs." }] },
-    AWR_BAND] },
+  "awr-text": { label: "Page text", about: "Words in the reading column, with headings, lists and links, such as Privacy and Terms.",
+    summary: (st) => { const h = /<h2[^>]*>([\s\S]*?)<\/h2>/.exec(String(st.body || "")); return h ? h[1].replace(/<[^>]*>/g, "").trim() : "Page text"; }, library: "Headings, paragraphs, lists and links",
+    starter: { standfirst: "", body: "<h2>[A heading]</h2><p>[Write the words for this page here.]</p>" }, fields: [
+    { name: "standfirst", label: "Larger first paragraph", type: "long", plain: true, hint: "Leave empty to hide." },
+    { name: "body", label: "Words", type: "long", cite: false, hint: "Type as you would in a document: headings, lists and links keep their look." }] },
 };
 const AWR_LINKS = { ...LINK_ROWS, fields: [LINK_ROWS.fields[0], { ...ADDRESS, hint: ST_ADDR_HINT }] };
 const TTAWR_SECTIONS = { ...STARTER_SECTIONS,
@@ -1663,7 +1662,13 @@ const TTAWR_ITEMS = { ...STARTER_ITEMS,
         { name: "description", label: "Search description", type: "long", plain: true, hint: "What search results show under the title. Leave empty to use the standfirst." }]
       : f.name === "date" ? [{ ...f, hint: "Such as 24 November 2026. Shown in the byline; the newest features come first." }]
       : f.name === "artist" ? [{ name: "subjects", label: "Research areas", type: "artists", hint: "The research areas this feature is filed under, in this order. Each one's page lists it, and the feature links to them." }] : [f]) }
-    : part.id === "body" ? { ...part, about: "The text of the feature, under the standfirst. Every fact rests on a named source." }
+    : part.id === "settings" ? { ...part, label: "Listing and settings", about: "Its card line, its web address folder, the other sections that list it, the three shown beside it, and whether visitors can see it.", fields: [
+      { name: "card", label: "Line on its card", type: "long", plain: true, hint: "One sentence shown under the title wherever the feature is listed. Leave empty for none." },
+      { name: "folder", label: "Web address folder", type: "text", hint: "Leave empty for features/. Write industry-news or reports to keep news or a report in that folder. Changing it changes the feature's web address." },
+      { name: "also", label: "Also listed under", type: "lines", hint: "Other sections whose page lists this feature too, one per line, such as Auction Houses." },
+      { name: "more1", label: "More reading, first", type: "piece", hint: "The three shown beside the feature. Leave all three empty for the next ones in the list." },
+      { name: "more2", label: "More reading, second", type: "piece" }, { name: "more3", label: "More reading, third", type: "piece" }, ...part.fields] }
+    : part.id === "body" ? { ...part, about: "The text of the feature, under the standfirst. Each heading becomes a line in its contents list. Every fact rests on a named source." }
     : part.id === "sources" ? { ...part, about: "Every source the feature rests on, listed at its foot under Sources." } : part) },
   artist: { ...STARTER_ITEMS.artist, label: "Research area", parts: [
     { id: "words", label: "Name and topics", about: "The research area's name, the short line on its card, and its topics.", fields: [
@@ -1704,7 +1709,7 @@ export const TTAWR_WORDS = {
   "missing.to-add": "To add", "form.name": "Your name", "form.your-email": "Your email address", "form.topic": "What it is about", "form.message": "Your message", "btn.write": "Write the email",
   "form.note-contact": "This opens your own email app with your message ready to send to {email}.", "item.sources": "Sources", "item.byline-date": "{site} · {date}", "item.byline": "{site}",
   "item.related-areas": "Related research areas", "item.subject": "Research area", "item.stories-about": "Features on this subject",
-  "item.none-yet": "Nothing has been published on this subject yet.", "item.related": "Related sections", "nf.eyebrow": "Page not found", "nf.title": "This page does not exist.",
+  "item.none-yet": "Nothing has been published on this subject yet.", "item.related": "Related sections", "item.toc": "In this article", "item.more": "More features", "item.more-other": "More reading", "nf.eyebrow": "Page not found", "nf.title": "This page does not exist.",
   "nf.home": "Back to the homepage", "form.need-email-join": "We need a working email address, so we can add you.", "form.subject": "Join the {site} mailing list",
   "form.sent-join": "Your email app should now be open with the message ready. Send it and we will add you. If nothing opened, write to {email}.", "sr.photo-box": "Photo",
   "form.need-email": "We need a working email address, so we can reply.", "form.need-message": "Please write your message first.",

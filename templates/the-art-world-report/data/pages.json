@@ -79,6 +79,10 @@
               [
                 "Contact",
                 "contact/"
+              ],
+              [
+                "Privacy",
+                "privacy/"
               ]
             ]
           }
@@ -114,7 +118,8 @@
             "button": "[Read the features]",
             "button_href": "#features",
             "link": "[Get the newsletter]",
-            "href": "#briefing"
+            "href": "#briefing",
+            "note": ""
           }
         },
         {
@@ -130,7 +135,8 @@
             "count": 6,
             "empty": "[Features appear here once you add them]",
             "band": "grey",
-            "close": false
+            "close": false,
+            "folder": ""
           }
         },
         {
@@ -209,7 +215,8 @@
             "button": "",
             "button_href": "",
             "link": "",
-            "href": ""
+            "href": "",
+            "note": ""
           }
         },
         {
@@ -225,7 +232,8 @@
             "count": 6,
             "empty": "[Features appear here once you add them]",
             "band": "",
-            "close": true
+            "close": true,
+            "folder": ""
           }
         },
         {
@@ -264,7 +272,8 @@
             "button": "",
             "button_href": "",
             "link": "",
-            "href": ""
+            "href": "",
+            "note": ""
           }
         },
         {
@@ -280,7 +289,8 @@
             "count": 6,
             "empty": "Nothing has been published in this section yet.",
             "band": "",
-            "close": true
+            "close": true,
+            "folder": ""
           }
         },
         {
@@ -340,7 +350,8 @@
             "button": "",
             "button_href": "",
             "link": "",
-            "href": ""
+            "href": "",
+            "note": ""
           }
         },
         {
@@ -407,7 +418,43 @@
             "button": "",
             "button_href": "",
             "link": "",
+            "href": "",
+            "note": ""
+          }
+        }
+      ]
+    },
+    "privacy": {
+      "path": "privacy/index.html",
+      "title": "Privacy | [Site name]",
+      "description": "[How the site handles visitors' information, for search results]",
+      "sections": [
+        {
+          "id": "privacy-1",
+          "type": "awr-opening",
+          "visible": true,
+          "settings": {
+            "size": "page",
+            "eyebrow": "[A small line]",
+            "heading": "Privacy",
+            "note": "[Last updated, with the date]",
+            "text": "",
+            "wide": false,
+            "topics": [],
+            "email": false,
+            "button": "",
+            "button_href": "",
+            "link": "",
             "href": ""
+          }
+        },
+        {
+          "id": "privacy-2",
+          "type": "awr-text",
+          "visible": true,
+          "settings": {
+            "standfirst": "",
+            "body": "<h2>[A heading]</h2>\n<p>[What the site collects, and what it does with it. Write only what is true of this site.]</p>\n"
           }
         }
       ]
