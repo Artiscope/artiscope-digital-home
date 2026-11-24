@@ -1,0 +1,15 @@
+{
+  "colours": {
+    "page": "#FFFFFF",
+    "band": "#191917",
+    "accent": "#F3F3F3",
+    "ink": "#191917"
+  },
+  "fonts": {
+    "display": "Libre Caslon Text",
+    "text": "Libre Franklin",
+    "sans": "Libre Franklin"
+  },
+  "css": "",
+  "font_links": []
+}

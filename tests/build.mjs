@@ -17,11 +17,12 @@ const TGAM = Object.fromEntries(walk(C_DIR + "/templates/global-art-monitor").fi
 const TWAR = Object.fromEntries(walk(C_DIR + "/templates/world-art-review").filter(([f]) => !f.endsWith(".gitkeep")));
 const TTAC = Object.fromEntries(walk(C_DIR + "/templates/the-art-correspondent").filter(([f]) => !f.endsWith(".gitkeep")));
 const TED = Object.fromEntries(walk(C_DIR + "/templates/editions").filter(([f]) => !f.endsWith(".gitkeep")));
+const TAWR = Object.fromEntries(walk(C_DIR + "/templates/the-art-world-report").filter(([f]) => !f.endsWith(".gitkeep")));
 const CR = "Artiscope/artiscope-digital-home", PB = "Artiscope/practice-build";
-const list = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4", domain: "", repo: "", live: false }, { id: "site-5", name: "Site 5", domain: "", repo: "", live: false }, { id: "site-9", name: "Site 9", domain: "", repo: "", live: false }, { id: "site-12", name: "Site 12", domain: "", repo: "", live: false }, { id: "site-13", name: "Site 13", domain: "", repo: "", live: false }, { id: "site-14", name: "Site 14", domain: "", repo: "", live: false }, { id: "site-15", name: "Site 15", domain: "", repo: "", live: false }] };
+const list = { sites: [{ id: "practice-build", name: "Practice build", domain: "artiscope.github.io/practice-build", repo: PB, kind: "starter", playground: true, live: true }, { id: "site-4", name: "Site 4", domain: "", repo: "", live: false }, { id: "site-5", name: "Site 5", domain: "", repo: "", live: false }, { id: "site-9", name: "Site 9", domain: "", repo: "", live: false }, { id: "site-12", name: "Site 12", domain: "", repo: "", live: false }, { id: "site-13", name: "Site 13", domain: "", repo: "", live: false }, { id: "site-14", name: "Site 14", domain: "", repo: "", live: false }, { id: "site-15", name: "Site 15", domain: "", repo: "", live: false }, { id: "site-16", name: "Site 16", domain: "", repo: "", live: false }] };
 const rd = (dir, f) => fs.readFileSync(dir + "/" + f, "utf8");
 const hub = makeGitHub({
-  [CR]: { "sites.json": JSON.stringify(list), ...Object.fromEntries(Object.entries(starter).map(([f, t]) => ["starter/" + f, t])), ...Object.fromEntries(Object.entries(TSAD).map(([f, t]) => ["templates/street-art-dispatch/" + f, t])), ...Object.fromEntries(Object.entries(TGAM).map(([f, t]) => ["templates/global-art-monitor/" + f, t])), ...Object.fromEntries(Object.entries(TWAR).map(([f, t]) => ["templates/world-art-review/" + f, t])) , ...Object.fromEntries(Object.entries(TTAC).map(([f, t]) => ["templates/the-art-correspondent/" + f, t])), ...Object.fromEntries(Object.entries(TED).map(([f, t]) => ["templates/editions/" + f, t])) },
+  [CR]: { "sites.json": JSON.stringify(list), ...Object.fromEntries(Object.entries(starter).map(([f, t]) => ["starter/" + f, t])), ...Object.fromEntries(Object.entries(TSAD).map(([f, t]) => ["templates/street-art-dispatch/" + f, t])), ...Object.fromEntries(Object.entries(TGAM).map(([f, t]) => ["templates/global-art-monitor/" + f, t])), ...Object.fromEntries(Object.entries(TWAR).map(([f, t]) => ["templates/world-art-review/" + f, t])) , ...Object.fromEntries(Object.entries(TTAC).map(([f, t]) => ["templates/the-art-correspondent/" + f, t])), ...Object.fromEntries(Object.entries(TED).map(([f, t]) => ["templates/editions/" + f, t])), ...Object.fromEntries(Object.entries(TAWR).map(([f, t]) => ["templates/the-art-world-report/" + f, t])) },
   [PB]: { ...Object.fromEntries(Object.entries(starter).filter(([f]) => !f.startsWith(".github/"))), ".github/workflows/pages.yml": starter[".github/workflows/pages.yml"] },
   "Artiscope/World-art-review": { "content/pages.json": rd(W_DIR, "content/pages.json") },
   "Artiscope/global-art-monitor": { "data/pages.json": rd(G_DIR, "data/pages.json") },
@@ -149,7 +150,7 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   const SAD_OWN = /Street Art Dispatch|streetartdispatch|Konn|Banksy|Invader|Fairey|Grove Gallery roster|sad-tile|sad-mark|assets\/brand/;
   let d = await as(ADMIN, { action: "planSite", site: "site-9", choices: { name: "Wall Notes", tagline: "Walls and what is on them", email: "hello@wallnotes.org", template: T } });
   assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
-  const tp = d.spec.templates; assert.deepEqual(tp.filter((x) => x.ready).map((x) => x.id), ["starter", T, "world-art-review", "global-art-monitor", "the-art-correspondent", "editions"]); assert.ok(!tp.some((x) => !x.ready)); ok("six templates are offered, all of them ready");
+  const tp = d.spec.templates; assert.deepEqual(tp.filter((x) => x.ready).map((x) => x.id), ["starter", T, "world-art-review", "global-art-monitor", "the-art-correspondent", "the-art-world-report", "editions"]); assert.ok(!tp.some((x) => !x.ready)); ok("six templates are offered, all of them ready");
   let plan = d.plan; assert.equal(plan.choices.template, T); assert.equal(plan.choices.pages, "template"); assert.equal(plan.choices.look, "Street Art Dispatch's own");
   assert.equal(d.spec.looks[0].own, true); assert.ok(!d.spec.looks.some((l) => l.name === "Like Street Art Dispatch"), "no second copy of its own look"); ok("the template's own look comes first");
   assert.deepEqual(Object.keys(plan.pages.pages).sort(), ["about", "artists", "collecting", "contact", "dispatches", "exhibitions", "home", "interventions", "urban-culture"]);
@@ -215,7 +216,7 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   const GAM_OWN = /Global Art Monitor|globalartmonitor|Konn|Zara|Tate Ward|Grove Gallery sells|MONITOR|market note|gam-tile|gam-mark/;
   let d = await as(ADMIN, { action: "planSite", site: "site-12", choices: { name: "Sale Notes", tagline: "Prices, kept honest", email: "hello@salenotes.org", template: T } });
   assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
-  assert.deepEqual(d.spec.templates.filter((x) => x.ready).map((x) => x.id), ["starter", "street-art-dispatch", "world-art-review", T, "the-art-correspondent", "editions"]);
+  assert.deepEqual(d.spec.templates.filter((x) => x.ready).map((x) => x.id), ["starter", "street-art-dispatch", "world-art-review", T, "the-art-correspondent", "the-art-world-report", "editions"]);
   let plan = d.plan; assert.equal(plan.choices.look, "Global Art Monitor's own");
   assert.deepEqual(Object.keys(plan.pages.pages).sort(), ["about", "artists", "auction-results", "collecting-valuation", "contact", "home", "market-intelligence", "research"]);
   assert.equal(plan.pages.pages.home.intro, true); assert.equal(plan.pages.pages["auction-results"].current, "auction-results");
@@ -253,7 +254,7 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   const WAR_OWN = /World Art Review|worldartreview|Konn|Zara|Zen Xander|Frieze|Malala|Alexandra|Grove Gallery|sym-mark|war-saved/;
   let d = await as(ADMIN, { action: "planSite", site: "site-13", choices: { name: "Portrait Notes", tagline: "Painters, looked at closely", email: "hello@portraitnotes.org", template: T } });
   assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
-  assert.deepEqual(d.spec.templates.filter((x) => x.ready).map((x) => x.id), ["starter", "street-art-dispatch", T, "global-art-monitor", "the-art-correspondent", "editions"]);
+  assert.deepEqual(d.spec.templates.filter((x) => x.ready).map((x) => x.id), ["starter", "street-art-dispatch", T, "global-art-monitor", "the-art-correspondent", "the-art-world-report", "editions"]);
   assert.equal(d.spec.templates.find((x) => x.id === T).page, "src/index.html");
   let plan = d.plan; assert.equal(plan.choices.look, "World Art Review's own");
   assert.deepEqual(Object.keys(plan.pages.pages).sort(), ["home", "standards"]);
@@ -301,7 +302,7 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   const TAC_OWN = /The Art Correspondent|theartcorrespondent|Konn|Zara|Zen Xander|Studio Sessions|Behind Every Work|Grove Gallery|Frieze|Reenie Beanie is|nib/;
   let d = await as(ADMIN, { action: "planSite", site: "site-14", choices: { name: "Studio Letters", tagline: "Artists at work", email: "hello@studioletters.org", template: T } });
   assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
-  assert.deepEqual(d.spec.templates.filter((x) => x.ready).map((x) => x.id), ["starter", "street-art-dispatch", "world-art-review", "global-art-monitor", T, "editions"]);
+  assert.deepEqual(d.spec.templates.filter((x) => x.ready).map((x) => x.id), ["starter", "street-art-dispatch", "world-art-review", "global-art-monitor", T, "the-art-world-report", "editions"]);
   assert.equal(d.spec.templates.find((x) => x.id === T).global, "TAC");
   let plan = d.plan; assert.equal(plan.choices.template, T); assert.equal(plan.choices.look, "The Art Correspondent's own");
   assert.deepEqual(Object.keys(plan.pages.pages).sort(), ["about", "contact", "home"]);
@@ -394,6 +395,60 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
   assert.ok(fs.existsSync(tmp + "/_site/works/index.html") && fs.existsSync(tmp + "/_site/series/index.html"), "the two lists");
   assert.ok(!NOT_OURS.test(home + work + ser) && !/—/.test(home + work + ser), "no one else's names and no long dashes");
   ok("the new site builds: works, series, the lists and the phone bar");
+}
+
+// ----- templates: a new site from The Art World Report design (Version 69) -----
+{
+  const T = "the-art-world-report", TR = "Artiscope/the-ledger-room";
+  const NOT_OURS = /Art World Report|theartworldreport|Grove|Zara|Konn|Tate Ward|Bonhams|Christie|Hauser|Art Basel|Briefing/;
+  let d = await as(ADMIN, { action: "planSite", site: "site-16", choices: { name: "The Ledger Room", tagline: "Notes on the art trade", email: "hello@ledgerroom.org", template: T } });
+  assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
+  assert.equal(d.spec.templates.find((x) => x.id === T).global, "TAWR");
+  let plan = d.plan;
+  assert.deepEqual(Object.keys(plan.pages.pages).sort(), ["about", "briefing", "contact", "features", "home", "section"]);
+  assert.deepEqual(plan.pages.pages.home.sections.map((x) => x.type), ["awr-opening", "awr-features", "awr-cards", "awr-briefing", "awr-cards"]);
+  assert.equal(plan.pages.shared.header.settings.name, "The Ledger Room");
+  assert.equal(plan.pages.shared.footer.settings.tagline, "Notes on the art trade");
+  assert.deepEqual([plan.content.articles, plan.content.artists], [[], []]);
+  assert.deepEqual(plan.theme.colours, { page: "#FFFFFF", band: "#191917", accent: "#F3F3F3", ink: "#191917" }); assert.deepEqual(plan.theme.fonts, { display: "Libre Caslon Text", text: "Libre Franklin", sans: "Libre Franklin" });
+  { const all = JSON.stringify({ ...plan.pages, _how_to_edit: "" }) + JSON.stringify(plan.content), m = all.match(NOT_OURS); assert.ok(!m, "nothing of the site it was made from: " + (m && all.slice(Math.max(0, m.index - 60), m.index + 40))); }
+  for (const pg of Object.values(plan.pages.pages)) for (const s of pg.sections) for (const [k, v] of Object.entries(s.settings)) {
+    if (typeof v === "string" && v && /^(heading|text)$/.test(k)) assert.ok(/^\[.*\]$/.test(v), s.id + "." + k + " = " + v);
+  }
+  ok("The Art World Report plan: home, features, a section, the newsletter, About and Contact, with placeholders and its own look");
+  d = await as(ADMIN, { action: "createSite", site: "site-16", choices: { name: "The Ledger Room", tagline: "Notes on the art trade", email: "hello@ledgerroom.org", template: T } });
+  assert.equal(d.status, 200, JSON.stringify(d));
+  for (const f of ["assets/render.js", "assets/site.css", "assets/site.js", "assets/vendor/lenis.mjs", "tools/build.mjs"]) assert.equal(hub.read(TR, "main", f), TAWR[f], f);
+  const card = h.SITES.find((x) => x.id === "site-16");
+  assert.ok(card.sectionKinds["awr-features"] && card.sectionKinds.columns && card.items.article.label === "Feature" && card.items.artist.label === "Research area");
+  const af = card.items.article.parts.flatMap((p) => p.fields.map((f) => f.name)), rf = card.items.artist.parts.flatMap((p) => p.fields.map((f) => f.name));
+  assert.ok(["kicker", "summary", "description", "date", "subjects", "body", "sources"].every((x) => af.includes(x)) && !af.includes("image"), "a feature: section, standfirst, search words, date, research areas, words and sources");
+  assert.ok(["name", "line", "description", "topics", "related"].every((x) => rf.includes(x)), "a research area: name, short line, search words, topics and related sections");
+  assert.deepEqual(card.paths, { articles: "features", artists: "research" });
+  d = await as(ADMIN, { action: "pages", site: "site-16" }); assert.equal(d.status, 200, JSON.stringify(d).slice(0, 300));
+  assert.ok(d.pages.pages.home && d.kinds["awr-briefing"] && d.paths.articles === "features", "it opens in the editor with its own sections");
+  const K = card.items, base = { site: { email: "hello@ledgerroom.org", address: "https://artiscope.github.io/the-ledger-room/", indexed: false }, articles: [], artists: [] };
+  let r = h.starterFromEditor({ artists: [{ slug: "dealers", name: "Dealers", line: "Pricing, placement", description: "Our notes on dealers.", topics: ["Pricing", "Placement"], related: [{ label: "[A section]", href: "section/" }], hidden: false }],
+    articles: [{ slug: "first", title: "The first note", kicker: "[A section]", summary: "It begins here.", description: "For search.", date: "24 November 2026", subjects: ["dealers"], body: "<p>Words with <em>emphasis</em>.</p>", sources: [{ title: "A report", publisher: "A publisher, 2026", href: "https://example.org/report" }], hidden: false }] }, base, K);
+  const f0 = r.content.articles[0], a0 = r.content.artists[0];
+  assert.deepEqual([f0.kicker, f0.subjects, f0.description, f0.date], ["[A section]", ["dealers"], "For search.", "24 November 2026"]);
+  assert.deepEqual([a0.topics, a0.related, a0.description], [["Pricing", "Placement"], [{ label: "[A section]", href: "section/" }], "Our notes on dealers."]);
+  ok("Create site copies the design; a feature keeps its section and research areas, a research area its topics and related sections");
+  const tmp = "/tmp/build-tawr"; fs.rmSync(tmp, { recursive: true, force: true }); fs.cpSync(C_DIR + "/templates/" + T, tmp, { recursive: true });
+  for (const f of ["data/pages.json", "data/theme.json"]) fs.writeFileSync(tmp + "/" + f, hub.read(TR, "main", f));
+  fs.writeFileSync(tmp + "/data/content.json", JSON.stringify(r.content));
+  execFileSync("python3", [tmp + "/tools/build.py", tmp + "/_site"]);
+  const rd2 = (f) => fs.readFileSync(tmp + "/_site/" + f, "utf8");
+  const home = rd2("index.html"), feat = rd2("features/first/index.html"), area = rd2("research/dealers/index.html"), sec = rd2("section/index.html");
+  assert.ok(home.includes("<title>The Ledger Room</title>") && home.includes('content="noindex, nofollow"') && !home.includes("@@") && home.includes('href="features/first/">The first note</a>'), "the home page lists the feature");
+  assert.ok(home.includes('<h3><a href="research/dealers/">Dealers</a></h3><p class="muted">Pricing, placement</p>'), "and the research area's card");
+  assert.ok(feat.includes('<p class="standfirst">It begins here.</p>') && feat.includes("<em>emphasis</em>") && feat.includes('<a href="https://example.org/report">A report</a>, A publisher, 2026') && feat.includes('<a href="../../research/dealers/">Dealers</a>') && feat.includes('<a href="../../section/">[A section]</a>'), "the feature: standfirst, words, sources, its research area and its section");
+  assert.ok(feat.includes("The Ledger Room · 24 November 2026") && feat.includes('content="For search."'), "byline and search words");
+  assert.ok(area.includes("<li>Pricing</li>") && area.includes("The first note") && area.includes('href="../../section/">[A section]</a>') && area.includes('content="Our notes on dealers."'), "the research area: topics, its features and related sections");
+  assert.ok(sec.includes("The first note") && !fs.existsSync(tmp + "/_site/research/index.html"), "the section page lists its feature; no research list until something leads to it");
+  assert.ok(home.includes("mailto:hello@ledgerroom.org") && home.includes("This opens your own email app"), "the newsletter box opens the visitor's email app, and says so");
+  assert.ok(!NOT_OURS.test(home + feat + area + sec) && !/—/.test(home + feat + area + sec), "no one else's names and no long dashes");
+  ok("the new site builds: features, research areas, sections and the newsletter");
 }
 
 // ----- step 5: articles and artists on a site built from the starter -----

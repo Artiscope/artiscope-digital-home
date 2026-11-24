@@ -37,6 +37,7 @@ export const WORD_LOCKS = {
   twar: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
   ttac: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
   ted: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK, "form.note-work": NOTE_LOCK },
+  ttawr: { "form.note": NOTE_LOCK, "form.note-contact": NOTE_LOCK },
   tgam: { "form.note": NOTE_LOCK, "item.who": "The heading of the publisher disclosure stays as it is: readers are always told who publishes the site." },
 };
 export const WAR_WORDS = {
@@ -183,6 +184,7 @@ export const FONTS = {
   "Castoro": "Castoro:ital@0;1",
   "Gloock": "Gloock",
   "Libre Caslon Display": "Libre+Caslon+Display",
+  "Libre Caslon Text": "Libre+Caslon+Text:ital@0;1",
   "Cormorant Garamond": "Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400",
   "EB Garamond": "EB+Garamond:ital,wght@0,400;0,500;0,600;1,400",
   "Libre Baskerville": "Libre+Baskerville:ital,wght@0,400;0,700;1,400",
@@ -1580,6 +1582,134 @@ export const TED_WORDS = { "sr.social": "Social media", "menu.articles": "All wo
 // Where each kind of site keeps its pages, look and content (a World Art Review site keeps them in content/).
 const DATA_FILES = { pages: "data/pages.json", theme: "data/theme.json", content: "data/content.json" };
 const WAR_FILES = { pages: "content/pages.json", theme: "content/theme.json", content: "content/site.json" };
+// The Art World Report template: an editorial site on the business of the art world. Features and
+// research areas are the site's articles and artists, at features/<name>/ and research/<name>/.
+// Words between stars in a heading are set in italics, as in "Understanding the *Business* of Art.".
+const AWR_ITAL = "Put words between stars to set them in italics, as in Understanding the *Business* of Art.";
+const AWR_EYEBROW = { name: "eyebrow", label: "Small line above the heading", type: "text", hint: "Leave empty to hide." };
+const AWR_HEADING = { name: "heading", label: "Heading", type: "text", hint: AWR_ITAL + " Leave empty to hide." };
+const AWR_BAND = { name: "band", label: "Background", type: "choice", seg: true, dflt: "", options: [["", "White"], ["grey", "Grey"]] };
+const AWR_HREF = { ...ADDR, hint: ST_ADDR_HINT };
+export const AWR_KINDS = ["awr-opening", "awr-features", "awr-cards", "awr-briefing", "awr-links", "awr-text"];
+const AWR_OWN = {
+  "awr-opening": { label: "Page opening", about: "The words at the top of a page: a small line, a large heading, an introduction, and a button and a link. Full screen on the home page, smaller on the others.",
+    summary: (st) => String(st.heading || "Page opening").replace(/\*/g, ""), library: "Words at the top of a page",
+    starter: { size: "page", eyebrow: "[A small line]", heading: "[A heading for the page]", text: "[A line that says what the page is about]", wide: false, topics: [], email: false, button: "", button_href: "", link: "", href: "" }, fields: [
+    { name: "size", label: "Size", type: "choice", seg: true, dflt: "page", options: [["large", "Full screen"], ["page", "Page heading"], ["tall", "Tall"]], hint: "Full screen suits the home page. Tall suits a short page, such as Contact." },
+    AWR_EYEBROW, AWR_HEADING, { name: "text", label: "Introduction", type: "long", plain: true, hint: "Leave empty to hide." },
+    { name: "wide", label: "Wider introduction", type: "yesno", hint: "For a longer introduction, as on About." },
+    { name: "topics", label: "Topics in a row", type: "lines", hint: "Short words under the heading, one per line. Leave empty to hide." },
+    { name: "email", label: "Show the email address, large", type: "yesno", hint: "As on Contact. The address is the one in Site details." },
+    { name: "button", label: "Button words", type: "text", hint: "Leave empty for no button." }, { ...AWR_HREF, name: "button_href", label: "Button address" },
+    { name: "link", label: "Link words", type: "text", hint: "A link beside the button. Leave empty for none." }, AWR_HREF] },
+  "awr-features": { label: "Feature cards", about: "Cards for the features, newest first: every feature, one section's, or one research area's. A feature appears here as soon as it is shown on the site.",
+    summary: (st) => (st.only ? st.only : st.area ? "One research area" : "Every feature") + (st.every === false ? ", up to " + (st.count || 6) : ""), library: "The features as cards",
+    starter: { eyebrow: "Features", heading: "", only: "", area: "", every: true, count: 6, empty: "Nothing has been published in this section yet.", band: "", close: false }, fields: [
+    AWR_EYEBROW, AWR_HEADING,
+    { name: "only", label: "Only features in this section", type: "text", hint: "Such as Galleries, to make the page of one section. Leave empty for every section." },
+    { name: "area", label: "Only features in this research area", type: "artists", one: true, hint: "Leave empty for every research area." },
+    { name: "every", label: "Show every feature", type: "yesno", dflt: true, hint: "Otherwise How many below decides." },
+    { name: "count", label: "How many", type: "range", min: 1, max: 48, step: 1, dflt: 6 },
+    { name: "empty", label: "Words when there is none yet", type: "text" }, AWR_BAND,
+    { name: "close", label: "Sit close under the page heading", type: "yesno", hint: "As on the section pages." }] },
+  "awr-cards": { label: "Cards", about: "A row of cards, each with a heading, a line and an optional link, such as What we cover. Or one card for every research area.",
+    summary: (st) => st.source === "areas" ? "Every research area" : (() => { const n = (st.cards || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " card" : " cards"); })(),
+    library: "A row of cards with headings", blocks: { field: "cards", label: "Card", add: "Add a card", about: "A card with a heading, a line and an optional link." },
+    starter: { eyebrow: "[A small line]", heading: "", source: "hand", band: "", cards: [{ title: "[A heading]", text: "[A line about it]", href: "" }, { title: "[A heading]", text: "[A line about it]", href: "" }, { title: "[A heading]", text: "[A line about it]", href: "" }] }, fields: [
+    AWR_EYEBROW, AWR_HEADING,
+    { name: "source", label: "Cards", type: "choice", seg: true, dflt: "hand", options: [["hand", "Written here"], ["areas", "Every research area"]], hint: "Every research area shows each one's name and short line, and leads to its page." },
+    { name: "cards", label: "Cards", type: "rows", fields: [{ name: "title", label: "Heading", type: "text" }, { name: "text", label: "Line", type: "long", plain: true }, { ...AWR_HREF, label: "Where the heading leads", hint: ST_ADDR_HINT + " Leave empty for no link." }] },
+    AWR_BAND] },
+  "awr-briefing": { label: "Briefing band", about: "The newsletter: a full band with the sign-up box, or a short strip at the foot of a page with a button that leads to it. The box opens the visitor's own email app with a request to join, and a line under it says so.",
+    summary: (st) => (st.style === "strip" ? "Short strip: " : "Full band: ") + String(st.heading || "").replace(/\*/g, ""), library: "The newsletter, as a band or a strip",
+    starter: { style: "strip", eyebrow: "", heading: "[The newsletter's *name*]", text: "[A line about what readers get]", button: "Subscribe", href: "briefing/", main: false }, fields: [
+    { name: "style", label: "Shape", type: "choice", seg: true, dflt: "full", options: [["full", "Full band with the box"], ["strip", "Short strip with a button"]] },
+    AWR_EYEBROW, AWR_HEADING, { name: "text", label: "Words", type: "long", plain: true, hint: "Leave empty to hide." },
+    { name: "button", label: "Button words", type: "text" }, { ...AWR_HREF, label: "Where the strip's button leads", hint: "The page with the full band, such as briefing/." },
+    { name: "main", label: "The page's main heading", type: "yesno", hint: "On a page that is only the newsletter, so its heading is the page's own." }] },
+  "awr-links": { label: "Link list", about: "A row of large links, such as the sections or the related research areas.",
+    summary: (st) => { const n = (st.links || []).filter((x) => x && !x.hidden).length; return n + (n === 1 ? " link" : " links"); }, library: "A row of large links",
+    blocks: { field: "links", label: "Link", add: "Add a link", about: "One link: its words and where it goes." },
+    starter: { eyebrow: "[A small line]", band: "grey", links: [{ label: "[A link]", href: "./" }] }, fields: [
+    AWR_EYEBROW, { name: "links", label: "Links", type: "rows", fields: [{ name: "label", label: "Words", type: "text" }, AWR_HREF] }, AWR_BAND] },
+  "awr-text": { label: "Page text", about: "Words in the reading column: a heading, a larger first paragraph, paragraphs, then parts each with its own heading.",
+    summary: (st) => String(st.heading || ((st.parts || [])[0] || {}).heading || "Page text").replace(/\*/g, ""), library: "Paragraphs and headed parts",
+    blocks: { field: "parts", label: "Part", add: "Add a part", about: "A heading and the paragraphs under it." },
+    starter: { heading: "", standfirst: "", paras: ["[A paragraph]"], parts: [], band: "" }, fields: [
+    { ...AWR_HEADING, label: "Heading at the top" }, { name: "standfirst", label: "Larger first paragraph", type: "long", plain: true, hint: "Leave empty to hide." },
+    { name: "paras", label: "Paragraphs", type: "lines", hint: "One paragraph per item." },
+    { name: "parts", label: "Parts", type: "rows", fields: [{ name: "heading", label: "Heading", type: "text" }, { name: "text", label: "Paragraphs", type: "long", plain: true, hint: "Leave an empty line between paragraphs." }] },
+    AWR_BAND] },
+};
+const AWR_LINKS = { ...LINK_ROWS, fields: [LINK_ROWS.fields[0], { ...ADDRESS, hint: ST_ADDR_HINT }] };
+const TTAWR_SECTIONS = { ...STARTER_SECTIONS,
+  header: { label: "Menu bar", about: "The name and a few links along the top of every page, and the full-screen menu that the Menu button opens.",
+    summary: (st) => ((st.links || []).length + " links, " + (st.menu || []).length + " in the menu"),
+    blocks: [{ field: "links", label: "Top link", add: "Add a top link", about: "A link along the top of every page. On a phone only Menu shows." },
+      { field: "menu", label: "Menu link", add: "Add a menu link", about: "A large link in the full-screen menu." }], fields: [
+    { name: "name", label: "Site name", type: "text" }, { ...AWR_LINKS, label: "Top links" }, { ...AWR_LINKS, name: "menu", label: "Links in the full menu" },
+    { name: "line", label: "Line at the foot of the menu", type: "text", hint: "Beside the email address. Leave empty to hide." }] },
+  footer: { label: "Footer", about: "The name, a line, the email address, columns of links and the small print at the bottom of every page.", summary: (st) => ((st.columns || []).length + " columns"),
+    blocks: { field: "columns", label: "Column", add: "Add a column", title: (b) => b.title, blocks: [{ field: "links", label: "Link", add: "Add a link", about: "One link in this column: its words and where it goes." }] }, fields: [
+    { name: "tagline", label: "Line under the name", type: "text" }, { name: "email", label: "Show the email address", type: "yesno", dflt: true },
+    { name: "columns", label: "Link columns", type: "rows", fields: [{ name: "title", label: "Column heading", type: "text" }, { ...AWR_LINKS, label: "Links in this column" }] },
+    { name: "legal", label: "Small print", type: "text", hint: "{year} becomes the current year." }] },
+  ...AWR_OWN };
+// What a feature and a research area hold.
+const TTAWR_ITEMS = { ...STARTER_ITEMS,
+  article: { ...STARTER_ITEMS.article, label: "Feature", parts: STARTER_ITEMS.article.parts.filter((part) => part.id !== "picture").map((part) => part.id === "words"
+    ? { ...part, label: "Title and standfirst", about: "The heading of the feature, how it is listed, and where it is filed.", fields: part.fields.flatMap((f) => f.name === "kicker" ? [{ ...f, label: "Section", hint: "Such as Galleries. Shown above the title and on the cards; it leads to the page that lists that section's features." }]
+      : f.name === "summary" ? [{ ...f, label: "Standfirst", hint: "One or two sentences that open the feature, in larger italics." },
+        { name: "description", label: "Search description", type: "long", plain: true, hint: "What search results show under the title. Leave empty to use the standfirst." }]
+      : f.name === "date" ? [{ ...f, hint: "Such as 24 November 2026. Shown in the byline; the newest features come first." }]
+      : f.name === "artist" ? [{ name: "subjects", label: "Research areas", type: "artists", hint: "The research areas this feature is filed under, in this order. Each one's page lists it, and the feature links to them." }] : [f]) }
+    : part.id === "body" ? { ...part, about: "The text of the feature, under the standfirst. Every fact rests on a named source." }
+    : part.id === "sources" ? { ...part, about: "Every source the feature rests on, listed at its foot under Sources." } : part) },
+  artist: { ...STARTER_ITEMS.artist, label: "Research area", parts: [
+    { id: "words", label: "Name and topics", about: "The research area's name, the short line on its card, and its topics.", fields: [
+      { name: "name", label: "Name", type: "text", hint: "Such as Gallery business. The page keeps its web address when the name changes." },
+      { name: "line", label: "Short line", type: "text", hint: "Shown on its card, such as Representation, artist development, gallery models." },
+      { name: "description", label: "Search description", type: "long", plain: true, hint: "What search results show under the name. Leave empty to use the short line." },
+      { name: "topics", label: "Topics", type: "lines", hint: "Shown in a row under the name, one per line." }] },
+    { id: "related", label: "Related sections", about: "Links to the section pages this research area relates to, shown under its features.",
+      fields: [{ name: "related", label: "Related sections", type: "rows", fields: [{ name: "label", label: "Words", type: "text" }, AWR_HREF] }],
+      blocks: { field: "related", label: "Section", add: "Add a section", about: "A link to a section page, such as Galleries." } },
+    ST_HIDDEN("research area")] },
+};
+const TTAWR_LISTS = {
+  articles: { label: "Features list", start: { eyebrow: "Features", heading: ["Features"], intro: "[A line about what the features cover]" } },
+  artists: { label: "Research areas list", start: { eyebrow: "Research areas", heading: ["Research areas"], intro: "[A line about the research areas]" } },
+};
+const TTAWR_THEME = { ...STARTER_THEME,
+  look: { ...STARTER_THEME.look, nav: ".head-nav a, .menu-btn", round: STARTER_THEME.look.round + ", .signup input" },
+  colours: [
+    { id: "page", role: "bg", label: "Page background", use: "Pages", var: "--page", default: "#FFFFFF", derived: [] },
+    { id: "ink", role: "text", label: "Text and buttons", use: "All text, and the solid buttons", var: "--ink", default: "#191917", on: "page", min: 4.5, derived: [] },
+    { id: "accent", role: "accent", label: "Grey bands", use: "The grey bands and the cards of the sections every site offers", var: "--accent", default: "#F3F3F3", derived: [] },
+    { id: "band", role: "band", label: "Dark bands and footer", use: "The newsletter, the full-screen menu and the footer", var: "--band", default: "#191917", derived: [] },
+  ],
+  fonts: [
+    { id: "display", role: "display", label: "Headlines", use: "Site name, headings and the menu", var: "--display", default: "Libre Caslon Text", fallback: "Georgia, serif", options: ["Libre Caslon Text", ...HEADLINE_FONTS] },
+    { id: "text", role: "body", label: "Reading text", use: "Paragraphs, introductions and the features", var: "--text", default: "Libre Franklin", fallback: "Arial, sans-serif", options: ["Libre Franklin", ...READING_FONTS.filter((f) => f !== "Libre Franklin")] },
+    { id: "sans", role: "small", label: "Small text", use: "Small lines, buttons and the menu bar", var: "--sans", default: "Libre Franklin", fallback: "Arial, sans-serif", options: SMALL_FONTS },
+  ],
+};
+// The fixed words of The Art World Report template, as its code writes them.
+export const TTAWR_WORDS = {
+  "sr.social": "Social media", "menu.articles": "Features", "menu.artists": "Research areas", "sr.photo": "Photograph to come: {what}", "missing.photo": "Photograph to come.",
+  "sr.share": "Share this page", "sr.privacy": "Privacy", "sr.nav": "Primary", "btn.menu": "Menu", "btn.close": "Close", "sr.menu": "All sections", "menu.skip": "Skip to content",
+  "btn.join": "Subscribe", "form.email": "Email address", "form.placeholder": "Your email address",
+  "form.note": "This opens your own email app with a message ready to send to {email}.", "item.reported": "Reported", "btn.count": "{n} of {total}", "btn.previous": "Previous",
+  "btn.next": "Next", "missing.title": "Title to confirm", "item.dates": "Dates:", "missing.tbc": "To confirm", "btn.source": "Source", "btn.read-source": "Read it at the source",
+  "missing.to-add": "To add", "form.name": "Your name", "form.your-email": "Your email address", "form.topic": "What it is about", "form.message": "Your message", "btn.write": "Write the email",
+  "form.note-contact": "This opens your own email app with your message ready to send to {email}.", "item.sources": "Sources", "item.byline-date": "{site} · {date}", "item.byline": "{site}",
+  "item.related-areas": "Related research areas", "item.subject": "Research area", "item.stories-about": "Features on this subject",
+  "item.none-yet": "Nothing has been published on this subject yet.", "item.related": "Related sections", "nf.eyebrow": "Page not found", "nf.title": "This page does not exist.",
+  "nf.home": "Back to the homepage", "form.need-email-join": "We need a working email address, so we can add you.", "form.subject": "Join the {site} mailing list",
+  "form.sent-join": "Your email app should now be open with the message ready. Send it and we will add you. If nothing opened, write to {email}.", "sr.photo-box": "Photo",
+  "form.need-email": "We need a working email address, so we can reply.", "form.need-message": "Please write your message first.",
+  "form.sent": "Your email app should now be open with the message ready. Send it and it reaches us. If nothing opened, write to {email}.",
+};
 export const SITE_TEMPLATES = [
   { id: "starter", name: "The starter", dir: STARTER_DIR, global: "STARTER", ready: true, line: "Simple and flexible. The design every new site has had so far.",
     own: "None of its own", pages: "Articles and artist pages", stays: "Nothing: it has no content of its own" },
@@ -1595,6 +1725,9 @@ export const SITE_TEMPLATES = [
   { id: "the-art-correspondent", name: "The Art Correspondent", dir: "templates/the-art-correspondent", global: "TAC", ready: true, line: "Quiet and text-led, with story lists by section and subject.",
     own: "6 of its own: Page opening, Lead photograph, Latest stories, Read by subject, Feature band and Page text", pages: "Stories in sections, subject pages for artists, About and Write to us",
     stays: "Its stories, artist pages, sources, the nib logo and its Studio Sessions words. Stories and subjects arrive empty" },
+  { id: "the-art-world-report", name: "The Art World Report", dir: "templates/the-art-world-report", global: "TAWR", ready: true, line: "Editorial and calm, on white with black bands, with features in sections and research areas.",
+    own: "6 of its own: Page opening, Feature cards, Cards, Briefing band, Link list and Page text", pages: "Features in sections, research area pages, the newsletter, About and Contact",
+    stays: "Its features, research areas and sources. Features and research areas arrive empty" },
   { id: "editions", name: "Editions", dir: "templates/editions", global: "EDITIONS", ready: true, line: "Bold and gallery-like, with every work in a black frame and a paper mount.",
     own: "5 of its own: Opening slides, Series banner, Works, Social tiles and Every series", pages: "Works with price, edition and details, series pages, About and Contact",
     stays: "Nothing: it is an original design with no content of its own. Works and series arrive empty", ownLook: "Black gallery", looks: ED_LOOKS },
@@ -1623,6 +1756,10 @@ export function starterSite(e) {
   if (t.id === "the-art-correspondent") {
     return { ...base, sectionKinds: TTAC_SECTIONS, words: TTAC_WORDS, wordLocks: WORD_LOCKS.ttac, items: TTAC_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: TTAC_THEME, collections: [], lists: TTAC_LISTS,
       paths: { articles: "stories", artists: "subjects" } };
+  }
+  if (t.id === "the-art-world-report") {
+    return { ...base, sectionKinds: TTAWR_SECTIONS, words: TTAWR_WORDS, wordLocks: WORD_LOCKS.ttawr, items: TTAWR_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: TTAWR_THEME, collections: [], lists: TTAWR_LISTS,
+      paths: { articles: "features", artists: "research" } };
   }
   if (t.id === "editions") {
     return { ...base, sectionKinds: TED_SECTIONS, words: TED_WORDS, wordLocks: WORD_LOCKS.ted, items: TED_ITEMS, model: STARTER_MODEL, builtIn: ["home"], theme: TED_THEME, collections: [], lists: TED_LISTS,

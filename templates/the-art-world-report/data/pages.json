@@ -1,0 +1,470 @@
+{
+  "_how_to_edit": "This file is edited in Artiscope Digital Home. Each page is a list of sections; words in square brackets are placeholders waiting for real words.",
+  "shared": {
+    "header": {
+      "type": "header",
+      "visible": true,
+      "settings": {
+        "name": "[Site name]",
+        "links": [
+          [
+            "Features",
+            "features/"
+          ],
+          [
+            "Sections",
+            "#sections"
+          ],
+          [
+            "Newsletter",
+            "briefing/"
+          ]
+        ],
+        "menu": [
+          [
+            "[A section]",
+            "section/"
+          ],
+          [
+            "Features",
+            "features/"
+          ],
+          [
+            "Newsletter",
+            "briefing/"
+          ],
+          [
+            "About",
+            "about/"
+          ],
+          [
+            "Contact",
+            "contact/"
+          ]
+        ],
+        "line": "[A short line about the site]"
+      }
+    },
+    "footer": {
+      "type": "footer",
+      "visible": true,
+      "settings": {
+        "tagline": "[A short line about the site]",
+        "email": true,
+        "columns": [
+          {
+            "title": "Sections",
+            "links": [
+              [
+                "[A section]",
+                "section/"
+              ]
+            ]
+          },
+          {
+            "title": "The Report",
+            "links": [
+              [
+                "Features",
+                "features/"
+              ],
+              [
+                "Newsletter",
+                "briefing/"
+              ],
+              [
+                "About",
+                "about/"
+              ],
+              [
+                "Contact",
+                "contact/"
+              ]
+            ]
+          }
+        ],
+        "legal": "[Small print, such as the year and the site's name]"
+      }
+    }
+  },
+  "groups": {
+    "top": [],
+    "popups": [],
+    "bottom": []
+  },
+  "pages": {
+    "home": {
+      "path": "index.html",
+      "title": "[Site name]",
+      "description": "[One or two sentences about the site, for search results]",
+      "home": true,
+      "sections": [
+        {
+          "id": "top",
+          "type": "awr-opening",
+          "visible": true,
+          "settings": {
+            "size": "large",
+            "eyebrow": "[A short line about the site]",
+            "heading": "[Your opening *heading*]",
+            "text": "[A sentence or two that says what the site covers and who it is for]",
+            "wide": false,
+            "topics": [],
+            "email": false,
+            "button": "[Read the features]",
+            "button_href": "#features",
+            "link": "[Get the newsletter]",
+            "href": "#briefing"
+          }
+        },
+        {
+          "id": "features",
+          "type": "awr-features",
+          "visible": true,
+          "settings": {
+            "eyebrow": "Features",
+            "heading": "[A heading for the *features*]",
+            "only": "",
+            "area": "",
+            "every": true,
+            "count": 6,
+            "empty": "[Features appear here once you add them]",
+            "band": "grey",
+            "close": false
+          }
+        },
+        {
+          "id": "sections",
+          "type": "awr-cards",
+          "visible": true,
+          "settings": {
+            "eyebrow": "Sections",
+            "heading": "[What we *cover*]",
+            "source": "hand",
+            "band": "",
+            "cards": [
+              {
+                "title": "[A section]",
+                "text": "[A line about what it covers]",
+                "href": "section/"
+              },
+              {
+                "title": "[Another section]",
+                "text": "[A line about what it covers]",
+                "href": ""
+              },
+              {
+                "title": "[Another section]",
+                "text": "[A line about what it covers]",
+                "href": ""
+              }
+            ]
+          }
+        },
+        {
+          "id": "briefing",
+          "type": "awr-briefing",
+          "visible": true,
+          "settings": {
+            "style": "full",
+            "eyebrow": "[Weekly newsletter]",
+            "heading": "[The newsletter's *name*]",
+            "text": "[A line about what readers get]",
+            "button": "Subscribe",
+            "href": "",
+            "main": false
+          }
+        },
+        {
+          "id": "research",
+          "type": "awr-cards",
+          "visible": true,
+          "settings": {
+            "eyebrow": "Research areas",
+            "heading": "[A heading for the research *areas*]",
+            "source": "areas",
+            "band": "grey",
+            "cards": []
+          }
+        }
+      ]
+    },
+    "features": {
+      "path": "features/index.html",
+      "title": "Features | [Site name]",
+      "description": "[A line about the features, for search results]",
+      "sections": [
+        {
+          "id": "features-1",
+          "type": "awr-opening",
+          "visible": true,
+          "settings": {
+            "size": "page",
+            "eyebrow": "Features",
+            "heading": "[A heading for the *features*]",
+            "text": "",
+            "wide": false,
+            "topics": [],
+            "email": false,
+            "button": "",
+            "button_href": "",
+            "link": "",
+            "href": ""
+          }
+        },
+        {
+          "id": "features-2",
+          "type": "awr-features",
+          "visible": true,
+          "settings": {
+            "eyebrow": "",
+            "heading": "",
+            "only": "",
+            "area": "",
+            "every": true,
+            "count": 6,
+            "empty": "[Features appear here once you add them]",
+            "band": "",
+            "close": true
+          }
+        },
+        {
+          "id": "features-3",
+          "type": "awr-briefing",
+          "visible": true,
+          "settings": {
+            "style": "strip",
+            "eyebrow": "",
+            "heading": "[The newsletter's *name*]",
+            "text": "[A line about what readers get]",
+            "button": "Subscribe",
+            "href": "briefing/",
+            "main": false
+          }
+        }
+      ]
+    },
+    "section": {
+      "path": "section/index.html",
+      "title": "[A section] | [Site name]",
+      "description": "[A line about the section, for search results]",
+      "sections": [
+        {
+          "id": "section-1",
+          "type": "awr-opening",
+          "visible": true,
+          "settings": {
+            "size": "page",
+            "eyebrow": "Section",
+            "heading": "[A section]",
+            "text": "[A line about what the section covers]",
+            "wide": false,
+            "topics": [],
+            "email": false,
+            "button": "",
+            "button_href": "",
+            "link": "",
+            "href": ""
+          }
+        },
+        {
+          "id": "section-2",
+          "type": "awr-features",
+          "visible": true,
+          "settings": {
+            "eyebrow": "Features in this section",
+            "heading": "",
+            "only": "[A section]",
+            "area": "",
+            "every": true,
+            "count": 6,
+            "empty": "Nothing has been published in this section yet.",
+            "band": "",
+            "close": true
+          }
+        },
+        {
+          "id": "section-3",
+          "type": "awr-briefing",
+          "visible": true,
+          "settings": {
+            "style": "strip",
+            "eyebrow": "",
+            "heading": "[The newsletter's *name*]",
+            "text": "[A line about what readers get]",
+            "button": "Subscribe",
+            "href": "briefing/",
+            "main": false
+          }
+        }
+      ]
+    },
+    "briefing": {
+      "path": "briefing/index.html",
+      "title": "[The newsletter's name] | [Site name]",
+      "description": "[A line about the newsletter, for search results]",
+      "sections": [
+        {
+          "id": "briefing-1",
+          "type": "awr-briefing",
+          "visible": true,
+          "settings": {
+            "style": "full",
+            "eyebrow": "[Weekly newsletter]",
+            "heading": "[The newsletter's *name*]",
+            "text": "[A line about what readers get]",
+            "button": "Subscribe",
+            "href": "",
+            "main": true
+          }
+        }
+      ]
+    },
+    "about": {
+      "path": "about/index.html",
+      "title": "About | [Site name]",
+      "description": "[A line about the site, for search results]",
+      "sections": [
+        {
+          "id": "about-1",
+          "type": "awr-opening",
+          "visible": true,
+          "settings": {
+            "size": "page",
+            "eyebrow": "About",
+            "heading": "[About the *site*]",
+            "text": "[A few sentences about what the site covers and how]",
+            "wide": true,
+            "topics": [],
+            "email": false,
+            "button": "",
+            "button_href": "",
+            "link": "",
+            "href": ""
+          }
+        },
+        {
+          "id": "about-2",
+          "type": "awr-cards",
+          "visible": true,
+          "settings": {
+            "eyebrow": "How we work",
+            "heading": "",
+            "source": "hand",
+            "band": "grey",
+            "cards": [
+              {
+                "title": "[A principle]",
+                "text": "[A line about it]",
+                "href": ""
+              },
+              {
+                "title": "[A principle]",
+                "text": "[A line about it]",
+                "href": ""
+              },
+              {
+                "title": "[A principle]",
+                "text": "[A line about it]",
+                "href": ""
+              }
+            ]
+          }
+        },
+        {
+          "id": "about-3",
+          "type": "awr-briefing",
+          "visible": true,
+          "settings": {
+            "style": "strip",
+            "eyebrow": "",
+            "heading": "[The newsletter's *name*]",
+            "text": "[A line about what readers get]",
+            "button": "Subscribe",
+            "href": "briefing/",
+            "main": false
+          }
+        }
+      ]
+    },
+    "contact": {
+      "path": "contact/index.html",
+      "title": "Contact | [Site name]",
+      "description": "[A line about how to get in touch, for search results]",
+      "sections": [
+        {
+          "id": "contact-1",
+          "type": "awr-opening",
+          "visible": true,
+          "settings": {
+            "size": "tall",
+            "eyebrow": "Contact",
+            "heading": "[Write to us.]",
+            "text": "[A line about what to write about]",
+            "wide": false,
+            "topics": [],
+            "email": true,
+            "button": "",
+            "button_href": "",
+            "link": "",
+            "href": ""
+          }
+        }
+      ]
+    }
+  },
+  "lists": {},
+  "addons": {},
+  "templates": {
+    "article": {
+      "default": {
+        "name": "Default",
+        "sections": [
+          {
+            "id": "main",
+            "type": "main"
+          },
+          {
+            "id": "t-briefing",
+            "type": "awr-briefing",
+            "visible": true,
+            "settings": {
+              "style": "strip",
+              "eyebrow": "",
+              "heading": "[The newsletter's *name*]",
+              "text": "[A line about what readers get]",
+              "button": "Subscribe",
+              "href": "briefing/",
+              "main": false
+            }
+          }
+        ]
+      }
+    },
+    "artist": {
+      "default": {
+        "name": "Default",
+        "sections": [
+          {
+            "id": "main",
+            "type": "main"
+          },
+          {
+            "id": "t-briefing",
+            "type": "awr-briefing",
+            "visible": true,
+            "settings": {
+              "style": "strip",
+              "eyebrow": "",
+              "heading": "[The newsletter's *name*]",
+              "text": "[A line about what readers get]",
+              "button": "Subscribe",
+              "href": "briefing/",
+              "main": false
+            }
+          }
+        ]
+      }
+    }
+  }
+}

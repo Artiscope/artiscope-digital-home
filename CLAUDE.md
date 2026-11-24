@@ -127,6 +127,7 @@ to this one, under either spelling of their names (or set `WAR_DIR`,
 | `Artiscope/global-art-monitor` | globalartmonitor.com | GitHub Pages, on every push to main |
 | `Artiscope/street-art-dispatch` | streetartdispatch.com. Its words are all in `data/content.json`; `tools/build.py <folder>` builds every page on publish, and no built pages are kept in the repository | GitHub Pages, on every push to main |
 | `Artiscope/practice-site` | The Practice site, a copy of World Art Review for trying things out | GitHub Pages at artiscope.github.io/practice-site, unlisted, every page marked noindex |
+| `Artiscope/the-art-world-report` | theartworldreport.com, 20 hand-written pages, published straight from its files. Its design is the template `templates/the-art-world-report` (Version 69); moving the site onto it is step 2 | GitHub Pages from the branch |
 | `Artiscope/the-art-correspondent` | theartcorrespondent.com, a site of The Art Correspondent template, listed in `sites.json` (`site-4`). Built by `tools/build.py <folder>` on publish; no built pages in the repository | GitHub Pages through GitHub Actions, on every push to main |
 
 Each site has its own `CLAUDE.md`. Those are written for the unattended
@@ -277,7 +278,7 @@ npm run test:all             # the same plus the full acceptance test (UAT), abo
   where GitHub joins them line by line, so tests make two people change
   different files when they should join cleanly.
 
-## Where things stand (24 November 2026, Version 68)
+## Where things stand (24 November 2026, Version 69)
 
 Done:
 
@@ -1329,6 +1330,62 @@ Done:
   - The writing editor keeps `target` and `rel` on links (`RICH_ATTR`);
     it used to drop `rel="noopener"` from the agents' source links.
   - `tests/rich.mjs` counts a bare "&" and "&amp;" as the same.
+
+- Version 69 (24 November): The Art World Report template, step 1 of 2 of
+  bringing theartworldreport.com (Artiscope/the-art-world-report, 20
+  hand-written pages) into the console, as was done for The Art
+  Correspondent. Taken as suggested, since the owner said go ahead without
+  choosing: the Briefing box opens the visitor's email app like the other
+  sites (it said "Sign-up is not open yet"; confirm before step 2), the smooth
+  scrolling is kept in the site (`assets/vendor/lenis.mjs`, Lenis 1.3.19,
+  MIT, bundled with esbuild from its source; it loaded from jsdelivr), and
+  the name stays in words until the logo is chosen.
+  - `templates/the-art-world-report` (global `TAWR`): the site's own
+    `site.css` on the theme's variables (`--page` white, `--band` #191917 for
+    the footer, menu and dark bands, `--accent` #F3F3F3 grey bands, `--ink`;
+    its greys mixed to land exactly on the site's #5C5C5A, #B8B8B6, #8F8F8D),
+    every font size times the scale variables (not `html`, whose size follows
+    the window width), then the shared sections from the TAC template in its
+    voice. `site.js`: its words rising into view (`data-lines`, `data-words`,
+    `data-r`), the full-screen menu (`#menu`), smooth scrolling and # links,
+    all off in a frame or with less motion; the TAC template's forms, shared
+    sections and editor link (`header#nav, #menu`, `footer.foot`).
+  - Features are the articles at `features/<slug>/` (section as `kicker`,
+    standfirst as `summary`, `description`, `date`, research areas as
+    `subjects`, `body`, sources), research areas the artists at
+    `research/<slug>/` (`line` for its card, `description`, `topics`,
+    `related` as label and href). Words between stars in a heading are
+    italics (`ital`). A list page is published only when the menu bar or the
+    footer leads to it (`linked`). An announcement bar sits fixed above the
+    fixed menu bar (`has-ann`), and a page that opens with a shared section
+    leaves room for the menu bar.
+  - Six sections of its own (`AWR_KINDS`, `AWR_OWN`): Page opening
+    (`awr-opening`: Full screen, Page heading or Tall; topics; the email
+    large; a button and a link), Feature cards (`awr-features`: every
+    feature, one section's by `only`, one research area's by `area`; words
+    when empty; grey; close under the heading), Cards (`awr-cards`: written
+    here, or every research area), Briefing band (`awr-briefing`: full band
+    with the box, or a short strip with a button; `main` makes its heading the
+    page's h1), Link list (`awr-links`) and Page text (`awr-text`).
+  - Server: `TTAWR_SECTIONS` (a menu bar with top links, menu links and a
+    line; a footer with columns of links, blocks inside blocks),
+    `TTAWR_ITEMS` (Feature and Research area, no pictures: the design has
+    none), `TTAWR_LISTS`, `TTAWR_THEME`, `TTAWR_WORDS`, `WORD_LOCKS.ttawr`,
+    "Libre Caslon Text" in `FONTS`, and `SITE_TEMPLATES` before Editions.
+    Its placeholder data was written by hand (`make-template.mjs` only works
+    from a site already in the console); "The Briefing" is "Newsletter" there.
+  - Checked against the live site: the converter (`/tmp/awr/convert.py`,
+    kept in this session) turned all 23 pages into data, the template built
+    them, and every page matched the live one word for word, link for link,
+    tag for tag in the features, and at the same height at 1440 and 390
+    wide. The only change is the line under the Briefing button.
+  - Checks: the Art World Report block in `tests/build.mjs` (site-16), the
+    `ttawr` words in `tests/run.mjs`, `tests/templates.mjs` (seven
+    templates), the first "Start building" check and a sixth run in
+    "Templates end to end" in `tests/uat.mjs`.
+  - Step 2, waiting for the owner's go ahead: move the live site onto its
+    own template (its data, the publishing steps, the site's brief, a live
+    card on All sites). The owner switches its Pages to GitHub Actions first.
 
 Waiting for the owner:
 
