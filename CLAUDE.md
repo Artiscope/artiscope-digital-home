@@ -1440,10 +1440,17 @@ Done:
     no longer lists jsDelivr and says what the newsletter box does. Every
     page was measured live at ten widths from 360 to 1440: nothing runs
     off the screen or over the introduction.
-  - GitHub's publishing step for the site sometimes fails with "No
-    artifacts named github-pages" on its first try; running it again
-    (`gh run rerun <id>`) publishes it. The Art Correspondent has seen the
-    same.
+  - GitHub's publishing step sometimes fails with "No artifacts named
+    github-pages" (every site had it). Since 25 November (owner's yes)
+    every site's `pages.yml`, the starter's and every template's wait and
+    publish again up to three times (`deployment`, `second`, `third`,
+    with `continue-on-error`); on the first run four of the seven sites
+    needed the second try and all published. If all three fail,
+    `gh run rerun <id>`.
+  - The Art Correspondent's own fallback email in `render.js` is
+    info@artiscope.co.uk (another conversation, 24 November); its
+    template copy matches. The starter, the other templates and the
+    console's forms still say info@grovegallery.com until the owner says.
 
 Waiting for the owner:
 

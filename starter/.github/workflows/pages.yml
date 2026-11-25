@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.second.outputs.page_url || steps.third.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - name: Build the pages
@@ -51,5 +51,25 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+      # GitHub sometimes cannot find the pages it was just given ("No artifacts
+      # named github-pages"). Publishing again a little later works, so it
+      # tries up to three times before the run fails.
       - id: deployment
+        name: Publish
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Wait before trying again
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+      - id: second
+        name: Publish, second try
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Wait a little longer
+        if: steps.deployment.outcome == 'failure' && steps.second.outcome == 'failure'
+        run: sleep 60
+      - id: third
+        name: Publish, third try
+        if: steps.deployment.outcome == 'failure' && steps.second.outcome == 'failure'
         uses: actions/deploy-pages@v4
