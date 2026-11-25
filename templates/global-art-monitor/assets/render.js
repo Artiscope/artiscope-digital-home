@@ -532,7 +532,7 @@
 
     // ----- sections any page can use: batch 4, sign-up and visiting -----
     // The sign-up sends nothing itself: it opens the visitor's own email app with a request ready to send.
-    function mailTo() { return SITE.email || "info@grovegallery.com"; }
+    function mailTo() { return SITE.email || "info@artiscope.co.uk"; }
     S.signup = function (st) {
       var t = get(st, "text", ""), e = get(st, "eyebrow", ""), h = get(st, "heading", "");
       return '<section class="shell section">\n<div class="panel on-ink signup" data-reveal>\n<div class="su-head">' + (e ? '<p class="eyebrow">' + txt(e) + '</p>' : "") + (h ? '<h2 class="h2">' + txt(h) + '</h2>' : "") + (t ? '<p class="intro">' + txt(String(t).trim()) + '</p>' : "") + '</div>\n' +

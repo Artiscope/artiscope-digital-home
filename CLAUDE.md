@@ -297,7 +297,8 @@ Done:
   Contact form (World Art Review), with its topics as blocks. Sample:
   https://claude.ai/artifact/CHjJnQp1MMq4hQtQmkayYP
   The forms send nothing themselves. They open the visitor's own email
-  app with the message ready to send to info@grovegallery.com, and a line
+  app with the message ready to send to info@artiscope.co.uk (since 25
+  November; info@grovegallery.com before), and a line
   under the button always says so. No outside service.
 - World Art Review's existing Subscribe panel (`subForm` in
   `src/index.html`) now works the same honest way: "Ask to join" opens
@@ -1447,10 +1448,14 @@ Done:
     with `continue-on-error`); on the first run four of the seven sites
     needed the second try and all published. If all three fail,
     `gh run rerun <id>`.
-  - The Art Correspondent's own fallback email in `render.js` is
-    info@artiscope.co.uk (another conversation, 24 November); its
-    template copy matches. The starter, the other templates and the
-    console's forms still say info@grovegallery.com until the owner says.
+  - Email (owner's yes, 25 November): every site now shows
+    info@artiscope.co.uk (changed on the live sites by another
+    conversation on 24 November), and so do the starter, every template
+    (their sample Site details and the fallback in their code), Start
+    building's suggested email, and the forms' notes on the server
+    (`FORM_HONEST`). The practice build and the Practice site were brought
+    in line too. Links to grovegallery.com pages (sources, exhibitions)
+    are untouched.
 
 Waiting for the owner:
 

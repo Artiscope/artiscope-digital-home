@@ -484,7 +484,7 @@ WAR_SECTIONS["artist-cards"] = { label: "Artist cards", about: "A card for each 
 // ----- new sections for any page: batch 4, sign-up, visiting and contact -----
 // The forms send nothing themselves: they open the visitor's own email app with a message
 // ready to send to the site's address, and say so under the button. No outside service.
-const FORM_HONEST = " It opens the visitor's own email app with the message ready to send to info@grovegallery.com. Nothing is sent or kept by the site.";
+const FORM_HONEST = " It opens the visitor's own email app with the message ready to send to info@artiscope.co.uk. Nothing is sent or kept by the site.";
 const FORM_TEXT = { name: "text", label: "Text", type: "long", plain: true, hint: "One or two short sentences. Leave empty to hide." };
 const FORM_BUTTON = (eg) => ({ name: "button", label: "Button words", type: "text", hint: "Such as " + eg + ". The line under the button, saying it opens the visitor's email app, is always shown." });
 const SIGNUP_ABOUT = "A heading, a line, first name and email, and one button." + FORM_HONEST;
@@ -909,7 +909,7 @@ const SAD_SECTIONS = {
     library: "The archive, latest or searchable", starter: { heading: "The Intervention Archive", intro: "", show: "recent", count: 6, button: "Search all {count} interventions", button_href: "interventions/", search_hint: "", note: "", note_link: "", top: false, flush: false }, fields: [
     ...S_HEAD, { name: "show", label: "Show", type: "choice", seg: true, options: [["recent", "The latest few"], ["all", "Every entry, with search"]] }, { name: "count", label: "How many of the latest", type: "number" },
     { name: "button", label: "Button words", type: "text", hint: "{count} is the number of entries. Leave empty for no button." }, { name: "button_href", label: "Button address", type: "text", hint: S_ADDR_HINT },
-    { name: "search_hint", label: "Words in the empty search box", type: "text" }, { name: "note", label: "Note under the archive", type: "long", plain: true }, { name: "note_link", label: "Words of the link to send an entry", type: "text", hint: "Opens an email to info@grovegallery.com. Leave empty for none." }, S_TOP, S_FLUSH,
+    { name: "search_hint", label: "Words in the empty search box", type: "text" }, { name: "note", label: "Note under the archive", type: "long", plain: true }, { name: "note_link", label: "Words of the link to send an entry", type: "text", hint: "Opens an email to info@artiscope.co.uk. Leave empty for none." }, S_TOP, S_FLUSH,
   ] },
   "exhibition-list": { label: "Exhibition listings", about: "The exhibitions in Issue details, each in a card with its dates and status.", summary: () => "From Issue details", library: "The exhibition listings", starter: { heading: "Exhibitions", intro: "", top: false, flush: false }, fields: [...S_HEAD, S_TOP, S_FLUSH] },
   collecting: { label: "Collecting band", about: "The collecting figures, a short primer and the glossary, in a dark green band. The figures and terms are in Issue details.", summary: (st) => st.heading || "", library: "Figures, primer and glossary",
@@ -3403,14 +3403,14 @@ export function cleanBuild(given, card) {
   const noTags = (v) => String(v || "").replace(/<[^>]*>?/g, " ").replace(/\s+/g, " ");
   const name = cleanText(noTags(g.name == null ? (card && card.name) || "" : g.name), 60).trim();
   const tagline = cleanText(noTags(g.tagline || ""), 120).trim();
-  const email = String(g.email == null ? "info@grovegallery.com" : g.email).trim();
+  const email = String(g.email == null ? "info@artiscope.co.uk" : g.email).trim();
   if (email && !EMAIL_SHAPE.test(email)) throw new Error("The email shown on the site does not look like an email address.");
   const template = templateOf(g.template).id, looks = buildLooks(template), look = looks.some((l) => l.name === g.look) ? g.look : looks[0].name;
   // a template brings its own pages; the starter offers a home page, the ready set or another site's layout
   const pages = template !== "starter" ? "template" : ["home", "set", "copy"].includes(g.pages) ? g.pages : "home";
   const from = BUILD_FROM.includes(g.from) ? g.from : BUILD_FROM[0];
   const registrar = BUILD_REGISTRARS.some((r) => r[0] === g.registrar) ? g.registrar : "other";
-  return { name, tagline, domain: cleanDomain(g.domain), registrar, email: email || "info@grovegallery.com", template, look, pages, from };
+  return { name, tagline, domain: cleanDomain(g.domain), registrar, email: email || "info@artiscope.co.uk", template, look, pages, from };
 }
 const BUILD_SEC = (id, kind, over) => ({ id, type: kind, visible: true, settings: { ...JSON.parse(JSON.stringify(STARTER_SECTIONS[kind].starter || {})), ...(over || {}) } });
 const BUILD_WORDS = "[One or two sentences about this page, for search results]";

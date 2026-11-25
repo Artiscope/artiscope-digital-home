@@ -49,7 +49,7 @@
     function iconOk() { return typeof opts.favicon === "string" && /^assets\/images\/[A-Za-z0-9._-]{1,120}\.(png|jpe?g|svg|ico)$/.test(opts.favicon); }
     opts = opts || {};
     D = D || {}; PAGES = PAGES || { shared: {}, pages: {} };
-    var SITE = D.site || {}, SITE_URL = addressOf(D), MAIL = /^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i.test(SITE.email || "") ? SITE.email : "info@grovegallery.com";
+    var SITE = D.site || {}, SITE_URL = addressOf(D), MAIL = /^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i.test(SITE.email || "") ? SITE.email : "info@artiscope.co.uk";
     // The fixed words of the design. Edit default text in Artiscope Digital Home keeps changed ones in the
     // page list file under "words"; any word not changed keeps the site's own, written beside each W().
     var WORDS = PAGES.words && typeof PAGES.words === "object" ? PAGES.words : {};

@@ -43,7 +43,7 @@ let n = 0; const ok = (what) => { n++; if (process.env.VERBOSE) console.log("ok 
 
 // ----- the choices, checked -----
 const c = h.cleanBuild({ name: "  Grove Prints ", tagline: "Prints from the studio", domain: "HTTPS://www.GrovePrints.co.uk/shop", registrar: "godaddy", look: "Like Street Art Dispatch", pages: "set" }, { name: "Site 4" });
-assert.deepEqual([c.name, c.domain, c.registrar, c.look, c.pages, c.email], ["Grove Prints", "groveprints.co.uk", "godaddy", "Like Street Art Dispatch", "set", "info@grovegallery.com"]); ok("choices are tidied");
+assert.deepEqual([c.name, c.domain, c.registrar, c.look, c.pages, c.email], ["Grove Prints", "groveprints.co.uk", "godaddy", "Like Street Art Dispatch", "set", "info@artiscope.co.uk"]); ok("choices are tidied");
 assert.throws(() => h.cleanBuild({ domain: "not a domain" }, {}), /should look like newsite\.com/); ok("a wrong web address is refused in plain words");
 assert.throws(() => h.cleanBuild({ domain: "artiscope.github.io" }, {}), /domain you own/); ok("a GitHub address is not a domain you own");
 assert.throws(() => h.cleanBuild({ email: "nope" }, {}), /does not look like an email/); ok("a wrong email is refused");
@@ -116,7 +116,7 @@ dns = { "groveprints.co.uk A": h.GITHUB_IPS, "www.groveprints.co.uk CNAME": ["ar
 d = await as(ADMIN, { action: "checkDomain", site: "site-4" });
 assert.equal(d.connected, true, JSON.stringify(d)); assert.equal(d.wwwOk, true);
 assert.equal(hub.pagesOf(R).cname, "groveprints.co.uk"); assert.equal(hub.pagesOf(R).https_enforced, true);
-assert.deepEqual(read(R, "data/content.json").site, { email: "info@grovegallery.com", address: "https://groveprints.co.uk/", indexed: true });
+assert.deepEqual(read(R, "data/content.json").site, { email: "info@artiscope.co.uk", address: "https://groveprints.co.uk/", indexed: true });
 assert.equal(read(CR, "sites.json").sites.find((x) => x.id === "site-4").domain, "groveprints.co.uk"); ok("connecting sets the address on GitHub, lets search engines in and moves the site to its own address");
 
 // ----- the publishing steps refused: the site is still made, and Try again finishes it -----
@@ -462,7 +462,7 @@ assert.ok(!hub.repoMade("Artiscope/tess-s-gallery"), "no new repository"); ok("a
 {
   const K = h.SITES.find((x) => x.id === "practice-build").items;
   assert.ok(K.article && K.artist, "articles and artists can be edited");
-  const base = { site: { email: "info@grovegallery.com", address: "https://artiscope.github.io/practice-build/", indexed: false }, articles: [], artists: [] };
+  const base = { site: { email: "info@artiscope.co.uk", address: "https://artiscope.github.io/practice-build/", indexed: false }, articles: [], artists: [] };
   let r = h.starterFromEditor({ site: base.site, articles: [{ slug: "first-look", title: "First look", body: "<p>Hello <script>x()</script><b>there</b></p>", sources: [{ title: "A source", href: "javascript:alert(1)" }, { title: "" }], artist: "tess-example" }], artists: [{ slug: "tess-example", name: "Tess Example" }] }, base, K);
   const a0 = r.content.articles[0], x0 = r.content.artists[0];
   assert.equal(a0.hidden, true, "a new article starts hidden"); assert.equal(x0.hidden, true, "a new artist starts hidden");

@@ -152,7 +152,7 @@ if (process.env.AUDIT) {
 area = "Getting in";
 await page.goto(consoleAt + "/index.html");
 await check("Signed-in console opens on All sites, with every site, The Art Correspondent, The Art World Report, the Practice site and the practice build among them", async () => { await page.waitForSelector('[data-act="open-site"]', { timeout: 12000 }); const n = await page.locator('[data-act="open-site"]').count(), want = 4 + siteList.sites.filter((x) => x.kind !== "outside").length; must(n === want, n + " sites shown, not " + want); for (const id of ["site-7", "site-8", "practice-build"]) must(await page.locator('[data-act="open-site"][data-site="' + id + '"]').count(), id + " is not shown"); await shot("01-home"); });
-await check("Version number is shown", async () => must((await text("body")).includes("Version 70"), "no version"));
+await check("Version number is shown", async () => must((await text("body")).includes("Version 71"), "no version"));
 await check("A site still to build opens Start building", async () => { await page.click('[data-act="open-site"][data-site="site-4"]'); await settle(); must((await text("body")).includes("About the site"), "no Start building"); await page.click('[data-act="bd-close"]'); await page.waitForSelector('[data-act="open-site"]'); });
 await check("Someone not on the list is turned away with a plain message", async () => {
   signedIn = "stranger@example.com"; await page.click('[data-act="refresh"]').catch(() => page.reload()); await settle(1500);
@@ -1264,7 +1264,7 @@ await check("Start again puts the practice build back to the starter, after one 
   await page.click('[data-act="startagain"]'); await page.waitForSelector("text=starts again from the starter", { timeout: 9000 }); await settle(600);
   const doc = pbRead("data/pages.json"), want = JSON.parse(starterFiles["data/pages.json"]);
   must(JSON.stringify(doc.pages.home.sections.map((x) => x.id)) === JSON.stringify(want.pages.home.sections.map((x) => x.id)), "pages are not the starter's: " + doc.pages.home.sections.map((x) => x.id));
-  must(pbRead("data/content.json").site.email === "info@grovegallery.com" && pbRead("data/content.json").site.address === "https://artiscope.github.io/practice-build/", "details: " + JSON.stringify(pbRead("data/content.json")));
+  must(pbRead("data/content.json").site.email === "info@artiscope.co.uk" && pbRead("data/content.json").site.address === "https://artiscope.github.io/practice-build/", "details: " + JSON.stringify(pbRead("data/content.json")));
   must(!Object.keys(hub.refs(PB)).some((r) => r.startsWith("adh/")), "copies are left: " + Object.keys(hub.refs(PB)));
   await shot("53-pb-startagain");
 });
@@ -1393,7 +1393,7 @@ await check("Contact form: a hidden topic is left out, and the button readies an
   await f.fill("#" + cf + " [name=name]", "Sam"); await f.fill("#" + cf + " [name=email]", "sam@example.org"); await f.fill("#" + cf + " [name=message]", "Hello");
   await f.$eval("#" + cf + " form", (x) => x.requestSubmit()); await settle(300); // in the editor a click picks the section, so the form is sent directly
   const m = decodeURIComponent(await f.getAttribute("#" + cf + " form", "data-mailto") || "");
-  must(m.startsWith("mailto:info@grovegallery.com?subject=A question from Sam") && m.includes("Reply to: sam@example.org"), "email: " + m); await shot("22-contact-form");
+  must(m.startsWith("mailto:info@artiscope.co.uk?subject=A question from Sam") && m.includes("Reply to: sam@example.org"), "email: " + m); await shot("22-contact-form");
 });
 await check("Visit us: a map link that is not a web address is not kept or drawn", async () => {
   await addSec("visit"); const vi = await secIdOf("visit");
@@ -1404,7 +1404,7 @@ await check("Visit us: a map link that is not a web address is not kept or drawn
 });
 await check("Global Art Monitor: the sign-up says it opens the visitor's email app, and saves", async () => {
   await openSite("global-art-monitor"); await newPage("Join"); await addSec("signup"); const su = await secIdOf("signup"); const f = frame("globalartmonitor.com");
-  must((await f.textContent('[data-adh="' + su + '"] .su-note')).includes("info@grovegallery.com"), "no plain line under the button"); await shot("23-gam-signup");
+  must((await f.textContent('[data-adh="' + su + '"] .su-note')).includes("info@artiscope.co.uk"), "no plain line under the button"); await shot("23-gam-signup");
   await liveSave(); const s = read(GR, "data/pages.json").pages.join.sections.find((y) => y.id === su).settings; must(s.button === "Ask to join", "saved " + JSON.stringify(s));
 });
 

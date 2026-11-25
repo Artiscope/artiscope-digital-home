@@ -898,11 +898,11 @@ footer .bar{padding-top:1rem}
       <div class="f"><label for="subName">Your name</label><input id="subName" name="name" type="text" autocomplete="name"></div>
       <div class="f"><label for="subEmail">Your email</label><input id="subEmail" name="email" type="email" autocomplete="email" required><span class="err" id="subErr" hidden>We need a working email address to send it to.</span></div>
       <div class="f"><label for="subTopics">Anything you would like us to cover? Optional.</label><textarea id="subTopics" name="topics" rows="3"></textarea></div>
-      <div class="act"><button class="btn paper" type="submit" id="subSend">Ask to join</button><span class="small">This opens your own email app with a message ready to send to <span class="mail-to">info@grovegallery.com</span>.</span></div>
+      <div class="act"><button class="btn paper" type="submit" id="subSend">Ask to join</button><span class="small">This opens your own email app with a message ready to send to <span class="mail-to">info@artiscope.co.uk</span>.</span></div>
     </form>
     <div class="done">
       <h3 id="subThanks">Your email app should now be open.</h3>
-      <p class="note">Your message to <span class="mail-to">info@grovegallery.com</span> is ready. Send it and you are on the list. If nothing opened, write to <a class="mail-link" href="mailto:info@grovegallery.com" style="color:inherit"><span class="mail-to">info@grovegallery.com</span></a> and ask to join.</p>
+      <p class="note">Your message to <span class="mail-to">info@artiscope.co.uk</span> is ready. Send it and you are on the list. If nothing opened, write to <a class="mail-link" href="mailto:info@artiscope.co.uk" style="color:inherit"><span class="mail-to">info@artiscope.co.uk</span></a> and ask to join.</p>
       <div><button class="btn paper" type="button" id="subDone">Back to reading</button></div>
     </div>
   </div>
@@ -1859,7 +1859,7 @@ function bandOf(st, dflt){
 }
 /* The site's forms send nothing themselves. Each one opens the visitor's own email app with a
    message ready to send to this address, and says so plainly. Nothing is stored or passed on. */
-const MAIL_TO = (typeof SITE !== 'undefined' && SITE && /^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i.test(SITE.email || '')) ? SITE.email : 'info@grovegallery.com';
+const MAIL_TO = (typeof SITE !== 'undefined' && SITE && /^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i.test(SITE.email || '')) ? SITE.email : 'info@artiscope.co.uk';
 /* the site's name, from the menu bar */
 function SITE_NAME(){ return (PAGES.shared.header && PAGES.shared.header.settings && PAGES.shared.header.settings.name) || '[Site name]'; }
 function mailDraft(kind, f){

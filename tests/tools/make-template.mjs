@@ -92,7 +92,7 @@ for (const [k, pg] of Object.entries(pages.pages || {})) {
 doc.groups = { top: [], popups: [], bottom: [] }; doc.addons = {};
 const DATA = id === "world-art-review" ? "content" : "data";
 const theme = JSON.parse(fs.readFileSync(SRC + "/" + DATA + "/theme.json", "utf8"));
-const content = { site: { email: "info@grovegallery.com", address: "https://example.org/", indexed: false } };
+const content = { site: { email: "info@artiscope.co.uk", address: "https://example.org/", indexed: false } };
 if (id === "world-art-review") {
   Object.assign(content, { sources: {}, artists: [], articles: [], guides: [] });
   doc.templates = { article: { default: { name: "Default article", sections: [{ id: "main", type: "main" }] } }, artist: { default: { name: "Default artist portfolio", sections: [{ id: "main", type: "main" }] } } };
@@ -105,7 +105,7 @@ if (id === "global-art-monitor") {
   const c0 = JSON.parse(fs.readFileSync(SRC + "/data/content.json", "utf8"));
   Object.assign(content, { published: "", published_text: "[Date of the latest update]",
     site: { name: "[Site name]", tagline: "[A short line about the site]", headline: "[Your opening heading]", intro: "[A sentence or two that says what the site is for]",
-      email: "info@grovegallery.com", disclosure: "[Who publishes this site, and any interest it has in the artists it covers]", address: "https://example.org/", indexed: false },
+      email: "info@artiscope.co.uk", disclosure: "[Who publishes this site, and any interest it has in the artists it covers]", address: "https://example.org/", indexed: false },
     // the sections in the menu bar keep their places and names; what each is about is a placeholder
     sections: (c0.sections || []).map((x) => [x[0], x[1], "[A line about this section]"]), bios: {}, features: [], glossary: [] });
   extra["sales.json"] = { _how_to_edit: "Every public sale, one entry each, with its source. Edited in Artiscope Digital Home.", artists: {}, sales: [] };
