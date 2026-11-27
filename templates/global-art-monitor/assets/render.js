@@ -155,7 +155,7 @@
     }
     function iconOk() { return typeof opts.favicon === "string" && /^assets\/images\/[A-Za-z0-9._-]{1,120}\.(png|jpe?g|svg|ico)$/.test(opts.favicon); }
     function footer(rootPath, own) {
-      if (own) return '<script src="' + rootPath + 'assets/site.js" defer></script>\n</body>\n</html>\n';
+      if (own) return '<script src="' + rootPath + 'assets/analytics.js" defer></script>\n<script src="' + rootPath + 'assets/site.js" defer></script>\n</body>\n</html>\n';
       var sh = shared("footer"), st = sh[0], on = sh[1], name = esc(NAME());
       var secs = SECTIONS_LIST.map(function (s) { return '<a href="' + rootPath + s[0] + '/">' + esc(s[1]) + '</a>'; }).join("");
       var arts = ARTIST_KEYS.map(function (slug) { return '<a href="' + rootPath + 'artists/' + slug + '/">' + esc(ARTISTS[slug].name) + '</a>'; }).join("");
@@ -167,7 +167,7 @@
         '<div><h3>' + W("menu.foot-sections", "Sections") + '</h3>' + secs + '</div>\n<div><h3>' + W("menu.foot-artists", "Artists") + '</h3>' + arts + '</div>\n<div><h3>' + W("menu.foot-about", "About") + '</h3>' + about + '</div>\n</div>\n' +
         socialHtml() + '<p class="foot-legal">' + fill(get(st, "legal", "")) + ' <a href="' + rootPath + legal[1] + '">' + txt(legal[0]) + '</a></p>\n</div>\n' +
         (bigWord() ? '<div class="foot-mark" aria-hidden="true">' + esc(bigWord()) + '</div>\n' : "") + '</footer>\n';
-      return body + '<script src="' + rootPath + 'assets/site.js" defer></script>\n</body>\n</html>\n';
+      return body + '<script src="' + rootPath + 'assets/analytics.js" defer></script>\n<script src="' + rootPath + 'assets/site.js" defer></script>\n</body>\n</html>\n';
     }
     // Sections shared by every page: announcement bars above the menu bar, the rest at the top and bottom of the page.
     function groupHtml(where, ann) {

@@ -153,7 +153,7 @@
         (o.head || "") + (iconOk() ? '<link rel="icon" href="' + r + opts.favicon + '">\n' : "") +
         '<link rel="stylesheet" href="' + r + 'assets/site.css">\n' + (THEME || "") + secCssTag() + wordsTag() +
         '</head>\n<body>\n<a class="skip" href="#main">' + W("menu.skip", "Skip to the stories") + '</a>\n' + (o.top ? String(o.top).split("@@").join(r) + "\n" : "") + nav + '\n<main id="main">\n' + main + '\n</main>\n' + foot + '\n' +
-        '<script src="' + r + 'assets/site.js" defer></script>\n</body>\n</html>\n';
+        '<script src="' + r + 'assets/analytics.js" defer></script>\n<script src="' + r + 'assets/site.js" defer></script>\n</body>\n</html>\n';
       return { path: o.file || path, url: urlPath, html: html };
     }
 
